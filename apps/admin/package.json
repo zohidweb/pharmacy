@@ -8,7 +8,14 @@
     "tags": [
       "scope:admin",
       "type:app"
-    ]
+    ],
+    "targets": {
+      "dev": {
+        "options": {
+          "command": "next dev -p 4300"
+        }
+      }
+    }
   },
   "dependencies": {
     "next": "~16.1.6",

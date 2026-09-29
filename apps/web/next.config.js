@@ -10,4 +10,11 @@ const nextConfig = {
   images: { unoptimized: true },
 };
 
+// Dev only: proxy /api/* to apps/api so the browser sees a single origin (as behind the
+// reverse proxy in production, C4 deployment). `rewrites` are not part of the static export.
+if (process.env.NODE_ENV === 'development') {
+  const target = process.env.API_PROXY_TARGET ?? 'http://localhost:3000';
+  nextConfig.rewrites = async () => [{ source: '/api/:path*', destination: `${target}/api/:path*` }];
+}
+
 module.exports = nextConfig;

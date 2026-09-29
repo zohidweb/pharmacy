@@ -8,7 +8,14 @@
     "tags": [
       "scope:web",
       "type:app"
-    ]
+    ],
+    "targets": {
+      "dev": {
+        "options": {
+          "command": "next dev -p 4200"
+        }
+      }
+    }
   },
   "dependencies": {
     "next": "~16.1.6",

@@ -1,0 +1,60 @@
+# Local stack: PostgreSQL + Redis + API (ADR-0005). web/admin run via `npx nx dev` until ADR-0011.
+#   docker compose -f docker/compose.yml --env-file .env up -d --build           # everything
+#   docker compose -f docker/compose.yml --env-file .env up -d postgres redis   # dependencies only
+name: pharmacy
+
+services:
+  postgres:
+    build: ./postgres
+    image: pharmacy/postgres:local
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pharmacy}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in .env}
+      PHARMACY_OWNER_PASSWORD: ${PHARMACY_OWNER_PASSWORD:?set in .env}
+      PHARMACY_APP_PASSWORD: ${PHARMACY_APP_PASSWORD:?set in .env}
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    build: ./redis
+    image: pharmacy/redis:local
+    command: ['redis-server', '/usr/local/etc/redis/redis.conf', '--requirepass', '${REDIS_PASSWORD:?set in .env}']
+    ports:
+      - '127.0.0.1:6379:6379'
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: pharmacy/api:local
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Used once the data layer (ADR-0006) and sessions (ADR-0008) are implemented
+      DATABASE_URL: postgres://pharmacy_app:${PHARMACY_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-pharmacy}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pg-data:

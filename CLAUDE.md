@@ -73,7 +73,7 @@ pharmacy/
 │   ├── shared/domain/  # @pharmacy/shared-domain — Tenant, Store, Batch, Receipt, StockMovement…
 │   ├── shared/util/    # @pharmacy/shared-util — деньги (integer дирамы), даты, i18n RU/TJ
 │   └── ui/             # @pharmacy/ui — общий UI-кит web и admin (сенсорные экраны от 10″)
-├── docker/           # compose.dev.yml — локальные PostgreSQL + Redis; офлайн-дистрибутив (ADR-0005)
+├── docker/           # compose.yml + образы postgres/, redis/ (ADR-0005); apps/api/Dockerfile
 ├── docs/architecture/, tech-radar/, templates/   # архитектура (read-only: tech-radar, templates)
 └── nx.json / package.json / tsconfig.base.json / eslint.config.mjs
 ```
@@ -90,9 +90,13 @@ npm ci                               # установка строго по lock
 npx nx run-many -t build test lint   # всё
 npx nx affected -t build test lint   # только затронутое изменением
 npx nx serve api                     # http://localhost:3000/api/v1/health
-npx nx dev web / npx nx dev admin    # фронтенды
+npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
+npx nx dev admin                     # http://localhost:4300
 npx nx e2e api-e2e                   # e2e API (поднимает api сам)
-docker compose -f docker/compose.dev.yml --env-file .env up -d   # PostgreSQL + Redis локально
+
+# Docker (ADR-0005): .env из .env.example
+docker compose -f docker/compose.yml --env-file .env up -d postgres redis   # только зависимости
+docker compose -f docker/compose.yml --env-file .env up -d --build          # + API в контейнере
 ```
 
 Задачи Nx запускать через `npx nx …`, а не напрямую инструментами. Флаги генераторов не угадывать —
@@ -177,6 +181,15 @@ Only these. No direct ABS database access. Financial operations require idempote
 | Синхронизация офлайн-точек | HTTPS + лицензионный ключ точки, идемпотентная очередь | JSON |
 
 Банковский эквайринг — БЕЗ интеграции. Новая интеграция = сначала новый ADR.
+
+## Containers (ADR-0005)
+
+- Образы: `apps/api/Dockerfile` (multi-stage, `nx run api:prune`, non-root), `docker/postgres`
+  (роли `pharmacy_owner` / `pharmacy_app`, схема `pharmacy`, `pg_trgm`), `docker/redis` (без
+  персистентности). Контекст сборки — корень репозитория (`.dockerignore`).
+- API в рантайме подключается ТОЛЬКО ролью `pharmacy_app`; `pharmacy_owner` — для миграций.
+- web/admin контейнеризуются вместе с reverse proxy после ADR-0011; до этого — `npx nx dev`.
+- Порты в compose публикуются только на `127.0.0.1`.
 
 ## Local development secrets
 

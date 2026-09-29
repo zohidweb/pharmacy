@@ -1,0 +1,20 @@
+# Build context is the repo root; keep it small and free of secrets.
+**/node_modules
+**/dist
+**/out
+**/.next
+**/test-output
+**/coverage
+.nx
+.git
+.idea
+.vscode
+.claude
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+docs
+tech-radar
+templates

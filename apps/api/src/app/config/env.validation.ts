@@ -1,4 +1,5 @@
-import { plainToInstance } from 'class-transformer';
+import 'reflect-metadata';
+import { plainToInstance, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, Max, Min, validateSync } from 'class-validator';
 
 // Fail-fast validation of process env. Add DATABASE_URL / REDIS_URL here once the data layer
@@ -8,6 +9,8 @@ class EnvironmentVariables {
   @IsOptional()
   NODE_ENV: 'development' | 'test' | 'production' = 'development';
 
+  // Env values are strings; convert explicitly instead of relying on emitted type metadata.
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(65535)

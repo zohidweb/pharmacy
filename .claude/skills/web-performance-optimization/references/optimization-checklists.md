@@ -152,9 +152,9 @@ useEffect(() => {
   });
 }, [lines.length]);
 ```
-Метки видны в DevTools → Performance (дорожка Timings). Отправка таких метрик куда-либо в проде —
-категория «Мониторинг» (на утверждении): не делать до решения комитета; если разрешат — только
-на собственный `apps/api`, без ПДн.
+Метки видны в DevTools → Performance (дорожка Timings). Отправка таких метрик в проде —
+мониторинг не выбран, вводится через ADR; до него не делать. Метрики — только на собственный
+`apps/api`, без ПДн и без внешних SaaS (правило проекта про данные).
 
 **Поиск длинных кадров после скана:**
 ```ts
@@ -299,7 +299,7 @@ export async function loadMessages(locale: 'ru' | 'tg'): Promise<Messages> {
 ### Step 4: Бюджет размера (без зависимостей)
 
 У Next.js нет встроенных бюджетов, как в `angular.json`. Простой скрипт в `tools/`, запускать вручную
-перед MR (CI/CD — «На утверждении», пайплайны не заводить):
+перед MR (CI не настроен — до ADR о CI проверки запускаются вручную):
 ```js
 // tools/check-bundle-budget.mjs — usage: node tools/check-bundle-budget.mjs apps/web/out
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -514,6 +514,6 @@ const nextConfig = { output: 'export', images: { unoptimized: true } };
 
 ### Не использовать
 - PageSpeed Insights / CrUX для закрытых экранов (недоступны снаружи, и данные о страницах уходят вовне)
-- Sentry, Datadog RUM, Vercel Analytics/Speed Insights и любые внешние RUM/аналитика — радар запрещает
-  отправку данных во внешние SaaS; категория «Мониторинг» — на утверждении
+- Sentry, Datadog RUM, Vercel Analytics/Speed Insights и любые внешние RUM/аналитика — правило проекта
+  запрещает отправку данных во внешние SaaS; мониторинг не выбран — вводится через ADR
 - Bundlephobia и подобные онлайн-сервисы допустимы только как справка о публичном пакете, без загрузки кода проекта

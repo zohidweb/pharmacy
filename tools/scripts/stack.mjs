@@ -11,7 +11,7 @@
 //             ps      container status
 //             logs    follow logs (optionally of given services)
 //
-// Checks run manually because the radar CI/CD category is pending (CLAUDE.md, "CI/CD").
+// Checks run manually until CI/CD is chosen by an ADR (CLAUDE.md, "CI/CD").
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -83,9 +83,9 @@ function build(envName, env, skipChecks) {
   } else {
     console.log('\n⚠ Quality gate skipped (--skip-checks).');
   }
-  // Static export of the frontends: apps/web/out, apps/admin/out (served after ADR-0011).
+  // Static export of the frontends: apps/web/out, apps/admin/out (served after the reverse-proxy ADR, future ADR-0012).
   run('npx', [...nx, 'run-many', '-t', 'build', '-p', 'web', 'admin', '--outputStyle=static'], {
-    env: { ...process.env, NODE_ENV: 'production' },
+    env: { ...process.env, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1' },
   });
   run('docker', [...composeArgs(envName, env), 'build']);
   console.log(`\n✔ ${envName}: images tagged ${process.env.IMAGE_TAG}; static web/admin in apps/*/out`);

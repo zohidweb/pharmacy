@@ -27,8 +27,8 @@ last-reviewed: "2026-09-29"
   До ADR — токены как CSS custom properties + CSS Modules.** Связка токенов с Tailwind v4 `@theme`
   описана в скиле `tailwind-patterns` и действует только при положительном ADR.
 - **UI-библиотеки** (shadcn/ui, Radix, Headless UI, MUI, Mantine…), библиотеки иконок, i18n,
-  stylelint-плагины и прочие новые зависимости — только через ADR/согласование (tech-radar/RADAR.md,
-  tech-radar/EXCEPTIONS.md). Не вводить молча.
+  stylelint-плагины и прочие новые зависимости — только через ADR команды (`/03-adr`).
+  Не вводить молча.
 - **Устройства** (docs/architecture/c4/deployment.md): Chrome/Edge (последние 2 версии), сенсорный
   экран от 10″ (1280×800 и выше), сканер штрих-кода USB HID, печать чеков 58/80 мм через печать браузера.
   Офлайн-точка работает без интернета → шрифты и иконки только self-hosted, никаких CDN.

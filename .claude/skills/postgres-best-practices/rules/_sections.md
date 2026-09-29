@@ -32,7 +32,7 @@ Impact раздела — типичный уровень; у отдельног
 
 ## 7. Monitoring & Diagnostics (monitor)
 **Impact:** LOW-MEDIUM
-**Description:** pg_stat_statements, EXPLAIN ANALYZE под ролью приложения и контекстом тенанта, VACUUM/ANALYZE для append-only и очередей. Системы мониторинга — категория радара «На утверждении».
+**Description:** pg_stat_statements, EXPLAIN ANALYZE под ролью приложения и контекстом тенанта, VACUUM/ANALYZE для append-only и очередей. Системы мониторинга не выбраны — вводятся через ADR.
 
 ## 8. Advanced Features (advanced)
 **Impact:** MEDIUM

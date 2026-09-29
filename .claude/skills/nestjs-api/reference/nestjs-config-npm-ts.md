@@ -29,9 +29,9 @@ npx nx g @nx/nest:application apps/api    # Nx >= 20: path-based; e2e project ap
 | `@nestjs/schedule` | курсы НБТ по расписанию, воркеры очередей-таблиц | библиотека экосистемы NestJS |
 | `@nestjs/swagger` | OpenAPI-документация (опционально, не в проде публично) | библиотека экосистемы NestJS |
 | `helmet` | заголовки безопасности (Express) | библиотека |
-| Redis-клиент (`ioredis` **или** `redis`) | сессии, кэш | Redis утверждён; выбрать **один** клиент и зафиксировать |
+| Redis-клиент (`ioredis` **или** `redis`) | сессии, кэш | Redis в стеке (stack.md); выбрать **один** клиент и зафиксировать |
 | `pg` / ORM | доступ к PostgreSQL | **требует ADR** (ORM не выбран) |
-| библиотека хеширования паролей/PIN | аутентификация | **требует ADR + согласования ИБ** («Криптография (библиотеки)» на утверждении) |
+| библиотека хеширования паролей/PIN | аутентификация | **требует accepted ADR** (ADR-0008, proposed — решает архитектор проекта); самописная криптография запрещена |
 
 Dev: `@nx/nest`, `@nx/jest`, `jest`, `ts-jest`, `@types/jest`, `@nestjs/testing`, `supertest`,
 `@types/supertest`, `eslint-plugin-security`.

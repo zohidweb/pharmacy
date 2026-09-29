@@ -33,26 +33,22 @@ Test-Case "md allowed before marker"    '{"tool_input":{"file_path":"docs/archit
 # 2b — NotebookEdit sends "notebook_path" instead of "file_path"; guard must fall
 #      back to it rather than fail-closed on a missing file_path.
 Test-Case "notebook_path fallback blocked before marker (code file)" '{"tool_input":{"notebook_path":"src/analysis.ipynb"}}' 2
-# 3
-Test-Case "radar edit always blocked"   '{"tool_input":{"file_path":"tech-radar/RADAR.md"}}' 2
-# 4
-Test-Case "template edit always blocked" '{"tool_input":{"file_path":"templates/adr-template.md"}}' 2
+# 3-4 — templates/ is no longer read-only (ADR-0011): .md allowed before the marker, code still blocked
+Test-Case "template md allowed"          '{"tool_input":{"file_path":"templates/adr-template.md"}}' 0
+Test-Case "code under templates blocked before marker" '{"tool_input":{"file_path":"templates/x.ts"}}' 2
 # 5 — fail-closed: tool_input present but file_path missing/empty/non-string must BLOCK,
 #     not allow (previously this expected 0; a Write/Edit call with no path cannot be verified).
 Test-Case "tool_input without file_path blocked (fail-closed)" '{"tool_input":{}}' 2
 
-# Absolute paths must be normalized against the sandbox root before matching,
-# so an absolute path to tech-radar/ still blocks, and an absolute path whose
-# containing folder happens to be named e.g. "templates"/"tech-radar" upstream
-# of the root does not false-positive once stripped to project-relative.
+# Absolute paths must be normalized against the sandbox root before matching.
 $sandboxFwd = ($sandbox -replace '\\', '/')
 # 6
-Test-Case "absolute path to radar blocked" ('{"tool_input":{"file_path":"' + $sandboxFwd + '/tech-radar/RADAR.md"}}') 2
+Test-Case "absolute path to code blocked before marker" ('{"tool_input":{"file_path":"' + $sandboxFwd + '/src/x.cs"}}') 2
 # 7
 Test-Case "absolute path to docs allowed" ('{"tool_input":{"file_path":"' + $sandboxFwd + '/docs/architecture/stack.md"}}') 0
 
-# Path-traversal: ".." segments must be resolved BEFORE the tech-radar/templates/
-# and allowlist regex checks run, so they cannot be used to dodge them.
+# Path-traversal: ".." segments must be resolved BEFORE the allowlist regex checks run,
+# so they cannot be used to dodge them.
 # 8
 Test-Case "traversal resolves to blocked code path" '{"tool_input":{"file_path":"docs/../src/x.cs"}}' 2
 # 9
@@ -75,13 +71,8 @@ Test-Case "absolute path outside project root allowed" ('{"tool_input":{"file_pa
 New-Item -ItemType File -Force -Path 'docs/architecture/.workflow-complete' | Out-Null
 # 12
 Test-Case "code allowed after marker"   '{"tool_input":{"file_path":"src/Program.cs"}}' 0
-# 13
-Test-Case "radar blocked even after marker" '{"tool_input":{"file_path":"tech-radar/RADAR.md"}}' 2
 # 14
 Test-Case "traversal allowed after marker" '{"tool_input":{"file_path":"docs/../src/x.cs"}}' 0
-# 14b — traversal into tech-radar/ must stay blocked regardless of workflow state
-#       (tech-radar/ check runs before the marker check).
-Test-Case "traversal into tech-radar blocked (always)" '{"tool_input":{"file_path":"docs/../tech-radar/RADAR.md"}}' 2
 
 Pop-Location
 Remove-Item -Recurse -Force $sandbox

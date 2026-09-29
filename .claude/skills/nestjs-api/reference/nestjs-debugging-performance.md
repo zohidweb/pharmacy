@@ -103,7 +103,7 @@ node --inspect-brk dist/apps/api/main.js        # chrome://inspect → Profiler
 node --prof dist/apps/api/main.js && node --prof-process isolate-*.log > profile.txt
 ```
 
-Нагрузочный прогон сценария кассы (250 параллельных «кассиров») — инструмент нагрузки **согласовать** (не описан в радаре), см. `nestjs-testing-ci-troubleshooting.md`.
+Нагрузочный прогон сценария кассы (250 параллельных «кассиров») — инструмент нагрузки пока не выбран — вводится через ADR, см. `nestjs-testing-ci-troubleshooting.md`.
 
 ## 5. Состояние circuit breaker-ов
 

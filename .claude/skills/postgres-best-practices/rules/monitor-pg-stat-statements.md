@@ -9,8 +9,8 @@ tags: pg-stat-statements, statistics, diagnostics, performance
 
 pg_stat_statements tracks execution statistics for all queries, helping identify slow and frequent
 queries. Это встроенное contrib-расширение PostgreSQL для диагностики, а не система мониторинга:
-категория радара «Мониторинг» (Prometheus, Grafana, OpenTelemetry…) — «На утверждении», экспортёры
-и дашборды не подключать до решения комитета.
+мониторинг (Prometheus, Grafana, OpenTelemetry…) не выбран — вводится через ADR; до него экспортёры
+и дашборды не подключать.
 
 **Incorrect (no visibility into query patterns):**
 

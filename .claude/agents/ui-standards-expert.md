@@ -22,7 +22,7 @@ last-reviewed: "2026-09-29"
 ## Источники
 - `ui-standards-tokens` — система токенов (CSS custom properties в `libs/ui`), доступность, стандарты кассы.
 - `tailwind-patterns` — только если ADR выбрал Tailwind CSS для `libs/ui`; до ADR — CSS Modules + токены.
-- `react-dev` — конвенции React Банка Эсхата (структура features/shared, TypeScript).
+- `react-dev` — конвенции React проекта Pharmacy (структура features/shared, TypeScript).
 - UI-библиотеки и CSS-фреймворки вне stack.md — только после ADR (`/03-adr`), не вводить молча.
 
 ## Что проверять

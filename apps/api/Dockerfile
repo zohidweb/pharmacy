@@ -2,7 +2,8 @@
 # apps/api — NestJS API image (ADR-0005). Build context: repository root.
 #   docker build -f apps/api/Dockerfile -t pharmacy/api .
 
-ARG NODE_IMAGE=node:24-alpine
+# Pinned by version + digest for reproducible builds; update deliberately (ADR-0005: base image updates).
+ARG NODE_IMAGE=node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
 
 FROM ${NODE_IMAGE} AS build
 WORKDIR /workspace

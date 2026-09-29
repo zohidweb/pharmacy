@@ -1,8 +1,8 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — категории радара «Логирование» и «Мониторинг» на утверждении: только встроенный Nest Logger с собственным JSON-`LoggerService` (без внешних библиотек), correlation ID в каждой записи, маскирование ПДн, ссылки на health-чеки. OpenTelemetry/Prometheus/облачный логгинг удалены. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — библиотека логирования и мониторинг пока не выбраны (вводятся через ADR); до ADR — только встроенный Nest Logger с собственным JSON-`LoggerService` (без внешних библиотек), correlation ID в каждой записи, маскирование ПДн, ссылки на health-чеки. OpenTelemetry/Prometheus/облачный логгинг удалены. Ограничения: `CLAUDE.md`.
 
 # NestJS Observability & Logging
 
-OpenTelemetry, Prometheus/Grafana, Sentry/APM, облачный логгинг, pino/winston — **только после утверждения категории радара + ADR**.
+OpenTelemetry, Prometheus/Grafana, Sentry/APM, облачный логгинг, pino/winston — **только после соответствующего ADR** (пока не выбраны).
 
 ## Правила
 

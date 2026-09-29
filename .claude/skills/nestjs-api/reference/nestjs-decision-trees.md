@@ -12,13 +12,15 @@
 |
 +-- Да -> используем
 |
-+-- Категория радара «На утверждении» (брокеры, секреты, логирование, мониторинг, CI/CD,
++-- Пока не выбрано (брокеры, секреты, логирование, мониторинг, CI/CD,
 |   API gateway, криптобиблиотеки, push)?
-|   -> НЕЛЬЗЯ. Используем проектную замену:
-|      брокер -> очередь-таблица PostgreSQL (SKIP LOCKED), nestjs-messaging-basics.md
-|      pino/winston/OTel -> встроенный Logger + correlation ID, nestjs-observability.md
-|      Vault -> переменные окружения
-|      bcrypt/argon2 -> порт PasswordHasher, реализация после ADR + ИБ
+|   -> Вводится только через ADR. До ADR — текущее решение:
+|      брокер -> очередь-таблица PostgreSQL (SKIP LOCKED, ADR-0002), nestjs-messaging-basics.md
+|      pino/winston/OTel -> встроенный Nest Logger + correlation ID, nestjs-observability.md
+|      Vault -> env-файлы / переменные окружения
+|      CI/CD -> ручной прогон `npm run check`
+|      bcrypt/argon2 -> порт PasswordHasher, реализация после accepted ADR-0008
+|      (сейчас proposed — решает архитектор проекта); самописная криптография запрещена
 |
 +-- Не выбрано проектом (ORM, миграции, Fastify, Tailwind/UI-библиотеки)?
 |   -> /03-adr в архитектурном репозитории ДО кода

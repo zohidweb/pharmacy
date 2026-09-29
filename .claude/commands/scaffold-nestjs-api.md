@@ -51,8 +51,9 @@ source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
 ## Запрещено при скаффолде
 
 - Устанавливать Prisma/TypeORM/Drizzle, Fastify, BullMQ/RabbitMQ/Kafka, pino/winston, OpenTelemetry,
-  Vault и любые технологии без ADR (см. `tech-radar/RADAR.md`, категории «На утверждении»).
-- Настраивать CI-пайплайны (категория CI/CD на утверждении).
+  Vault и любые технологии без accepted ADR (proposed ADR недостаточно; см. `docs/architecture/stack.md`
+  и `docs/architecture/adr/`).
+- Настраивать CI-пайплайны (CI пока не выбран — вводится через ADR; до ADR проверки вручную, `npm run check`).
 - Коммитить секреты и реальные данные.
 
 ## Итог

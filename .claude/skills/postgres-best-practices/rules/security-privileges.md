@@ -57,10 +57,11 @@ alter default privileges for role pharmacy_owner in schema pharmacy
 Прочее:
 
 - Строки подключения и пароли — только через переменные окружения (`.env` в `.gitignore`,
-  в git — `.env.example` без значений). Инструмент управления секретами — категория радара
-  «На утверждении», до решения — переменные окружения среды деплоя.
+  в git — `.env.example` без значений). Хранилище секретов не выбрано — вводится
+  через ADR; до него — env-файлы / переменные окружения среды деплоя.
 - Пароли ролей БД — механизм `scram-sha-256` PostgreSQL; никакой самописной криптографии.
-- Прямой доступ к БД АБС запрещён; внешние SaaS-БД (Supabase Cloud, Neon и т.п.) — запрещены радаром.
+- Внешние SaaS-БД (Supabase Cloud, Neon и т.п.) для данных тенантов запрещены правилом проекта —
+  только собственная PostgreSQL.
 
 Reference: [Privileges](https://www.postgresql.org/docs/current/ddl-priv.html),
 [ALTER DEFAULT PRIVILEGES](https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html)

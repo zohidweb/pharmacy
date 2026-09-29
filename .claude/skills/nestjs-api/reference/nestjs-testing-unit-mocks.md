@@ -85,7 +85,7 @@ it('replays the original result for the same idempotency key', async () => {
 
 ## Кэш (Redis)
 
-Redis утверждён для сессий и кэша каталога/цен. Мокается обёртка `RedisService`, не клиент.
+Redis в стеке (stack.md) — для сессий и кэша каталога/цен. Мокается обёртка `RedisService`, не клиент.
 
 ```typescript
 export const createRedisMock = () => ({ get: jest.fn(), set: jest.fn(), del: jest.fn(), delByPrefix: jest.fn(), ping: jest.fn() });

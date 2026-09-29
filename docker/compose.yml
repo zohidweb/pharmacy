@@ -2,7 +2,7 @@
 # Do not run this file alone — use the environment scripts (CLAUDE.md, "Environments"):
 #   npm run stack -- <dev|test|prod> <up|down|ps|logs|build>
 # Environment overrides: compose.dev.yml, compose.test.yml, compose.prod.yml.
-# web/admin are built as static files; serving them comes with ADR-0011 (reverse proxy).
+# web/admin are built as static files; serving them comes with the reverse proxy (future ADR-0012).
 
 x-logging: &logging
   driver: json-file

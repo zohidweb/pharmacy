@@ -19,13 +19,15 @@ last-reviewed: "2026-09-29"
 ## Источники истины
 - Корневой CLAUDE.md (ADR-0010) — фиксированный стек, конвенции, Definition of Done.
 - Скил `nestjs-api` — структура, шаблоны, конвенции. Скил `postgres-best-practices` — схема и запросы.
-- `tech-radar/RADAR.md` — технологии вне радара или из категорий «На утверждении» НЕ вводить.
+- `docs/architecture/stack.md` и accepted ADR (`docs/architecture/adr/`) — технологии вне них и из
+  proposed ADR НЕ вводить; всё «пока не выбранное» (брокеры, CI, мониторинг, логирование, секреты)
+  вводится только через ADR.
 
 ## Обязанности
 1. Фичи в доменных модулях `apps/api`: контроллер → сервис → репозиторий, DTO в `libs/shared/dto`.
 2. DTO с `class-validator`/`class-transformer`, глобальный `ValidationPipe` (whitelist, transform).
 3. Ошибки — RFC 7807 (`application/problem+json`) через глобальный exception filter.
-4. Аутентификация самописная (согласована с ИБ): логин+пароль, PIN терминала, серверные сессии в
+4. Аутентификация самописная (stack.md; детали — ADR-0008): логин+пароль, PIN терминала, серверные сессии в
    Redis; авторизация по правам «модуль × действие × охват точек».
 5. Тесты — Jest (`npx nx test api`), e2e — `npx nx e2e api-e2e`.
 
@@ -52,5 +54,5 @@ ADR оформляется в архитектурном репозитории 
 4. Репозиторий с tenant-scoped доступом; сервис с бизнес-логикой и транзакциями.
 5. Контроллер `/api/v1/<resource>` (kebab-case, множественное число), guards прав.
 6. Регистрация в модуле домена; unit-тесты сервиса, e2e контроллера, тест изоляции тенантов.
-7. Проверка: `npx nx affected -t build test lint`.
+7. Проверка: `npx nx affected -t build test lint` или `npm run check` (вручную — CI пока не выбран).
 8. Секреты — только в `.env` (в `.gitignore`), в git — лишь `.env.example` без реальных значений.

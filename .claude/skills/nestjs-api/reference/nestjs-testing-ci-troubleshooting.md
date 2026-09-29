@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest; пайплайны CI (GitHub Actions/GitLab CI) удалены: категория CI/CD радара «На утверждении», до решения — локальный прогон `npx nx affected -t build test lint` перед MR и пороги покрытия в jest-конфиге. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest; пайплайны CI (GitHub Actions/GitLab CI) удалены: CI пока не выбран (вводится через ADR), до ADR — ручной прогон `npm run check` / `npx nx affected -t build test lint` перед MR и пороги покрытия в jest-конфиге. Ограничения: `CLAUDE.md`.
 
 # NestJS Testing — Coverage, Pre-MR Checks & Troubleshooting
 
@@ -27,16 +27,17 @@ coverageThreshold: {
 
 ## Проверка перед MR (вместо CI-пайплайна)
 
-Категория CI/CD техрадара «На утверждении» — не создавайте пайплайны (`.github/workflows`, `.gitlab-ci.yml` и т.п.). До утверждения каждый разработчик прогоняет локально:
+CI пока не выбран — вводится через ADR; до ADR не создавайте пайплайны (`.github/workflows`, `.gitlab-ci.yml` и т.п.). Каждый разработчик прогоняет локально:
 
 ```bash
 npm ci                                   # строго по lock-файлу
+npm run check                            # lint + test + build всех проектов
 npx nx affected -t build test lint       # затронутые проекты, база — main
 npx nx affected -t test --coverage       # пороги покрытия
 npx nx e2e api-e2e                       # если затронут api: нужна PostgreSQL из docker compose
 ```
 
-В описании MR — что запускалось и результат (Definition of Done). После утверждения CI/CD в радаре (`/update-radar`) этот раздел заменяется правилами утверждённого пайплайна.
+В описании MR — что запускалось и результат (Definition of Done). После принятия ADR о CI этот раздел заменяется правилами выбранного пайплайна.
 
 ## Чек-лист тестов
 
@@ -101,7 +102,7 @@ it('sells', async () => { await service.completeReceipt(storeId, dto, key); expe
 
 ## Нагрузочная проверка
 
-Ориентир ТЗ: операция кассы ≤ 1 сек; до 50 одновременных кассиров с запасом ×5. Инструмент нагрузочного тестирования (autocannon, k6 и т.п.) в радаре не описан — **согласовать** перед добавлением. Сценарий: поиск товара по штрихкоду → чек с FEFO-списанием → оплата, 250 параллельных «кассиров», проверка p95 и отсутствия ошибок/дублей. Методика измерений — `nestjs-debugging-performance.md`.
+Ориентир ТЗ: операция кассы ≤ 1 сек; до 50 одновременных кассиров с запасом ×5. Инструмент нагрузочного тестирования (autocannon, k6 и т.п.) пока не выбран — вводится через ADR. Сценарий: поиск товара по штрихкоду → чек с FEFO-списанием → оплата, 250 параллельных «кассиров», проверка p95 и отсутствия ошибок/дублей. Методика измерений — `nestjs-debugging-performance.md`.
 
 ## Snapshot-тесты
 
@@ -116,6 +117,6 @@ expect(res.body).toMatchSnapshot({ id: expect.any(String), createdAt: expect.any
 
 **Главное:**
 1. Jest (Nx): `npx nx test <proj>`, `npx nx e2e api-e2e`; пороги — в `coverageThreshold`.
-2. CI-пайплайнов нет до утверждения категории радара — перед MR локально `npx nx affected -t build test lint`.
+2. CI-пайплайнов нет до ADR о CI — перед MR вручную `npm run check` (или `npx nx affected -t build test lint`).
 3. Обязательные кейсы проекта: изоляция тенантов, идемпотентность, атомарность, деньги integer.
 4. Unit — fake timers и моки `DatabaseService`/репозиториев; e2e — реальная PostgreSQL, прикладная роль без обхода RLS.

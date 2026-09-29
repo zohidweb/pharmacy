@@ -1,8 +1,8 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — без APM/трейсинга (категория «Мониторинг» на утверждении); логгер — `nestjs-observability.md`, health — `nestjs-enterprise-infrastructure.md`; здесь — диагностика по correlationId, очередям, синхронизации точек и БД. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — без APM/трейсинга (мониторинг пока не выбран — вводится через ADR); логгер — `nestjs-observability.md`, health — `nestjs-enterprise-infrastructure.md`; здесь — диагностика по correlationId, очередям, синхронизации точек и БД. Ограничения: `CLAUDE.md`.
 
 # NestJS Debugging — Production
 
-APM и распределённый трейсинг (OpenTelemetry, Sentry, DataDog и т.п.) — только после утверждения категории радара + ADR. До этого диагностика опирается на JSON-логи с correlationId, SQL-запросы состояния и внутренние диагностические эндпоинты.
+APM и распределённый трейсинг (OpenTelemetry, Sentry, DataDog и т.п.) — только после ADR о мониторинге (пока не выбран). До этого диагностика опирается на JSON-логи с correlationId, SQL-запросы состояния и внутренние диагностические эндпоинты.
 
 ## 1. Найти запрос по correlation ID
 

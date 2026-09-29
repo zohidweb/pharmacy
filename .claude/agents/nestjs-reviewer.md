@@ -1,6 +1,6 @@
 ---
 name: nestjs-reviewer
-description: Specialized code reviewer for the Pharmacy NestJS API (Nx apps/api, PostgreSQL, Redis, REST). Reviews module boundaries, tenant isolation, money handling, stock-movement invariants, idempotency, custom auth/permissions, tests and stack compliance with the tech radar. Examples:\n\n<example>\nContext: A sale (receipt) endpoint was just implemented in the pos module.\nUser: "Проверь эндпоинт пробития чека перед MR."\nAssistant: "I'll use the nestjs-reviewer agent to check tenant filtering, the single transaction for the receipt and its batch movements, integer money, idempotency key and correlation ID, permission guards and Jest coverage."\n</example>
+description: Specialized code reviewer for the Pharmacy NestJS API (Nx apps/api, PostgreSQL, Redis, REST). Reviews module boundaries, tenant isolation, money handling, stock-movement invariants, idempotency, custom auth/permissions, tests and stack compliance with stack.md and accepted ADRs. Examples:\n\n<example>\nContext: A sale (receipt) endpoint was just implemented in the pos module.\nUser: "Проверь эндпоинт пробития чека перед MR."\nAssistant: "I'll use the nestjs-reviewer agent to check tenant filtering, the single transaction for the receipt and its batch movements, integer money, idempotency key and correlation ID, permission guards and Jest coverage."\n</example>
 tools: Read, Grep, Glob, Bash
 model: opus
 permissionMode: default
@@ -27,8 +27,8 @@ last-reviewed: "2026-09-29"
    - остатки выводятся из движений; документ и движения — в одной транзакции (CRITICAL);
    - аудит / журнал ПКУ без UPDATE/DELETE (CRITICAL);
    - идемпотентность и correlation ID для финансовых операций и синхронизации (HIGH);
-   - стек: нет технологий вне stack.md / радара и без ADR — ORM, Fastify, брокеры, логгеры,
-     мониторинг, новые интеграции (HIGH);
+   - стек соответствует stack.md и accepted ADR; технологии из proposed ADR не используются —
+     ORM, Fastify, брокеры, логгеры, мониторинг, новые интеграции без accepted ADR (HIGH);
    - границы модулей: нет импорта внутренностей чужих модулей, apps не импортируют друг друга (HIGH);
    - нет секретов и реальных данных клиентов в diff (CRITICAL).
 4. **Report** — находки в формате чек-листа: `file:line`, серьёзность, суть, как исправить.

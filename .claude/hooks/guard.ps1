@@ -1,6 +1,6 @@
 # guard.ps1 — PreToolUse hook for Write|Edit|NotebookEdit|MultiEdit.
-# Blocks: (a) application code until docs/architecture/.workflow-complete exists,
-#         (b) any write to tech-radar/** or templates/** (always).
+# Blocks application code until docs/architecture/.workflow-complete exists.
+# (tech-radar/** and templates/** are no longer read-only — ADR-0011.)
 # Exit 0 = allow, exit 2 = block (reason on stderr, returned to Claude).
 #
 # Input handling (fail-closed):
@@ -13,7 +13,7 @@
 # Scope and honesty note: this hook is a guardrail against ACCIDENTAL drift via the
 # Write/Edit/NotebookEdit/MultiEdit tools. It is not a security boundary — it does not
 # stop writes made via Bash (e.g. redirection, git, scripts) or a deliberate bypass.
-# The real controls are the Architecture Committee review gate and human code review.
+# The real controls are the project architect's review (APPROVAL.md) and human code review.
 
 $raw = [Console]::In.ReadToEnd()
 try {
@@ -55,10 +55,6 @@ if (-not $fullFwd.ToLower().StartsWith($rootNorm.ToLower())) {
 }
 $rel = $fullFwd.Substring($rootNorm.Length)
 
-if ($rel -match '(^|/)tech-radar/' -or $rel -match '(^|/)templates/') {
-    [Console]::Error.WriteLine("BLOCKED: tech-radar/ and templates/ are read-only in projects. Changes go through the central ai-project-start repository (see tech-radar/GOVERNANCE.md). To refresh the local radar copy use /update-radar.")
-    exit 2
-}
 
 $marker = Join-Path $root 'docs/architecture/.workflow-complete'
 if (Test-Path $marker) { exit 0 }

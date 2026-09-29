@@ -1,14 +1,14 @@
 ---
 title: Use SKIP LOCKED Table Queues Instead of a Message Broker
 impact: HIGH
-impactDescription: Parallel, non-blocking workers for sync queue / outbox with no broker (brokers are not approved by the radar)
+impactDescription: Parallel, non-blocking workers for sync queue / outbox with no broker (ADR-0002: table queues in PostgreSQL; a broker needs a new ADR)
 tags: skip-locked, queue, outbox, sync-queue, workers, concurrency
 ---
 
 ## Use SKIP LOCKED Table Queues Instead of a Message Broker
 
-Брокеры сообщений (RabbitMQ, Kafka, BullMQ-как-брокер, NATS…) — категория радара «На утверждении»,
-использовать нельзя. По ADR-0002 очереди — **таблицы в PostgreSQL**: очередь синхронизации
+Брокер сообщений (RabbitMQ, Kafka, BullMQ-как-брокер, NATS…) не выбран — вводится только через ADR,
+пересматривающий ADR-0002. По ADR-0002 очереди — **таблицы в PostgreSQL**: очередь синхронизации
 офлайн-точки, outbox для фоновых задач (фискализация, отложенная обработка). `SKIP LOCKED` позволяет
 нескольким воркерам разбирать очередь, не ожидая блокировок друг друга.
 

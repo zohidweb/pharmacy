@@ -31,15 +31,21 @@ last-reviewed: "2026-09-29"
 
 **Требует ADR через `/03-adr` до использования** (примеры в reference помечены):
 ORM/слой доступа к данным и инструмент миграций · Fastify-адаптер · библиотека хеширования
-паролей/PIN (радар: «Криптография (библиотеки)» на утверждении, + согласование ИБ) ·
+паролей/PIN (ADR-0008, proposed — решает архитектор проекта) ·
 транспорт идентификатора сессии и защита от CSRF · протокол привязки терминала · вход
 оператора «от имени» · раздача статики web на офлайн-точке · любая новая интеграция,
 модуль или технология.
 
-**Нельзя до решения комитета** (категории радара «На утверждении»): брокеры сообщений,
-управление секретами (Vault и т.п. — на MVP переменные окружения), pino/winston/ELK как
-стандарт логирования, мониторинг (OpenTelemetry, Prometheus, Sentry…), CI/CD-пайплайны,
-API gateway / ESB, push.
+**Пока не выбрано — вводится только через ADR; до ADR действует текущее решение:**
+брокеры сообщений → очереди-таблицы PostgreSQL (ADR-0002); хранилище секретов (Vault и т.п.) →
+env-файлы; библиотека логирования (pino/winston/ELK) → встроенный Nest `Logger`;
+мониторинг (OpenTelemetry, Prometheus, Sentry…) → не выбран; CI/CD → ручной прогон
+`npm run check`; API gateway / ESB, push → не используются.
+
+**Правила проекта (без исключений):** никакой самописной криптографии — только проверенные
+библиотеки и алгоритмы; персональные и клиентские данные не отправляются во внешние LLM и SaaS;
+никаких внешних SaaS-БД для данных тенантов — только собственная PostgreSQL; закрытый список
+интеграций (1С, фискализация, курсы НБТ, синхронизация офлайн-точек), новая — через ADR.
 
 ## Iron Law
 
@@ -72,7 +78,7 @@ API gateway / ESB, push.
    `reference/nestjs-templates-features.md`.
 6. **Тесты (Jest)** — unit для правил; интеграционные с реальной PostgreSQL для изоляции
    тенантов и идемпотентности (`reference/nestjs-testing-*.md`).
-7. **Проверка** — `npx nx affected -t build test lint`, `npx nx e2e api-e2e` (вручную: CI не утверждён).
+7. **Проверка** — `npx nx affected -t build test lint`, `npx nx e2e api-e2e` (вручную или `npm run check`: CI пока не выбран — до ADR о CI).
 8. **Ревью** — агенты из «Post-Code Review», затем обязательное ревью человеком.
 
 ## Key Patterns
@@ -145,6 +151,7 @@ npx nx e2e api-e2e                       # e2e API
 npx nx lint api                          # ESLint (incl. module boundaries, security)
 npx nx build api --configuration=production
 npx nx affected -t build test lint       # only what the change touches — run before every MR
+npm run check                            # lint + test + build of all projects (manual, until an ADR on CI)
 npm audit --omit=dev --audit-level=high  # dependency check (locally, no CI)
 docker compose -f docker/compose.dev.yml up -d   # local PostgreSQL + Redis (ADR-0005)
 ```
@@ -179,10 +186,13 @@ docker compose -f docker/compose.dev.yml up -d   # local PostgreSQL + Redis (ADR
 - No stored stock balances — stock is `SUM(stock_movements)`; an operation and its movements commit in one transaction.
 - No UPDATE/DELETE of `audit_log`, the ПКУ journal or `stock_movements` — append-only, corrections are reversals.
 - No financial operation or sync endpoint without an idempotency key and correlation ID.
-- No message brokers (BullMQ, RabbitMQ, Kafka, NATS…) — PostgreSQL queue tables instead.
-- No unapproved technology: Fastify, an ORM/migration tool without ADR, pino/winston/OpenTelemetry/Sentry,
-  Vault, JWT/OAuth/Passport as the auth standard, Vitest, external SaaS, integrations outside the closed list.
-- No self-made cryptography; password/PIN hashing only via the ADR-approved library.
+- No message brokers (BullMQ, RabbitMQ, Kafka, NATS…) — PostgreSQL queue tables (ADR-0002) until an ADR revises it.
+- No technology outside `stack.md` and accepted ADRs (technologies from proposed ADRs are not used either):
+  Fastify, an ORM/migration tool without ADR, pino/winston/OpenTelemetry/Sentry, Vault,
+  JWT/OAuth/Passport as the auth standard, Vitest — each only via an accepted ADR.
+- No external SaaS databases for tenant data; no PII or client data sent to external LLMs/SaaS;
+  no integrations outside the closed list (1С, fiscalization, NBT rates, offline-store sync).
+- No self-made cryptography; password/PIN hashing only via the library chosen by an accepted ADR (ADR-0008).
 - No route without `@RequirePermission(...)` or an explicit `@Public()`.
 - No schema auto-sync (`synchronize: true`, `prisma db push`) outside a throwaway local DB.
 - No PII, passwords, PINs, session tokens or license keys in logs or error bodies; no `console.*`.

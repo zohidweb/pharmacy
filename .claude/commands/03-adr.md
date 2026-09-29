@@ -17,10 +17,11 @@ File: `docs/architecture/adr/NNNN-<short-slug-latin>.md`, following the template
 Статус, Дата, Контекст, Рассмотренные варианты (min 2), Решение, Последствия — the negative
 consequences are MANDATORY; push back if the user claims there are none.
 
-If the decision involves a technology outside the radar («Утверждено» statuses in
-tech-radar/RADAR.md): keep the ADR in status `proposed`, fill the exception section
-(alternatives from the radar, approvals fields empty), and tell the user to submit it via
-tech-radar/EXCEPTIONS.md. The technology may not be used until approvals are recorded. Once approvals are recorded in the ADR, change its status to `accepted`.
+Every new ADR is created with status `proposed`. It becomes `accepted` only after review by the
+project architect (recorded in docs/architecture/APPROVAL.md); do not set `accepted` yourself.
+A technology, framework-level library, integration or component introduced by the ADR may not be
+used in code until the ADR is `accepted`. If the template contains sections that do not apply to
+this project (e.g. external approval fields), omit them.
 
 During the design phase the minimum set is ADR-0001 (выбор стека — summarize from
 docs/architecture/stack.md) for all tracks; ADR-0002 (стиль архитектуры: монолит / модульный
@@ -28,5 +29,5 @@ docs/architecture/stack.md) for all tracks; ADR-0002 (стиль архитек�
 required for the Full track (Lite: only 0001).
 
 Finish with a Russian summary. If this was ADR-0002 during design phase, remind: next is the
-human gate — Architecture Review; the reviewer records docs/architecture/APPROVAL.md
-(см. README, раздел «Ревью архитектуры»), then `/04-generate-claude-md`.
+human gate — Architecture Review by the project architect, who records the result in
+docs/architecture/APPROVAL.md (см. README, раздел «Ревью архитектуры»), then `/04-generate-claude-md`.

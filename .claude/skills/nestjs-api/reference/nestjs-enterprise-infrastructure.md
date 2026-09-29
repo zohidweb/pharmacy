@@ -35,14 +35,14 @@ app.getHttpAdapter().getInstance().disable('x-powered-by');
 - DTO лежат в `libs/shared/dto` без `@nestjs/*`, поэтому `@ApiProperty` там не пишем. Если
   нужна полная схема DTO — подключите swagger CLI plugin в сборке apps/api (проверить
   совместимость с Nx-сборкой) или ограничьтесь документацией операций.
-- Экспорт `openapi.json` «для API gateway» не делаем — gateway в радаре на утверждении;
+- Экспорт `openapi.json` «для API gateway» не делаем — API gateway пока не выбран (вводится через ADR);
   типы для фронтендов уже общие (`libs/shared/dto`).
 
 ## Health checks (@nestjs/terminus)
 
 Два эндпоинта: liveness (процесс жив) и readiness (PostgreSQL и Redis доступны).
 Используются healthcheck'ом Docker на офлайн-точке и мониторингом облака (когда он будет
-утверждён). Без аутентификации, без детальной информации об окружении.
+выбран через ADR). Без аутентификации, без детальной информации об окружении.
 
 ```typescript
 // apps/api/src/core/health/health.controller.ts

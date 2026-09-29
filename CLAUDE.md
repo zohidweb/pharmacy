@@ -1,9 +1,9 @@
 <!-- based on /04 output (docs/architecture/generated/CLAUDE.pharmacy-app.md), merged per ADR-0010 -->
-<!-- ai-project-start version: 0.2.2 | tech radar version: 1.3 -->
+<!-- ai-project-start version: 0.2.2 | governance: ADR-0011 (outside the bank) -->
 
 # CLAUDE.md — Pharmacy (SaaS-платформа автоматизации сети аптек)
 
-Единый репозиторий (ADR-0010): архитектурные артефакты (`docs/architecture/`, `tech-radar/`) и
+Единый репозиторий (ADR-0010): архитектурные артефакты (`docs/architecture/`) и
 Nx-монорепо кода (`apps/`, `libs/`) в корне. Общение с пользователем и командой — на русском;
 идентификаторы и комментарии в коде — на английском.
 
@@ -13,36 +13,36 @@ Project class: Full
 
 1. **Новое архитектурное решение → сначала ADR** (`/03-adr`, `docs/architecture/adr/`), потом код:
    смена/добавление технологии или библиотеки уровня фреймворка, новая интеграция, новый
-   компонент, изменение границ модулей. ADR может идти в том же MR, но принимается до слияния кода.
+   компонент, изменение границ модулей. ADR может идти в том же PR, но принимается до слияния кода.
    ADR в статусе `proposed` — ещё не решение: реализовывать нельзя.
-2. **Техрадар — закон.** Канонический источник:
-   https://gitlab.eskhata.com/zsaidov/ai-project-start.git; локальная копия
-   tech-radar/RADAR.md (v1.3) обновляется только через /update-radar — ручные правки копии
-   недействительны. Технология вне радара → tech-radar/EXCEPTIONS.md, никогда молча.
-   Категории «На утверждении» (брокеры, секреты, криптобиблиотеки, логирование и аудит,
-   мониторинг, CI/CD, API gateway…) — использовать нельзя. tech-radar/** и templates/** — read-only.
-3. Утверждённые исключения этого проекта (одноразовые, апрув 2026-09-29, APPROVAL.md):
-   ADR-0003 NestJS, ADR-0004 Next.js, ADR-0005 Docker. На другие проекты не распространяются.
-4. Изменения stack.md / C4, меняющие утверждённую архитектуру, требуют повторного вынесения
-   на Архитектурный комитет (обновление APPROVAL.md).
+2. **Ревью архитектуры и принятие ADR** (`proposed` → `accepted`) — архитектор проекта
+   Zohid Saidov (docs/architecture/APPROVAL.md). Внешних согласований нет (ADR-0011).
+   Технология не из stack.md/accepted ADR — сначала ADR, никогда молча.
+3. **Обязательные правила проекта (ADR-0011):**
+   - никакой самописной криптографии — только проверенные библиотеки и алгоритмы;
+   - персональные и клиентские данные не отправляются во внешние LLM и SaaS;
+   - никаких внешних SaaS-БД для данных тенантов — только собственная PostgreSQL;
+   - закрытый список интеграций (раздел «Integrations»); новая — через ADR.
+4. Изменения stack.md / C4, меняющие принятую архитектуру, — через ADR и ревью архитектора
+   (отметка в APPROVAL.md).
 
 ## Fixed technology stack (do not deviate)
 
 | Слой | Технология | Статус |
 |---|---|---|
-| Backend | NestJS (Express adapter), TypeScript strict | Исключение ADR-0003 |
-| Frontend (web, admin) | Next.js (React, TypeScript), **static export (SPA)** | Исключение ADR-0004 |
-| БД | PostgreSQL | Приоритет |
-| Кэш / сессии | Redis | Утверждено |
-| API-стиль | REST | Утверждено |
-| Аутентификация | Самописная (логин+пароль, PIN терминала) | Утверждено; согласовано с ИБ (APPROVAL.md) |
-| Контейнеризация | Docker (офлайн-дистрибутив, локальная среда) | Исключение ADR-0005 |
+| Backend | NestJS (Express adapter), TypeScript strict | ADR-0003 |
+| Frontend (web, admin) | Next.js (React, TypeScript), **static export (SPA)** | ADR-0004 |
+| БД | PostgreSQL | ADR-0001 |
+| Кэш / сессии | Redis | ADR-0001 |
+| API-стиль | REST | ADR-0001 |
+| Аутентификация | Самописная (логин+пароль, PIN терминала) | ADR-0001; реализация — ADR-0008 (proposed) |
+| Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
 | Runtime / тесты | Node.js 24 (`.nvmrc`), npm, Jest | — |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
 ADR-0006 слой доступа к данным и миграции · ADR-0007 CSS-подход и UI-кит (Tailwind, Base UI) ·
-ADR-0008 реализация аутентификации (хеширование, сессии; нужен апрув ИБ) ·
+ADR-0008 реализация аутентификации (хеширование, сессии) ·
 ADR-0009 инструменты тестирования и пороги качества (в т.ч. Playwright для web/admin e2e).
 
 ## Architecture references
@@ -74,7 +74,7 @@ pharmacy/
 │   ├── shared/util/    # @pharmacy/shared-util — деньги (integer дирамы), даты, i18n RU/TJ
 │   └── ui/             # @pharmacy/ui — общий UI-кит web и admin (сенсорные экраны от 10″)
 ├── docker/           # compose.yml + образы postgres/, redis/ (ADR-0005); apps/api/Dockerfile
-├── docs/architecture/, tech-radar/, templates/   # архитектура (read-only: tech-radar, templates)
+├── docs/architecture/, templates/   # архитектура, ADR; шаблоны ai-project-start
 └── nx.json / package.json / tsconfig.base.json / eslint.config.mjs
 ```
 
@@ -137,15 +137,15 @@ npm run dev                          # api + web + admin с hot reload
 | Новое приложение API | команда `/scaffold-nestjs-api` |
 | Архитектурное решение | команда `/03-adr` |
 
-## Git / merge requests
+## Git / pull requests (GitHub `zohidweb/pharmacy`)
 
 - Branch naming: `feature/<task-id>-<slug>` or `fix/<task-id>-<slug>`, from an up-to-date `main`.
 - Conventional Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`.
-- Direct pushes to `main` are forbidden — every change goes through a merge request.
-- A merge request requires at least one approve from a human developer of the team; an AI is
+- Direct pushes to `main` are forbidden — every change goes through a pull request.
+- A pull request requires at least one approve from a human developer of the team; an AI is
   never the reviewer of record.
-- The MR description states what was done, links the ADR when an architectural decision is
-  involved, and how it was verified (tests run, manual checks). AI-assisted MRs are labeled `ai-assisted`.
+- The PR description states what was done, links the ADR when an architectural decision is
+  involved, and how it was verified (tests run, manual checks). AI-assisted PRs are labeled `ai-assisted`.
 
 ## Definition of Done
 
@@ -170,7 +170,7 @@ The reviewer is a human developer of the team — never an AI. Before approving,
 
 ## Integrations (closed list)
 
-Only these. No direct ABS database access. Financial operations require idempotency and a correlation ID.
+Only these. Financial operations require idempotency and a correlation ID.
 
 | Система | Протокол | Формат |
 |---|---|---|
@@ -179,7 +179,7 @@ Only these. No direct ABS database access. Financial operations require idempote
 | Курсы валют НБТ | Исходящий HTTPS-запрос курса на дату операции | JSON/HTML |
 | Синхронизация офлайн-точек | HTTPS + лицензионный ключ точки, идемпотентная очередь | JSON |
 
-Банковский эквайринг — БЕЗ интеграции. Новая интеграция = сначала новый ADR.
+Эквайринг (оплата картой) — БЕЗ интеграции: кассир проводит оплату на платёжном терминале вручную. Новая интеграция = сначала новый ADR.
 
 ## Environments
 
@@ -198,14 +198,14 @@ npm run prod:build / prod:up / prod:down
 ```
 
 - Скрипт: `tools/scripts/stack.mjs`; compose: `docker/compose.yml` + `docker/compose.<env>.yml`.
-- `build` — ручной quality gate вместо CI (категория CI/CD на утверждении): lint + test всех
+- `build` — ручной quality gate, пока CI не выбран через ADR: lint + test всех
   проектов, затем сборка. Для prod `--skip-checks` запрещён, а сборка — только из чистого дерева
   git (тег образа = короткий sha; у test с незакоммиченными изменениями — `<sha>-dirty`).
 - `up` для test/prod запускает ровно те образы, что собрал `build` (`--no-build`).
 - Env-файлы сред лежат в `docker/env/`, а не `.env.test`: Nx автоматически грузит `.env.<имя>`
   в задачи (`.env.test` попал бы в `nx test`). В корневом `.env` не задавать `NODE_ENV`.
 - `APP_ENV` (dev|test|prod) — среда развёртывания; `NODE_ENV` в test/prod всегда `production`.
-- web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (ADR-0011).
+- web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (будущий ADR-0012).
 - Сейчас обе среды запускаются локально; хостинг — открытый вопрос № 1 stack.md.
 
 ## Containers (ADR-0005)
@@ -214,7 +214,7 @@ npm run prod:build / prod:up / prod:down
   (роли `pharmacy_owner` / `pharmacy_app`, схема `pharmacy`, `pg_trgm`), `docker/redis` (без
   персистентности). Контекст сборки — корень репозитория (`.dockerignore`).
 - API в рантайме подключается ТОЛЬКО ролью `pharmacy_app`; `pharmacy_owner` — для миграций.
-- web/admin контейнеризуются вместе с reverse proxy после ADR-0011; до этого — `npx nx dev`.
+- web/admin контейнеризуются вместе с reverse proxy после ADR-0012 (ещё не создан); до этого — `npx nx dev`.
 - Порты в compose публикуются только на `127.0.0.1`.
 
 ## Local development secrets
@@ -222,25 +222,25 @@ npm run prod:build / prod:up / prod:down
 - Never commit secrets (passwords, keys, connection strings, tokens) to git, in any form.
 - `.env` (API, docker compose) и `.env.local` (frontend) — в `.gitignore`; в git только `.env.example`
   без реальных значений.
-- Production secrets live in the platform's secret store (category pending in the tech radar;
-  вопрос № 8 в stack.md).
+- Production secrets: хранилище секретов пока не выбрано — через ADR (вопрос № 8 в stack.md);
+  до этого — env-файлы только на хосте среды (`docker/env/*.env`).
 
 ## CI/CD (interim rule)
 
-Категория CI/CD радара — «На утверждении». До утверждения:
-- run build, test, and lint manually before every MR;
-- do not set up pipelines (GitHub Actions, GitLab CI и т.п.) outside the radar process.
+CI/CD пока не выбран — вводится через ADR (например, GitHub Actions). До этого ADR:
+- run build, test, and lint manually before every PR (`npm run check`);
+- do not add pipeline files (`.github/workflows` и т.п.) without an accepted ADR.
 
 ## Security constraints
 
 - No secrets in code, committed config, or docs. No real client data anywhere, including fixtures.
-- Follow the "Запрещено" section of tech-radar/RADAR.md (no self-made crypto, no client data to
-  external LLMs/SaaS, no external SaaS DBs for sensitive data).
+- Follow the mandatory project rules (section «Правила», п. 3; ADR-0011): no self-made crypto,
+  no client data to external LLMs/SaaS, no external SaaS DBs for tenant data, closed list of integrations.
 - Пароли — только хеши; PIN ≥ 4 цифр; HTTPS на всех соединениях; таймаут сессии кассира —
   настройка на уровне сети тенанта.
 
 ## AI usage rules (vibe-coding)
 
 - Never paste secrets or real client data into prompts, code, or fixtures; use synthetic data.
-- Dependencies only from approved registries; check licenses before adding.
+- Dependencies only from the public npm registry / official Docker images; check licenses before adding.
 - AI-generated code is merged ONLY after human review.

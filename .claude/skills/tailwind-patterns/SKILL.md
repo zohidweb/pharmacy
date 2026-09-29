@@ -30,7 +30,7 @@ metadata:
   после ADR о выборе CSS-подхода для libs/ui (через /03-adr). До ADR — токены как CSS custom
   properties + CSS Modules** (скил `ui-standards-tokens`). Этот скил описывает связку на случай
   положительного ADR и помогает подготовить сам ADR (§1).
-- Технология вне радара → tech-radar/EXCEPTIONS.md, не молча (корневой CLAUDE.md, правило 2).
+- Новая технология или библиотека уровня фреймворка → ADR команды (`/03-adr`), не молча.
 - **Любые UI-библиотеки и плагины** (shadcn/ui, Radix, Headless UI, Flowbite, MUI…) —
   тоже только через ADR. Хелперы `clsx`/`tailwind-merge` (`cn`) и `class-variance-authority`
   (CVA) — **зависимости на согласование**; до согласования — примеры без них (§5).

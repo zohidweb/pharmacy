@@ -1,6 +1,6 @@
 # prod: PostgreSQL and Redis are NOT published — reachable only inside the compose network
 # (C4 deployment: private network). The API port is bound to localhost; public access goes
-# through the reverse proxy (ADR-0011).
+# through the reverse proxy (future ADR-0012).
 services:
   postgres:
     restart: unless-stopped

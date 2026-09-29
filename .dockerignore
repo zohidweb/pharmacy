@@ -10,10 +10,14 @@
 .idea
 .vscode
 .claude
-.env
-.env.*
-!.env.example
-*.pem
-*.key
+# Secrets: env files anywhere in the tree (compose reads docker/env/*.env from the host, not the context)
+**/.env
+**/.env.*
+**/*.env
+docker/env
+!**/*.env.example
+!**/.env.example
+**/*.pem
+**/*.key
 docs
 templates

@@ -107,13 +107,14 @@ export class DatabaseService implements OnModuleDestroy {
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products FORCE ROW LEVEL SECURITY;  -- applies even to the table owner
 
-CREATE POLICY tenant_isolation ON products
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+CREATE POLICY tenant_isolation ON products TO pharmacy_app
+  USING (tenant_id = (SELECT current_setting('app.tenant_id')::uuid))
+  WITH CHECK (tenant_id = (SELECT current_setting('app.tenant_id')::uuid));
 ```
 
-- Если `app.tenant_id` не установлен, `current_setting(..., true)` вернёт NULL → политика не
-  пропустит ни одной строки (fail-closed).
+- Если `app.tenant_id` не установлен, запрос падает с ошибкой (fail-closed, без `missing_ok`) —
+  канон: postgres-best-practices `security-rls-basics.md`. Политики — с явным `TO <роль>`
+  (черновик ADR-0013).
 - Прикладная роль БД — не суперпользователь и без `BYPASSRLS`.
 - Индексы начинаются с `tenant_id`: `(tenant_id, …)`. Правила по индексам/RLS/локам —
   скил `postgres-best-practices`.

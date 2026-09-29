@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest; мок `DatabaseService`/репозиториев вместо Prisma-клиента (ORM не выбран — ADR); настоящий контекст запроса вместо мока; внешние HTTP — только закрытый список интеграций. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest; мок `DatabaseService`/репозиториев вместо Prisma-клиента (ORM не выбран — ADR); настоящий контекст запроса вместо мока; внешние HTTP — только закрытый список интеграций. Ограничения: `CLAUDE.md`.
 
 # NestJS Unit Testing — Mock Patterns & Conventions
 

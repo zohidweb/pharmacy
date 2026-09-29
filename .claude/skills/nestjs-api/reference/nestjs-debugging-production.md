@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — без APM/трейсинга (категория «Мониторинг» на утверждении); логгер — `nestjs-observability.md`, health — `nestjs-enterprise-infrastructure.md`; здесь — диагностика по correlationId, очередям, синхронизации точек и БД. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — без APM/трейсинга (категория «Мониторинг» на утверждении); логгер — `nestjs-observability.md`, health — `nestjs-enterprise-infrastructure.md`; здесь — диагностика по correlationId, очередям, синхронизации точек и БД. Ограничения: `CLAUDE.md`.
 
 # NestJS Debugging — Production
 

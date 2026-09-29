@@ -19,8 +19,7 @@ last-reviewed: "2026-09-29"
 
 Скил адаптирован под Pharmacy — мультитенантную SaaS-платформу автоматизации сети аптек
 (3 тенанта, ~30 точек, до 50 одновременных кассиров, рост ×5, операция кассы ≤ 1 сек).
-Источник истины: `CLAUDE.md` кодового монорепо `pharmacy-app`
-(`docs/architecture/generated/CLAUDE.pharmacy-app.md` в архитектурном репозитории),
+Источник истины: `CLAUDE.md` репозитория `pharmacy` (ADR-0010)
 `docs/architecture/stack.md`, `docs/architecture/adr/0002-stil-arhitektury.md`,
 `docs/architecture/glossary.md`. При расхождении с этим скилом прав CLAUDE.md/ADR.
 

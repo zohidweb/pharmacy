@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest + supertest в проекте `apps/api-e2e`, стандартный NestJS (Express) вместо Fastify, реальная PostgreSQL из docker compose локальной среды (Testcontainers — «согласовать»), миграции — инструментом из ADR (не Prisma). Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest + supertest в проекте `apps/api-e2e`, стандартный NestJS (Express) вместо Fastify, реальная PostgreSQL из docker compose локальной среды (Testcontainers — «согласовать»), миграции — инструментом из ADR (не Prisma). Ограничения: `CLAUDE.md`.
 
 # NestJS Integration Testing — Setup
 

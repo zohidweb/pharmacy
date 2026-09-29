@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest (стандарт Nx) вместо Vitest, мок слоя данных (`DatabaseService` + репозитории модуля) вместо Prisma (ORM не выбран — ADR), модули api вместо users. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest (стандарт Nx) вместо Vitest, мок слоя данных (`DatabaseService` + репозитории модуля) вместо Prisma (ORM не выбран — ADR), модули api вместо users. Ограничения: `CLAUDE.md`.
 
 # NestJS Unit Testing — Basics & Service Tests
 

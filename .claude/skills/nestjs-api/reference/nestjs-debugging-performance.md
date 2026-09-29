@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — ориентир «операция кассы ≤ 1 сек»; Prisma-middleware заменён на средства PostgreSQL (ORM — после ADR); публичный memory-эндпоинт и сброс circuit breaker через API удалены. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — ориентир «операция кассы ≤ 1 сек»; Prisma-middleware заменён на средства PostgreSQL (ORM — после ADR); публичный memory-эндпоинт и сброс circuit breaker через API удалены. Ограничения: `CLAUDE.md`.
 
 # NestJS Debugging — Performance & Memory
 

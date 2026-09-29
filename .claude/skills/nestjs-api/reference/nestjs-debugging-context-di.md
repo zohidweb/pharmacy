@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Prisma middleware и Bull-процессоры удалены; контекст восстанавливается в воркерах очереди-таблицы и cron; DI-примеры на модулях api; конфигурация через `@nestjs/config`. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Prisma middleware и Bull-процессоры удалены; контекст восстанавливается в воркерах очереди-таблицы и cron; DI-примеры на модулях api; конфигурация через `@nestjs/config`. Ограничения: `CLAUDE.md`.
 
 # NestJS Debugging — Context, DI & Configuration
 

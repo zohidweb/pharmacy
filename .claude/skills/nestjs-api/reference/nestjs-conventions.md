@@ -1,8 +1,7 @@
 # NestJS Conventions — Pharmacy (apps/api)
 
 Обязательно к прочтению перед созданием любого модуля (Iron Law из SKILL.md).
-Источник истины — `CLAUDE.md` кодового монорепо `pharmacy-app`
-(генерируется из `docs/architecture/generated/CLAUDE.pharmacy-app.md`) и `docs/architecture/stack.md`.
+Источник истины — `CLAUDE.md` репозитория `pharmacy` (ADR-0010) и `docs/architecture/stack.md`.
 
 ## Стек (зафиксирован, другое — только через ADR `/03-adr`)
 

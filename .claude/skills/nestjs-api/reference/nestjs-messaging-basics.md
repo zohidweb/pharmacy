@@ -1,4 +1,4 @@
-> **Pharmacy:** файл переписан под Pharmacy — брокеры сообщений (RabbitMQ, Kafka, BullMQ, NATS…) не утверждены радаром; фоновые задачи и очередь синхронизации офлайн-точек — таблицы-очереди в PostgreSQL (ADR-0002), планировщик — `@nestjs/schedule`. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** файл переписан под Pharmacy — брокеры сообщений (RabbitMQ, Kafka, BullMQ, NATS…) не утверждены радаром; фоновые задачи и очередь синхронизации офлайн-точек — таблицы-очереди в PostgreSQL (ADR-0002), планировщик — `@nestjs/schedule`. Ограничения: `CLAUDE.md`.
 
 # Фоновые задачи и очереди в PostgreSQL (без брокера)
 

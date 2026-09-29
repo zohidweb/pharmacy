@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — контекст запроса на `AsyncLocalStorage` (без библиотек) с correlationId, tenantId, employeeId, storeId/охватом точек; тенант — только из серверной сессии или лицензионного ключа точки; восстановление контекста в воркерах очереди и cron; Fastify-типы удалены. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — контекст запроса на `AsyncLocalStorage` (без библиотек) с correlationId, tenantId, employeeId, storeId/охватом точек; тенант — только из серверной сессии или лицензионного ключа точки; восстановление контекста в воркерах очереди и cron; Fastify-типы удалены. Ограничения: `CLAUDE.md`.
 
 # NestJS Resilience — Request Context & Correlation
 

@@ -17,7 +17,7 @@ last-reviewed: "2026-09-29"
 
 Оригинал был написан для мобильного стека — переписан под веб-стек Pharmacy (React, CSS custom properties).
 
-- **Стек** (CLAUDE.md кодового репо `pharmacy-app` — источник: `docs/architecture/generated/CLAUDE.pharmacy-app.md`;
+- **Стек** (корневой CLAUDE.md репозитория `pharmacy`;
   `docs/architecture/stack.md`): Nx-монорепо, `apps/web` (касса, склад, кабинет владельца) и `apps/admin`
   (админка оператора) — Next.js (React, TypeScript strict) в режиме SPA/static (`output: 'export'`, без SSR).
   Общий UI-кит — `libs/ui`; деньги, даты, i18n — `libs/shared/util`.
@@ -128,7 +128,7 @@ components.css   --ph-button-bg-primary, --ph-batch-expired-bg …       кон�
 
 Автоматических хуков и команды линта дизайн-системы в проекте нет. До появления линтеров
 (stylelint с правилом вроде `declaration-strict-value`, ESLint-правила — это новые зависимости,
-требуют согласования) аудит выполняется поиском. Команды — из корня `pharmacy-app`:
+требуют согласования) аудит выполняется поиском. Команды — из корня `pharmacy`:
 
 ```bash
 SCOPE="apps libs/ui/src/lib"

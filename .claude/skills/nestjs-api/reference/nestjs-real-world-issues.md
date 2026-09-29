@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — решения на Jest (стандарт Nx) вместо Vitest; Prisma- и JWT-специфика удалены (ORM не выбран, аутентификация — серверные сессии); добавлены типичные проблемы Jest + Nest в Nx. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — решения на Jest (стандарт Nx) вместо Vitest; Prisma- и JWT-специфика удалены (ORM не выбран, аутентификация — серверные сессии); добавлены типичные проблемы Jest + Nest в Nx. Ограничения: `CLAUDE.md`.
 
 # NestJS Real-World Issues — GitHub & Stack Overflow Reference
 

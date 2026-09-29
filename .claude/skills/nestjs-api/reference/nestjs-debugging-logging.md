@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Fastify-хуки и Prisma query logging удалены; жизненный цикл запроса — адаптер-независимо (стандартный NestJS/Express); логирование SQL — средствами выбранного ORM после ADR или `log_min_duration_statement` в PostgreSQL. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Fastify-хуки и Prisma query logging удалены; жизненный цикл запроса — адаптер-независимо (стандартный NestJS/Express); логирование SQL — средствами выбранного ORM после ADR или `log_min_duration_statement` в PostgreSQL. Ограничения: `CLAUDE.md`.
 
 # NestJS Debugging — Logging & Request Lifecycle
 

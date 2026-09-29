@@ -15,7 +15,7 @@ metadata:
 
 Скил переписан с Angular 21 на стек Pharmacy с сохранением методологии оригинала: «сначала измерь,
 потом оптимизируй», Core Web Vitals, чек-листы. Источники истины — `CLAUDE.md` монорепо
-`pharmacy-app` (в архитектурном репозитории: `docs/architecture/generated/CLAUDE.pharmacy-app.md`),
+`pharmacy` (ADR-0010),
 `docs/architecture/stack.md`, `docs/architecture/c4/deployment.md`. Конвенции React — скил `react-dev`
 (этот скил ему не противоречит и не дублирует его).
 

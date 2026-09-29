@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest, фабрики без Prisma/faker (детерминированные синтетические данные), сущности из глоссария. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest, фабрики без Prisma/faker (детерминированные синтетические данные), сущности из глоссария. Ограничения: `CLAUDE.md`.
 
 # NestJS Unit Testing — Controllers & Test Data Factories
 

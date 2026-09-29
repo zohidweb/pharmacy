@@ -1,0 +1,18 @@
+{
+  "name": "@pharmacy/web",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "web",
+    "sourceRoot": "apps/web/src",
+    "tags": [
+      "scope:web",
+      "type:app"
+    ]
+  },
+  "dependencies": {
+    "next": "~16.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

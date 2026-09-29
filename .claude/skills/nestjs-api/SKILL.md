@@ -1,6 +1,6 @@
 ---
 name: nestjs-api
-description: NestJS backend patterns for the Pharmacy multi-tenant SaaS (pharmacy chains, Tajikistan) — apps/api in the Nx monorepo pharmacy-app, a modular monolith (catalog, inventory, pos, purchasing, pricing, returns, billing, sync, fiscal, export-1c, audit) on NestJS + Express, TypeScript strict, PostgreSQL, Redis, REST /api/v1, Jest. Covers modules, controllers, services, tenant-scoped repositories and transactions (tenant_id + set_config app.tenant_id for RLS), DTOs in libs/shared/dto with class-validator, RFC 7807 problem+json errors, limit/offset pagination, custom login+password and terminal PIN auth with Redis server sessions, permission guards «модуль × действие × охват точек», idempotency keys and correlation IDs, money as integer dirams, stock derived from batch movements, append-only audit, NBT rates client, fiscal adapter stub, 1C CommerceML export, Docker for the offline store. Use when creating or reviewing NestJS modules, controllers, services, DTOs, guards, interceptors, filters or Jest tests in apps/api — касса, чек, склад, партии, остатки, мультитенантность, сессии, права.
+description: NestJS backend patterns for the Pharmacy multi-tenant SaaS (pharmacy chains, Tajikistan) — apps/api in the Nx monorepo pharmacy, a modular monolith (catalog, inventory, pos, purchasing, pricing, returns, billing, sync, fiscal, export-1c, audit) on NestJS + Express, TypeScript strict, PostgreSQL, Redis, REST /api/v1, Jest. Covers modules, controllers, services, tenant-scoped repositories and transactions (tenant_id + set_config app.tenant_id for RLS), DTOs in libs/shared/dto with class-validator, RFC 7807 problem+json errors, limit/offset pagination, custom login+password and terminal PIN auth with Redis server sessions, permission guards «модуль × действие × охват точек», idempotency keys and correlation IDs, money as integer dirams, stock derived from batch movements, append-only audit, NBT rates client, fiscal adapter stub, 1C CommerceML export, Docker for the offline store. Use when creating or reviewing NestJS modules, controllers, services, DTOs, guards, interceptors, filters or Jest tests in apps/api — касса, чек, склад, партии, остатки, мультитенантность, сессии, права.
 allowed-tools: Bash, Read, Write, Edit
 source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
 metadata:
@@ -18,8 +18,7 @@ last-reviewed: "2026-09-29"
 Скил адаптирован под Pharmacy — мультитенантную SaaS-платформу автоматизации сети аптек
 (3 тенанта, ~30 точек, до 50 одновременных кассиров, рост ×5, операция кассы ≤ 1 сек;
 офлайн-точка — та же система в Docker на ПК аптеки с локальной PostgreSQL).
-Источник истины: `CLAUDE.md` кодового монорепо `pharmacy-app`
-(`docs/architecture/generated/CLAUDE.pharmacy-app.md` в архитектурном репозитории),
+Источник истины: `CLAUDE.md` репозитория `pharmacy` (ADR-0010)
 `docs/architecture/stack.md`, `docs/architecture/adr/0002-stil-arhitektury.md`,
 `docs/architecture/glossary.md`. При расхождении с этим скилом прав CLAUDE.md/ADR.
 

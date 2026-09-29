@@ -24,7 +24,7 @@ metadata:
 ## Pharmacy: контекст и ограничения
 
 Оригинал был написан под другой фронтенд-стек и готовую UI-библиотеку. Переписан под Next.js
-(React, TypeScript) в Nx-монорепо `pharmacy-app`; маркетинговые Bento-раскладки удалены.
+(React, TypeScript) в Nx-монорепо `pharmacy`; маркетинговые Bento-раскладки удалены.
 
 - **Tailwind CSS не зафиксирован в `docs/architecture/stack.md`. Tailwind CSS применяется только
   после ADR о выборе CSS-подхода для libs/ui (через /03-adr). До ADR — токены как CSS custom
@@ -37,7 +37,7 @@ metadata:
 - Источник истины дизайна — токены `--ph-*` в `libs/ui` (скил `ui-standards-tokens`). Tailwind
   только **отображает** их в утилиты через `@theme inline`; своих значений в `@theme` не заводим
   (кроме breakpoints/containers — их нельзя задать через `var()`).
-- Стек фронта (CLAUDE.md монорепо, источник `docs/architecture/generated/CLAUDE.pharmacy-app.md`):
+- Стек фронта (корневой CLAUDE.md):
   Next.js в режиме `output: 'export'` (без SSR), Chrome/Edge последние 2 версии, сенсорные экраны от
   10″ (1280×800+), тесты — Jest. Tailwind работает только на этапе сборки — рантайма и CDN нет
   (Play CDN запрещён: офлайн-точки, закрытый список внешних вызовов).
@@ -330,7 +330,7 @@ Viewport-префиксы (`lg:`, `xl:`) — только для расклад�
 
 ## 13. Verify
 
-Перед сдачей изменений с Tailwind (из корня `pharmacy-app`):
+Перед сдачей изменений с Tailwind (из корня `pharmacy`):
 
 1. ADR на Tailwind существует и принят; новые зависимости (`cn`, CVA) — согласованы.
 2. Нет `tailwind.config.*` (v4 — только CSS); в `@theme inline` только `var(--ph-…)`.

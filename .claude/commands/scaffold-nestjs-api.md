@@ -1,5 +1,5 @@
 ---
-description: Scaffold the NestJS API application (apps/api + apps/api-e2e) inside the Pharmacy Nx monorepo pharmacy-app
+description: Scaffold the NestJS API application (apps/api + apps/api-e2e) inside the Pharmacy Nx monorepo pharmacy
 argument-hint: "[app name, default: api]"
 allowed-tools: Bash, Read, Write, Edit
 disable-model-invocation: true
@@ -8,17 +8,16 @@ source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
 
 # Scaffold NestJS API (Pharmacy)
 
-**Имя приложения:** $ARGUMENTS (по умолчанию `api` — по структуре из CLAUDE.md кодового репозитория).
+**Имя приложения:** $ARGUMENTS (по умолчанию `api` — по структуре из корневой CLAUDE.md).
 
 Работай по-русски. Все паттерны, шаблоны и конвенции — из скила `nestjs-api` (Iron Law:
-сначала `reference/nestjs-conventions.md`). Стек — строго из CLAUDE.md `pharmacy-app`
-(источник: `docs/architecture/generated/CLAUDE.pharmacy-app.md` архитектурного репозитория).
+сначала `reference/nestjs-conventions.md`). Стек — строго из CLAUDE.md `pharmacy` (ADR-0010).
 
 ## Предусловия (проверить ДО любых действий, иначе СТОП)
 
-1. Текущий репозиторий — кодовый `pharmacy-app` (в корне есть `nx.json`). Если в корне лежит
-   `docs/architecture/stack.md` и нет `nx.json` — это архитектурный репозиторий: кода здесь нет,
-   остановись и сообщи пользователю.
+1. Команда запущена из корня репозитория `pharmacy` (в корне есть `nx.json`) — иначе остановись
+   и сообщи пользователю. `apps/api` уже создан при инициализации; команда нужна для нового
+   API-приложения (например, отдельного сервиса офлайн-точки) — и только после ADR о нём.
 2. `apps/<имя>` ещё не существует — иначе остановись (не перезаписывать).
 3. В корне есть `.gitignore` с `node_modules/`, `dist/`, `coverage/`, `.env`, `.env.local`, `*.pem`,
    `*.key`, `.nx/cache` — если нет, создай/дополни его первым.

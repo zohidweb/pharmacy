@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest; пайплайны CI (GitHub Actions/GitLab CI) удалены: категория CI/CD радара «На утверждении», до решения — локальный прогон `npx nx affected -t build test lint` перед MR и пороги покрытия в jest-конфиге. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest; пайплайны CI (GitHub Actions/GitLab CI) удалены: категория CI/CD радара «На утверждении», до решения — локальный прогон `npx nx affected -t build test lint` перед MR и пороги покрытия в jest-конфиге. Ограничения: `CLAUDE.md`.
 
 # NestJS Testing — Coverage, Pre-MR Checks & Troubleshooting
 

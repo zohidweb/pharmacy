@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest (fake timers вместо реальных ожиданий), circuit breaker/retry собственной реализации, контекст запроса (correlationId, tenantId, employeeId, storeId), тесты очереди-таблицы PostgreSQL. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest (fake timers вместо реальных ожиданий), circuit breaker/retry собственной реализации, контекст запроса (correlationId, tenantId, employeeId, storeId), тесты очереди-таблицы PostgreSQL. Ограничения: `CLAUDE.md`.
 
 # NestJS Advanced Testing — Resilience, Request Context, DB Queues
 

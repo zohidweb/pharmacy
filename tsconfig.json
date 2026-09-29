@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/api-e2e"
+    },
+    {
+      "path": "./apps/api"
+    },
+    {
+      "path": "./apps/web"
+    },
+    {
+      "path": "./apps/admin"
+    },
+    {
+      "path": "./libs/shared/dto"
+    },
+    {
+      "path": "./libs/shared/domain"
+    },
+    {
+      "path": "./libs/shared/util"
+    },
+    {
+      "path": "./libs/ui"
+    }
+  ],
+  "compilerOptions": {}
+}

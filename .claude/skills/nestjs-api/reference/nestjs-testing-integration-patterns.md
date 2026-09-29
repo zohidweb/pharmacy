@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest + supertest в `apps/api-e2e`; добавлены обязательные кейсы проекта (изоляция тенантов, идемпотентность, атомарность чек+движения, деньги в integer); JWT заменён на серверные сессии; пагинация limit/offset. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest + supertest в `apps/api-e2e`; добавлены обязательные кейсы проекта (изоляция тенантов, идемпотентность, атомарность чек+движения, деньги в integer); JWT заменён на серверные сессии; пагинация limit/offset. Ограничения: `CLAUDE.md`.
 
 # NestJS Integration Testing — Patterns
 

@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — circuit breaker / retry / timeout только для закрытого списка внешних интеграций (курсы НБТ, адаптер фискализации, синхронизация офлайн-точек); собственная реализация без библиотек; «database fallback» с in-memory кэшем удалён (противоречит инвариантам остатков). Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — circuit breaker / retry / timeout только для закрытого списка внешних интеграций (курсы НБТ, адаптер фискализации, синхронизация офлайн-точек); собственная реализация без библиотек; «database fallback» с in-memory кэшем удалён (противоречит инвариантам остатков). Ограничения: `CLAUDE.md`.
 
 # NestJS Resilience — Circuit Breaker, Retry, Timeout
 

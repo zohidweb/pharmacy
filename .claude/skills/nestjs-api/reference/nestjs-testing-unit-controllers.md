@@ -1,0 +1,131 @@
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest, фабрики без Prisma/faker (детерминированные синтетические данные), сущности из глоссария. Ограничения: `docs/architecture/generated/CLAUDE.pharmacy-app.md`.
+
+# NestJS Unit Testing — Controllers & Test Data Factories
+
+## Паттерн unit-теста контроллера
+
+Контроллер тонкий (без бизнес-логики), поэтому его unit-тест проверяет только передачу параметров в сервис и проброс исключений. Валидация DTO, guards (сессия, права, охват точек), `IdempotencyKeyPipe` и фильтр RFC 7807 проверяются в e2e (`nestjs-testing-integration-patterns.md`).
+
+```typescript
+// apps/api/src/modules/pos/receipts.controller.spec.ts
+import { Test } from '@nestjs/testing';
+import { UnprocessableEntityException } from '@nestjs/common';
+import { ReceiptsController } from './receipts.controller';
+import { ReceiptsService } from './receipts.service';
+
+describe('ReceiptsController', () => {
+  let controller: ReceiptsController;
+  const service = { completeReceipt: jest.fn() };
+
+  beforeEach(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [ReceiptsController],
+      providers: [{ provide: ReceiptsService, useValue: service }],
+    }).compile();
+    controller = moduleRef.get(ReceiptsController);
+  });
+
+  const dto = {
+    lines: [{ batchId: '00000000-0000-4000-8000-000000000101', quantity: 2, unitPriceDirams: 1250 }],
+    payments: [{ method: 'cash' as const, amountDirams: 2500 }],
+  };
+
+  it('passes storeId, idempotency key and DTO to the service', async () => {
+    service.completeReceipt.mockResolvedValue({ id: 'r-1', totalDirams: 2500 });
+
+    await expect(controller.complete('store-1', 'idem-1', dto)).resolves.toEqual({ id: 'r-1', totalDirams: 2500 });
+    expect(service.completeReceipt).toHaveBeenCalledWith('store-1', dto, 'idem-1');
+  });
+
+  it('propagates domain exceptions unchanged (the global filter maps them to problem+json)', async () => {
+    service.completeReceipt.mockRejectedValue(new UnprocessableEntityException());
+
+    await expect(controller.complete('store-1', 'idem-1', dto)).rejects.toThrow(UnprocessableEntityException);
+  });
+});
+```
+
+Для списков контроллер возвращает `Page<T>` = `{ items, total, limit, offset }` (`nestjs-rest-dto-pagination.md`) — проверяйте именно эту форму.
+
+## Фабрики тестовых данных
+
+Правила проекта:
+- **Только синтетические данные** — никаких реальных ФИО, телефонов, рецептов, реквизитов поставщиков.
+- Детерминированные значения (счётчик), без генераторов случайных данных — тесты воспроизводимы. `@faker-js/faker` — новая dev-зависимость, **согласовать**.
+- Деньги — integer в дирамах; сроки годности — явные даты.
+- Фабрики строк БД (snake_case, как `ProductRow` в `nestjs-config-data-access.md`) — для моков репозиториев и сидера e2e.
+- Расположение: `apps/api/test/factories/` (unit) и `apps/api-e2e/src/support/factories.ts` (e2e — копия/своя версия: e2e не импортирует код `apps/api`). Если фабрики нужны обоим — вынести в тестовую lib (например, `libs/shared/testing`) — **согласовать** с командой.
+
+```typescript
+// apps/api/test/factories/index.ts
+let seq = 0;
+const next = () => ++seq;
+export const uuid = (n: number) => `00000000-0000-4000-8000-${n.toString().padStart(12, '0')}`;
+
+export function buildProductRow(overrides: Partial<ProductRow> = {}): ProductRow {
+  const n = next();
+  return {
+    id: uuid(n),
+    tenant_id: uuid(0),
+    name_ru: `Test product ${n}`,
+    name_tj: `Test product ${n}`,
+    inn: null,
+    is_prescription: false,
+    is_controlled_substance: false,
+    barcodes: [`46000000${n.toString().padStart(5, '0')}`],
+    archived_at: null,
+    ...overrides,
+  };
+}
+
+export function buildBatchRow(overrides: Partial<BatchRow> = {}): BatchRow {
+  const n = next();
+  return {
+    id: uuid(n),
+    tenant_id: uuid(0),
+    store_id: uuid(0),
+    product_id: uuid(0),
+    expiry_date: '2027-12-31',
+    purchase_price_dirams: 1500,   // integer, minor units TJS
+    ...overrides,
+  };
+}
+```
+
+Поля — иллюстрация; источник истины — схема миграций, типы `libs/shared/domain` и глоссарий (`docs/architecture/glossary.md`).
+
+### Сидирование для e2e
+
+В e2e данные создаются через публичный API (предпочтительно — проверяет реальный путь) или сидером через `TestDb` (`nestjs-testing-integration-setup.md`) — когда нужно состояние, недоступное через API (например, начальные остатки).
+
+```typescript
+// apps/api-e2e/src/support/seeder.ts
+import { TestDb } from './test-db';
+import { buildBatchRow, buildProductRow } from './factories';
+
+export class TestSeeder {
+  constructor(private readonly db: TestDb) {}
+
+  async productWithStock(tenantId: string, storeId: string, quantity: number) {
+    const product = buildProductRow({ tenant_id: tenantId });
+    const batch = buildBatchRow({ tenant_id: tenantId, store_id: storeId, product_id: product.id });
+    // Table/column names are illustrative — the schema comes from migrations (tool per ADR).
+    await this.db.query(
+      'INSERT INTO products (id, tenant_id, name_ru, name_tj, barcodes) VALUES ($1, $2, $3, $4, $5)',
+      [product.id, tenantId, product.name_ru, product.name_tj, product.barcodes],
+    );
+    await this.db.query(
+      `INSERT INTO batches (id, tenant_id, store_id, product_id, expiry_date, purchase_price_dirams)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [batch.id, tenantId, storeId, product.id, batch.expiry_date, batch.purchase_price_dirams],
+    );
+    // Stock is never stored — it is the sum of movements.
+    await this.db.query(
+      `INSERT INTO stock_movements (tenant_id, store_id, batch_id, quantity, source_type)
+       VALUES ($1, $2, $3, $4, 'initial_balance')`,
+      [tenantId, storeId, batch.id, quantity],
+    );
+    return { product, batch };
+  }
+}
+```

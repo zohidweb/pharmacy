@@ -38,5 +38,10 @@ Project class: Full
 - Апрув ревью: docs/architecture/APPROVAL.md
 - Сгенерированные CLAUDE.md кодовых репозиториев: docs/architecture/generated/
 - Архив bootstrap-инструкций: docs/architecture/bootstrap-claude-md.bak
+- Скилы, агенты и команды разработки для `pharmacy-app` (адаптированы под стек, MIT —
+  .claude/THIRD_PARTY_NOTICES.md): skills/{nestjs-api, postgres-best-practices,
+  web-performance-optimization, ui-standards-tokens, tailwind-patterns, react-dev},
+  agents/*, commands/scaffold-nestjs-api.md — копируются в `.claude/` кодового репозитория
+  при его создании
 - Исходные ТЗ: «Клиентский продукт» v3.1, «Административный продукт» v2.1,
   «Бэклог MVP и модель данных» v1.1 (хранятся у команды)

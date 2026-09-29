@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "deny": [
+      "Write(./tech-radar/**)",
+      "Edit(./tech-radar/**)",
+      "NotebookEdit(./tech-radar/**)",
+      "MultiEdit(./tech-radar/**)",
+      "Write(./templates/**)",
+      "Edit(./templates/**)",
+      "NotebookEdit(./templates/**)",
+      "MultiEdit(./templates/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.ps1"]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,42 @@
+C4Container
+  title Контейнеры — платформа Pharmacy
+
+  Person(tenantUser, "Сотрудник тенанта", "Роль настраиваемая")
+  Person(platformOp, "Оператор платформы")
+
+  System_Boundary(cloud, "Облачная платформа") {
+    Container(web, "Клиентское веб-приложение", "Next.js (SPA), TypeScript", "Касса, склад, закупки, возвраты, отчёты, кабинет владельца. Встроенный буфер перебоев связи: локальная очередь операций в браузере")
+    Container(admin, "Админка оператора", "Next.js (SPA), TypeScript", "Тенанты, биллинг и счета, лицензионные ключи, услуги, статистика, вход «от имени»")
+    Container(api, "API-приложение", "NestJS, модульный монолит", "Модули: каталог, склад/партии (FEFO), касса и смены, закупки, цены/скидки, возвраты, биллинг, синхронизация офлайн-точек, адаптер фискализации, загрузчик курсов НБТ, экспорт 1С, аудит")
+    ContainerDb(db, "База данных", "PostgreSQL", "Единая мультитенантная БД; изоляция тенантов на уровне данных; остатки выводятся из движений по партиям; неизменяемый аудит")
+    ContainerDb(redis, "Кэш", "Redis", "Сессии и PIN-сессии терминалов, кэш каталога и цен для скорости кассы (≤ 1 сек)")
+  }
+
+  System_Boundary(offline, "Офлайн-точка (Docker на ПК аптеки, волна 3)") {
+    Container(lweb, "Локальное веб-приложение", "Next.js (SPA)", "Тот же клиентский продукт; доступ из браузера этого же ПК")
+    Container(lapi, "Локальный API + очередь синхронизации", "NestJS", "Полный функционал точки офлайн; операции копятся в локальной очереди (таблица в БД); лицензионный ключ")
+    ContainerDb(ldb, "Локальная БД", "PostgreSQL", "Данные точки; очередь синхронизации")
+  }
+
+  System_Ext(oneC, "1С:Бухгалтерия 8", "Файловый обмен")
+  System_Ext(fiscal, "Фискализация / ККМ", "В MVP — заглушка")
+  System_Ext(nbt, "НБТ", "Курсы валют")
+
+  Rel(tenantUser, web, "Браузер", "HTTPS")
+  Rel(platformOp, admin, "Браузер", "HTTPS")
+  Rel(tenantUser, lweb, "Браузер", "localhost")
+
+  Rel(web, api, "REST/JSON", "HTTPS")
+  Rel(admin, api, "REST/JSON", "HTTPS")
+  Rel(api, db, "SQL", "")
+  Rel(api, redis, "кэш/сессии", "")
+
+  Rel(lweb, lapi, "REST/JSON", "localhost")
+  Rel(lapi, ldb, "SQL", "")
+  Rel(lapi, api, "Синхронизация", "HTTPS + ключ")
+
+  Rel(api, oneC, "CommerceML/XML", "файл")
+  Rel(api, fiscal, "чек", "адаптер")
+  Rel(api, nbt, "курс валют", "HTTPS")
+
+  UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")

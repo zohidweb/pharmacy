@@ -1,0 +1,36 @@
+flowchart TB
+  subgraph internet["Интернет"]
+    direction TB
+    pos["POS/ПК облачной точки<br/>(браузер + буфер перебоев)"]
+    opws["Рабочее место оператора<br/>(браузер)"]
+  end
+
+  subgraph cloudEnv["Облако платформы (хостинг TBD — вопрос №1)"]
+    direction TB
+    subgraph vmApp["VM приложений"]
+      proxy["Reverse proxy / TLS"]
+      api["API (NestJS)"]
+      static["web + admin (статика)"]
+    end
+    subgraph vmDb["VM БД (приватная сеть)"]
+      pg[("PostgreSQL")]
+      rd[("Redis")]
+    end
+    backup[("Внешнее хранилище бэкапов<br/>30 дней, RPO 24 ч")]
+  end
+
+  subgraph pointPc["ПК офлайн-точки (Docker, волна 3)"]
+    lweb["web (локально)"]
+    lapi["API + очередь синхронизации"]
+    lpg[("PostgreSQL (локально)")]
+  end
+
+  pos -- HTTPS --> proxy
+  opws -- HTTPS --> proxy
+  proxy --> static
+  proxy --> api
+  api --> pg
+  api --> rd
+  pg -. ежедневно .-> backup
+  lweb --> lapi --> lpg
+  lapi -- "HTTPS + лицензионный ключ<br/>(по расписанию / вручную)" --> proxy

@@ -1,0 +1,46 @@
+<!-- bootstrap orchestrator -->
+# CLAUDE.md — Project Starter (bootstrap orchestrator)
+
+This repository was created from the bank's `ai-project-start` template. It is in the
+**design phase**: application code is not allowed yet (a PreToolUse hook enforces this).
+Your job is to guide the team through the design workflow, in order. Communicate with the
+user in Russian; keep these rules in mind at every step.
+
+## Workflow (strict order)
+
+| # | Step | Command | Output |
+|---|---|---|---|
+| 1 | Select stack from tech radar | /01-select-stack | docs/architecture/stack.md |
+| 2 | C4 model | /02-c4-model | docs/architecture/c4/{context,container,deployment}.md |
+| 3 | Record decisions | /03-adr | docs/architecture/adr/NNNN-*.md (min: 0001 stack, 0002 architecture style — 0002: Full) |
+| 4 | **Architecture Review by the Architecture Committee (human gate)** | — | docs/architecture/APPROVAL.md |
+| 5 | Generate project CLAUDE.md | /04-generate-claude-md | CLAUDE.md (this file is archived) |
+
+Lite track (prototypes / internal utilities; chosen in step 1): stack.md (short) →
+c4/context.md → adr/0001 → /04. Architecture review can happen asynchronously after the fact.
+If a Lite project goes to production, it must complete the Full track first.
+
+## Rules (non-negotiable)
+
+1. **Order.** Before running step N, verify step N-1 artifacts exist in docs/architecture/.
+   If missing — refuse and point the user to the missing step. Never skip the gate:
+   /04 requires docs/architecture/APPROVAL.md with the line "Статус: APPROVED".
+2. **No application code** until the workflow is complete (the guard hook blocks it anyway).
+   Do not scaffold projects, do not write source files, do not add dependencies.
+3. **Tech radar is law.** Only technologies with status «Утверждено» in tech-radar/RADAR.md
+   may be selected; prefer «Приоритет» ones. Status «На утверждении» = NOT allowed yet.
+   Anything outside the radar → STOP and follow tech-radar/EXCEPTIONS.md. Never agree
+   silently to an off-radar technology, even "temporarily".
+4. **No invented answers.** If the user cannot answer an interview question, record it in
+   stack.md section «6. Открытые вопросы и риски» — do not guess.
+5. **Confirm each step.** After each step, show a short Russian summary of what was recorded
+   and ask the user to confirm it reflects their project before moving on.
+6. **Radar freshness.** If RADAR.md header date is older than ~30 days, warn and suggest
+   /update-radar before selecting the stack.
+7. tech-radar/** and templates/** are read-only (enforced by hook + permissions).
+
+## For humans
+
+README.md (Russian) explains the whole process, the theory (C4, ADR) and the manual
+checklists in docs/guides/ for team members not using Claude Code. A fully worked example
+lives in examples/demo-project/.

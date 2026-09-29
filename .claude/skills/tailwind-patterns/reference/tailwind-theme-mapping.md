@@ -44,8 +44,6 @@
   --color-success-subtle: var(--ph-color-success-subtle);
   --color-info: var(--ph-color-info);
   --color-info-subtle: var(--ph-color-info-subtle);
-  --color-hold: var(--ph-color-hold);
-  --color-hold-subtle: var(--ph-color-hold-subtle);
   --color-disabled: var(--ph-color-disabled);
   --color-on-disabled: var(--ph-color-on-disabled);
   --color-focus-ring: var(--ph-color-focus-ring);

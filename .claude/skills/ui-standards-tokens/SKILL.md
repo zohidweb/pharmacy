@@ -1,6 +1,6 @@
 ---
 name: ui-standards-tokens
-description: "Design tokens and UI standards for Pharmacy web apps (Next.js/React SPA in Nx, shared kit libs/ui): primitive → semantic → component tokens as CSS custom properties (color OKLCH, typography, spacing, radius, shadow, z-index, motion), WCAG 2.1 AA, touch targets for POS / касса (≥44px, POS ≥48px), keyboard and USB barcode scanner, RU/TJ localization (ҳ ҷ ӣ қ ӯ ғ, cyrillic-ext), TJS money (сомони/дирамы, integer minor units) and dates, batch status colors (истекает срок / просрочено / карантин), 58/80 mm receipt print styles. Use when creating or reviewing UI components and styles in apps/web, apps/admin, libs/ui, defining themes, or auditing hardcoded hex/rgb/px (токены, дизайн-система, доступность, печать чека)."
+description: "Design tokens and UI standards for Pharmacy web apps (Next.js/React SPA in Nx, shared kit libs/ui): primitive → semantic → component tokens as CSS custom properties (color OKLCH, typography, spacing, radius, shadow, z-index, motion), WCAG 2.1 AA, touch targets for POS / касса (≥44px, POS ≥48px), keyboard and USB barcode scanner, RU/TJ localization (ҳ ҷ ӣ қ ӯ ғ, cyrillic-ext), TJS money (сомони/дирамы, integer minor units) and dates, batch status colors (истекает срок / просрочено), 58/80 mm receipt print styles. Use when creating or reviewing UI components and styles in apps/web, apps/admin, libs/ui, defining themes, or auditing hardcoded hex/rgb/px (токены, дизайн-система, доступность, печать чека)."
 allowed-tools: Read, Grep, Glob
 metadata:
   triggers: design tokens, CSS custom properties, libs/ui, UI kit, theming, accessibility, WCAG, color contrast, touch target, POS UI, касса, токены, доступность, печать чека, receipt print, RU/TJ, TJS money format, token compliance audit
@@ -36,9 +36,9 @@ last-reviewed: "2026-09-29"
   идентификаторы; доменные термины — из `docs/architecture/glossary.md`).
 - Аудит соответствия выполняет агент проекта `ui-standards-expert` с этим скилом.
 - **Открыто / согласовать** (не выдавать за решённое): финальная палитра и шрифт (кандидаты в
-  reference), обозначение валюты («смн»?) и формат для TJ, набор горячих клавиш кассы, статус
-  партии «карантин» (в глоссарии его пока нет — термин добавить в `glossary.md`), тёмная тема и
-  компактная плотность `apps/admin`.
+  reference), обозначение валюты («смн»?) и формат для TJ, набор горячих клавиш кассы, тёмная тема и компактная плотность `apps/admin`.
+  Статусы партий — только из `glossary.md` (срок годности партии); новые статусы (например,
+  блокировка партии) не вводить, пока их нет в ТЗ и глоссарии.
 
 ---
 
@@ -51,7 +51,7 @@ duration) ровно ОДНА каноническая шкала. Не заво
 t-shirt `sm/md/lg` рядом с числовой `1..16`). Миграция вызовов и удаление старой шкалы — в одном MR.
 
 **Iron Law 3:** Статус никогда не передаётся только цветом — всегда иконка и/или текст
-(WCAG 1.4.1). Особенно статусы партий: истекает срок / просрочено / в карантине.
+(WCAG 1.4.1). Особенно статусы партий: истекает срок / просрочено.
 
 # UI Standards — Design Tokens & Patterns (Pharmacy)
 
@@ -141,7 +141,7 @@ rg -n "${EXCL[@]}" --glob '*.css' -e '\b\d+(\.\d+)?(px|rem|em|pt|mm)\b' $SCOPE
 # 3. Inline-стили и литеральный z-index
 rg -n "${EXCL[@]}" -e 'style=\{\{' -e 'z-index:\s*\d' $SCOPE
 # 4. Примитивы вне файлов токенов
-rg -n "${EXCL[@]}" -e 'var\(--ph-(neutral|green|red|amber|blue|violet)-\d+' $SCOPE
+rg -n "${EXCL[@]}" -e 'var\(--ph-(neutral|green|red|amber|blue)-\d+' $SCOPE
 # 5. Сброс фокуса
 rg -n "${EXCL[@]}" -e 'outline:\s*(none|0)' $SCOPE
 # 6. Деньги во float

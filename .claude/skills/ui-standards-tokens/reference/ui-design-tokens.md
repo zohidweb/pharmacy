@@ -52,7 +52,7 @@ Tailwind — тот же набор токенов маппится в `@theme` 
   --ph-neutral-700: oklch(0.373 0.034 259.7);
   --ph-neutral-900: oklch(0.21 0.034 264.7);
   --ph-neutral-1000: oklch(0 0 0);
-  /* Hues: green = brand/success, red = danger, amber = warning, blue = info/focus, violet = hold */
+  /* Hues: green = brand/success, red = danger, amber = warning, blue = info/focus */
   --ph-green-50: oklch(0.982 0.018 155.8);
   --ph-green-600: oklch(0.627 0.194 149.2);
   --ph-green-700: oklch(0.527 0.154 150.1);
@@ -67,9 +67,6 @@ Tailwind — тот же набор токенов маппится в `@theme` 
   --ph-blue-50: oklch(0.97 0.014 254.6);
   --ph-blue-600: oklch(0.546 0.245 262.9);
   --ph-blue-700: oklch(0.488 0.243 264.4);
-  --ph-violet-50: oklch(0.969 0.016 293.8);
-  --ph-violet-600: oklch(0.541 0.281 293);
-  --ph-violet-700: oklch(0.491 0.27 292.6);
   /* Scrim — единственная полупрозрачность палитры */
   --ph-scrim-50: oklch(0.21 0.034 264.7 / 0.5);
 }
@@ -116,9 +113,6 @@ L. Часть значений палитры Tailwind v4 выходит за sR
   --ph-color-info: var(--ph-blue-700);
   --ph-color-info-subtle: var(--ph-blue-50);
   --ph-color-info-border: var(--ph-blue-600);
-  --ph-color-hold: var(--ph-violet-700);        /* «заблокировано/на удержании»: карантин партии */
-  --ph-color-hold-subtle: var(--ph-violet-50);
-  --ph-color-hold-border: var(--ph-violet-600);
 }
 ```
 
@@ -160,9 +154,6 @@ L. Часть значений палитры Tailwind v4 выходит за sR
   --ph-batch-expired-fg: var(--ph-color-danger);
   --ph-batch-expired-bg: var(--ph-color-danger-subtle);
   --ph-batch-expired-border: var(--ph-color-danger-border);
-  --ph-batch-quarantined-fg: var(--ph-color-hold);
-  --ph-batch-quarantined-bg: var(--ph-color-hold-subtle);
-  --ph-batch-quarantined-border: var(--ph-color-hold-border);
 
   /* Экран кассы */
   --ph-pos-side-width: 26rem;        /* правая панель: итог, оплата, клавиатура */

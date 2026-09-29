@@ -125,21 +125,19 @@ export function Modal({ open, onClose, labelledBy, returnFocusTo, children }: Mo
 |---|---|---|---|
 | Истекает срок (`expiring-soon`) | `--ph-batch-expiring-*` | часы / предупреждение | «Истекает 12.11.2026» |
 | Просрочено (`expired`) | `--ph-batch-expired-*` | запрет / крест | «Просрочено» |
-| В карантине (`quarantined`) | `--ph-batch-quarantined-*` | замок / пауза | «Карантин» |
 
 ```tsx
 // libs/ui/src/lib/BatchStatusBadge/BatchStatusBadge.tsx
 // The status union should come from libs/shared/domain if defined there; shown inline for the example.
 import type { ComponentType, SVGProps } from 'react';
 import styles from './BatchStatusBadge.module.css';
-import { ClockIcon, BanIcon, LockIcon } from '../icons'; // inline SVG in libs/ui; icon packages need approval
+import { ClockIcon, BanIcon } from '../icons'; // inline SVG in libs/ui; icon packages need approval
 
-export type BatchStatus = 'expiring-soon' | 'expired' | 'quarantined';
+export type BatchStatus = 'expiring-soon' | 'expired';
 
 const icons: Record<BatchStatus, ComponentType<SVGProps<SVGSVGElement>>> = {
   'expiring-soon': ClockIcon,
   expired: BanIcon,
-  quarantined: LockIcon,
 };
 
 export function BatchStatusBadge({ status, label }: { status: BatchStatus; label: string }) {
@@ -170,7 +168,6 @@ export function BatchStatusBadge({ status, label }: { status: BatchStatus; label
 }
 .badge[data-status='expiring-soon'] { --badge-fg: var(--ph-batch-expiring-fg); --badge-bg: var(--ph-batch-expiring-bg); --badge-border: var(--ph-batch-expiring-border); }
 .badge[data-status='expired']       { --badge-fg: var(--ph-batch-expired-fg);  --badge-bg: var(--ph-batch-expired-bg);  --badge-border: var(--ph-batch-expired-border); }
-.badge[data-status='quarantined']   { --badge-fg: var(--ph-batch-quarantined-fg); --badge-bg: var(--ph-batch-quarantined-bg); --badge-border: var(--ph-batch-quarantined-border); }
 .icon { inline-size: var(--ph-size-icon-sm); block-size: var(--ph-size-icon-sm); flex: none; }
 ```
 

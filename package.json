@@ -2,7 +2,21 @@
   "name": "@pharmacy/source",
   "version": "0.0.0",
   "license": "UNLICENSED",
-  "scripts": {},
+  "scripts": {
+    "dev": "nx run-many -t serve dev -p api web admin",
+    "dev:deps": "node tools/scripts/stack.mjs dev up postgres redis",
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "lint": "nx run-many -t lint",
+    "check": "nx run-many -t lint test build",
+    "stack": "node tools/scripts/stack.mjs",
+    "test-env:build": "node tools/scripts/stack.mjs test build",
+    "test-env:up": "node tools/scripts/stack.mjs test up",
+    "test-env:down": "node tools/scripts/stack.mjs test down",
+    "prod:build": "node tools/scripts/stack.mjs prod build",
+    "prod:up": "node tools/scripts/stack.mjs prod up",
+    "prod:down": "node tools/scripts/stack.mjs prod down"
+  },
   "private": true,
   "devDependencies": {
     "@babel/core": "^7.14.5",

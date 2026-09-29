@@ -1,0 +1,19 @@
+# prod: PostgreSQL and Redis are NOT published — reachable only inside the compose network
+# (C4 deployment: private network). The API port is bound to localhost; public access goes
+# through the reverse proxy (ADR-0011).
+services:
+  postgres:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '2', memory: 4g }
+  redis:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '1', memory: 1g }
+  api:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '2', memory: 1g }

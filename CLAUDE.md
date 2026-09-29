@@ -94,9 +94,8 @@ npx nx dev web                       # http://localhost:4200 (/api/* прокс�
 npx nx dev admin                     # http://localhost:4300
 npx nx e2e api-e2e                   # e2e API (поднимает api сам)
 
-# Docker (ADR-0005): .env из .env.example
-docker compose -f docker/compose.yml --env-file .env up -d postgres redis   # только зависимости
-docker compose -f docker/compose.yml --env-file .env up -d --build          # + API в контейнере
+npm run dev:deps                     # PostgreSQL + Redis в Docker (dev), затем npm run dev
+npm run dev                          # api + web + admin с hot reload
 ```
 
 Задачи Nx запускать через `npx nx …`, а не напрямую инструментами. Флаги генераторов не угадывать —
@@ -181,6 +180,33 @@ Only these. No direct ABS database access. Financial operations require idempote
 | Синхронизация офлайн-точек | HTTPS + лицензионный ключ точки, идемпотентная очередь | JSON |
 
 Банковский эквайринг — БЕЗ интеграции. Новая интеграция = сначала новый ADR.
+
+## Environments
+
+| Среда | Env-файл (не в git) | Compose-проект | API | PostgreSQL / Redis наружу |
+|---|---|---|---|---|
+| dev | `.env` ← `.env.example` | `pharmacy-dev` | `127.0.0.1:3000` | `5432` / `6379` на localhost |
+| test | `docker/env/test.env` | `pharmacy-test` | `127.0.0.1:3100` | PostgreSQL `127.0.0.1:5433`, Redis — нет |
+| prod | `docker/env/prod.env` | `pharmacy-prod` | `127.0.0.1:3200` | нет (только сеть compose, C4) |
+
+```
+npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs> [service…] [--skip-checks]
+npm run stack -- test init     # env-файл из примера со случайными паролями (один раз)
+npm run test-env:build         # lint + test + static web/admin + образы с тегом <git sha>
+npm run test-env:up            # запуск и ожидание healthy;  test-env:down — остановка
+npm run prod:build / prod:up / prod:down
+```
+
+- Скрипт: `tools/scripts/stack.mjs`; compose: `docker/compose.yml` + `docker/compose.<env>.yml`.
+- `build` — ручной quality gate вместо CI (категория CI/CD на утверждении): lint + test всех
+  проектов, затем сборка. Для prod `--skip-checks` запрещён, а сборка — только из чистого дерева
+  git (тег образа = короткий sha; у test с незакоммиченными изменениями — `<sha>-dirty`).
+- `up` для test/prod запускает ровно те образы, что собрал `build` (`--no-build`).
+- Env-файлы сред лежат в `docker/env/`, а не `.env.test`: Nx автоматически грузит `.env.<имя>`
+  в задачи (`.env.test` попал бы в `nx test`). В корневом `.env` не задавать `NODE_ENV`.
+- `APP_ENV` (dev|test|prod) — среда развёртывания; `NODE_ENV` в test/prod всегда `production`.
+- web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (ADR-0011).
+- Сейчас обе среды запускаются локально; хостинг — открытый вопрос № 1 stack.md.
 
 ## Containers (ADR-0005)
 

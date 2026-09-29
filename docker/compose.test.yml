@@ -1,0 +1,20 @@
+# test: acceptance environment (customer test database, backlog W2-05). Same topology as prod,
+# smaller resources (C4 deployment). PostgreSQL is published on localhost only, for diagnostics.
+services:
+  postgres:
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5433}:5432'
+    deploy:
+      resources:
+        limits: { cpus: '1', memory: 1g }
+  redis:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 384m }
+  api:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '1', memory: 512m }

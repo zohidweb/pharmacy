@@ -9,6 +9,11 @@ class EnvironmentVariables {
   @IsOptional()
   NODE_ENV: 'development' | 'test' | 'production' = 'development';
 
+  // Deployment environment (docker/env/*.env); independent of NODE_ENV, which is `production` in test and prod.
+  @IsIn(['dev', 'test', 'prod'])
+  @IsOptional()
+  APP_ENV: 'dev' | 'test' | 'prod' = 'dev';
+
   // Env values are strings; convert explicitly instead of relying on emitted type metadata.
   @Type(() => Number)
   @IsInt()

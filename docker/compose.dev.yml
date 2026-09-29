@@ -1,0 +1,8 @@
+# dev: local development. PostgreSQL and Redis are published on localhost for `npx nx serve api`.
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:5432:5432'
+  redis:
+    ports:
+      - '127.0.0.1:6379:6379'

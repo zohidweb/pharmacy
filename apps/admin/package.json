@@ -14,6 +14,18 @@
         "options": {
           "command": "next dev -p 4300"
         }
+      },
+      "fsd": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          "{projectRoot}/src/**/*",
+          "{projectRoot}/steiger.config.mjs"
+        ],
+        "options": {
+          "command": "steiger ./src",
+          "cwd": "{projectRoot}"
+        }
       }
     }
   },

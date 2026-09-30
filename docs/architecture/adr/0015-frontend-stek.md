@@ -291,8 +291,8 @@ UX (подсказка до отправки), а не для безопасно
 библиотеки**; свой код — только там, где задача специфична и укладывается в десятки строк (сканер,
 Service Worker, тонкий API-клиент). Раскладка по сегментам FSD (ADR-0017): API-клиент — `shared/api`;
 запросы — `entities/*/api`, `features/*/api`; состояние — `*/model`; формы — `features/*/model`;
-i18n-провайдер и Service Worker — `_app`, словари — `shared/i18n`; буфер перебоев —
-`shared/lib/offline-queue`; маршруты — `app/` + `_pages`.
+i18n-провайдер и Service Worker — `src/app`, словари — `shared/i18n`; буфер перебоев —
+`shared/lib/offline-queue`; маршруты — корневая `app/` + слой `src/pages`.
 
 Версии на 2026-09-30 (npm): `@tanstack/react-query` 5.104 (MIT), `zustand` 5.0 (MIT),
 `react-hook-form` 7.89 (MIT), `@hookform/resolvers` 5.9 (MIT), `zod` 4.6 (MIT), `use-intl` 4.14 (MIT),

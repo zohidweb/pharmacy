@@ -70,7 +70,7 @@ pharmacy/
 │   │                 #   pricing, returns, billing, sync, fiscal, export-1c, audit}
 │   ├── api-e2e/      # e2e-тесты API (Jest)
 │   ├── web/          # Next.js: клиентский продукт (касса, склад, кабинет владельца)
-│   │                 #   app/ — маршруты (реэкспорты); src/{_app,_pages,widgets,features,entities,shared} — FSD (ADR-0017)
+│   │                 #   app/ — маршруты (реэкспорты), pages/ — пустая; src/{app,pages,widgets,features,entities,shared} — FSD (ADR-0017)
 │   └── admin/        # Next.js: админка оператора платформы — та же структура FSD
 │                     # web-e2e / admin-e2e — после ADR-0009
 ├── libs/
@@ -92,8 +92,9 @@ pharmacy/
 
 ```
 npm ci                               # установка строго по lock-файлу
-npx nx run-many -t build test lint   # всё
-npx nx affected -t build test lint   # только затронутое изменением
+npx nx run-many -t build test lint fsd   # всё (= npm run check)
+npx nx affected -t build test lint fsd   # только затронутое изменением
+npx nx fsd web / admin               # Steiger — слои FSD (ADR-0017)
 npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
 npx nx dev admin                     # http://localhost:4300
@@ -235,7 +236,7 @@ npm run prod:build / prod:up / prod:down
 
 ## CI/CD (ADR-0009)
 
-- CI — GitHub Actions (`ubuntu-latest`). Гейты PR: **checks** (`nx affected` lint/typecheck/test с
+- CI — GitHub Actions (`ubuntu-latest`). Гейты PR: **checks** (`nx affected` lint/fsd/typecheck/test с
   порогами покрытия/build), **api-e2e** (Node 22 и 24, PostgreSQL + Redis через `docker compose`),
   **web-e2e** (Playwright + axe). Nightly: `npm audit`, Trivy, Dependabot. Actions — только по SHA,
   `permissions: contents: read`, секретов в CI нет, Nx Cloud не подключается.

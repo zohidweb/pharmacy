@@ -35,18 +35,18 @@ Project class: Full
 | БД | PostgreSQL | ADR-0001 |
 | Кэш / сессии | Redis | ADR-0001 |
 | API-стиль | REST | ADR-0001 |
-| Аутентификация | Самописная (логин+пароль, PIN терминала) | ADR-0001; реализация — ADR-0008 (proposed) |
+| Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`, cookie-сессии (Redis; офлайн — PostgreSQL) | ADR-0001, ADR-0008 |
+| Авторизация | Модель прав «модуль × действие × охват точек» — **не решена**, отдельный ADR | — |
 | UI и стили (web, admin, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей | ADR-0007 |
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
-| Runtime / тесты | Node.js 24 (`.nvmrc`), npm, Jest | — |
+| Runtime / тесты | Node.js 22 LTS (≥ 22.20) или 24 LTS (`.nvmrc` — 24, Docker — 24), npm, Jest | ADR-0008 |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
-ADR-0008 реализация аутентификации (хеширование, сессии) ·
 ADR-0009 инструменты тестирования и пороги качества (в т.ч. Playwright для web/admin e2e) ·
 ADR-0012 reverse proxy и статика · ADR-0013 кросс-тенантный доступ · ADR-0014 протокол
-синхронизации офлайн-точек · ADR-0015 фронтенд-стек.
+синхронизации офлайн-точек · ADR-0015 фронтенд-стек · модель авторизации (ADR ещё не создан).
 
 ## Architecture references
 
@@ -166,7 +166,7 @@ The reviewer is a human developer of the team — never an AI. Before approving,
   libraries; nothing from `proposed` ADRs.
 - External calls go only to systems in the "Integrations" list.
 - No secrets or client data anywhere in the diff.
-- No self-made cryptography; password hashing only with the approach approved in ADR-0008.
+- No self-made cryptography; password hashing only with the approach approved in ADR-0008 (scrypt via `node:crypto`).
 - Financial operations carry idempotency and a correlation ID.
 - Error handling does not silently swallow failures.
 - tenant_id filtering present in every data access path (multi-tenancy isolation).

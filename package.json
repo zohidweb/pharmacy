@@ -75,7 +75,7 @@
     "libs/shared/*"
   ],
   "engines": {
-    "node": ">=24.18.0"
+    "node": "^22.20.0 || >=24.0.0"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

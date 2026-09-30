@@ -36,14 +36,17 @@ Project class: Full
 | Кэш / сессии | Redis | ADR-0001 |
 | API-стиль | REST | ADR-0001 |
 | Аутентификация | Самописная (логин+пароль, PIN терминала) | ADR-0001; реализация — ADR-0008 (proposed) |
+| Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
 | Runtime / тесты | Node.js 24 (`.nvmrc`), npm, Jest | — |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
-ADR-0006 слой доступа к данным и миграции · ADR-0007 CSS-подход и UI-кит (Tailwind, Base UI) ·
+ADR-0007 CSS-подход и UI-кит (Tailwind, Base UI) ·
 ADR-0008 реализация аутентификации (хеширование, сессии) ·
-ADR-0009 инструменты тестирования и пороги качества (в т.ч. Playwright для web/admin e2e).
+ADR-0009 инструменты тестирования и пороги качества (в т.ч. Playwright для web/admin e2e) ·
+ADR-0012 reverse proxy и статика · ADR-0013 кросс-тенантный доступ · ADR-0014 протокол
+синхронизации офлайн-точек · ADR-0015 фронтенд-стек.
 
 ## Architecture references
 
@@ -205,7 +208,7 @@ npm run prod:build / prod:up / prod:down
 - Env-файлы сред лежат в `docker/env/`, а не `.env.test`: Nx автоматически грузит `.env.<имя>`
   в задачи (`.env.test` попал бы в `nx test`). В корневом `.env` не задавать `NODE_ENV`.
 - `APP_ENV` (dev|test|prod) — среда развёртывания; `NODE_ENV` в test/prod всегда `production`.
-- web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (будущий ADR-0012).
+- web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (ADR-0012, proposed).
 - Сейчас обе среды запускаются локально; хостинг — открытый вопрос № 1 stack.md.
 
 ## Containers (ADR-0005)
@@ -214,7 +217,7 @@ npm run prod:build / prod:up / prod:down
   (роли `pharmacy_owner` / `pharmacy_app`, схема `pharmacy`, `pg_trgm`), `docker/redis` (без
   персистентности). Контекст сборки — корень репозитория (`.dockerignore`).
 - API в рантайме подключается ТОЛЬКО ролью `pharmacy_app`; `pharmacy_owner` — для миграций.
-- web/admin контейнеризуются вместе с reverse proxy после ADR-0012 (ещё не создан); до этого — `npx nx dev`.
+- web/admin контейнеризуются вместе с reverse proxy после принятия ADR-0012 (proposed); до этого — `npx nx dev`.
 - Порты в compose публикуются только на `127.0.0.1`.
 
 ## Local development secrets

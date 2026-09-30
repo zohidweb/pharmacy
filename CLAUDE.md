@@ -36,13 +36,13 @@ Project class: Full
 | Кэш / сессии | Redis | ADR-0001 |
 | API-стиль | REST | ADR-0001 |
 | Аутентификация | Самописная (логин+пароль, PIN терминала) | ADR-0001; реализация — ADR-0008 (proposed) |
+| UI и стили (web, admin, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей | ADR-0007 |
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
 | Runtime / тесты | Node.js 24 (`.nvmrc`), npm, Jest | — |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
-ADR-0007 CSS-подход и UI-кит (Tailwind, Base UI) ·
 ADR-0008 реализация аутентификации (хеширование, сессии) ·
 ADR-0009 инструменты тестирования и пороги качества (в т.ч. Playwright для web/admin e2e) ·
 ADR-0012 reverse proxy и статика · ADR-0013 кросс-тенантный доступ · ADR-0014 протокол
@@ -135,7 +135,7 @@ npm run dev                          # api + web + admin с hot reload
 | SQL, схема, миграции, запросы | скил `postgres-best-practices`; ревью — `postgresql-database-reviewer` |
 | React-код web/admin/ui | скил `react-dev` |
 | Токены, доступность, печать чеков | скил `ui-standards-tokens`; ревью — `ui-standards-expert` |
-| Tailwind (только после ADR-0007 accepted) | скил `tailwind-patterns` |
+| Tailwind-утилиты (ADR-0007) | скил `tailwind-patterns` |
 | Производительность фронтенда, касса | скил `web-performance-optimization` |
 | Новое приложение API | команда `/scaffold-nestjs-api` |
 | Архитектурное решение | команда `/03-adr` |

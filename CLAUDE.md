@@ -70,7 +70,7 @@ pharmacy/
 │   │                 #   pricing, returns, billing, sync, fiscal, export-1c, audit}
 │   ├── api-e2e/      # e2e-тесты API (Jest)
 │   ├── web/          # Next.js: клиентский продукт (касса, склад, кабинет владельца)
-│   │                 #   app/ — маршруты (реэкспорты); src/{_app,_pages,widgets,features,entities,shared} — FSD (ADR-0017)
+│   │                 #   app/ — маршруты (реэкспорты), pages/ — пустая; src/{app,pages,widgets,features,entities,shared} — FSD (ADR-0017)
 │   └── admin/        # Next.js: админка оператора платформы — та же структура FSD
 │                     # web-e2e / admin-e2e — после ADR-0009
 ├── libs/

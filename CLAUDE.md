@@ -45,8 +45,7 @@ Project class: Full
 | CI | GitHub Actions | ADR-0009 |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
-ADR-0012 reverse proxy и статика · ADR-0014 протокол
-синхронизации офлайн-точек · ADR-0015 фронтенд-стек · модель авторизации (ADR ещё не создан).
+ADR-0012 reverse proxy и статика (отложен до выбора хостинга) · ADR-0015 фронтенд-стек · модель авторизации (ADR ещё не создан).
 
 ## Architecture references
 

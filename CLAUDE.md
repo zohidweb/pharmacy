@@ -36,7 +36,7 @@ Project class: Full
 | Кэш / сессии | Redis | ADR-0001 |
 | API-стиль | REST | ADR-0001 |
 | Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`, cookie-сессии (Redis; офлайн — PostgreSQL) | ADR-0001, ADR-0008 |
-| Авторизация | Модель прав «модуль × действие × охват точек» — **не решена**, отдельный ADR | — |
+| Авторизация | RBAC: динамические роли тенанта, каталог прав `модуль:действие` (`libs/shared/domain`), одна роль + охват точек, запрет эскалации, проверка только на сервере | ADR-0018 |
 | Архитектура фронтенда | Feature-Sliced Design в `apps/web` и `apps/admin` («pages first», Steiger) | ADR-0017 |
 | UI и стили (web, admin, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей | ADR-0007 |
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
@@ -46,7 +46,7 @@ Project class: Full
 | CI | GitHub Actions | ADR-0009 |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
-ADR-0012 reverse proxy и статика (отложен до выбора хостинга) · ADR-0015 фронтенд-стек · модель авторизации (ADR ещё не создан).
+ADR-0012 reverse proxy и статика (отложен до выбора хостинга) · ADR-0015 фронтенд-стек.
 
 ## Architecture references
 

@@ -37,6 +37,7 @@ Project class: Full
 | API-стиль | REST | ADR-0001 |
 | Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`, cookie-сессии (Redis; офлайн — PostgreSQL) | ADR-0001, ADR-0008 |
 | Авторизация | Модель прав «модуль × действие × охват точек» — **не решена**, отдельный ADR | — |
+| Архитектура фронтенда | Feature-Sliced Design в `apps/web` и `apps/admin` («pages first», Steiger) | ADR-0017 |
 | UI и стили (web, admin, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей | ADR-0007 |
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
@@ -68,7 +69,8 @@ pharmacy/
 │   │                 #   pricing, returns, billing, sync, fiscal, export-1c, audit}
 │   ├── api-e2e/      # e2e-тесты API (Jest)
 │   ├── web/          # Next.js: клиентский продукт (касса, склад, кабинет владельца)
-│   └── admin/        # Next.js: админка оператора платформы
+│   │                 #   app/ — маршруты (реэкспорты); src/{_app,_pages,widgets,features,entities,shared} — FSD (ADR-0017)
+│   └── admin/        # Next.js: админка оператора платформы — та же структура FSD
 │                     # web-e2e / admin-e2e — после ADR-0009
 ├── libs/
 │   ├── shared/dto/     # @pharmacy/shared-dto — DTO и контракты REST API (единственный источник типов API)

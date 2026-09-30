@@ -1,6 +1,6 @@
 # ADR-0017: Архитектура фронтенда — Feature-Sliced Design для `apps/web` и `apps/admin`
 
-- **Статус:** proposed
+- **Статус:** accepted (2026-09-30, архитектор проекта — APPROVAL.md)
 - **Дата:** 2026-09-30
 - **Авторы:** Zohid Saidov (z.saidov@eskhata.com), команда проекта Pharmacy (текст подготовлен с помощью AI)
 - **Принимает:** архитектор проекта (docs/architecture/APPROVAL.md)

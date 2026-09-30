@@ -41,10 +41,10 @@ Project class: Full
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
-| Runtime / тесты | Node.js 22 LTS (≥ 22.20) или 24 LTS (`.nvmrc` — 24, Docker — 24), npm, Jest | ADR-0008 |
+| Runtime / тесты | Node.js 22 LTS (≥ 22.20) или 24 LTS (`.nvmrc` — 24, Docker — 24), npm, Jest; e2e фронтенда — Playwright | ADR-0008, ADR-0009 |
+| CI | GitHub Actions | ADR-0009 |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
-ADR-0009 инструменты тестирования и пороги качества (в т.ч. Playwright для web/admin e2e) ·
 ADR-0012 reverse proxy и статика · ADR-0013 кросс-тенантный доступ · ADR-0014 протокол
 синхронизации офлайн-точек · ADR-0015 фронтенд-стек · модель авторизации (ADR ещё не создан).
 
@@ -228,11 +228,14 @@ npm run prod:build / prod:up / prod:down
 - Production secrets: хранилище секретов пока не выбрано — через ADR (вопрос № 8 в stack.md);
   до этого — env-файлы только на хосте среды (`docker/env/*.env`).
 
-## CI/CD (interim rule)
+## CI/CD (ADR-0009)
 
-CI/CD пока не выбран — вводится через ADR (например, GitHub Actions). До этого ADR:
-- run build, test, and lint manually before every PR (`npm run check`);
-- do not add pipeline files (`.github/workflows` и т.п.) without an accepted ADR.
+- CI — GitHub Actions (`ubuntu-latest`). Гейты PR: **checks** (`nx affected` lint/typecheck/test с
+  порогами покрытия/build), **api-e2e** (Node 22 и 24, PostgreSQL + Redis через `docker compose`),
+  **web-e2e** (Playwright + axe). Nightly: `npm audit`, Trivy, Dependabot. Actions — только по SHA,
+  `permissions: contents: read`, секретов в CI нет, Nx Cloud не подключается.
+- Пока workflow-файлы не созданы — перед каждым PR вручную `npm run check`.
+- Деплой (CD) — после выбора хостинга, отдельным ADR.
 
 ## Security constraints
 

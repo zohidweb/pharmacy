@@ -19,7 +19,11 @@ export function fsdLayerRules() {
               message: `FSD (ADR-0017): layer "${layer}" must not import from higher layer "${higher}".`,
             })),
             {
-              group: SLICED_LAYERS.map((sliced) => `@/${sliced}/*/*`),
+              group: [
+                ...SLICED_LAYERS.map((sliced) => `@/${sliced}/*/*`),
+                // entities cross-imports go through the slice's @x public API (ADR-0017 §3)
+                '!@/entities/*/@x',
+              ],
               message:
                 'FSD (ADR-0017): import a slice only through its public API (index.ts).',
             },

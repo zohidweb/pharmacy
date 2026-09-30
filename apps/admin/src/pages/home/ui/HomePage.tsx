@@ -1,12 +1,12 @@
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- the icons below
    are inline SVGs, which have no tag to swap the role for. */
-import styles from './page.module.css';
+import styles from './HomePage.module.css';
 
-export default function Index() {
+export function HomePage() {
   /*
    * Replace the elements below with your own.
    *
-   * Note: The corresponding styles are in the ./index.css file.
+   * Note: The corresponding styles are in the ./HomePage.module.css file.
    */
   return (
     <div className={styles.page}>

@@ -5,7 +5,10 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "preserve",
-    "types": ["jest", "node"]
+    "types": ["jest", "node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": [
     "jest.config.ts",
@@ -18,7 +21,10 @@
     "src/**/*.spec.js",
     "src/**/*.test.jsx",
     "src/**/*.spec.jsx",
-    "src/**/*.d.ts"
+    "src/**/*.d.ts",
+    "specs/**/*.ts",
+    "specs/**/*.tsx",
+    "app/**/*.tsx"
   ],
   "references": [
     {

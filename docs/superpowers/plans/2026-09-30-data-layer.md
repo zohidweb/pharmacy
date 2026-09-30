@@ -9,6 +9,7 @@
 **Tech Stack:** NestJS 11, `kysely` 0.29.6, `pg` 8.23.0, `node-pg-migrate` 9.0.0, `kysely-codegen` 0.20.0, `@types/pg` 8.23.1, PostgreSQL 17 (`docker/postgres`), Jest + SWC.
 
 **Spec:**
+- `docs/architecture/data-model/` — физическая модель данных (схема первой миграции — `01-platform-org.md`);
 - `docs/architecture/adr/0006-orm-i-migracii.md` — правила 1–9;
 - `docs/architecture/adr/0013-krosstenantnyj-dostup.md` — классы таблиц, роли, п. 7 «Правило для кода», п. 8 «Тесты изоляции»;
 - `docs/architecture/adr/0018-model-avtorizacii.md` — п. 2–3, 7: `roles`, `role_permissions`, `employee_stores`, `permissions_version`;
@@ -20,6 +21,7 @@
 - Версии закреплены точно (без `^`): `kysely` 0.29.6, `pg` 8.23.0, `node-pg-migrate` 9.0.0 — в `dependencies` проекта `apps/api`; `kysely-codegen` 0.20.0, `@types/pg` 8.23.1 — в `devDependencies`.
 - Ни одна рантайм-роль не получает `BYPASSRLS`. `pharmacy_app` и `pharmacy_platform` — `LOGIN NOBYPASSRLS`, `pharmacy_resolver` — `NOLOGIN NOBYPASSRLS`, `pharmacy_owner` — только миграции.
 - Tenant-политика — только в fail-closed форме: `using/with check (tenant_id = (select current_setting('app.tenant_id')::uuid))`, без `missing_ok`. Все политики — с явным `TO <роль>`, политик `TO public` нет.
+- id — UUIDv7 от приложения (`newId()`, ADR-0014 §2), без `default` в БД; у таблиц класса `tenant` первичный ключ `(tenant_id, id)`, ссылки внутри тенанта составные. Схема таблиц — `docs/architecture/data-model/` (одобрена архитектором 2026-09-30).
 - `ENABLE` + `FORCE ROW LEVEL SECURITY` на каждой таблице классов `tenant`, `tenant-export`, `platform`, `system`.
 - Default privileges для `pharmacy_app` не выдаются. Гранты — явно в миграции по классу таблицы. `alter default privileges for role pharmacy_owner revoke execute on functions from public`.
 - Миграции — `apps/api/migrations/*.sql`, только Up (без `-- Down Migration`). Таблица журнала — `public.pgmigrations`, схема `pharmacy` содержит только прикладные таблицы.
@@ -259,74 +261,103 @@ git commit -m "build(api): node-pg-migrate runner and integration test stand on 
 
 ---
 
-### Task 4: Первая миграция — тенанты, точки, роли и назначения; манифест классов
+### Task 4: Первая миграция — организация сети по модели данных; манифест классов
+
+**Spec этой задачи:**
+- `docs/architecture/data-model/README.md` — соглашения и «Порядок миграций», п. 1;
+- `docs/architecture/data-model/01-platform-org.md` — колонки, типы, проверки и индексы таблиц.
+
+Схему таблиц брать **оттуда**; здесь — только решения, которых там нет.
 
 **Files:**
-- Create: `apps/api/migrations/<timestamp>_authz-foundation.sql` — через `npx node-pg-migrate create authz-foundation --migration-file-language sql -m apps/api/migrations`, секцию Down удалить
+- Create: `apps/api/migrations/<timestamp>_org-foundation.sql` — через `npx node-pg-migrate create org-foundation --migration-file-language sql -m apps/api/migrations`, секцию Down удалить
+- Create: `apps/api/src/core/database/ids.ts`, `apps/api/src/core/database/ids.spec.ts`
 - Create: `apps/api/src/core/database/table-classes.ts`
 - Create: `apps/api/src/core/database/catalog.int-spec.ts`, `apps/api/src/core/database/isolation.int-spec.ts`
-- Create: `apps/api/test/integration/seed.ts` — `seedTenant(code: string): Promise<{ tenantId: string; storeId: string }>`: тенант под `pharmacy_platform`, точка под `pharmacy_app` в контексте тенанта, случайные UUID
+- Create: `apps/api/test/integration/seed.ts` — `seedTenant(code: string): Promise<{ tenantId: string; legalEntityId: string; storeId: string }>`: тенант под `pharmacy_platform`, юрлицо и точка под `pharmacy_app` в контексте тенанта, id — `newId()`
+- Modify: `apps/api/package.json`, `package-lock.json` — `uuid` 14.0.2 в `dependencies` (точная версия, MIT; UUIDv7 — ADR-0014 §2)
 
 **Interfaces:**
 - Produces:
+  - `newId(): string` — UUIDv7 (`v7` из `uuid`); единственный генератор id приложения;
   - `type TableClass = 'tenant' | 'tenant-export' | 'platform' | 'shared' | 'system'`;
-  - `TABLE_CLASSES: Readonly<Record<string, TableClass>>` = `{ tenants: 'platform', stores: 'tenant', roles: 'tenant', role_permissions: 'tenant', employees: 'tenant', employee_stores: 'tenant' }`;
+  - `TABLE_CLASSES: Readonly<Record<string, TableClass>>` = `{ tenants: 'platform', tenant_settings: 'tenant', legal_entities: 'tenant', stores: 'tenant', employees: 'tenant', employee_credentials: 'tenant', roles: 'tenant', role_permissions: 'tenant', employee_stores: 'tenant', terminals: 'tenant' }`;
   - `RESOLVER_FUNCTIONS: readonly string[]` = `[]` (ADR-0013 п. 3; резолверы — в следующих планах);
   - `STORE_PLATFORM_COLUMNS` = `['id','tenant_id','name','mode','status','created_at','closed_at']`.
 
-Схема миграции (все таблицы в `pharmacy`, `id uuid primary key default gen_random_uuid()`, `created_at timestamptz not null default now()`):
+Решения миграции (дополняют 01-platform-org.md):
+- **`id` без `default`:** id генерирует приложение (`newId()`).
+- **Первичные ключи:**
+  - таблицы класса `tenant` — `(tenant_id, id)`;
+  - `tenant_settings` — `tenant_id`;
+  - `employee_credentials` — `(tenant_id, employee_id)`;
+  - `role_permissions` — `(tenant_id, role_id, permission)`;
+  - `employee_stores` — `(tenant_id, employee_id, store_id)`.
+- **Ссылки внутри тенанта** — составные: `(tenant_id, x_id) references t (tenant_id, id)`. `tenant_id` каждой таблицы — `references tenants (id)`.
+- **`roles.name`** — `jsonb` с `check (jsonb_typeof(name) = 'object' and name <> '{}'::jsonb)` (D6).
+- **Индексы** — под каждый составной внешний ключ, который не покрыт ведущими колонками первичного или уникального ключа.
+- **Права.** Политики — с `to <роль>`, у каждой таблицы `enable` + `force row level security`:
 
-| Таблица | Колонки и ограничения | Права |
+| Таблица | `pharmacy_app` | `pharmacy_platform` |
 |---|---|---|
-| `tenants` | `code text not null unique check (code ~ '^[a-z0-9-]{3,32}$')`, `name text not null`, `status text not null default 'active' check (status in ('active','suspended'))` | `pharmacy_platform`: `select, insert, update`, политика `platform_all … to pharmacy_platform using (true) with check (true)`; `pharmacy_app`: `select`, политика `tenant_self_read for select to pharmacy_app using (id = (select current_setting('app.tenant_id')::uuid))` |
-| `stores` | `tenant_id uuid not null references tenants(id)`, `name text not null`, `address text`, `mode text not null default 'online' check (mode in ('online','offline'))`, `status text not null default 'active' check (status in ('active','closed'))`, `closed_at timestamptz`, `unique (tenant_id, id)` | `pharmacy_app`: DML + `tenant_isolation`; `pharmacy_platform`: `select` колонок `STORE_PLATFORM_COLUMNS` + `platform_registry_read for select … using (true)`, `update (mode)` + `platform_store_mode for update … using (true) with check (true)` |
-| `roles` | `tenant_id uuid not null references tenants(id)`, `name text not null`, `is_owner boolean not null default false`, `unique (tenant_id, id)`, `unique (tenant_id, name)`, уникальный индекс `(tenant_id) where is_owner` | `pharmacy_app`: DML + `tenant_isolation` |
-| `role_permissions` | `tenant_id uuid not null`, `role_id uuid not null`, `permission text not null check (permission ~ '^[a-z0-9-]+:[a-z0-9-]+$')`, `primary key (tenant_id, role_id, permission)`, `foreign key (tenant_id, role_id) references roles (tenant_id, id) on delete cascade` | то же |
-| `employees` | `tenant_id uuid not null references tenants(id)`, `role_id uuid not null`, `login text not null`, `full_name text not null`, `store_scope text not null check (store_scope in ('all','list'))`, `status text not null default 'active' check (status in ('active','blocked'))`, `permissions_version bigint not null default 1`, `unique (tenant_id, id)`, уникальный индекс `(tenant_id, lower(login))`, `foreign key (tenant_id, role_id) references roles (tenant_id, id)`, индекс `(tenant_id, role_id)` | то же |
-| `employee_stores` | `tenant_id`, `employee_id`, `store_id` (все `uuid not null`), `primary key (tenant_id, employee_id, store_id)`, `foreign key (tenant_id, employee_id) references employees (tenant_id, id) on delete cascade`, `foreign key (tenant_id, store_id) references stores (tenant_id, id)`, индекс `(tenant_id, store_id)` | то же |
+| `tenants` | `select` + `tenant_self_read for select using (id = (select current_setting('app.tenant_id')::uuid))` | `select, insert, update` + `platform_all using (true) with check (true)` |
+| `stores` | DML + `tenant_isolation` | `select` колонок `STORE_PLATFORM_COLUMNS` + `platform_registry_read for select using (true)`; `update (mode)` + `platform_store_mode for update using (true) with check (true)` |
+| остальные восемь | DML + `tenant_isolation` | нет |
 
-`tenant_isolation` — политика из Global Constraints с `to pharmacy_app`. У каждой таблицы — `enable` и `force row level security`.
+`tenant_isolation` — политика из Global Constraints с `to pharmacy_app`.
 
-- [ ] **Step 1: Тест каталога `catalog.int-spec.ts`** — под `ownerPool()`. Отдельный `it` на каждое правило ADR-0013 п. 8, сообщение перечисляет нарушителей:
-  - `every table in schema pharmacy is in TABLE_CLASSES and vice versa`: `pg_class` с `relkind in ('r','p')` против ключей манифеста;
+- [ ] **Step 1: Тест `ids.spec.ts`:**
+  - `newId()` возвращает UUID версии 7 (`/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/`);
+  - два вызова подряд дают возрастающие строки (`a < b`).
+
+- [ ] **Step 2: Тест каталога `catalog.int-spec.ts`** — под `ownerPool()`, отдельный `it` на каждое правило ADR-0013 п. 8, сообщение перечисляет нарушителей:
+  - `every table in schema pharmacy is in TABLE_CLASSES and vice versa` (`pg_class`, `relkind in ('r','p')`);
   - `RLS is enabled and forced on tenant, tenant-export, platform and system tables`;
-  - `pharmacy_app has no insert/update/delete on platform tables`: `has_table_privilege`;
-  - `pharmacy_platform has no table privileges on tenant tables and only the registry columns of stores`: `has_table_privilege` по `select/insert/update/delete` = false; `has_column_privilege(…, 'select')` — true ровно для `STORE_PLATFORM_COLUMNS`; `update` — только `mode`;
-  - `only superusers bypass RLS`: `select rolname from pg_roles where rolbypassrls and not rolsuper` → пусто;
-  - `security definer functions are exactly the resolver list`: имена `prosecdef`-функций схемы = `RESOLVER_FUNCTIONS`; для каждой — владелец `pharmacy_resolver`, в `proconfig` есть `search_path=`, `has_function_privilege('public', oid, 'execute')` = false;
-  - `pharmacy_app is not a member of pharmacy_platform or pharmacy_resolver`: `pg_has_role(…, 'member')`;
-  - `no policy targets public, tenant policies target pharmacy_app`: `pg_policies`;
-  - `no default privileges grant anything to pharmacy_app`: `pg_default_acl`.
+  - `pharmacy_app has no insert/update/delete on platform tables`;
+  - `pharmacy_platform has no table privileges on tenant tables and only the registry columns of stores`:
+    - `has_table_privilege` (`select/insert/update/delete`) = false;
+    - `has_column_privilege(…, 'select')` true ровно для `STORE_PLATFORM_COLUMNS`;
+    - `update` — только `mode`;
+  - `only superusers bypass RLS`;
+  - `security definer functions are exactly the resolver list` — владелец `pharmacy_resolver`, `search_path=` в `proconfig`, нет `EXECUTE` у `PUBLIC`;
+  - `pharmacy_app is not a member of pharmacy_platform or pharmacy_resolver`;
+  - `no policy targets public, tenant policies target pharmacy_app`;
+  - `no default privileges grant anything to pharmacy_app`;
+  - `every tenant-class table has tenant_id leading its primary key` — по `pg_index` / `pg_attribute`: первая колонка PK — `tenant_id` для всех таблиц класса `tenant`;
+  - `no id column has a default` — `pg_attrdef` для колонок `id`: пусто.
 
-- [ ] **Step 2: Тест поведения `isolation.int-spec.ts`** — тенанты A и B из `seedTenant`. Хелпер `asTenant(tenantId, fn)` на `appPool()`: `begin; select set_config('app.tenant_id', $1, true); …; rollback|commit`. Кейсы:
-  - `app: reads and updates of another tenant's rows affect 0 rows`: `stores` B из контекста A;
-  - `app: insert with another tenant_id violates the policy`: код `42501`;
-  - `app: a query without tenant context fails`: `select * from stores` вне транзакции с `set_config` → ошибка (код `42704` или `22P02`);
-  - `app: sees only its own tenants row and cannot insert tenants`: 1 строка; `insert` → `42501`;
-  - `app: composite FK rejects a store of another tenant in employee_stores`: сотрудник A, `store_id` B → `23503`;
-  - `platform: tenant tables are not readable`: `select * from roles` → `42501`;
-  - `platform: store registry columns are readable, address is not`: `select id, name, mode from stores` видит A и B; `select address from stores` → `42501`;
-  - `platform: may change store mode only`: `update stores set mode = 'offline'` → 1 строка; `update stores set name = 'x'` → `42501`.
+- [ ] **Step 3: Тест поведения `isolation.int-spec.ts`** — тенанты A и B из `seedTenant`. Хелпер `asTenant(tenantId, fn)` на `appPool()`: `begin; select set_config('app.tenant_id', $1, true); …; rollback|commit`. Кейсы:
+  - `app: reads and updates of another tenant's rows affect 0 rows` — `stores` и `legal_entities` B из контекста A;
+  - `app: insert with another tenant_id violates the policy` — `42501`;
+  - `app: a query without tenant context fails` — `42704` или `22P02`;
+  - `app: sees only its own tenants row and cannot insert tenants` — 1 строка; `insert` → `42501`;
+  - `app: composite FK rejects a store of another tenant in employee_stores` — сотрудник A, `store_id` B → `23503`;
+  - `app: composite FK rejects a legal entity of another tenant in stores` — `23503`;
+  - `platform: tenant tables are not readable` — `select * from roles` и `select * from employee_credentials` → `42501`;
+  - `platform: store registry columns are readable, address is not` — `select id, name, mode from stores` видит A и B; `select address from stores` → `42501`;
+  - `platform: may change store mode only` — `update stores set mode = 'offline'` → 1 строка; `update stores set name = 'x'` → `42501`.
 
-- [ ] **Step 3: Запустить — должны упасть**
+- [ ] **Step 4: Запустить — должны упасть**
 
-Run: `npx nx run api:integration`
-Expected: FAIL — `Cannot find module './table-classes'`; после создания манифеста — таблиц нет (`relation "stores" does not exist`), тест каталога называет отсутствующие таблицы.
+Run: `npx nx test api --skip-nx-cache` и `npx nx run api:integration`
+Expected:
+- FAIL: `Cannot find module './ids'` / `'./table-classes'`;
+- после создания модулей — таблиц ещё нет, тест каталога называет отсутствующие таблицы.
 
-- [ ] **Step 4: Написать миграцию и манифест** по таблице выше. Миграция — один `.sql`: таблицы, индексы, RLS, политики, гранты. Ревью миграции — агент `postgresql-database-reviewer` (ADR-0006 п. 7); замечания Critical/Important — исправить до коммита.
+- [ ] **Step 5: Реализовать** `ids.ts`, манифест и миграцию по 01-platform-org.md и решениям выше. Миграция — один `.sql`: таблицы, индексы, RLS, политики, гранты. Ревью миграции — агент `postgresql-database-reviewer` (ADR-0006 п. 7); замечания Critical/Important — исправить до коммита.
 
-- [ ] **Step 5: Запустить — должны пройти**
+- [ ] **Step 6: Запустить — должны пройти**
 
-Run: `npx nx run api:integration`
-Expected: PASS — `stand`, `catalog` (9) и `isolation` (8) тестов.
+Run: `npx nx test api --skip-nx-cache` и `npx nx run api:integration`
+Expected: PASS — `ids`, `stand`, `catalog` (11) и `isolation` (9).
 
-- [ ] **Step 6: Применить к dev-БД** — `npx nx run api:migrate`. Expected: применена 1 миграция, повторный запуск — «No migrations to run».
+- [ ] **Step 7: Применить к dev-БД** — `npx nx run api:migrate`. Expected: применена 1 миграция, повторный запуск — «No migrations to run».
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/api/migrations apps/api/src/core/database/table-classes.ts apps/api/src/core/database/*.int-spec.ts apps/api/test/integration/seed.ts
-git commit -m "feat(api): first migration — tenants, stores, roles, employees with RLS and table classes (ADR-0013, ADR-0018)"
+git add apps/api/package.json package-lock.json apps/api/migrations apps/api/src/core/database/ids.ts apps/api/src/core/database/ids.spec.ts apps/api/src/core/database/table-classes.ts apps/api/src/core/database/*.int-spec.ts apps/api/test/integration/seed.ts
+git commit -m "feat(api): first migration — tenant organization per the data model, table classes (ADR-0013, ADR-0018)"
 ```
 
 ---

@@ -13,6 +13,7 @@ const config = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
   coverageDirectory: '../../coverage/apps/web',
   testEnvironment: 'jsdom',
+  moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
 };
 
 const jestConfig = createJestConfig(config);

@@ -1,9 +1,9 @@
 # NestJS REST — сервисный слой и внешние клиенты
 
 Паттерны сервисов apps/api. Внешние вызовы — **только** к системам закрытого списка:
-курсы НБТ (HTTPS), фискализация (адаптер; в MVP — заглушка), синхронизация офлайн-точек
-(HTTPS + лицензионный ключ), 1С (только файлы, без сетевого вызова). Новая интеграция =
-сначала ADR.
+фискализация (адаптер; в MVP — заглушка), синхронизация офлайн-точек (HTTPS + лицензионный
+ключ), 1С (только файлы, без сетевого вызова). Валюта — только TJS (ADR-0016).
+Новая интеграция = сначала ADR.
 
 ## 1. Сервис со списком
 
@@ -21,63 +21,7 @@ export class SuppliersService {
 }
 ```
 
-## 2. Внешний клиент: курсы НБТ
-
-Курс нужен на **дату операции** (закупочная цена партии в валюте → TJS). Курс, однажды
-применённый к документу, сохраняется в документе и больше не пересчитывается.
-
-```typescript
-// apps/api/src/modules/pricing/nbt-rates.client.ts
-import { BadGatewayException, Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigType } from '@nestjs/config';
-import nbtConfig from '../../config/nbt.config';
-import { getCorrelationId } from '../../common/context/request-context';
-
-export interface NbtRate {
-  currency: string;     // ISO 4217, e.g. 'USD'
-  onDate: string;       // 'YYYY-MM-DD'
-  /** Rate as a scaled integer: TJS dirams per `nominal` units of currency — never a float in business logic */
-  diramsPerNominal: number;
-  nominal: number;
-}
-
-@Injectable()
-export class NbtRatesClient {
-  private readonly logger = new Logger(NbtRatesClient.name);
-
-  constructor(@Inject(nbtConfig.KEY) private readonly cfg: ConfigType<typeof nbtConfig>) {}
-
-  async fetchRates(onDate: string): Promise<NbtRate[]> {
-    const url = new URL('/<rates-path>', this.cfg.baseUrl); // real path/format — per NBT spec (JSON/HTML)
-    url.searchParams.set('date', onDate);
-    try {
-      const res = await fetch(url, {
-        signal: AbortSignal.timeout(this.cfg.timeoutMs),
-        headers: { Accept: 'application/json' },
-      });
-      if (!res.ok) throw new Error(`NBT responded ${res.status}`);
-      return this.parse(await res.text(), onDate); // strict parsing, reject unknown shapes
-    } catch (error) {
-      this.logger.warn(`NBT rates unavailable for ${onDate} [cid=${getCorrelationId()}]: ${(error as Error).message}`);
-      throw new BadGatewayException('Exchange rate provider is unavailable');
-    }
-  }
-
-  private parse(body: string, onDate: string): NbtRate[] {
-    // convert the decimal string from NBT to a scaled integer here, once; no float arithmetic downstream
-    throw new Error('implement per NBT format');
-  }
-}
-```
-
-- Загрузка курсов — плановая задача (`@nestjs/schedule`) с сохранением в таблицу курсов;
-  прикладной код читает курс **из БД**, а не ходит в НБТ на каждый документ.
-- Таймаут обязателен; повторы — ограниченные, вне транзакции БД. Автомат размыкания —
-  `nestjs-resilience-circuit-breaker.md`.
-- Нет курса на дату → документ нельзя провести (422 с понятным `code`), а не «подставить вчерашний» молча.
-- Используется встроенный `fetch` Node LTS — отдельный HTTP-клиент не нужен.
-
-## 3. Адаптер фискализации (порт + заглушка MVP)
+## 2. Адаптер фискализации (порт + заглушка MVP)
 
 Вендор ККМ не выбран (открытый вопрос stack.md). Касса зависит только от порта — замена
 заглушки на реального вендора не меняет модуль `pos`.
@@ -127,6 +71,76 @@ export class FiscalModule {}
 Отправка чека в фискализацию — **после** коммита транзакции чека, через очередь-таблицу
 PostgreSQL (`nestjs-messaging-basics.md`): недоступность ККМ не блокирует продажу, повтор —
 с тем же idempotency key.
+
+## 3. Внешний HTTP-клиент: реализация адаптера фискализации
+
+Образец исходящего HTTP-вызова в проекте (кроме синхронизации точек) — реализация порта
+`FiscalRegistrar` для вендора ККМ. Вендор не выбран: путь, формат тела и имя заголовка
+идемпотентности — по его спецификации; до выбора работает `StubFiscalRegistrar`.
+
+```typescript
+// apps/api/src/modules/fiscal/http-fiscal-registrar.ts — skeleton until the KKM vendor is chosen
+import { BadGatewayException, Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
+import fiscalConfig from '../../config/fiscal.config';
+import { getCorrelationId } from '../../common/context/request-context';
+import { FiscalReceipt, FiscalRegistrar, FiscalResult } from './fiscal-registrar.port';
+
+@Injectable()
+export class HttpFiscalRegistrar implements FiscalRegistrar {
+  private readonly logger = new Logger(HttpFiscalRegistrar.name);
+
+  constructor(@Inject(fiscalConfig.KEY) private readonly cfg: ConfigType<typeof fiscalConfig>) {}
+
+  async register(receipt: FiscalReceipt, idempotencyKey: string): Promise<FiscalResult> {
+    const url = new URL('/<receipts-path>', this.cfg.baseUrl); // real path/format — per vendor spec
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        signal: AbortSignal.timeout(this.cfg.timeoutMs),
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,          // header name — per vendor spec
+          'X-Correlation-Id': getCorrelationId() ?? idempotencyKey,
+        },
+        body: JSON.stringify(this.toVendorPayload(receipt)), // amounts stay integer dirams (TJS only)
+      });
+      if (!res.ok) throw new Error(`KKM vendor responded ${res.status}`);
+      return this.parse(await res.text()); // strict parsing, reject unknown shapes
+    } catch (error) {
+      this.logger.warn(`fiscal registration failed receipt=${receipt.receiptId} [cid=${getCorrelationId()}]: ${(error as Error).message}`);
+      throw new BadGatewayException('Fiscal registrar is unavailable');
+    }
+  }
+
+  private toVendorPayload(receipt: FiscalReceipt): unknown {
+    throw new Error('implement per vendor format'); // no PII beyond what the fiscal law requires
+  }
+
+  private parse(body: string): FiscalResult {
+    throw new Error('implement per vendor format');
+  }
+}
+```
+
+```typescript
+// fiscal.module.ts — after the vendor is chosen: implementation selected by config (FISCAL_ADAPTER)
+{
+  provide: FISCAL_REGISTRAR,
+  inject: [fiscalConfig.KEY],
+  useFactory: (cfg: ConfigType<typeof fiscalConfig>): FiscalRegistrar =>
+    cfg.adapter === 'http' ? new HttpFiscalRegistrar(cfg) : new StubFiscalRegistrar(),
+}
+```
+
+- Вызов идёт только из обработчика задачи `fiscal.send` (очередь-таблица), никогда из
+  транзакции чека; касса не ждёт ККМ.
+- Таймаут обязателен (`FISCAL_TIMEOUT_MS`); повторы — ограниченные, вне транзакции БД, всегда с
+  тем же idempotency key задачи. Автомат размыкания — `nestjs-resilience-circuit-breaker.md`.
+- Бизнес-отказ вендора (`status: 'rejected'`) отличайте от сбоя транспорта: повторяется только
+  сбой (сеть, таймаут, 5xx → `BadGatewayException`), отказ фиксируется в результате фискализации.
+- Используется встроенный `fetch` Node LTS — отдельный HTTP-клиент не нужен. Адрес вендора — из
+  конфигурации (`nestjs-config-basics.md`), только HTTPS.
 
 ## 4. Массовые операции
 

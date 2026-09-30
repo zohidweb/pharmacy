@@ -17,13 +17,13 @@ describe('CircuitBreaker', () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
-    breaker = new CircuitBreaker({ name: 'nbt-rates', failureThreshold: 3, resetTimeoutMs: 30_000, halfOpenMaxCalls: 1 });
+    breaker = new CircuitBreaker({ name: 'fiscal', failureThreshold: 3, resetTimeoutMs: 30_000, halfOpenMaxCalls: 1 });
   });
   afterEach(() => jest.useRealTimers());
 
   const failTimes = async (n: number) => {
-    const op = jest.fn().mockRejectedValue(new Error('NBT down'));
-    for (let i = 0; i < n; i++) await expect(breaker.execute(op)).rejects.toThrow('NBT down');
+    const op = jest.fn().mockRejectedValue(new Error('KKM vendor down'));
+    for (let i = 0; i < n; i++) await expect(breaker.execute(op)).rejects.toThrow('KKM vendor down');
     return op;
   };
 

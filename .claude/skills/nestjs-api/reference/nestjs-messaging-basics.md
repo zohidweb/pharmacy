@@ -18,9 +18,8 @@
 | `fiscal.send` | fiscal | Отправка чека в адаптер фискализации (в MVP — заглушка) | outbox в транзакции чека |
 | `sync.upload` | sync (офлайн-точка) | Досылка операций точки в облако по HTTPS | outbox в транзакции операции |
 | `sync.apply` | sync (облако) | Применение принятых операций точки | при приёме пачки |
-| `nbt-rates.fetch` | pricing | Загрузка курсов НБТ на дату | планировщик |
 | `export-1c.build` | export-1c | Формирование файла CommerceML/XML за период | по запросу пользователя |
-| `billing.invoice` | billing | Счета тенантам за период | планировщик |
+| `billing.invoice` | billing | Счета тенантам за период (в сомони, ADR-0016) | планировщик |
 
 Названия и состав очередей — иллюстрация; фиксируются при реализации модулей.
 
@@ -31,7 +30,7 @@ DDL иллюстративный — реальная схема создаёт�
 ```sql
 CREATE TABLE job_queue (
   id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  tenant_id        uuid,                          -- NULL = platform-level job (e.g. NBT rates)
+  tenant_id        uuid,                          -- NULL = platform-level job (e.g. billing period run)
   queue            text        NOT NULL,
   payload          jsonb       NOT NULL,          -- ids and parameters only, no PII
   idempotency_key  text        NOT NULL,
@@ -132,7 +131,7 @@ RETURNING j.*;
 
 Два режима обработки:
 - **Эффект только в нашей БД** (`sync.apply`, `billing.invoice`) — можно захватить и обработать в одной транзакции: изменения и `status = 'done'` коммитятся атомарно.
-- **Вызов внешней системы** (`fiscal.send`, `nbt-rates.fetch`, `sync.upload`) — короткая транзакция захвата → вызов вне транзакции (не держим блокировку и соединение) → отдельная транзакция `complete`/`fail`. Вызов обязан быть идемпотентным: во внешнюю систему передаётся idempotency key задачи, т.к. после сбоя задача может выполниться повторно (at-least-once).
+- **Вызов внешней системы** (`fiscal.send`, `sync.upload`) — короткая транзакция захвата → вызов вне транзакции (не держим блокировку и соединение) → отдельная транзакция `complete`/`fail`. Вызов обязан быть идемпотентным: во внешнюю систему передаётся idempotency key задачи, т.к. после сбоя задача может выполниться повторно (at-least-once).
 
 Зависшие `processing` (воркер упал) возвращаются в `pending`:
 
@@ -229,27 +228,29 @@ export class JobWorker implements OnApplicationShutdown {
 `@nestjs/schedule` — пакет экосистемы NestJS (в рамках ADR-0003), не отдельная технология стека. Cron срабатывает **на каждом инстансе**, поэтому cron только ставит задачу с idempotency key периода — дубль отсечёт `UNIQUE`:
 
 ```typescript
-// apps/api/src/modules/pricing/nbt-rates.scheduler.ts
+// apps/api/src/modules/billing/billing-invoice.scheduler.ts
 @Injectable()
-export class NbtRatesScheduler {
+export class BillingInvoiceScheduler {
   constructor(private readonly jobs: JobQueueRepository) {}
 
-  @Cron('0 8 * * *', { timeZone: 'Asia/Dushanbe' })
-  scheduleDailyFetch(): Promise<void> {
-    const date = todayInDushanbe();                    // 'YYYY-MM-DD'
+  @Cron('0 6 1 * *', { timeZone: 'Asia/Dushanbe' })
+  scheduleMonthlyRun(): Promise<void> {
+    const period = previousMonthInDushanbe();          // 'YYYY-MM'
     return runWithContext({ correlationId: randomUUID() }, () =>
-      this.jobs.enqueuePlatform({                      // system path: rates are platform-wide, tenant_id = NULL
+      this.jobs.enqueuePlatform({                      // system path: the period run is platform-wide, tenant_id = NULL
         tenantId: null,
-        queue: 'nbt-rates.fetch',
-        payload: { date },
-        idempotencyKey: `nbt-rates:${date}`,
+        queue: 'billing.invoice',
+        payload: { period },
+        idempotencyKey: `billing-invoice:${period}`,
         correlationId: getCorrelationId()!,
       }));
   }
 }
 ```
 
-Обработчик `nbt-rates.fetch` вызывает `NbtRatesClient.fetchRates()` (`nestjs-rest-services.md`) через retry + circuit breaker и сохраняет курсы в таблицу курсов; документы читают курс из БД.
+Обработчик платформенной задачи `billing.invoice` только раскладывает её на задачи по тенантам
+(`tenant_id` задан, ключ `billing-invoice:<period>`) — счёт каждого тенанта формируется в контексте
+его `tenant_id`, в сомони. Эффект только в нашей БД — захват и обработка в одной транзакции.
 
 Альтернатива для эксклюзивных задач — `pg_try_advisory_lock(<key>)` в начале обработки.
 

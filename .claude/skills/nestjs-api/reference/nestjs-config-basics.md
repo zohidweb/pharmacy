@@ -78,7 +78,7 @@ import databaseConfig from './database.config';
 import redisConfig from './redis.config';
 import securityConfig from './security.config';
 import sessionConfig from './session.config';
-import nbtConfig from './nbt.config';
+import fiscalConfig from './fiscal.config';
 
 export const ALL_CONFIGS = [
   applicationConfig,
@@ -86,7 +86,7 @@ export const ALL_CONFIGS = [
   redisConfig,
   securityConfig,
   sessionConfig,
-  nbtConfig,
+  fiscalConfig,
 ];
 
 @Module({
@@ -136,14 +136,22 @@ export default registerAs('session', () => ({
 ```
 
 ```typescript
-// apps/api/src/config/nbt.config.ts — NBT exchange rates (closed integration list)
+// apps/api/src/config/fiscal.config.ts — fiscal adapter (closed integration list; KKM vendor not chosen)
 import { registerAs } from '@nestjs/config';
-import { getRequiredString, getRequiredInt } from './static-config-reader';
+import { StaticConfigurationException } from '../common/exceptions/static-configuration.exception';
+import { getOptionalString, getRequiredInt, getRequiredString } from './static-config-reader';
 
-export default registerAs('nbt', () => ({
-  baseUrl: getRequiredString('NBT_RATES_BASE_URL'), // HTTPS only; validated at startup
-  timeoutMs: getRequiredInt('NBT_RATES_TIMEOUT_MS'),
-}));
+export default registerAs('fiscal', () => {
+  const adapter = getRequiredString('FISCAL_ADAPTER');         // 'stub' in MVP, 'http' after the vendor is chosen
+  if (adapter !== 'stub' && adapter !== 'http') {
+    throw StaticConfigurationException.invalidEnvVar('FISCAL_ADAPTER', adapter, 'stub | http');
+  }
+  const baseUrl = getOptionalString('FISCAL_BASE_URL');        // HTTPS only; validated at startup
+  if (adapter === 'http' && baseUrl === undefined) {
+    throw StaticConfigurationException.missingEnvVar('FISCAL_BASE_URL');
+  }
+  return { adapter, baseUrl, timeoutMs: getRequiredInt('FISCAL_TIMEOUT_MS') } as const;
+});
 ```
 
 Аналогично: `database.config.ts` (`DATABASE_URL`, размер пула), `redis.config.ts`
@@ -169,8 +177,9 @@ SESSION_ABSOLUTE_TTL_SECONDS=86400
 PIN_MAX_ATTEMPTS=5
 PIN_LOCKOUT_SECONDS=900
 
-NBT_RATES_BASE_URL=https://<nbt-host>
-NBT_RATES_TIMEOUT_MS=5000
+FISCAL_ADAPTER=stub
+# FISCAL_BASE_URL=https://<kkm-vendor-host>   # required when FISCAL_ADAPTER=http
+FISCAL_TIMEOUT_MS=5000
 ```
 
 Каждый `getRequired*()` должен иметь строку в `.env.example`. Локальный `.env` создаётся

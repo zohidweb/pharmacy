@@ -152,7 +152,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 | Дубликат / unique violation / повтор idempotency key с другим телом | 409 | pg `23505`, `IdempotencyConflictException` |
 | Нарушение бизнес-правила (нет остатка, смена закрыта, ПКУ без рецепта) | 422 | `BusinessRuleException` |
 | Лимит запросов | 429 | throttler |
-| Внешняя интеграция недоступна (НБТ, фискализация) | 502/503 | клиент интеграции |
+| Внешняя интеграция недоступна (фискализация, синхронизация) | 502/503 | клиент интеграции |
 
 ## ValidationPipe
 

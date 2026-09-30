@@ -14,8 +14,7 @@ export interface BatchRow {
   id: string;
   product_id: string;
   expires_on: string;           // DATE -> 'YYYY-MM-DD', no timezone games
-  purchase_price_dirams: string; // int8 arrives from pg as string
-  currency: string;             // purchase currency; TJS amount is fixed at the NBT rate on the document date
+  purchase_price_dirams: string; // int8 arrives from pg as string; TJS only, no currency column (ADR-0016)
   supplier_id: string;
 }
 
@@ -25,7 +24,6 @@ export function toBatchResponse(row: BatchRow, quantityOnHand: number): BatchRes
     productId: row.product_id,
     expiresOn: row.expires_on,
     purchasePriceDirams: toDirams(row.purchase_price_dirams), // safe-integer check, never parseFloat
-    currency: row.currency,
     supplierId: row.supplier_id,
     quantityOnHand,               // derived from stock_movements, not a stored column
   };

@@ -1,10 +1,10 @@
 ---
 name: nestjs-api
-description: NestJS backend patterns for the Pharmacy multi-tenant SaaS (pharmacy chains, Tajikistan) — apps/api in the Nx monorepo pharmacy, a modular monolith (catalog, inventory, pos, purchasing, pricing, returns, billing, sync, fiscal, export-1c, audit) on NestJS + Express, TypeScript strict, PostgreSQL, Redis, REST /api/v1, Jest. Covers modules, controllers, services, tenant-scoped repositories and transactions (tenant_id + set_config app.tenant_id for RLS), DTOs in libs/shared/dto with class-validator, RFC 7807 problem+json errors, limit/offset pagination, custom login+password and terminal PIN auth with Redis server sessions, permission guards «модуль × действие × охват точек», idempotency keys and correlation IDs, money as integer dirams, stock derived from batch movements, append-only audit, NBT rates client, fiscal adapter stub, 1C CommerceML export, Docker for the offline store. Use when creating or reviewing NestJS modules, controllers, services, DTOs, guards, interceptors, filters or Jest tests in apps/api — касса, чек, склад, партии, остатки, мультитенантность, сессии, права.
+description: NestJS backend patterns for the Pharmacy multi-tenant SaaS (pharmacy chains, Tajikistan) — apps/api in the Nx monorepo pharmacy, a modular monolith (catalog, inventory, pos, purchasing, pricing, returns, billing, sync, fiscal, export-1c, audit) on NestJS + Express, TypeScript strict, PostgreSQL, Redis, REST /api/v1, Jest. Covers modules, controllers, services, tenant-scoped repositories and transactions (tenant_id + set_config app.tenant_id for RLS), DTOs in libs/shared/dto with class-validator, RFC 7807 problem+json errors, limit/offset pagination, custom login+password and terminal PIN auth with Redis server sessions, permission guards «модуль × действие × охват точек», idempotency keys and correlation IDs, money as integer dirams, stock derived from batch movements, append-only audit, fiscal adapter (port + MVP stub, vendor HTTP client with timeout/retry/circuit breaker), TJS-only money (ADR-0016), 1C CommerceML export, Docker for the offline store. Use when creating or reviewing NestJS modules, controllers, services, DTOs, guards, interceptors, filters or Jest tests in apps/api — касса, чек, склад, партии, остатки, мультитенантность, сессии, права.
 allowed-tools: Bash, Read, Write, Edit
 source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
 metadata:
-  triggers: NestJS, Nest, apps/api, Nx nest generator, NestJS module, NestJS controller, NestJS service, NestJS guard, DTO class-validator, libs/shared/dto, tenant_id, мультитенантность, tenantTransaction, RLS, idempotency key, идемпотентность, correlation ID, problem+json, RFC 7807, limit offset, Redis session, PIN терминала, права модуль действие охват, чек, receipt, stock movements, остатки, партии, дирамы, аудит, НБТ, фискализация, выгрузка 1С, Jest
+  triggers: NestJS, Nest, apps/api, Nx nest generator, NestJS module, NestJS controller, NestJS service, NestJS guard, DTO class-validator, libs/shared/dto, tenant_id, мультитенантность, tenantTransaction, RLS, idempotency key, идемпотентность, correlation ID, problem+json, RFC 7807, limit offset, Redis session, PIN терминала, права модуль действие охват, чек, receipt, stock movements, остатки, партии, дирамы, аудит, фискализация, ККМ, выгрузка 1С, Jest
   related-skills: postgres-best-practices, react-dev
   domain: backend
   role: specialist
@@ -45,7 +45,8 @@ env-файлы; библиотека логирования (pino/winston/ELK) �
 **Правила проекта (без исключений):** никакой самописной криптографии — только проверенные
 библиотеки и алгоритмы; персональные и клиентские данные не отправляются во внешние LLM и SaaS;
 никаких внешних SaaS-БД для данных тенантов — только собственная PostgreSQL; закрытый список
-интеграций (1С, фискализация, курсы НБТ, синхронизация офлайн-точек), новая — через ADR.
+интеграций (1С, фискализация, синхронизация офлайн-точек), новая — через ADR.
+Единственная валюта — сомони (TJS, integer-дирамы), курсов и валютных полей нет (ADR-0016).
 
 ## Iron Law
 
@@ -95,7 +96,7 @@ env-файлы; библиотека логирования (pino/winston/ELK) �
 | **Auth** | Сессии в Redis (логин+пароль, PIN терминала); глобальные `SessionAuthGuard` + `PermissionsGuard` «модуль × действие × охват точек» |
 | **Pagination** | `limit`/`offset` → `{ items, total, limit, offset }`, сортировка по whitelist |
 | **Background work** | Очереди-таблицы PostgreSQL (`FOR UPDATE SKIP LOCKED`), outbox в транзакции операции |
-| **Integrations** | Только закрытый список: НБТ (HTTPS, `fetch` с таймаутом), фискализация (порт + заглушка MVP), 1С (файлы XML), синхронизация точек (лицензионный ключ) |
+| **Integrations** | Только закрытый список: фискализация (порт + заглушка MVP; HTTP-клиент вендора ККМ — `fetch` с таймаутом), 1С (файлы XML), синхронизация точек (лицензионный ключ) |
 | **Config** | `@nestjs/config` + `registerAs()`, fail-fast; секреты — env; в git только `.env.example` |
 | **Logging** | Встроенный `Logger`, correlation ID, маскирование ПДн/секретов |
 | **Migrations** | Версионированные, инструмент по ADR; никакого schema-sync в проде |
@@ -117,7 +118,7 @@ env-файлы; библиотека логирования (pino/winston/ELK) �
 | `reference/nestjs-rest-workflow.md` | Процесс эндпоинта: ADR → DTO → миграция → код → тесты | Новый эндпоинт |
 | `reference/nestjs-rest-dto-pagination.md` | Маппинг, limit/offset, фильтры, вложенные DTO чека | DTO, списки |
 | `reference/nestjs-rest-upload-errors.md` | Выгрузка 1С, загрузка CSV, RFC 7807 | Файлы, ошибки |
-| `reference/nestjs-rest-services.md` | Клиент НБТ, порт фискализации, массовые операции, кэш | Сервисы, интеграции |
+| `reference/nestjs-rest-services.md` | Порт фискализации + заглушка, HTTP-клиент вендора ККМ, массовые операции, кэш | Сервисы, интеграции |
 | `reference/nestjs-security-auth.md` | Логин+пароль, PIN, сессии Redis, guards прав, лицензионный ключ | Аутентификация, права |
 | `reference/nestjs-security-scanning.md` | `npm audit`, eslint security, grep-аудит, CORS | Аудит безопасности |
 | `reference/nestjs-security-validation-logging.md` | Валидация DTO, маскирование ПДн, безопасный SQL, OWASP | Вход, логи |
@@ -174,7 +175,7 @@ docker compose -f docker/compose.dev.yml up -d   # local PostgreSQL + Redis (ADR
 - **Бизнес-правило** (нет остатка, смена закрыта, ПКУ без рецепта) — `BusinessRuleException` → 422 с `code`.
 - **Дубликат** — unique violation PostgreSQL `23505` (у ORM — его обёртка) → 409; повтор
   idempotency key с тем же телом — исходный результат, с другим — 409.
-- **Интеграция недоступна** (НБТ, фискализация) — 502/503; касса не блокируется.
+- **Интеграция недоступна** (фискализация, синхронизация) — 502/503; касса не блокируется.
 - Везде `correlationId` в ответе; никаких стеков, SQL, значений полей и ПДн в `detail`.
 
 ## Hard Prohibitions
@@ -191,7 +192,7 @@ docker compose -f docker/compose.dev.yml up -d   # local PostgreSQL + Redis (ADR
   Fastify, an ORM/migration tool without ADR, pino/winston/OpenTelemetry/Sentry, Vault,
   JWT/OAuth/Passport as the auth standard, Vitest — each only via an accepted ADR.
 - No external SaaS databases for tenant data; no PII or client data sent to external LLMs/SaaS;
-  no integrations outside the closed list (1С, fiscalization, NBT rates, offline-store sync).
+  no integrations outside the closed list (1С, fiscalization, offline-store sync); TJS is the only currency (ADR-0016).
 - No self-made cryptography; password/PIN hashing only via the library chosen by an accepted ADR (ADR-0008).
 - No route without `@RequirePermission(...)` or an explicit `@Public()`.
 - No schema auto-sync (`synchronize: true`, `prisma db push`) outside a throwaway local DB.

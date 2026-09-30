@@ -17,7 +17,6 @@ C4Context
 
   System_Ext(oneC, "1С:Бухгалтерия 8 (Таджикистан)", "Бухгалтерия тенанта")
   System_Ext(fiscal, "Фискализация / онлайн-ККМ", "Вендор не выбран; в MVP — адаптер-заглушка")
-  System_Ext(nbt, "НБТ", "Курсы валют Национального банка Таджикистана")
 
   Rel(tenantUser, cloud, "Касса, склад, отчёты", "HTTPS")
   Rel(tenantUser, offlinePoint, "Работа на ПК точки", "localhost")
@@ -26,7 +25,6 @@ C4Context
   Rel(offlinePoint, cloud, "Синхронизация", "HTTPS + ключ")
   Rel(cloud, oneC, "Выгрузка (вручную)", "CommerceML/XML")
   Rel(cloud, fiscal, "Чек (заглушка)", "адаптер")
-  Rel(cloud, nbt, "Курс валют", "HTTPS, ежедневно")
 
   UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
 ```

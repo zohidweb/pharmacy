@@ -17,7 +17,7 @@
 | [nestjs-rest-workflow.md](nestjs-rest-workflow.md) | Новый эндпоинт от ТЗ до MR | Нужен ли ADR, контракт, миграция, генераторы Nx, тесты, проверка; контроллер с idempotency key |
 | [nestjs-rest-dto-pagination.md](nestjs-rest-dto-pagination.md) | DTO, списки, фильтры | Маппинг строк в DTO, limit/offset, whitelist сортировки, вложенные DTO чека |
 | [nestjs-rest-upload-errors.md](nestjs-rest-upload-errors.md) | Файлы и ошибки | Выгрузка 1С (CommerceML/XML), загрузка CSV в черновик документа, RFC 7807 |
-| [nestjs-rest-services.md](nestjs-rest-services.md) | Сервисная логика, внешние клиенты | Клиент курсов НБТ, порт фискализации + заглушка MVP, массовые операции, архивирование, кэш с tenantId |
+| [nestjs-rest-services.md](nestjs-rest-services.md) | Сервисная логика, внешние клиенты | Порт фискализации + заглушка MVP, HTTP-клиент вендора ККМ, массовые операции, архивирование, кэш с tenantId |
 | [nestjs-security-auth.md](nestjs-security-auth.md) | Аутентификация и права | Логин+пароль, PIN терминала, сессии в Redis, guards «модуль × действие × охват точек», лицензионный ключ sync |
 | [nestjs-security-scanning.md](nestjs-security-scanning.md) | Аудит безопасности перед MR | `npm audit`, eslint-plugin-security, grep-аудит, CORS |
 | [nestjs-security-validation-logging.md](nestjs-security-validation-logging.md) | Валидация входа, логи с ПДн | Правила DTO, маскирование ПДн/секретов, безопасный SQL, OWASP |
@@ -32,7 +32,7 @@
 | [nestjs-testing-ci-troubleshooting.md](nestjs-testing-ci-troubleshooting.md) | Покрытие, проблемы тестов | Пороги покрытия, локальный прогон через Nx, типовые проблемы |
 | [nestjs-messaging-basics.md](nestjs-messaging-basics.md) | Фоновые задачи, outbox, sync | Очереди-таблицы PostgreSQL (`SELECT … FOR UPDATE SKIP LOCKED`) вместо брокеров |
 | [nestjs-observability.md](nestjs-observability.md) | Логирование, трассировка | Структурные логи встроенным `Logger` + correlation ID; OpenTelemetry — после ADR |
-| [nestjs-resilience-circuit-breaker.md](nestjs-resilience-circuit-breaker.md) | Устойчивость внешних вызовов | Circuit breaker, retry, timeout для НБТ/фискализации/sync |
+| [nestjs-resilience-circuit-breaker.md](nestjs-resilience-circuit-breaker.md) | Устойчивость внешних вызовов | Circuit breaker, retry, timeout для фискализации/sync |
 | [nestjs-resilience-context.md](nestjs-resilience-context.md) | Контекст запроса, correlation ID | AsyncLocalStorage: tenant, employee, correlation ID |
 | [nestjs-debugging-logging.md](nestjs-debugging-logging.md) | Отладка запросов | Debug-логи, логирование SQL, жизненный цикл запроса |
 | [nestjs-debugging-context-di.md](nestjs-debugging-context-di.md) | Ошибки DI, контекст | Отладка DI, AsyncLocalStorage, конфиг |

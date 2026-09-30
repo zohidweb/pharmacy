@@ -9,7 +9,7 @@ tags: transactions, locking, contention, performance, fiscalization
 
 Long-running transactions hold locks that block other queries. Пока транзакция чека держит
 `FOR UPDATE` на партиях, другие кассы с теми же товарами ждут. Внешние вызовы (адаптер
-фискализации, загрузка курсов НБТ, синхронизация по HTTPS) внутри транзакции превращают
+фискализации, синхронизация по HTTPS) внутри транзакции превращают
 миллисекунды блокировки в секунды.
 
 **Incorrect (long transaction with external call):**
@@ -29,7 +29,7 @@ commit;
 **Correct (minimal transaction scope):**
 
 ```sql
--- 1. Before: validate input, load prices/rates, compute totals (no locks)
+-- 1. Before: validate input, load prices, compute totals (no locks)
 
 -- 2. Short transaction: receipt + lines + movements + audit + outbox record
 begin;

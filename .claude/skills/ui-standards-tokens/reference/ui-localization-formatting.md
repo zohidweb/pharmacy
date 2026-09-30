@@ -61,7 +61,7 @@ fallback-шрифта — «прыгающие» буквы посреди сл�
 
 ```ts
 // libs/shared/util — contract sketch; the real implementation lives there
-const CURRENCY_LABEL = 'смн'; // confirm with the customer
+const CURRENCY_LABEL = 'смн'; // TJS is the only currency (ADR-0016); label — confirm with the customer
 
 export function formatMoney(amountMinor: number, opts: { plainSpaces?: boolean } = {}): string {
   if (!Number.isSafeInteger(amountMinor)) {
@@ -90,8 +90,8 @@ export function parseMoneyToMinor(input: string): number | null {
 `Intl` для `ru-RU`). Для локали `tg` поддержка в ICU браузера не гарантируется — поэтому
 группировка берётся из `ru-RU`, а формат для обоих языков единый (проверить с заказчиком).
 
-Курсы НБТ и закупочные цены в валюте: показывать код валюты (USD, RUB) и курс на дату операции;
-точность курса и правила округления — из `libs/shared/util`/бэкенда, в UI не изобретать.
+Валюта в системе одна — сомони (ADR-0016): ни выбора валюты, ни кода валюты у суммы, ни курсов в UI
+нет; закупочные цены партий — тоже в дирамах.
 Себестоимость штуки при делении упаковки округляется вверх — это вычисляет бэкенд, UI только
 показывает.
 

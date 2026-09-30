@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — circuit breaker / retry / timeout только для закрытого списка внешних интеграций (курсы НБТ, адаптер фискализации, синхронизация офлайн-точек); собственная реализация без библиотек; «database fallback» с in-memory кэшем удалён (противоречит инвариантам остатков). Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — circuit breaker / retry / timeout только для закрытого списка внешних интеграций (адаптер фискализации, синхронизация офлайн-точек; только TJS — ADR-0016); собственная реализация без библиотек; «database fallback» с in-memory кэшем удалён (противоречит инвариантам остатков). Ограничения: `CLAUDE.md`.
 
 # NestJS Resilience — Circuit Breaker, Retry, Timeout
 
@@ -10,8 +10,7 @@
 
 | Интеграция | Имя цепи | Timeout | Retry | Поведение при OPEN |
 |---|---|---|---|---|
-| Курсы НБТ (HTTPS) | `nbt-rates` | 5 с (в клиенте) | 3 попытки, backoff | задача `nbt-rates.fetch` уходит в повтор по очереди; документы читают курс из БД, нет курса на дату → 422 (`nestjs-rest-services.md`) |
-| Адаптер фискализации (в MVP — заглушка) | `fiscal` | по требованиям вендора | через очередь `fiscal.send` | чек уже проведён; задача ждёт в очереди |
+| Адаптер фискализации (в MVP — заглушка; HTTP-клиент вендора ККМ) | `fiscal` | `FISCAL_TIMEOUT_MS` (в клиенте), по требованиям вендора | 3 попытки, backoff; дальше — повтор задачи `fiscal.send` | чек уже проведён; задача ждёт в очереди |
 | Синхронизация офлайн-точки → облако (HTTPS + лицензионный ключ) | `sync-upload` | 15 с | через очередь `sync.upload` | точка работает автономно, операции копятся в `sync_outbox` |
 
 Выгрузка 1С — файловый обмен вручную, цепь не нужна.
@@ -33,7 +32,7 @@
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 export interface CircuitBreakerOptions {
-  name: string;               // 'nbt-rates' | 'fiscal' | 'sync-upload'
+  name: string;               // 'fiscal' | 'sync-upload'
   failureThreshold: number;   // consecutive failures to open
   resetTimeoutMs: number;     // OPEN → HALF_OPEN after this time
   halfOpenMaxCalls: number;   // concurrent trial calls in HALF_OPEN
@@ -130,7 +129,7 @@ export class CircuitBreakerRegistry {
 
 ## 2. Retry с экспоненциальным backoff и jitter
 
-Повторять можно только **идемпотентные** вызовы: GET курса; отправку чека/пачки синхронизации — только с idempotency key, который принимающая сторона дедуплицирует.
+Повторять можно только **идемпотентные** вызовы: чтение (GET); регистрацию чека в ККМ и отправку пачки синхронизации — только с idempotency key, который принимающая сторона дедуплицирует.
 
 ```typescript
 // apps/api/src/common/resilience/retry.ts
@@ -184,36 +183,39 @@ export function withTimeout<T>(operation: (signal: AbortSignal) => Promise<T>, t
 
 Операция обязана передать `signal` в `fetch` — иначе таймаут не прервёт вызов.
 
-## 4. Композиция: обработчик задачи курсов НБТ
+## 4. Композиция: обработчик задачи фискализации
 
-Клиент `NbtRatesClient` (`nestjs-rest-services.md`) уже ограничивает вызов таймаутом (`AbortSignal.timeout`) и переводит сбой в `BadGatewayException`. Цепь и повторы добавляет вызывающая сторона — обработчик задачи очереди. Порядок: **retry( breaker( call-with-timeout ) )** — каждая попытка ограничена таймаутом и учитывается цепью; при OPEN повторы прекращаются, задача уходит в повтор очереди по backoff.
+Клиент `HttpFiscalRegistrar` (`nestjs-rest-services.md`) уже ограничивает вызов таймаутом (`AbortSignal.timeout`) и переводит сбой в `BadGatewayException`. Цепь и повторы добавляет вызывающая сторона — обработчик задачи очереди. Порядок: **retry( breaker( call-with-timeout ) )** — каждая попытка ограничена таймаутом и учитывается цепью; при OPEN повторы прекращаются, задача уходит в повтор очереди по backoff.
 
 ```typescript
-// apps/api/src/modules/pricing/nbt-rates.job-handler.ts
+// apps/api/src/modules/fiscal/fiscal-send.job-handler.ts
+type FiscalSendPayload = { receiptId: string };
+
 @Injectable()
-export class NbtRatesJobHandler implements JobHandler<{ date: string }> {
-  readonly queue = 'nbt-rates.fetch';
+export class FiscalSendJobHandler implements JobHandler<FiscalSendPayload> {
+  readonly queue = 'fiscal.send';
   private readonly breaker: CircuitBreaker;
 
   constructor(
     registry: CircuitBreakerRegistry,
-    private readonly client: NbtRatesClient,
-    private readonly rates: NbtRatesRepository,
+    @Inject(FISCAL_REGISTRAR) private readonly registrar: FiscalRegistrar,
+    private readonly fiscal: FiscalService,
   ) {
-    this.breaker = registry.get({ name: 'nbt-rates', failureThreshold: 5, resetTimeoutMs: 60_000, halfOpenMaxCalls: 1 });
+    this.breaker = registry.get({ name: 'fiscal', failureThreshold: 5, resetTimeoutMs: 60_000, halfOpenMaxCalls: 1 });
   }
 
-  async handle({ date }: { date: string }): Promise<void> {
-    const rates = await retry(
-      () => this.breaker.execute(() => this.client.fetchRates(date)),
+  async handle({ receiptId }: FiscalSendPayload, job: ClaimedJob<FiscalSendPayload>): Promise<void> {
+    const receipt = await this.fiscal.loadReceipt(receiptId);          // tenantTransaction, read-only
+    const result = await retry(
+      () => this.breaker.execute(() => this.registrar.register(receipt, job.idempotencyKey)), // same key on every attempt
       { attempts: 3, baseDelayMs: 500, maxDelayMs: 5_000 },
     );
-    await this.rates.upsertForDate(date, rates);   // idempotent by (currency, onDate); integer-scaled rates
+    await this.fiscal.saveResult(receiptId, result);                   // idempotent by receiptId
   }
 }
 ```
 
-Для клиента без собственного таймаута оборачивайте вызов в `withTimeout((signal) => fetch(url, { signal }), ms)`. Адрес НБТ — из конфигурации (`.env`), только HTTPS.
+Для клиента без собственного таймаута оборачивайте вызов в `withTimeout((signal) => fetch(url, { signal }), ms)`. Адрес вендора ККМ — из конфигурации (`FISCAL_BASE_URL`, `nestjs-config-basics.md`), только HTTPS.
 
 ## 5. Best practices
 

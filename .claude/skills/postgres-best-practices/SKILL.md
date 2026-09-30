@@ -146,7 +146,7 @@ CHANGING CONFIGURATION OR ADDING INDEXES. И второй закон Pharmacy: *
 ### Concurrency & Locking
 - `rules/lock-skip-locked.md` — HIGH — очередь синхронизации / outbox на `SKIP LOCKED`, lease, backoff
 - `rules/lock-deadlock-prevention.md` — MEDIUM-HIGH — блокировка партий одним запросом `order by id`
-- `rules/lock-short-transactions.md` — MEDIUM-HIGH — фискализация, курсы НБТ, HTTPS — вне транзакции
+- `rules/lock-short-transactions.md` — MEDIUM-HIGH — фискализация, синхронизация по HTTPS — вне транзакции
 - `rules/lock-advisory.md` — MEDIUM — `pg_advisory_xact_lock` по точке
 
 ### Monitoring & Diagnostics

@@ -43,25 +43,18 @@ create table receipt_lines (
 create table batches (
   -- ...
   pack_cost_dirams bigint  not null check (pack_cost_dirams >= 0),
-  units_per_pack   integer not null check (units_per_pack > 0),
-  -- purchase in foreign currency: rate is not money, numeric is fine for it
-  purchase_currency char(3) not null default 'TJS',
-  purchase_rate numeric(18, 6) check (purchase_rate > 0)
+  units_per_pack   integer not null check (units_per_pack > 0)
+  -- TJS only (ADR-0016): no currency / exchange-rate columns
 );
 
 -- Unit cost when splitting a pack: round UP in favour of the pharmacy (project rule)
 select (pack_cost_dirams + units_per_pack - 1) / units_per_pack as unit_cost_dirams
 from batches;
-
--- Currency conversion: compute in numeric, round once (rule defined in one place), store bigint
--- amount_minor = amount in foreign-currency minor units
-select round(l.amount_minor * l.purchase_rate)::bigint as amount_dirams
-from supplier_invoice_lines l;
 ```
 
 Правила:
 
-- Суффикс колонки — `_dirams` (или `_minor` для сумм в иностранной валюте рядом с `currency`).
+- Суффикс колонки — `_dirams`; единственная валюта — TJS (ADR-0016), колонок `currency`/курса нет.
 - `bigint`, а не `integer`: строка чека влезает и в `integer`, но итоги смен, обороты тенанта и долги
   поставщикам за годы — нет (`integer` ≈ 21,4 млн сомони).
 - `CHECK (>= 0)` — для цен, сумм строк, оплат, скидок. **Не** ставьте его на сальдо/долг

@@ -93,32 +93,38 @@ export const createRedisMock = () => ({ get: jest.fn(), set: jest.fn(), del: jes
 
 ## Внешние интеграции (только закрытый список)
 
-Разрешены только: курсы НБТ (HTTPS), адаптер фискализации (в MVP — заглушка), синхронизация офлайн-точек (HTTPS + лицензионный ключ), выгрузка 1С (файлы). Никаких других внешних адресов ни в коде, ни в тестах.
+Разрешены только: адаптер фискализации (в MVP — заглушка; HTTP-клиент вендора ККМ), синхронизация офлайн-точек (HTTPS + лицензионный ключ), выгрузка 1С (файлы). Никаких других внешних адресов ни в коде, ни в тестах.
 
-- **Потребители** мокают порт интеграции (`NbtRatesClient`, `FiscalRegistrar`, клиент синхронизации) через `useValue`.
+- **Потребители** мокают порт интеграции (`FiscalRegistrar` по токену `FISCAL_REGISTRAR`, клиент синхронизации) через `useValue`.
 - **Сам клиент** тестируется с подменой встроенного `fetch` (Node LTS) — без сети:
 
 ```typescript
-// apps/api/src/modules/pricing/nbt-rates.client.spec.ts
+// apps/api/src/modules/fiscal/http-fiscal-registrar.spec.ts
 import { BadGatewayException } from '@nestjs/common';
-import { NbtRatesClient } from './nbt-rates.client';
+import { HttpFiscalRegistrar } from './http-fiscal-registrar';
+import type { FiscalReceipt } from './fiscal-registrar.port';
 
-describe('NbtRatesClient', () => {
-  const client = new NbtRatesClient({ baseUrl: 'https://nbt.test', timeoutMs: 5_000 } as never);
+describe('HttpFiscalRegistrar', () => {
+  const registrar = new HttpFiscalRegistrar({ adapter: 'http', baseUrl: 'https://kkm.test', timeoutMs: 5_000 } as never);
+  const receipt: FiscalReceipt = {                   // synthetic data only
+    receiptId: 'receipt-1', storeId: 'store-1', totalDirams: 1_250,
+    lines: [{ name: 'Test product', quantity: 1, amountDirams: 1_250 }],
+  };
   afterEach(() => jest.restoreAllMocks());
 
-  it('converts the decimal rate to a scaled integer once', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(NBT_SAMPLE_BODY, { status: 200 })); // synthetic sample
-    const [usd] = await client.fetchRates('2026-09-29');
+  it('sends the job idempotency key with the registration', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch')
+      .mockResolvedValue(new Response(KKM_SAMPLE_BODY, { status: 200 })); // synthetic vendor sample
+    await registrar.register(receipt, 'receipt:receipt-1');
 
-    expect(usd).toMatchObject({ currency: 'USD', onDate: '2026-09-29' });
-    expect(Number.isInteger(usd.diramsPerNominal)).toBe(true);
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(new Headers(init?.headers).get('Idempotency-Key')).toBe('receipt:receipt-1');
   });
 
-  it('maps provider failure to BadGatewayException (retry/circuit breaker decide next)', async () => {
+  it('maps vendor failure to BadGatewayException (retry/circuit breaker decide next)', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response('fail', { status: 503 }));
 
-    await expect(client.fetchRates('2026-09-29')).rejects.toThrow(BadGatewayException);
+    await expect(registrar.register(receipt, 'receipt:receipt-1')).rejects.toThrow(BadGatewayException);
   });
 });
 ```
@@ -137,10 +143,10 @@ export const createConfigMock = (values: Record<string, unknown> = {}) => ({
 });
 
 // Only synthetic values — never real connection strings or keys
-const config = createConfigMock({ NBT_BASE_URL: 'https://nbt.test' });
+const config = createConfigMock({ FISCAL_BASE_URL: 'https://kkm.test' });
 ```
 
-Если конфиг внедряется через `registerAs` + `ConfigType` (`nestjs-config-basics.md`) — подставляйте объект конфига по его `KEY`: `{ provide: nbtConfig.KEY, useValue: { baseUrl: 'https://nbt.test', timeoutMs: 5000 } }`.
+Если конфиг внедряется через `registerAs` + `ConfigType` (`nestjs-config-basics.md`) — подставляйте объект конфига по его `KEY`: `{ provide: fiscalConfig.KEY, useValue: { adapter: 'http', baseUrl: 'https://kkm.test', timeoutMs: 5000 } }`.
 
 ## Время и сроки годности
 

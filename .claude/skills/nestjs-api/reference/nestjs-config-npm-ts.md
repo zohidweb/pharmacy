@@ -26,7 +26,7 @@ npx nx g @nx/nest:application apps/api    # Nx >= 20: path-based; e2e project ap
 | `class-validator`, `class-transformer` | валидация DTO (`libs/shared/dto`) | стек (CLAUDE.md) |
 | `@nestjs/terminus` | health checks | библиотека экосистемы NestJS |
 | `@nestjs/throttler` | rate limiting | библиотека экосистемы NestJS |
-| `@nestjs/schedule` | курсы НБТ по расписанию, воркеры очередей-таблиц | библиотека экосистемы NestJS |
+| `@nestjs/schedule` | плановые задачи (счета тенантам, очистка очередей), воркеры очередей-таблиц | библиотека экосистемы NestJS |
 | `@nestjs/swagger` | OpenAPI-документация (опционально, не в проде публично) | библиотека экосистемы NestJS |
 | `helmet` | заголовки безопасности (Express) | библиотека |
 | Redis-клиент (`ioredis` **или** `redis`) | сессии, кэш | Redis в стеке (stack.md); выбрать **один** клиент и зафиксировать |
@@ -37,7 +37,7 @@ Dev: `@nx/nest`, `@nx/jest`, `jest`, `ts-jest`, `@types/jest`, `@nestjs/testing`
 `@types/supertest`, `eslint-plugin-security`.
 
 **Не добавлять:** `bullmq`, `amqplib`, `kafkajs` и любые брокеры; `@opentelemetry/*`, `pino`,
-`winston`, SDK облачного логирования; `axios` (для НБТ хватает встроенного `fetch` Node LTS);
+`winston`, SDK облачного логирования; `axios` (для HTTP-клиента фискализации и синхронизации хватает встроенного `fetch` Node LTS);
 `decimal.js` и прочие десятичные типы для денег (деньги — integer дирамы); `uuid`
 (есть `crypto.randomUUID()`); `@nestjs/platform-fastify`, `@fastify/*`; `vitest`.
 

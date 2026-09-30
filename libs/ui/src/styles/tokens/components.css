@@ -1,0 +1,56 @@
+/*
+ * Component tokens: --ph-{component}-{property}-{variant?}-{state?}.
+ * They reference semantic tokens and scales, never color primitives.
+ * Defaults target touch screens (apps/web); apps/admin sets data-density="compact" on <html>.
+ */
+:root {
+  --ph-button-height: var(--ph-size-touch-min);
+  --ph-button-height-lg: var(--ph-size-control-lg);
+  --ph-button-height-pos: var(--ph-size-touch-pos);
+  --ph-button-height-primary: var(--ph-size-touch-primary);
+  --ph-button-padding-x: var(--ph-space-5);
+  --ph-button-radius: var(--ph-radius-full);
+  --ph-icon-button-size: var(--ph-size-touch-min);
+
+  --ph-input-height: var(--ph-size-touch-min);
+  --ph-input-padding-x: var(--ph-space-4);
+  --ph-input-radius: var(--ph-radius-md);
+  --ph-input-bg: var(--ph-color-surface-sunken);
+  --ph-input-border: var(--ph-color-border-control);
+  --ph-input-border-focus: var(--ph-color-primary);
+  --ph-input-border-invalid: var(--ph-color-danger);
+
+  --ph-switch-width: 2.75rem;
+  --ph-switch-height: 1.625rem;
+  --ph-switch-thumb: 1.25rem;
+  --ph-switch-track-off: var(--ph-color-border-control);
+  --ph-switch-track-on: var(--ph-color-primary);
+
+  --ph-chip-height: var(--ph-size-touch-min);
+  --ph-pill-padding-x: var(--ph-space-2);
+
+  --ph-card-radius: var(--ph-radius-lg);
+  --ph-card-padding: var(--ph-space-6);
+  --ph-card-shadow: var(--ph-shadow-sm);
+
+  --ph-dialog-radius: var(--ph-radius-lg);
+  --ph-dialog-shadow: var(--ph-shadow-lg);
+
+  --ph-table-row-height: var(--ph-size-row-dense);
+  --ph-table-cell-padding-x: var(--ph-space-5);
+  --ph-table-header-bg: var(--ph-color-surface-sunken);
+
+  --ph-nav-item-bg-active: var(--ph-color-primary-subtle);
+  --ph-nav-item-fg-active: var(--ph-color-primary);
+  --ph-nav-counter-bg: var(--ph-color-danger-subtle);
+  --ph-nav-counter-fg: var(--ph-color-danger);
+}
+
+/* Admin (mouse): smaller controls and rows. Touch-screen apps/web never sets it. */
+[data-density='compact'] {
+  --ph-button-height: var(--ph-size-control-compact);
+  --ph-icon-button-size: var(--ph-size-control-compact);
+  --ph-input-height: var(--ph-size-control-compact);
+  --ph-chip-height: var(--ph-size-control-compact);
+  --ph-table-row-height: var(--ph-size-row-compact);
+}

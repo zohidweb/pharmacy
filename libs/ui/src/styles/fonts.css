@@ -1,0 +1,35 @@
+/*
+ * Product typeface: self-hosted (offline stores have no internet; no CDN).
+ * TT Norms Pro (TypeType) — commercial font; the license for this product must be confirmed
+ * before release (libs/ui/THIRD_PARTY_NOTICES.md). Replace the family here to switch the font:
+ * components read only --ph-font-sans.
+ * Weights shipped: 400, 500, 700 (600 resolves to 700). Checked: Tajik glyphs
+ * Ғ ғ Қ қ Ҳ ҳ Ҷ ҷ Ӣ ӣ Ӯ ӯ and the tnum feature are present in every file.
+ */
+@font-face {
+  font-family: 'TT Norms Pro';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../assets/fonts/TTNormsPro-Regular.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../../assets/fonts/TTNormsPro-Medium.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../assets/fonts/TTNormsPro-Bold.otf') format('opentype');
+}
+
+:root {
+  --ph-font-face-sans: 'TT Norms Pro';
+}

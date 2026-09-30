@@ -1,8 +1,8 @@
 # ADR-0013: Кросс-тенантный доступ к данным (оператор платформы и фоновые задачи)
 
 - **Статус:** proposed
-- **Дата:** 2026-09-29
-- **Авторы:** Zohid Saidov (z.saidov@eskhata.com), команда проекта Pharmacy (черновик подготовлен с помощью AI)
+- **Дата:** 2026-09-30
+- **Авторы:** Zohid Saidov (z.saidov@eskhata.com), команда проекта Pharmacy (текст подготовлен с помощью AI)
 - **Принимает:** архитектор проекта (docs/architecture/APPROVAL.md)
 
 ## Контекст
@@ -17,14 +17,13 @@ LEVEL SECURITY`, политика `tenant_id = (select current_setting('app.tena
 укладываются в «одна транзакция = один тенант из сессии»:
 
 - **админка оператора** (`apps/admin`): реестр тенантов, счета по активным точкам всех тенантов,
-  лицензионные ключи офлайн-точек, услуги, статистика, вход «от имени» (ADR-0008, proposed, ось E);
+  лицензионные ключи офлайн-точек, услуги, статистика, вход «от имени» (ADR-0008, ось E: только просмотр);
 - **фоновые задачи**: очередь-таблица `job_queue` / outbox со `SKIP LOCKED` (ADR-0002) с задачами
-  всех тенантов; ежемесячное начисление счетов; загрузка курсов НБТ — платформенные данные без
-  тенанта;
+  всех тенантов; ежемесячное начисление счетов — платформенная задача без тенанта (курсов валют нет — ADR-0016);
 - **определение контекста до его появления**: приём синхронизации (тенант и точка — по хешу
   лицензионного ключа, не из тела запроса), вход по паролю (тенант — по коду сети), PIN-вход
   по device-cookie терминала, сессии офлайн-точки в PostgreSQL (ADR-0008: Redis там нет);
-- **общие справочники платформы** (курсы валют, каталог услуг) — одни на всех тенантов.
+- **общие справочники платформы** (справочник препаратов, каталог услуг) — одни на всех тенантов.
 
 Скилы прямо откладывают это решение: «модель ролей воркера — требует ADR», «кросс-тенантные
 операции — отдельная роль/путь… требует ADR, `BYPASSRLS` роли API не выдаётся»; ADR-0006 выносит
@@ -93,10 +92,10 @@ NestJS, а не API конкретной библиотеки. Правила AD
 
 | Класс | Таблицы (иллюстрация, состав — при реализации модулей) | `pharmacy_app` | `pharmacy_platform` |
 |---|---|---|---|
-| `tenant` — данные тенанта | `products`, `batches`, `stock_movements`, `documents`, `receipts`, `receipt_lines`, `payments`, `shifts`, `employees`, `roles`, `terminals`, `suppliers`, `prices`, `discount_rules`, журнал ПКУ, `audit_log`, `sync_inbox`/`sync_outbox`, ключи идемпотентности, `stores` | DML по RLS `tenant_isolation TO pharmacy_app` | нет грантов → `42501`; исключение — реестр `stores`: `SELECT` колонок `id, tenant_id, name, mode, status, created_at, closed_at` по политике `FOR SELECT TO pharmacy_platform` |
+| `tenant` — данные тенанта | `products`, `batches`, `stock_movements`, `documents`, `receipts`, `receipt_lines`, `payments`, `shifts`, `employees`, `roles`, `terminals`, `suppliers`, `prices`, `discount_rules`, журнал ПКУ, `audit_log`, `sync_inbox`/`sync_outbox`, ключи идемпотентности, `stores` (создаёт и закрывает владелец сети) | DML по RLS `tenant_isolation TO pharmacy_app` | нет грантов → `42501`; исключение — реестр `stores`: `SELECT` колонок `id, tenant_id, name, mode, status, created_at, closed_at` по политике `FOR SELECT TO pharmacy_platform` и **`UPDATE (mode)`** по политике `FOR UPDATE TO pharmacy_platform` — перевод точки в офлайн (с выдачей лицензионного ключа) делает оператор, с записью в `platform_audit_log` |
 | `tenant-export` — витрины, пишет тенант, читает платформа | `store_usage_monthly` (точка × месяц: число чеков, первая/последняя продажа, `computed_at`), `tenant_stats_daily` (счётчики без ПДн и сумм позиций), при необходимости `store_sync_status` | запись по RLS тенанта | только `SELECT` по политике `FOR SELECT TO pharmacy_platform` |
-| `platform` — данные оператора | `tenants`, `operators` и их роли, `impersonations`, `license_keys`, `invoices`, `invoice_lines`, `tenant_services`, `platform_audit_log` (append-only, как `audit_log`) | нет прав; точечно — `SELECT` своих строк по политике тенанта, где тенанту нужно видеть своё (`tenants` — своя карточка; `invoices` — если ТЗ показывает счета в кабинете владельца) | DML по политике `TO pharmacy_platform USING (true)` |
-| `shared` — общие справочники | `exchange_rates`, каталог `services`, валюты | `SELECT` всех строк | DML |
+| `platform` — данные оператора (тенант читает **только свои** строки `tenants`, `invoices`, `invoice_lines`, `tenant_services`, `license_keys` — политика «свои строки» `FOR SELECT TO pharmacy_app`, запись — только оператор) | `tenants`, `operators` и их роли, `impersonations`, `license_keys`, `invoices`, `invoice_lines`, `tenant_services`, `platform_audit_log` (append-only, как `audit_log`) | нет прав; точечно — `SELECT` своих строк по политике тенанта, где тенанту нужно видеть своё (`tenants` — своя карточка; `invoices` — если ТЗ показывает счета в кабинете владельца) | DML по политике `TO pharmacy_platform USING (true)` |
+| `shared` — общие справочники | `drug_reference` — общий справочник препаратов (названия RU/TJ, МНН, форма, дозировка, производитель, штрихкоды), каталог `services` | `SELECT` всех строк | DML (ведёт оператор платформы) |
 | `system` — очередь | `job_queue` (`tenant_id` NULL = платформенная задача) | DML своих строк по RLS тенанта (постановка в outbox, захват, завершение) | `SELECT` всех строк (диагностика); `INSERT/UPDATE` только строк с `tenant_id IS NULL`; перевод `dead → pending` — колонночный `UPDATE` с политикой `USING (status = 'dead') WITH CHECK (status = 'pending')` |
 
 **2. Роли БД** (облако и офлайн-точка одинаково; `BYPASSRLS` — только у суперпользователя
@@ -141,6 +140,16 @@ grant select, insert, update, delete on receipts to pharmacy_app;     -- nothing
 -- store registry visible to the operator: selected columns only
 create policy platform_registry_read on stores for select to pharmacy_platform using (true);
 grant select (id, tenant_id, name, mode, status, created_at, closed_at) on stores to pharmacy_platform;
+-- operator switches a store to offline mode (issuing a license key) — one column only
+create policy platform_store_mode on stores for update to pharmacy_platform using (true) with check (true);
+grant update (mode) on stores to pharmacy_platform;
+
+-- shared drug reference: maintained by the operator, read by every tenant
+create policy shared_read on drug_reference for select to pharmacy_app using (true);
+create policy platform_all on drug_reference to pharmacy_platform using (true) with check (true);
+grant select on drug_reference to pharmacy_app;
+grant select, insert, update on drug_reference to pharmacy_platform;
+-- tenant products may link to it: products.drug_reference_id uuid null references drug_reference(id)
 
 -- tenant-export: written in tenant context, read by the platform
 create policy tenant_isolation on store_usage_monthly to pharmacy_app using (…) with check (…);
@@ -189,7 +198,7 @@ terminal_id, revoked_at)` для device-cookie (ADR-0008, ось C); `resolve_se
   Режимы скила `nestjs-api` сохраняются: эффект только в БД — захват, обработка и `done` в одной
   tenant-транзакции; внешний вызов — короткий захват, вызов вне транзакции, отдельная
   tenant-транзакция `complete`/`fail`. Возврат зависших `processing` — тоже в цикле по тенантам.
-- **Платформенные задачи** (`tenant_id` NULL: `nbt-rates.fetch`, оркестратор `billing.invoice`)
+- **Платформенные задачи** (`tenant_id` NULL: оркестратор `billing.invoice`)
   — через `platformTransaction` под `pharmacy_platform`.
 - **Биллинг**: оркестратор (платформенная задача) для каждого тенанта ставит/выполняет задачу
   пересчёта `store_usage_monthly` в контексте тенанта (активная точка = хотя бы одна продажа в
@@ -208,7 +217,7 @@ terminal_id, revoked_at)` для device-cookie (ADR-0008, ось C); `resolve_se
 **6. Офлайн-точка.** Та же схема, миграции, роли и RLS (один код, правило `security-rls-basics`
 не меняется). Админка и маршруты `/api/v1/operator/*` не регистрируются. `pharmacy_platform` на
 точке используется только модулем `sync` для применения платформенных данных, пришедших из
-облака (`exchange_rates`, `services`, своя строка `tenants`, статус своего `license_keys`); пароль
+облака (`drug_reference`, `services`, своя строка `tenants`, статус своего `license_keys`); пароль
 генерируется при установке, как и pepper (ADR-0008). Воркер — тот же цикл с одним тенантом.
 Пул платформы на точке — 1–2 соединения.
 
@@ -223,7 +232,7 @@ terminal_id, revoked_at)` для device-cookie (ADR-0008, ось C); `resolve_se
   `{ kind: 'system', job }`; без него — исключение (fail-closed); actor попадает в
   `platform_audit_log`.
 - `PlatformDatabaseModule` **не `@Global`** и импортируется только модулями из
-  `apps/api/src/app/platform/**` (реестр тенантов, ключи, счета, услуги, курсы НБТ, выдача
+  `apps/api/src/app/platform/**` (реестр тенантов, ключи, счета, услуги, справочник препаратов, режим точки, выдача
   impersonation, оркестратор задач) и `sync` на офлайн-точке. Это видно на ревью по импорту и
   проверяется ESLint `no-restricted-imports` с переопределением по путям в `eslint.config.mjs`
   (модули API — папки одного приложения, поэтому `@nx/enforce-module-boundaries` здесь не
@@ -325,17 +334,18 @@ proposed; сами проверки от выбора инструментов �
     `docs/architecture/glossary.md` (термины «платформенные данные», «витрина тенанта»);
   - ADR-0006 — открытый вопрос о кросс-тенантном пути закрыть ссылкой на этот ADR.
 
-Спорные моменты для решения архитектором проекта:
+Решено архитектором проекта 2026-09-30:
 
-1. Видит ли владелец тенанта свои счета и подключённые услуги в клиентском продукте (тогда
-   `invoices`/`tenant_services` получают `SELECT` своих строк для `pharmacy_app`).
-2. Есть ли в ТЗ общий платформенный справочник препаратов (МНН, формы, производители) — сейчас
-   карточка товара тенантная; общий справочник стал бы классом `shared`.
-3. Кто вручную корректирует курс НБТ при недоступности — оператор (класс `shared`) или тенант
-   (тогда нужна тенантная таблица переопределений).
-4. Кто создаёт точки и меняет их режим (облачная/офлайн): тенант или оператор — от этого
-   зависит, нужна ли платформе запись в `stores` (сейчас — только чтение реестра).
-5. Частота пересчёта витрин (ночью или ежечасно) и дата отсечки расчётного периода.
-6. Достаточно ли ESLint + архитектурного теста, или платформенный код и `PlatformDatabase`
-   стоит вынести в отдельную Nx-библиотеку с тегом `scope:platform`, чтобы границу держал
-   `@nx/enforce-module-boundaries`.
+1. Владелец тенанта видит свои счета, подключённые услуги и лицензионные ключи своих точек —
+   только чтение (`SELECT` своих строк для `pharmacy_app`); меняет их только оператор.
+2. Каталог — **общий справочник препаратов платформы** (`drug_reference`, класс `shared`, ведёт
+   оператор) + собственные карточки тенанта (`products`, класс `tenant`) со ссылкой на справочник;
+   цены, партии и остатки — всегда тенантные.
+3. Курсов валют нет — торговля только в сомони (ADR-0016); `exchange_rates` и задача загрузки
+   курсов НБТ исключены.
+4. Точки создаёт и закрывает владелец сети (`stores` — тенантная таблица); перевод в офлайн-режим
+   и выдачу лицензионного ключа делает оператор (`UPDATE (mode)` для `pharmacy_platform`).
+5. Витрины пересчитываются ночью; дата отсечки периода — 3-е число следующего месяца (запас на
+   позднюю досылку чеков из буфера перебоев); значения — параметры, меняются без нового ADR.
+6. Граница платформенного кода — ESLint `no-restricted-imports` + архитектурный тест; вынос в
+   Nx-библиотеку `scope:platform` — при росте платформенного кода, без нового ADR.

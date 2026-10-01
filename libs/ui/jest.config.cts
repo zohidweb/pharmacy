@@ -7,6 +7,6 @@ module.exports = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
   coverageDirectory: 'test-output/jest/coverage',
-  // UI kit starts empty; components with tests are added by the ui-standards-tokens skill.
-  passWithNoTests: true,
+  testEnvironment: 'jsdom',
+  setupFilesAfterEnv: ['<rootDir>/test-setup.ts'],
 };

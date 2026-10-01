@@ -1,4 +1,4 @@
-import { formatDateOnly, formatDateTime } from './date.js';
+import { formatDateOnly, formatDateTime } from './date';
 
 describe('formatDateOnly', () => {
   it('formats YYYY-MM-DD as dd.MM.yyyy without time zone shifts', () => {

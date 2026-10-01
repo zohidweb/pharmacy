@@ -1,4 +1,4 @@
-import { CURRENCY_SIGN, formatMoney, parseMoneyToMinor } from './money.js';
+import { CURRENCY_SIGN, formatMoney, parseMoneyToMinor } from './money';
 
 const plain = (text: string) => text.replace(/[\u00a0\u202f]/g, ' ');
 

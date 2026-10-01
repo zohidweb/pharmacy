@@ -1,2 +1,2 @@
-export * from './lib/money.js';
-export * from './lib/date.js';
+export * from './lib/money';
+export * from './lib/date';

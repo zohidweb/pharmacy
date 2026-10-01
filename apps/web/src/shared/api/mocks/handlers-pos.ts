@@ -98,6 +98,20 @@ function product(id: string, correlationId: string): PosProduct {
 
 const today = () => toAppDate();
 
+const stockOf = (storeId: string) => (mockDb().stock.stock[storeId] ??= {});
+
+/** The product with the stock of one store (the mock keeps stock by store and batch). */
+export function productAt(item: PosProduct, storeId: string): PosProduct {
+  const stock = stockOf(storeId);
+  return {
+    ...item,
+    batches: item.batches.map((b) => ({
+      ...b,
+      quantityPieces: stock[b.id] ?? 0,
+    })),
+  };
+}
+
 /** FEFO: the batch with the nearest expiry that is not expired and has stock. */
 function fefoBatch(item: PosProduct) {
   return [...item.batches]
@@ -110,6 +124,23 @@ function withoutCost(item: PosProduct): PosProduct {
     ...item,
     batches: item.batches.map(({ costMinor: _cost, ...rest }) => rest),
   };
+}
+
+function move(
+  storeId: string,
+  batchId: string,
+  document: string,
+  pieces: number,
+) {
+  const stock = stockOf(storeId);
+  stock[batchId] = (stock[batchId] ?? 0) + pieces;
+  mockDb().stock.movements.push({
+    storeId,
+    batchId,
+    document,
+    pieces,
+    at: new Date().toISOString(),
+  });
 }
 
 export const posHandlers: Pick<MockHandlers, PosRoute> = {
@@ -128,7 +159,9 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       full: !upToDate,
       products: upToDate
         ? []
-        : db.products.map((p) => (canSeeCost ? p : withoutCost(p))),
+        : db.products
+            .map((p) => productAt(p, store.id))
+            .map((p) => (canSeeCost ? p : withoutCost(p))),
       removedProductIds: [],
       categories,
       discountRules,
@@ -146,7 +179,10 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       }
       let discrepancies = 0;
       const lines = body.lines.map((line, index) => {
-        const item = product(line.productId, correlationId);
+        const item = productAt(
+          product(line.productId, correlationId),
+          body.storeId,
+        );
         const batch = item.batches.find((b) => b.id === line.batchId);
         if (!batch)
           throw validation(
@@ -188,7 +224,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         if (price !== line.unitPriceMinor || pieces > batch.quantityPieces) {
           discrepancies += 1; // the sale happened: accepted, marked for the manager
         }
-        batch.quantityPieces = Math.max(0, batch.quantityPieces - pieces);
+        move(body.storeId, batch.id, 'sale', -pieces);
         return {
           ...line,
           lineId: `${body.id}-${index}`,
@@ -482,15 +518,12 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         if (!line) continue;
         line.returnedQuantity += item.quantity;
         // goods go back into the same batch (ТЗ)
-        const batch = pos()
-          .products.find((p) => p.id === line.productId)
-          ?.batches.find((b) => b.id === line.batchId);
         const perUnit =
           line.unit === 'pack'
             ? (pos().products.find((p) => p.id === line.productId)
                 ?.piecesPerPack ?? 1)
             : 1;
-        if (batch) batch.quantityPieces += item.quantity * perUnit;
+        move(receipt.storeId, line.batchId, 'return', item.quantity * perUnit);
       }
       receipt.returnedSubtotalMinor += returnedNow;
       const number = `ВЗ-${String(pos().nextReturn++).padStart(6, '0')}`;

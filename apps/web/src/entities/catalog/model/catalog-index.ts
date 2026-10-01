@@ -3,14 +3,15 @@
  * search by name / МНН / barcode, analogs by МНН, FEFO order of batches. Text is NFC-normalized and
  * case-folded once at build time; a search is a linear scan over a few thousand products.
  */
+import { EXPIRY_WARNING_DAYS } from '@pharmacy/shared-domain';
 import type {
   CatalogSnapshot,
   PosBatch,
   PosProduct,
 } from '@pharmacy/shared-dto';
 
-/** Batch expiring within this many days is shown as «истекает». */
-export const EXPIRING_DAYS = 30;
+/** Batch expiring within this many days is shown as «истекает» (one threshold for POS and stock). */
+export const EXPIRING_DAYS = EXPIRY_WARNING_DAYS;
 
 export type BatchState = 'ok' | 'expiring' | 'expired' | 'empty';
 

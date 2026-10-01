@@ -24,6 +24,7 @@ import {
   writeSession,
 } from './session';
 import { posHandlers } from './handlers-pos';
+import { stockHandlers } from './handlers-stock';
 import type { MockHandlers, MockRequest } from './types';
 
 /** Simulated network latency in development; none in tests (fast, deterministic). */
@@ -103,6 +104,7 @@ function toMe(employee: MockEmployeeState): EmployeeMe {
 
 const handlers: MockHandlers = {
   ...posHandlers,
+  ...stockHandlers,
   'sessions.create': ({ body, correlationId }) => {
     const employee = mockDb().employees.find(
       (e) => e.login === body.login.trim().toLowerCase(),

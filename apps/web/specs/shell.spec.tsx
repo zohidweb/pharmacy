@@ -7,12 +7,7 @@ import { axe } from 'jest-axe';
 import { DashboardPage } from '@/pages/dashboard';
 import { ProfilePage } from '@/pages/profile';
 import { AppShell } from '@/widgets/app-shell';
-import {
-  scenario,
-  signInAs,
-  signInByPin,
-  useMockApi,
-} from './mock-env';
+import { scenario, signInAs, signInByPin, useMockApi } from './mock-env';
 import { renderWithProviders } from './test-utils';
 
 const replace = jest.fn();
@@ -26,7 +21,8 @@ jest.mock('next/navigation', () => ({
 useMockApi();
 beforeEach(() => replace.mockClear());
 
-const nav = () => screen.findByRole('navigation', { name: 'Основная навигация' });
+const nav = () =>
+  screen.findByRole('navigation', { name: 'Основная навигация' });
 
 describe('AppShell', () => {
   it('shows the owner every section, with screens of the next stages not linked yet', async () => {
@@ -41,10 +37,15 @@ describe('AppShell', () => {
       expect(within(menu).getByRole('heading', { name: section })).toBeTruthy();
     }
     expect(
-      within(menu).getByRole('link', { name: 'Дашборд' }).getAttribute('aria-current'),
+      within(menu)
+        .getByRole('link', { name: 'Дашборд' })
+        .getAttribute('aria-current'),
     ).toBe('page');
-    expect(within(menu).queryByRole('link', { name: /Остатки/ })).toBeNull();
-    expect(within(menu).getByText('Остатки')).toBeTruthy();
+    expect(within(menu).getByRole('link', { name: 'Остатки' })).toBeTruthy();
+    expect(
+      within(menu).queryByRole('link', { name: /Заказы поставщикам/ }),
+    ).toBeNull();
+    expect(within(menu).getByText('Заказы поставщикам')).toBeTruthy();
   });
 
   it('shows a cashier only the cashier menu and a fixed terminal store', async () => {
@@ -60,7 +61,9 @@ describe('AppShell', () => {
     expect(within(menu).queryByText('Кабинет владельца')).toBeNull();
     expect(within(menu).getByText('Касса', { selector: 'h2' })).toBeTruthy();
     expect(screen.getByText('Аптека №3 · Рудаки')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Терминал привязан к этой точке' })).toBeTruthy();
+    expect(
+      screen.getByRole('img', { name: 'Терминал привязан к этой точке' }),
+    ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Рабочая точка/ })).toBeNull();
   });
 
@@ -83,7 +86,9 @@ describe('AppShell', () => {
       }),
     ).toBeTruthy();
     // an offline store reports its sync with the cloud and the queue
-    expect(await screen.findByText(/Синхронизировано .* · в очереди: 3/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Синхронизировано .* · в очереди: 3/),
+    ).toBeTruthy();
   });
 
   it('marks a view-only session of the platform operator', async () => {
@@ -118,9 +123,15 @@ describe('AppShell', () => {
       await screen.findByRole('button', { name: 'Уведомления, новых: 3' }),
     );
     const panel = screen.getByRole('region', { name: 'Уведомления' });
-    expect(within(panel).getByText('Нурофен 200 мг · партия N-4471')).toBeTruthy();
-    expect(within(panel).getByText(/истекает через 12 дней · 18 уп\./)).toBeTruthy();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Отметить все прочитанными' }));
+    expect(
+      within(panel).getByText('Нурофен 200 мг · партия N-4471'),
+    ).toBeTruthy();
+    expect(
+      within(panel).getByText(/истекает через 12 дней · 18 уп\./),
+    ).toBeTruthy();
+    fireEvent.click(
+      within(panel).getByRole('button', { name: 'Отметить все прочитанными' }),
+    );
     expect(
       await screen.findByRole('button', { name: 'Уведомления' }),
     ).toBeTruthy();
@@ -158,7 +169,9 @@ describe('DashboardPage', () => {
   it('covers only the stores of a manager', async () => {
     await signInAs('manizha', 'store-1');
     renderWithProviders(<DashboardPage />);
-    const table = await screen.findByRole('table', { name: 'Продажи по точкам' });
+    const table = await screen.findByRole('table', {
+      name: 'Продажи по точкам',
+    });
     expect(within(table).getAllByRole('row')).toHaveLength(3);
     expect(within(table).queryByText('Аптека №2 · Сино')).toBeNull();
   });
@@ -189,13 +202,19 @@ describe('ProfilePage', () => {
     fireEvent.change(within(pinCard).getByLabelText(/^Новый PIN/), {
       target: { value: '1234' },
     });
-    fireEvent.click(within(pinCard).getByRole('button', { name: 'Сохранить PIN' }));
-    expect(await within(pinCard).findByText(/Слишком простой PIN/)).toBeTruthy();
+    fireEvent.click(
+      within(pinCard).getByRole('button', { name: 'Сохранить PIN' }),
+    );
+    expect(
+      await within(pinCard).findByText(/Слишком простой PIN/),
+    ).toBeTruthy();
 
     fireEvent.change(within(pinCard).getByLabelText(/^Новый PIN/), {
       target: { value: '4826' },
     });
-    fireEvent.click(within(pinCard).getByRole('button', { name: 'Сохранить PIN' }));
+    fireEvent.click(
+      within(pinCard).getByRole('button', { name: 'Сохранить PIN' }),
+    );
     expect(
       await within(pinCard).findByText('Текущий PIN указан неверно'),
     ).toBeTruthy();
@@ -203,19 +222,22 @@ describe('ProfilePage', () => {
     fireEvent.change(within(pinCard).getByLabelText(/^Текущий PIN/), {
       target: { value: '3690' },
     });
-    fireEvent.click(within(pinCard).getByRole('button', { name: 'Сохранить PIN' }));
+    fireEvent.click(
+      within(pinCard).getByRole('button', { name: 'Сохранить PIN' }),
+    );
     expect(await screen.findByText('PIN изменён')).toBeTruthy();
   });
 
   it('changes secrets only in a session opened by password (step-up)', async () => {
     await signInByPin('emp-cashier', '2580');
     renderWithProviders(<ProfilePage />);
+    expect((await screen.findAllByText(/Вы вошли по PIN/)).length).toBe(2);
     expect(
-      (await screen.findAllByText(/Вы вошли по PIN/)).length,
-    ).toBe(2);
-    expect(
-      (screen.getByRole('button', { name: 'Сменить пароль' }) as HTMLButtonElement)
-        .disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Сменить пароль',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     // a cashier may not unbind terminals
     expect(screen.queryByRole('button', { name: /Отвязать/ })).toBeNull();

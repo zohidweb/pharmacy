@@ -93,9 +93,13 @@
   --ph-size-sidebar: 15.75rem; /* 252 */
   --ph-size-topbar: 4rem; /* 64 — top bar of apps/web */
   --ph-size-pos-side: 30rem; /* 480 — receipt panel of the POS */
+  --ph-size-cell-sm: 6rem; /* 96 — quantity inputs in document tables */
+  --ph-size-cell-md: 8rem; /* 128 — money / batch inputs */
+  --ph-size-cell-lg: 10rem; /* 160 — date inputs */
   --ph-size-dialog-sm: 27.5rem; /* 440 */
   --ph-size-dialog-md: 32.5rem; /* 520 */
   --ph-size-dialog-lg: 38.75rem; /* 620 */
+  --ph-size-dialog-xl: 70rem; /* 1120 — document editors */
   --ph-size-content-max: 90rem; /* 1440 */
   --ph-size-login: 60rem; /* 960 — login card */
   --ph-size-table-md: 45rem; /* 720 — min table width before horizontal scroll */

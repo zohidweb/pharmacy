@@ -36,7 +36,8 @@
     "../../apps/web/.next/types/**/*.ts",
     "../../dist/apps/web/.next/types/**/*.ts",
     "index.d.ts",
-    "next-env.d.ts"
+    "next-env.d.ts",
+    "src/**/*.json"
   ],
   "exclude": [
     "out-tsc",
@@ -49,9 +50,20 @@
     ".next",
     "eslint.config.js",
     "eslint.config.cjs",
-    "eslint.config.mjs"
+    "eslint.config.mjs",
+    "src/**/*.spec.tsx",
+    "src/**/*.test.tsx"
   ],
   "references": [
+    {
+      "path": "../../libs/shared/util"
+    },
+    {
+      "path": "../../libs/shared/dto"
+    },
+    {
+      "path": "../../libs/shared/domain"
+    },
     {
       "path": "../../libs/ui"
     }

@@ -46,6 +46,9 @@
   --ph-nav-item-fg-active: var(--ph-color-primary);
   --ph-nav-counter-bg: var(--ph-color-danger-subtle);
   --ph-nav-counter-fg: var(--ph-color-danger);
+
+  /* Area under the top bar of apps/web: sticky sidebar height */
+  --ph-shell-body-height: calc(100dvh - var(--ph-size-topbar));
 }
 
 /* Admin (mouse): smaller controls and rows. Touch-screen apps/web never sets it. */

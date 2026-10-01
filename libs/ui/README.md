@@ -10,12 +10,13 @@
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | Кнопки      | `Button` (primary / secondary / tertiary / destructive / success, md / lg, loading), `buttonClassName` для ссылок, `IconButton`, `Spinner` | `<button>`                                                |
 | Поля        | `TextField`, `TextareaField`, `Select`, `OtpField`, `Field` (обёртка label + hint + error)                                                 | `<input>`, `<textarea>`, `<select>` (`base-select`)       |
+| Ввод        | `Keypad` — экранная цифровая клавиатура (PIN, количество, суммы), клавиши 48 / 64 px                                                       | `<button>` в `role="group"`                               |
 | Выбор       | `Checkbox`, `RadioCardGroup`, `Switch`                                                                                                     | нативные `checkbox` / `radio`, `role="switch"`            |
 | Отображение | `StatusPill`, `CountBadge`, `Chip` / `ChipGroup`, `Avatar`, `Card` / `CardHeader`, `Alert`, `KpiTile`, `EmptyState`, `Stepper`             | —                                                         |
 | Навигация   | `Tabs` (ARIA APG, roving tabindex), `SegmentedControl`, `Pagination` (limit/offset)                                                        | —                                                         |
 | Оверлеи     | `Dialog`, `Popover`, `ToastProvider` / `useToast`                                                                                          | `<dialog>`, Popover API + anchor positioning, `aria-live` |
 | Данные      | `DataTable` (caption, `aria-sort`, пустое состояние), `BarChart` (данные дублируются скрытой таблицей)                                     | `<table>`                                                 |
-| Иконки      | `Icon` — 49 иконок Lucide (ISC), см. `THIRD_PARTY_NOTICES.md`                                                                              | inline SVG                                                |
+| Иконки      | `Icon` — 63 иконки Lucide (ISC), см. `THIRD_PARTY_NOTICES.md`                                                                              | inline SVG                                                |
 
 ## Правила
 

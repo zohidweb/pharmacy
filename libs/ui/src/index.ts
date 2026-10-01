@@ -30,6 +30,7 @@ export {
   type SelectProps,
 } from './lib/field/Select';
 export { OtpField, type OtpFieldProps } from './lib/field/OtpField';
+export { Keypad, type KeypadProps, type KeypadSize } from './lib/input/Keypad';
 
 export { Checkbox, type CheckboxProps } from './lib/choice/Checkbox';
 export {

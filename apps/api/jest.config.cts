@@ -17,7 +17,7 @@ module.exports = {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
-  // uuid 14, kysely 0.29 and @nestjs/config 12 ship ESM only; let SWC compile them to CommonJS.
-  transformIgnorePatterns: ['/node_modules/(?!(uuid|kysely|@nestjs/config)/)'],
+  // ESM-only packages compiled by SWC; the list is shared with the integration config.
+  transformIgnorePatterns: require('./jest.esm-packages.cjs').transformIgnorePatterns,
   coverageDirectory: 'test-output/jest/coverage',
 };

@@ -1,4 +1,3 @@
-/* eslint-disable */
 const { readFileSync } = require('fs');
 
 // Reading the SWC compilation config for the spec files
@@ -18,10 +17,10 @@ module.exports = {
   globalSetup: '<rootDir>/test/integration/global-setup.ts',
   testTimeout: 30000,
   transform: {
-    '^.+\.[tj]s$': ['@swc/jest', swcJestConfig],
+    '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
-  // uuid 14 and kysely 0.29 ship ESM only; let SWC compile them to CommonJS like the sources.
-  transformIgnorePatterns: ['/node_modules/(?!(uuid|kysely)/)'],
+  // ESM-only packages compiled by SWC; the list is shared with the unit config.
+  transformIgnorePatterns: require('./jest.esm-packages.cjs').transformIgnorePatterns,
   coverageDirectory: 'test-output/jest/coverage-integration',
 };

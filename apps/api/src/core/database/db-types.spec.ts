@@ -12,6 +12,11 @@ describe('db.generated.ts', () => {
     expect(source).not.toMatch(/Int8/);
   });
 
+  it('maps date to string (same as the pool type parser)', () => {
+    // legal_entities.closed_until is a `date`; a Date type would allow a timezone shift.
+    expect(source).toMatch(/closedUntil: string \| null;/);
+  });
+
   it('uses camelCase table keys without schema prefix and skips pgmigrations', () => {
     expect(source).toMatch(/employeeStores: EmployeeStores;/);
     expect(source).not.toMatch(/pharmacy\.|pgmigrations/);

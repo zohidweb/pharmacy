@@ -21,5 +21,7 @@ module.exports = {
     '^.+\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
+  // uuid 14 ships ESM only; let SWC compile it to CommonJS like the sources.
+  transformIgnorePatterns: ['/node_modules/(?!uuid/)'],
   coverageDirectory: 'test-output/jest/coverage-integration',
 };

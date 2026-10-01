@@ -547,7 +547,7 @@ git commit -m "test(api): enforce platform and data-access boundaries (ADR-0013,
 
 Run: `npx nx run api:prune --configuration=production`
 Expected:
-- в `apps/api/dist/` есть `scripts/migrate.mjs` и `migrations/<timestamp>_authz-foundation.sql`;
+- в `apps/api/dist/` есть `scripts/migrate.mjs` и `migrations/<timestamp>_org-foundation.sql`;
 - `apps/api/dist/package.json` содержит `node-pg-migrate`, `pg`, `kysely`.
 
 Если prune не переносит `node-pg-migrate` — найти причину, решение записать как ruling.

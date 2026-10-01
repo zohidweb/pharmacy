@@ -72,6 +72,22 @@
           "cwd": "{workspaceRoot}"
         }
       },
+      "db-types": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "kysely-codegen",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "db-types-verify": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "kysely-codegen --verify",
+          "cwd": "{projectRoot}"
+        }
+      },
       "integration": {
         "executor": "nx:run-commands",
         "cache": false,

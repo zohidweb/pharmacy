@@ -16,6 +16,8 @@ module.exports = {
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
+  // uuid ships ESM only: let SWC transform it
+  transformIgnorePatterns: ['/node_modules/(?!uuid/)'],
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: 'test-output/jest/coverage',
 };

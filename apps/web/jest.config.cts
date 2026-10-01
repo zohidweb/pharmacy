@@ -29,7 +29,7 @@ module.exports = async () => {
   }
   // use-intl and its ICU dependencies ship ESM only: let SWC transform them.
   resolved.transformIgnorePatterns = [
-    '/node_modules/(?!(use-intl|icu-minify|intl-messageformat|@formatjs|@schummar)/)',
+    '/node_modules/(?!(use-intl|icu-minify|intl-messageformat|@formatjs|@schummar|uuid)/)',
     '^.+\\.module\\.(css|sass|scss)$',
   ];
   return resolved;

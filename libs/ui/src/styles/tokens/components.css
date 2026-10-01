@@ -47,6 +47,17 @@
   --ph-nav-counter-bg: var(--ph-color-danger-subtle);
   --ph-nav-counter-fg: var(--ph-color-danger);
 
+  --ph-receipt-preview-height: var(--ph-size-receipt-preview);
+
+  /* POS: catalog | receipt panel; the screen height under the top bar minus the bottom padding of main */
+  --ph-pos-height: calc(var(--ph-shell-body-height) - var(--ph-space-6));
+  --ph-pos-columns: minmax(0, 1fr) var(--ph-size-pos-side);
+  /* Customer return: receipt lines | calculation */
+  --ph-return-columns: minmax(0, 2fr) minmax(0, 1fr);
+  /* Search rows: field | button, and field | date | button */
+  --ph-search-columns: minmax(0, 1fr) auto;
+  --ph-search-columns-2: minmax(0, 2fr) minmax(0, 1fr) auto;
+
   /* Area under the top bar of apps/web: sticky sidebar height */
   --ph-shell-body-height: calc(100dvh - var(--ph-size-topbar));
 }

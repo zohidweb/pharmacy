@@ -1,18 +1,27 @@
 'use client';
 
 /*
- * Client providers of the client product: server-data cache (TanStack Query), i18n (use-intl) and toasts.
+ * Client providers of the client product: server-data cache (TanStack Query) following our own
+ * connection detector, i18n (use-intl), toasts and the Service Worker of the cloud build.
  * In development with NEXT_PUBLIC_API_MOCKS=true the in-memory API mocks are installed before any
  * query runs; the mock code is loaded only then and never reaches a build without the flag.
  */
 import { ToastProvider } from '@pharmacy/ui';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  onlineManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { IntlProvider } from 'use-intl';
 import {
   apiMocksEnabled,
+  apiRequest,
+  isOnline,
   loadMockTransport,
   setApiTransport,
+  startConnectivity,
+  subscribeConnectivity,
 } from '@/shared/api';
 import {
   APP_TIME_ZONE,
@@ -23,6 +32,7 @@ import {
   type Locale,
   type Messages,
 } from '@/shared/i18n';
+import { ServiceWorker } from './ServiceWorker';
 
 function createQueryClient() {
   return new QueryClient({
@@ -65,10 +75,23 @@ function useApiReady() {
   return ready;
 }
 
+/** TanStack Query follows our own connection detector, not navigator.onLine (ADR-0015, 2а). */
+function useConnectivity(ready: boolean) {
+  useEffect(() => {
+    if (!ready) return;
+    onlineManager.setEventListener((setOnline) => {
+      setOnline(isOnline());
+      return subscribeConnectivity(setOnline);
+    });
+    return startConnectivity(() => apiRequest('health.get'));
+  }, [ready]);
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
   const { locale, messages } = useMessages(useLocale());
   const apiReady = useApiReady();
+  useConnectivity(apiReady);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -77,7 +100,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
         messages={messages}
         timeZone={APP_TIME_ZONE}
       >
-        <ToastProvider>{apiReady ? children : null}</ToastProvider>
+        <ToastProvider>
+          {apiReady ? (
+            <>
+              <ServiceWorker />
+              {children}
+            </>
+          ) : null}
+        </ToastProvider>
       </IntlProvider>
     </QueryClientProvider>
   );

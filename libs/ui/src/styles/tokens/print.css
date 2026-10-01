@@ -1,0 +1,17 @@
+/*
+ * Print tokens of receipts 58/80 mm (skill ui-standards-tokens, «Печать чеков»): the only place where
+ * physical units are allowed. Start values — calibrate font size and columns on the store printers.
+ */
+:root {
+  --ph-receipt-font: var(--ph-font-mono);
+  --ph-receipt-font-size: 8pt;
+  --ph-receipt-line-height: 1.25;
+  --ph-receipt-padding-inline: 1mm;
+  --ph-receipt-cols: 32;
+  --ph-receipt-width: 48mm; /* printable width of 58 mm paper */
+}
+
+[data-receipt-width='80'] {
+  --ph-receipt-cols: 42;
+  --ph-receipt-width: 72mm; /* printable width of 80 mm paper */
+}

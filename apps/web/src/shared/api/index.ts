@@ -5,7 +5,18 @@ export {
   type ApiFieldError,
   type ApiTransport,
 } from './client';
-export { apiRoutes, type ApiRouteKey } from './routes';
+export {
+  apiRoutes,
+  type ApiBody,
+  type ApiResponse,
+  type ApiRouteKey,
+} from './routes';
+export {
+  isOnline,
+  resetConnectivity,
+  startConnectivity,
+  subscribeConnectivity,
+} from './connectivity';
 export { useApiErrorMessage } from './error-message';
 
 /** True when the client product runs against in-memory mocks instead of apps/api. */
@@ -34,15 +45,12 @@ export async function resetApiMocks(): Promise<void> {
   (await mockModule()).resetMockDb();
 }
 
-export type MockScenario = 'impersonation' | 'unbound-terminal';
+export type MockScenario =
+  'impersonation' | 'unbound-terminal' | 'offline' | 'online' | 'no-shift';
 
 /** Puts the mocks into a state that is hard to reach by clicking (tests only). */
 export async function applyMockScenario(scenario: MockScenario): Promise<void> {
   if (!mockModule) return;
   const mocks = await mockModule();
-  if (scenario === 'impersonation') {
-    mocks.startMockImpersonation('Оператор платформы');
-  } else {
-    mocks.unbindMockTerminal();
-  }
+  mocks.applyScenario(scenario);
 }

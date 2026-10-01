@@ -2,17 +2,14 @@
 
 import type { EmployeeSession } from '@pharmacy/shared-dto';
 import {
-  Alert,
   Avatar,
-  Button,
   buttonClassName,
   Popover,
   SegmentedControl,
 } from '@pharmacy/ui';
 import Link from 'next/link';
 import { useTranslations } from 'use-intl';
-import { useSignOut } from '@/features/sign-out';
-import { useApiErrorMessage } from '@/shared/api';
+import { SignOutButton } from '@/features/sign-out';
 import { routes } from '@/shared/config';
 import { locales, setLocale, useLocale } from '@/shared/i18n';
 
@@ -20,8 +17,6 @@ import { locales, setLocale, useLocale } from '@/shared/i18n';
 export function UserMenu({ session }: { session: EmployeeSession }) {
   const t = useTranslations();
   const locale = useLocale();
-  const signOut = useSignOut();
-  const error = useApiErrorMessage(signOut.error);
   const { fullName, phone } = session.employee;
 
   return (
@@ -79,20 +74,7 @@ export function UserMenu({ session }: { session: EmployeeSession }) {
           >
             {t('shell.profile')}
           </Link>
-          {error && (
-            <Alert tone="danger" live="assertive">
-              {error}
-            </Alert>
-          )}
-          <Button
-            variant="tertiary"
-            iconStart="log-out"
-            block
-            loading={signOut.isPending}
-            onClick={() => signOut.mutate()}
-          >
-            {t('shell.signOut')}
-          </Button>
+          <SignOutButton block />
         </div>
       )}
     </Popover>

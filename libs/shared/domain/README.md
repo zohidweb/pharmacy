@@ -5,6 +5,8 @@ Domain model shared by `apps/api`, `apps/web` and `apps/admin` (`type:domain`: d
 - `permissions` — the permission catalog `<module>:<action>` and special permissions (ADR-0018);
   `hasPermissions`, `exceedingPermissions` (escalation check), `isPermission`.
 - `checkPin`, `isTrivialPin` — PIN policy of terminal sign-in (ADR-0008).
+- `bestDiscount`, `nextDiscount`, `returnRefund` — discount rules by threshold and the refund with
+  the discount recalculated on a customer return (amounts in dirams).
 - `roleTemplates` — the four role templates copied into a new tenant (owner is a system role).
 
 `npx nx test shared-domain` — unit tests (Jest).

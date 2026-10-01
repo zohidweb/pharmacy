@@ -29,6 +29,30 @@
           "command": "steiger ./src",
           "cwd": "{projectRoot}"
         }
+      },
+      "build": {
+        "options": {
+          "command": "next build && node ../../tools/scripts/build-sw.mjs apps/web/out"
+        },
+        "inputs": [
+          "default",
+          "^default",
+          "{workspaceRoot}/tools/scripts/build-sw.mjs",
+          {
+            "externalDependencies": [
+              "next"
+            ]
+          },
+          {
+            "dependentTasksOutputFiles": "**/*.d.ts",
+            "transitive": true
+          }
+        ],
+        "outputs": [
+          "{projectRoot}/.next/!(cache)/**/*",
+          "{projectRoot}/.next/!(cache)",
+          "{projectRoot}/out"
+        ]
       }
     }
   },

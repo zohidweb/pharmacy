@@ -4,6 +4,23 @@
  */
 import type {
   BoundTerminal,
+  CashMovementRequest,
+  CatalogSnapshot,
+  CloseShiftRequest,
+  CreatedReceipt,
+  CreatedReturn,
+  CreateReceiptRequest,
+  CreateReturnRequest,
+  DeploymentInfo,
+  HeldReceipt,
+  HoldReceiptRequest,
+  OpenShiftRequest,
+  ReturnableReceipt,
+  ReturnListResponse,
+  ReturnReason,
+  SaleSearchItem,
+  Shift,
+  ZReport,
   ChangePasswordRequest,
   ChangePinRequest,
   DashboardPeriod,
@@ -93,6 +110,67 @@ export const apiRoutes = {
   ),
   'me.changePin': route<void, ChangePinRequest>('POST', () => '/me/pin'),
   'me.terminals': route<MyTerminal[]>('GET', () => '/me/terminals'),
+
+  'health.get': route<{ status: string }>('GET', () => '/health'),
+  'deployment.get': route<DeploymentInfo>('GET', () => '/deployment'),
+
+  'catalog.snapshot': route<
+    CatalogSnapshot,
+    undefined,
+    { storeId: string },
+    { sinceVersion?: number }
+  >('GET', (p) => `/stores/${encodeURIComponent(p.storeId)}/catalog-snapshot`),
+
+  'receipts.create': route<CreatedReceipt, CreateReceiptRequest>(
+    'POST',
+    () => '/receipts',
+  ),
+  'heldReceipts.list': route<HeldReceipt[], undefined, { storeId: string }>(
+    'GET',
+    (p) => `/stores/${encodeURIComponent(p.storeId)}/held-receipts`,
+  ),
+  'heldReceipts.create': route<HeldReceipt, HoldReceiptRequest>(
+    'POST',
+    () => '/held-receipts',
+  ),
+  'heldReceipts.delete': route<void, undefined, { id: string }>(
+    'DELETE',
+    (p) => `/held-receipts/${id(p)}`,
+  ),
+
+  'shifts.current': route<Shift>('GET', () => '/shifts/current'),
+  'shifts.open': route<Shift, OpenShiftRequest>('POST', () => '/shifts'),
+  'shifts.cashMovement': route<Shift, CashMovementRequest, { id: string }>(
+    'POST',
+    (p) => `/shifts/${id(p)}/cash-movements`,
+  ),
+  'shifts.close': route<ZReport, CloseShiftRequest, { id: string }>(
+    'POST',
+    (p) => `/shifts/${id(p)}/closure`,
+  ),
+
+  'receipts.returnable': route<
+    ReturnableReceipt,
+    undefined,
+    undefined,
+    { number: string }
+  >('GET', () => '/receipts/returnable'),
+  'returns.salesSearch': route<
+    SaleSearchItem[],
+    undefined,
+    undefined,
+    { query: string; date: string }
+  >('GET', () => '/returns/sales-search'),
+  'returns.create': route<CreatedReturn, CreateReturnRequest>(
+    'POST',
+    () => '/returns',
+  ),
+  'returns.list': route<
+    ReturnListResponse,
+    undefined,
+    undefined,
+    { reason?: ReturnReason; limit?: number; offset?: number }
+  >('GET', () => '/returns'),
 } as const;
 
 export type ApiRouteKey = keyof typeof apiRoutes;

@@ -16,7 +16,8 @@
 | Навигация   | `Tabs` (ARIA APG, roving tabindex), `SegmentedControl`, `Pagination` (limit/offset)                                                        | —                                                         |
 | Оверлеи     | `Dialog`, `Popover`, `ToastProvider` / `useToast`                                                                                          | `<dialog>`, Popover API + anchor positioning, `aria-live` |
 | Данные      | `DataTable` (caption, `aria-sort`, пустое состояние), `BarChart` (данные дублируются скрытой таблицей)                                     | `<table>`                                                 |
-| Иконки      | `Icon` — 63 иконки Lucide (ISC), см. `THIRD_PARTY_NOTICES.md`                                                                              | inline SVG                                                |
+| Печать      | `ReceiptPreview` (экранная лента), `ReceiptPrint` (печатный корень 58/80 мм), `printReceipt` — токены `tokens/print.css`                   | `window.print()`, `@media print`                          |
+| Иконки      | `Icon` — 74 иконки Lucide (ISC), см. `THIRD_PARTY_NOTICES.md`                                                                              | inline SVG                                                |
 
 ## Правила
 

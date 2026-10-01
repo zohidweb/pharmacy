@@ -2,14 +2,19 @@
  * Shared setup of the screen tests: the in-memory API mocks, a fresh data set and session per test,
  * and helpers that sign in through the mock API the way the sign-in screen does.
  */
+import { IDBFactory } from 'fake-indexeddb';
+import { emptyDraft, usePosStore } from '@/features/pos';
 import {
   applyMockScenario,
+  resetConnectivity,
   loadMockTransport,
   resetApiMocks,
   setApiTransport,
   type ApiTransport,
   type MockScenario,
 } from '@/shared/api';
+import { resetTerminalRuntimes } from '@/shared/lib/offline-queue';
+import { useShellChrome } from '@/shared/lib/shell-chrome';
 
 export const MOCK_PASSWORD = 'Demo1234';
 
@@ -24,6 +29,19 @@ export function useMockApi() {
     await resetApiMocks();
     sessionStorage.clear();
     localStorage.clear();
+    // a fresh terminal: no IndexedDB, no outbox sender, no draft, connection up
+    await resetTerminalRuntimes();
+    globalThis.indexedDB = new IDBFactory();
+    resetConnectivity();
+    usePosStore.setState({
+      draft: emptyDraft(),
+      hydrated: false,
+      notice: null,
+    });
+    useShellChrome.setState({ fullscreen: false });
+  });
+  afterEach(async () => {
+    await resetTerminalRuntimes();
   });
 }
 
@@ -44,7 +62,11 @@ export async function signInAs(login: string, storeId = 'store-3') {
 }
 
 export async function signInByPin(employeeId: string, pin: string) {
-  await transport('terminalSessions.create', { body: { employeeId, pin } }, 'test');
+  await transport(
+    'terminalSessions.create',
+    { body: { employeeId, pin } },
+    'test',
+  );
 }
 
 export const scenario = (name: MockScenario) => applyMockScenario(name);

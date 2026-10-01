@@ -5,139 +5,30 @@
  * failures (ADR-0008), view-only impersonation. The mock session lives in sessionStorage to survive
  * a reload in development. Enabled only by NEXT_PUBLIC_API_MOCKS=true.
  */
-import {
-  hasPermissions,
-  isTrivialPin,
-  roleTemplates,
-  type Permission,
-} from '@pharmacy/shared-domain';
+import { isTrivialPin } from '@pharmacy/shared-domain';
 import type {
   DashboardPeriod,
   EmployeeMe,
-  EmployeeSession,
   TenantDashboard,
 } from '@pharmacy/shared-dto';
 import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { mockDb, type MockEmployeeState } from './db';
-import { roleNames, storeDay, stores, tenant } from './fixtures';
+import { roleNames, storeDay, stores } from './fixtures';
+import {
+  authorize,
+  current,
+  employeeStores,
+  startSession,
+  toSession,
+  writeSession,
+} from './session';
+import { posHandlers } from './handlers-pos';
 import type { MockHandlers, MockRequest } from './types';
 
-const SESSION_KEY = 'pharmacy-web-mock-session';
 /** Simulated network latency in development; none in tests (fast, deterministic). */
 const LATENCY_MS = process.env.NODE_ENV === 'test' ? 0 : 300;
 const PIN_MAX_FAILURES = 3;
-
-interface StoredSession {
-  employeeId: string;
-  currentStoreId: string | null;
-  auth: 'password' | 'pin';
-  terminalId: string | null;
-  authenticatedAt: string;
-  impersonation: EmployeeSession['impersonation'];
-}
-
-function readSession(): StoredSession | null {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as StoredSession) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeSession(session: StoredSession | null): void {
-  try {
-    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    else sessionStorage.removeItem(SESSION_KEY);
-  } catch {
-    // storage unavailable (private mode): the mock session lives only until reload
-  }
-}
-
-function employeeStores(employee: MockEmployeeState) {
-  return employee.storeIds === null
-    ? stores
-    : stores.filter((store) => employee.storeIds?.includes(store.id));
-}
-
-function toSession(stored: StoredSession, correlationId: string) {
-  const employee = mockDb().employees.find((e) => e.id === stored.employeeId);
-  if (!employee) throw new ApiError(401, 'unauthenticated', correlationId);
-  const template = roleTemplates[employee.role];
-  const scoped = employeeStores(employee);
-  const session: EmployeeSession = {
-    employee: {
-      id: employee.id,
-      fullName: employee.fullName,
-      login: employee.login,
-      phone: employee.phone,
-    },
-    tenant,
-    role: {
-      id: `role-${employee.role}`,
-      name: roleNames[employee.role],
-      system: template.system,
-      templateKey: employee.role,
-    },
-    permissions: [...template.permissions],
-    scope: employee.storeIds === null ? 'network' : 'stores',
-    stores:
-      stored.auth === 'pin'
-        ? scoped.filter((store) => store.id === stored.currentStoreId)
-        : scoped,
-    currentStoreId: stored.currentStoreId,
-    auth: stored.auth,
-    authenticatedAt: stored.authenticatedAt,
-    terminalId: stored.terminalId,
-    impersonation: stored.impersonation,
-    locale: employee.locale,
-  };
-  return { session, employee };
-}
-
-function current(correlationId: string) {
-  const stored = readSession();
-  if (!stored) throw new ApiError(401, 'unauthenticated', correlationId);
-  return { stored, ...toSession(stored, correlationId) };
-}
-
-/** Like the server guard: permission of the role, then the view-only rule of impersonation. */
-function authorize(
-  correlationId: string,
-  permission: Permission | null,
-  { write = false } = {},
-) {
-  const context = current(correlationId);
-  if (permission && !hasPermissions(context.session.permissions, permission)) {
-    throw new ApiError(403, 'forbidden', correlationId);
-  }
-  if (write && context.session.impersonation) {
-    throw new ApiError(403, 'read_only_session', correlationId);
-  }
-  return context;
-}
-
-function startSession(
-  employee: MockEmployeeState,
-  auth: 'password' | 'pin',
-  storeId: string | null,
-  terminalId: string | null,
-) {
-  employee.lastLoginAt = new Date().toISOString();
-  const scoped = employeeStores(employee);
-  const stored: StoredSession = {
-    employeeId: employee.id,
-    // one store in the scope needs no choice
-    currentStoreId: storeId ?? (scoped.length === 1 ? scoped[0].id : null),
-    auth,
-    terminalId,
-    authenticatedAt: new Date().toISOString(),
-    impersonation: null,
-  };
-  writeSession(stored);
-  return stored;
-}
 
 const PERIOD_DAYS: Record<DashboardPeriod, number> = {
   today: 1,
@@ -211,6 +102,7 @@ function toMe(employee: MockEmployeeState): EmployeeMe {
 }
 
 const handlers: MockHandlers = {
+  ...posHandlers,
   'sessions.create': ({ body, correlationId }) => {
     const employee = mockDb().employees.find(
       (e) => e.login === body.login.trim().toLowerCase(),
@@ -389,7 +281,11 @@ export const mockTransport: ApiTransport = async (
   correlationId,
 ) => {
   await new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
-  if (options.signal?.aborted) throw new ApiError(0, 'network', correlationId);
+  if (options.signal?.aborted) throw new ApiError(0, 'aborted', correlationId);
+  // outage: the mock flag, or the «Offline» checkbox of the browser devtools in development
+  if (mockDb().pos.offline || navigator.onLine === false) {
+    throw new ApiError(0, 'network', correlationId);
+  }
   const handler = handlers[route] as (
     request: MockRequest<typeof route>,
   ) => ApiResponse<typeof route>;
@@ -419,4 +315,28 @@ export function startMockImpersonation(operatorName: string): void {
 /** Dev and tests only: forget the device-cookie (an unbound browser). */
 export function unbindMockTerminal(): void {
   mockDb().terminal = null;
+}
+
+/** Dev and tests: put the mocks into a state that is hard to reach by clicking. */
+export function applyScenario(
+  scenario:
+    'impersonation' | 'unbound-terminal' | 'offline' | 'online' | 'no-shift',
+): void {
+  switch (scenario) {
+    case 'impersonation':
+      startMockImpersonation('Оператор платформы');
+      break;
+    case 'unbound-terminal':
+      unbindMockTerminal();
+      break;
+    case 'offline':
+      mockDb().pos.offline = true;
+      break;
+    case 'online':
+      mockDb().pos.offline = false;
+      break;
+    case 'no-shift':
+      for (const shift of mockDb().pos.shifts) shift.status = 'closed';
+      break;
+  }
 }

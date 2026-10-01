@@ -16,6 +16,11 @@ const knownCodes = [
   'wrong_pin',
   'step_up_required',
   'read_only_session',
+  'shift_open',
+  'no_open_shift',
+  'return_window_expired',
+  'return_quantity_exceeded',
+  'forbidden',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

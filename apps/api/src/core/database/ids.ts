@@ -5,3 +5,11 @@ import { v7 } from 'uuid';
 export function newId(): string {
   return v7();
 }
+
+// Canonical textual UUID of any version. Ids that reach set_config (tenant, operator) are checked
+// with it before any database call, so a malformed value fails in the application, not in SQL.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID.test(value);
+}

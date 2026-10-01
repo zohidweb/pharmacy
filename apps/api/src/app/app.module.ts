@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from '../core/database';
 import { validateEnv } from './config/env.validation';
 import { HealthController } from './health/health.controller';
 import { CatalogModule } from './catalog/catalog.module';
@@ -16,7 +17,12 @@ import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      validate: validateEnv,
+    }),
+    DatabaseModule,
     CatalogModule,
     InventoryModule,
     PosModule,

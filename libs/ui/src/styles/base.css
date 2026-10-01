@@ -1,0 +1,36 @@
+/*
+ * Base styles on top of Tailwind preflight: document font and colors, focus ring, helpers.
+ * Imported into the `base` layer, so Tailwind utilities always win over it.
+ */
+html {
+  font-family: var(--ph-font-sans);
+  font-size: 100%; /* 1rem = 16px, user zoom preserved */
+  color: var(--ph-color-fg);
+  background: var(--ph-color-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-size: var(--ph-font-size-md);
+  line-height: var(--ph-line-height-md);
+}
+
+/* Focus via outline (kept in Windows forced-colors mode); components never reset it. */
+:focus-visible {
+  outline: var(--ph-focus-ring-width) solid var(--ph-color-focus-ring);
+  outline-offset: var(--ph-focus-ring-offset);
+}
+
+.ph-numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.ph-visually-hidden {
+  position: absolute;
+  inline-size: 1px; /* ignore-design: standard visually-hidden pattern */
+  block-size: 1px; /* ignore-design: standard visually-hidden pattern */
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

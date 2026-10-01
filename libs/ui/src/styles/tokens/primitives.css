@@ -1,0 +1,171 @@
+/*
+ * Primitive tokens: raw values only. Used exclusively by semantic.css and components.css —
+ * never by components or screens (ui-standards-tokens, Iron Law 1).
+ * Colors are OKLCH conversions of the admin UI mockups palette (sRGB), contrast-checked in pairs
+ * in semantic.css.
+ */
+:root {
+  /* Neutral (warm-neutral "nblack" ramp of the mockups) */
+  --ph-neutral-0: oklch(100% 0 0);
+  --ph-neutral-50: oklch(96.1% 0.001 0);
+  --ph-neutral-100: oklch(87.3% 0 0);
+  --ph-neutral-400: oklch(45.6% 0.002 247.9);
+  --ph-neutral-900: oklch(14% 0 0);
+
+  /* Cool gray ("cblack"): hairlines, fills, subtle text */
+  --ph-slate-50: oklch(97.2% 0.003 228.8);
+  --ph-slate-100: oklch(91.2% 0.006 255.5);
+  --ph-slate-200: oklch(82.1% 0.014 258.4);
+  --ph-slate-400: oklch(63% 0.032 259.6);
+  --ph-slate-500: oklch(53.1% 0.041 258.8);
+  --ph-slate-900: oklch(20.8% 0.04 265.8);
+
+  /* Brand blue */
+  --ph-blue-25: oklch(98.4% 0.007 260.7);
+  --ph-blue-50: oklch(94.4% 0.018 258.4);
+  --ph-blue-100: oklch(89% 0.037 258.4);
+  --ph-blue-400: oklch(56.5% 0.162 258.6);
+  --ph-blue-500: oklch(47.3% 0.198 260.5);
+  --ph-blue-600: oklch(40.4% 0.166 260.2);
+  --ph-blue-700: oklch(33.2% 0.132 259.6);
+  --ph-sky-500: oklch(71.9% 0.106 249.9);
+
+  /* Status hues */
+  --ph-green-100: oklch(96.2% 0.043 156.7);
+  --ph-green-400: oklch(80% 0.182 151.7);
+  --ph-green-600: oklch(62.7% 0.17 149.2);
+  --ph-green-700: oklch(52.7% 0.137 150.1);
+  --ph-green-800: oklch(44.8% 0.119 151.3);
+  --ph-amber-100: oklch(96.2% 0.058 95.6);
+  --ph-amber-500: oklch(78.3% 0.168 66.2);
+  --ph-amber-700: oklch(55.5% 0.146 49);
+  --ph-red-50: oklch(97.1% 0.013 17.4);
+  --ph-red-100: oklch(93.6% 0.031 17.7);
+  --ph-red-200: oklch(88.5% 0.059 18.3);
+  --ph-red-600: oklch(57.7% 0.215 27.3);
+  --ph-red-700: oklch(50.5% 0.19 27.5);
+  --ph-orange-50: oklch(98% 0.016 73.7);
+  --ph-orange-200: oklch(90.1% 0.073 70.7);
+  --ph-orange-800: oklch(47% 0.143 37.3);
+
+  /* Scrim — the only translucent colors of the palette */
+  --ph-scrim-40: oklch(20.8% 0.04 265.8 / 0.4);
+  --ph-shadow-color-sm: oklch(14% 0 0 / 0.06);
+  --ph-shadow-color-lg: oklch(14% 0 0 / 0.12);
+  --ph-shadow-color-xl: oklch(20.8% 0.04 265.8 / 0.28);
+}
+
+/*
+ * Scales: one canonical scale per family (Iron Law 2). Unlike color primitives, these may be
+ * referenced directly by components (var(--ph-space-4) or Tailwind p-4).
+ */
+:root {
+  /* Spacing, 4px base */
+  --ph-space-0: 0;
+  --ph-space-0-5: 0.125rem; /* 2 */
+  --ph-space-1: 0.25rem; /* 4 */
+  --ph-space-2: 0.5rem; /* 8 — minimum gap between touch targets */
+  --ph-space-3: 0.75rem; /* 12 */
+  --ph-space-4: 1rem; /* 16 */
+  --ph-space-5: 1.25rem; /* 20 */
+  --ph-space-6: 1.5rem; /* 24 */
+  --ph-space-8: 2rem; /* 32 */
+  --ph-space-10: 2.5rem; /* 40 */
+  --ph-space-12: 3rem; /* 48 */
+  --ph-space-16: 4rem; /* 64 */
+
+  /* Sizes */
+  --ph-size-touch-min: 2.75rem; /* 44 — any interactive target in apps/web */
+  --ph-size-touch-pos: 3rem; /* 48 — POS buttons, keypad */
+  --ph-size-touch-primary: 4rem; /* 64 — "Pay", "Hold receipt" */
+  --ph-size-control-compact: 2.5rem; /* 40 — admin controls (mouse), data-density="compact" */
+  --ph-size-control-lg: 3.5rem; /* 56 — full-width primary action (login) */
+  --ph-size-row-dense: 2.75rem; /* 44 — dense tables on touch screens */
+  --ph-size-row-compact: 2.5rem; /* 40 — admin tables */
+  --ph-size-icon-xs: 0.875rem; /* 14 */
+  --ph-size-icon-sm: 1rem; /* 16 */
+  --ph-size-icon-md: 1.25rem; /* 20 */
+  --ph-size-icon-lg: 1.5rem; /* 24 */
+  --ph-size-icon-xl: 2rem; /* 32 */
+  --ph-size-avatar-sm: 2.25rem; /* 36 */
+  --ph-size-avatar-md: 3rem; /* 48 */
+  --ph-size-avatar-lg: 4rem; /* 64 */
+  --ph-size-sidebar: 15.75rem; /* 252 */
+  --ph-size-dialog-sm: 27.5rem; /* 440 */
+  --ph-size-dialog-md: 32.5rem; /* 520 */
+  --ph-size-dialog-lg: 38.75rem; /* 620 */
+  --ph-size-content-max: 90rem; /* 1440 */
+  --ph-size-login: 60rem; /* 960 — login card */
+  --ph-size-table-md: 45rem; /* 720 — min table width before horizontal scroll */
+  --ph-size-table-lg: 57.5rem; /* 920 */
+  --ph-size-chart-height: 10rem; /* 160 */
+
+  /* Typography: families (--ph-font-face-sans comes from fonts.css), sizes in rem only (WCAG 1.4.4) */
+  --ph-font-sans:
+    var(--ph-font-face-sans, 'Segoe UI'), 'Segoe UI', system-ui, sans-serif;
+  --ph-font-mono: Consolas, 'Courier New', monospace;
+  --ph-font-size-2xs: 0.6875rem; /* 11 — section labels, counters */
+  --ph-line-height-2xs: 1rem;
+  --ph-font-size-xs: 0.75rem; /* 12 */
+  --ph-line-height-xs: 1rem;
+  --ph-font-size-sm: 0.875rem; /* 14 — admin tables and forms */
+  --ph-line-height-sm: 1.25rem;
+  --ph-font-size-md: 1rem; /* 16 */
+  --ph-line-height-md: 1.5rem;
+  --ph-font-size-lg: 1.125rem; /* 18 */
+  --ph-line-height-lg: 1.75rem;
+  --ph-font-size-xl: 1.25rem; /* 20 — page title */
+  --ph-line-height-xl: 1.75rem;
+  --ph-font-size-2xl: 1.5rem; /* 24 — KPI values */
+  --ph-line-height-2xl: 2rem;
+  --ph-font-size-3xl: 2rem; /* 32 — POS total */
+  --ph-line-height-3xl: 2.5rem;
+  --ph-font-size-4xl: 4rem; /* 64 — error code on state screens */
+  --ph-line-height-4xl: 4.5rem;
+  --ph-font-weight-normal: 400;
+  --ph-font-weight-medium: 500;
+  --ph-font-weight-semibold: 600;
+  --ph-font-weight-bold: 700;
+  --ph-letter-spacing-tight: -0.01em;
+  --ph-letter-spacing-wide: 0.05em;
+
+  /* Radii and borders */
+  --ph-radius-none: 0;
+  --ph-radius-sm: 0.5rem; /* 8 */
+  --ph-radius-md: 1rem; /* 16 — inputs, tiles */
+  --ph-radius-lg: 1.5rem; /* 24 — cards, dialogs */
+  --ph-radius-full: 9999px;
+  --ph-border-width-1: 1px;
+  --ph-border-width-2: 2px;
+  --ph-focus-ring-width: 3px;
+  --ph-focus-ring-offset: 2px;
+
+  /* Elevation — only for layers above content (cards on canvas, popovers, dialogs, toasts) */
+  --ph-shadow-sm: 0 4px 16px var(--ph-shadow-color-sm);
+  --ph-shadow-lg: 0 8px 32px var(--ph-shadow-color-lg);
+  --ph-shadow-xl: 0 14px 34px var(--ph-shadow-color-xl);
+
+  /* Z-index (native <dialog> and popovers live in the top layer and need none) */
+  --ph-z-base: 0;
+  --ph-z-sticky: 100;
+  --ph-z-dropdown: 1000;
+  --ph-z-overlay: 1040;
+  --ph-z-modal: 1050;
+  --ph-z-toast: 1060;
+  --ph-z-tooltip: 1070;
+
+  /* Motion */
+  --ph-duration-fast: 120ms;
+  --ph-duration-normal: 200ms;
+  --ph-duration-slow: 300ms;
+  --ph-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ph-ease-out: cubic-bezier(0, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ph-duration-fast: 0ms;
+    --ph-duration-normal: 0ms;
+    --ph-duration-slow: 0ms;
+  }
+}

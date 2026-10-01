@@ -1,0 +1,150 @@
+/*
+ * Tailwind v4 theme (ADR-0007): only maps libs/ui tokens to utilities.
+ * Every @theme inline value is var(--ph-…); literals only for breakpoints/containers,
+ * which media/container queries cannot read from var(). New token → tokens/*.css first, then here.
+ */
+@theme {
+  --*: initial; /* drop the default theme: no bg-blue-500, no p-13, no text-7xl */
+
+  --breakpoint-lg: 80rem; /* 1280 — target screen */
+  --breakpoint-xl: 100rem; /* 1600 */
+  --breakpoint-2xl: 120rem; /* 1920 */
+  --container-xs: 20rem;
+  --container-sm: 24rem;
+  --container-md: 28rem;
+  --container-lg: 32rem;
+  --container-xl: 36rem;
+  --container-2xl: 42rem;
+
+  --animate-spin: spin 1s linear infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+@theme inline {
+  --color-bg: var(--ph-color-bg);
+  --color-surface: var(--ph-color-surface);
+  --color-surface-sunken: var(--ph-color-surface-sunken);
+  --color-surface-highlight: var(--ph-color-surface-highlight);
+  --color-fg: var(--ph-color-fg);
+  --color-fg-muted: var(--ph-color-fg-muted);
+  --color-fg-subtle: var(--ph-color-fg-subtle);
+  --color-fg-disabled: var(--ph-color-fg-disabled);
+  --color-border: var(--ph-color-border);
+  --color-border-strong: var(--ph-color-border-strong);
+  --color-control: var(--ph-color-border-control);
+  --color-primary: var(--ph-color-primary);
+  --color-primary-hover: var(--ph-color-primary-hover);
+  --color-primary-active: var(--ph-color-primary-active);
+  --color-on-primary: var(--ph-color-on-primary);
+  --color-primary-subtle: var(--ph-color-primary-subtle);
+  --color-primary-subtle-hover: var(--ph-color-primary-subtle-hover);
+  --color-accent: var(--ph-color-accent);
+  --color-focus-ring: var(--ph-color-focus-ring);
+  --color-overlay: var(--ph-color-overlay);
+  --color-disabled: var(--ph-color-disabled);
+  --color-on-disabled: var(--ph-color-on-disabled);
+  --color-inverse: var(--ph-color-inverse);
+  --color-on-inverse: var(--ph-color-on-inverse);
+  --color-on-inverse-success: var(--ph-color-on-inverse-success);
+  --color-success: var(--ph-color-success);
+  --color-success-subtle: var(--ph-color-success-subtle);
+  --color-success-border: var(--ph-color-success-border);
+  --color-success-hover: var(--ph-color-success-hover);
+  --color-on-success: var(--ph-color-on-success);
+  --color-warning: var(--ph-color-warning);
+  --color-warning-subtle: var(--ph-color-warning-subtle);
+  --color-warning-border: var(--ph-color-warning-border);
+  --color-danger: var(--ph-color-danger);
+  --color-danger-hover: var(--ph-color-danger-hover);
+  --color-on-danger: var(--ph-color-on-danger);
+  --color-danger-subtle: var(--ph-color-danger-subtle);
+  --color-danger-surface: var(--ph-color-danger-surface);
+  --color-danger-border: var(--ph-color-danger-border);
+  --color-attention: var(--ph-color-attention);
+  --color-attention-subtle: var(--ph-color-attention-subtle);
+  --color-attention-border: var(--ph-color-attention-border);
+  --color-info: var(--ph-color-info);
+  --color-info-subtle: var(--ph-color-info-subtle);
+  --color-info-border: var(--ph-color-info-border);
+
+  /* One canonical spacing scale (4px base). No --spacing base → p-13 does not exist */
+  --spacing-0: var(--ph-space-0);
+  --spacing-0\.5: var(--ph-space-0-5);
+  --spacing-1: var(--ph-space-1);
+  --spacing-2: var(--ph-space-2);
+  --spacing-3: var(--ph-space-3);
+  --spacing-4: var(--ph-space-4);
+  --spacing-5: var(--ph-space-5);
+  --spacing-6: var(--ph-space-6);
+  --spacing-8: var(--ph-space-8);
+  --spacing-10: var(--ph-space-10);
+  --spacing-12: var(--ph-space-12);
+  --spacing-16: var(--ph-space-16);
+  /* Sizes via the spacing namespace → min-h-touch-pos, size-icon-md, w-sidebar */
+  --spacing-touch: var(--ph-size-touch-min);
+  --spacing-touch-pos: var(--ph-size-touch-pos);
+  --spacing-touch-primary: var(--ph-size-touch-primary);
+  --spacing-control-compact: var(--ph-size-control-compact);
+  --spacing-control-lg: var(--ph-size-control-lg);
+  --spacing-row-dense: var(--ph-size-row-dense);
+  --spacing-row-compact: var(--ph-size-row-compact);
+  --spacing-icon-xs: var(--ph-size-icon-xs);
+  --spacing-icon-sm: var(--ph-size-icon-sm);
+  --spacing-icon-md: var(--ph-size-icon-md);
+  --spacing-icon-lg: var(--ph-size-icon-lg);
+  --spacing-icon-xl: var(--ph-size-icon-xl);
+  --spacing-avatar-sm: var(--ph-size-avatar-sm);
+  --spacing-avatar-md: var(--ph-size-avatar-md);
+  --spacing-avatar-lg: var(--ph-size-avatar-lg);
+  --spacing-sidebar: var(--ph-size-sidebar);
+  --spacing-dialog-sm: var(--ph-size-dialog-sm);
+  --spacing-dialog-md: var(--ph-size-dialog-md);
+  --spacing-dialog-lg: var(--ph-size-dialog-lg);
+  --spacing-content-max: var(--ph-size-content-max);
+
+  --font-sans: var(--ph-font-sans);
+  --font-mono: var(--ph-font-mono);
+  --default-font-family: var(--ph-font-sans);
+  --default-mono-font-family: var(--ph-font-mono);
+  --text-2xs: var(--ph-font-size-2xs);
+  --text-2xs--line-height: var(--ph-line-height-2xs);
+  --text-xs: var(--ph-font-size-xs);
+  --text-xs--line-height: var(--ph-line-height-xs);
+  --text-sm: var(--ph-font-size-sm);
+  --text-sm--line-height: var(--ph-line-height-sm);
+  --text-md: var(--ph-font-size-md);
+  --text-md--line-height: var(--ph-line-height-md);
+  --text-lg: var(--ph-font-size-lg);
+  --text-lg--line-height: var(--ph-line-height-lg);
+  --text-xl: var(--ph-font-size-xl);
+  --text-xl--line-height: var(--ph-line-height-xl);
+  --text-2xl: var(--ph-font-size-2xl);
+  --text-2xl--line-height: var(--ph-line-height-2xl);
+  --text-3xl: var(--ph-font-size-3xl);
+  --text-3xl--line-height: var(--ph-line-height-3xl);
+  --text-4xl: var(--ph-font-size-4xl);
+  --text-4xl--line-height: var(--ph-line-height-4xl);
+  --font-weight-normal: var(--ph-font-weight-normal);
+  --font-weight-medium: var(--ph-font-weight-medium);
+  --font-weight-semibold: var(--ph-font-weight-semibold);
+  --font-weight-bold: var(--ph-font-weight-bold);
+  --tracking-tight: var(--ph-letter-spacing-tight);
+  --tracking-wide: var(--ph-letter-spacing-wide);
+
+  --radius-sm: var(--ph-radius-sm);
+  --radius-md: var(--ph-radius-md);
+  --radius-lg: var(--ph-radius-lg);
+  --radius-full: var(--ph-radius-full);
+  --shadow-sm: var(--ph-shadow-sm);
+  --shadow-lg: var(--ph-shadow-lg);
+  --shadow-xl: var(--ph-shadow-xl);
+  --ease-standard: var(--ph-ease-standard);
+  --ease-out: var(--ph-ease-out);
+  --default-transition-duration: var(--ph-duration-fast);
+  --default-transition-timing-function: var(--ph-ease-standard);
+}

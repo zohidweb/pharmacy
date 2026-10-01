@@ -8,13 +8,17 @@
 const nextConfig = {
   output: 'export',
   images: { unoptimized: true },
+  // Always defined so the bundler can fold mock-only code away; the dev target sets it to true.
+  env: { NEXT_PUBLIC_API_MOCKS: process.env.NEXT_PUBLIC_API_MOCKS ?? 'false' },
 };
 
 // Dev only: proxy /api/* to apps/api so the browser sees a single origin (as behind the
 // reverse proxy in production, C4 deployment). `rewrites` are not part of the static export.
 if (process.env.NODE_ENV === 'development') {
   const target = process.env.API_PROXY_TARGET ?? 'http://localhost:3000';
-  nextConfig.rewrites = async () => [{ source: '/api/:path*', destination: `${target}/api/:path*` }];
+  nextConfig.rewrites = async () => [
+    { source: '/api/:path*', destination: `${target}/api/:path*` },
+  ];
 }
 
 module.exports = nextConfig;

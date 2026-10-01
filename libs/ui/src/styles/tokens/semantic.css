@@ -1,0 +1,78 @@
+/*
+ * Semantic tokens: meaning, not value. Themes and density override THIS layer only.
+ * Contrast (WCAG 2.1 AA, measured on the displayed sRGB color) is noted per text pair:
+ * text ≥ 4.5:1, control borders / icons / focus ≥ 3:1.
+ */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  /* Canvas, cards/panels/sidebar/header, input fill and table head, unread row */
+  --ph-color-bg: var(--ph-neutral-50);
+  --ph-color-surface: var(--ph-neutral-0);
+  --ph-color-surface-sunken: var(--ph-slate-50);
+  --ph-color-surface-highlight: var(--ph-blue-25);
+
+  /* fg 19.9:1 on surface · muted 7.2:1 (6.7:1 on sunken) · subtle 5.3:1 (4.7:1 on bg).
+     Disabled text is exempt from 1.4.3. */
+  --ph-color-fg: var(--ph-neutral-900);
+  --ph-color-fg-muted: var(--ph-neutral-400);
+  --ph-color-fg-subtle: var(--ph-slate-500);
+  --ph-color-fg-disabled: var(--ph-slate-200);
+
+  /* Hairlines, switch track / empty-state glyphs, control boundary 3.5:1 (1.4.11) */
+  --ph-color-border: var(--ph-slate-100);
+  --ph-color-border-strong: var(--ph-slate-200);
+  --ph-color-border-control: var(--ph-slate-400);
+
+  /* Primary 7.0:1 on surface and with on-primary; primary text on subtle 6.0:1.
+     Accent — chart bars only (non-text, always paired with labels). */
+  --ph-color-primary: var(--ph-blue-500);
+  --ph-color-primary-hover: var(--ph-blue-600);
+  --ph-color-primary-active: var(--ph-blue-700);
+  --ph-color-on-primary: var(--ph-neutral-0);
+  --ph-color-primary-subtle: var(--ph-blue-50);
+  --ph-color-primary-subtle-hover: var(--ph-blue-100);
+  --ph-color-accent: var(--ph-sky-500);
+
+  --ph-color-focus-ring: var(--ph-blue-400);
+  --ph-color-overlay: var(--ph-scrim-40);
+  --ph-color-disabled: var(--ph-slate-50);
+  --ph-color-on-disabled: var(--ph-slate-200);
+
+  /* Toast: inverse surface; success icon on it 11.4:1 */
+  --ph-color-inverse: var(--ph-neutral-900);
+  --ph-color-on-inverse: var(--ph-neutral-0);
+  --ph-color-on-inverse-success: var(--ph-green-400);
+
+  /* Statuses: solid (text/icon/button), subtle (tint background), border.
+     Solid on subtle ≥ 4.5:1: success 4.6, warning 4.5, danger 5.3 (5.9 on danger-surface),
+     attention 6.9. White on success/danger buttons ≥ 4.8. Never color alone (Iron Law 3). */
+  --ph-color-success: var(--ph-green-700);
+  --ph-color-success-subtle: var(--ph-green-100);
+  --ph-color-success-border: var(--ph-green-600);
+  --ph-color-success-hover: var(--ph-green-800);
+  --ph-color-on-success: var(--ph-neutral-0);
+
+  --ph-color-warning: var(--ph-amber-700);
+  --ph-color-warning-subtle: var(--ph-amber-100);
+  --ph-color-warning-border: var(--ph-amber-500);
+
+  --ph-color-danger: var(--ph-red-700);
+  --ph-color-danger-hover: var(--ph-red-600);
+  --ph-color-on-danger: var(--ph-neutral-0);
+  --ph-color-danger-subtle: var(--ph-red-100);
+  --ph-color-danger-surface: var(--ph-red-50);
+  --ph-color-danger-border: var(--ph-red-200);
+
+  /* Attention: platform-operator actions (impersonation banner, operator tag, risky confirms) */
+  --ph-color-attention: var(--ph-orange-800);
+  --ph-color-attention-subtle: var(--ph-orange-50);
+  --ph-color-attention-border: var(--ph-orange-200);
+
+  --ph-color-info: var(--ph-blue-500);
+  --ph-color-info-subtle: var(--ph-blue-50);
+  --ph-color-info-border: var(--ph-blue-100);
+}
+
+/* Dark theme is not in the MVP: when needed, override this layer only and re-check every pair. */

@@ -33,11 +33,74 @@ const MANIFEST_TABLES = `
   left join pg_class c
     on c.relname = t.name and c.relnamespace = 'pharmacy'::regnamespace and c.relkind in ('r', 'p')`;
 
+// Every table privilege type of PostgreSQL 17 (MAINTAIN is new in 17).
+const TABLE_PRIVILEGES = [
+  'SELECT',
+  'INSERT',
+  'UPDATE',
+  'DELETE',
+  'TRUNCATE',
+  'REFERENCES',
+  'TRIGGER',
+  'MAINTAIN',
+] as const;
+type TablePrivilege = (typeof TABLE_PRIVILEGES)[number];
+
+const RUNTIME_ROLES = ['pharmacy_app', 'pharmacy_platform', 'pharmacy_resolver'];
+
+// Table-level privileges of a role on manifest tables compared with an allowed set; 'exact' also
+// reports an allowed privilege the role lacks. has_table_privilege counts direct grants, grants to
+// PUBLIC and inherited role memberships. Each violation names the role, the table and the privilege.
+async function tablePrivilegeViolations(
+  role: string,
+  tables: string[],
+  allowed: readonly TablePrivilege[],
+  mode: 'exact' | 'at most',
+): Promise<string[]> {
+  const rows = await query<{
+    name: string;
+    missing: boolean;
+    privileges: string[];
+  }>(
+    `select t.name, t.oid is null as missing,
+            coalesce(array_agg(p.privilege order by p.privilege)
+                       filter (where has_table_privilege($2, t.oid, p.privilege)), '{}'::text[]) as privileges
+     from (${MANIFEST_TABLES}) t
+     cross join unnest($3::text[]) as p(privilege)
+     group by t.name, t.oid
+     order by 1`,
+    [tables, role, TABLE_PRIVILEGES],
+  );
+  return rows.flatMap((row) => {
+    if (row.missing) return [`${role} on ${row.name}: table missing`];
+    const extra = row.privileges
+      .filter((privilege) => !allowed.includes(privilege as TablePrivilege))
+      .map((privilege) => `${role} on ${row.name}: has ${privilege}`);
+    const lacking =
+      mode === 'exact'
+        ? allowed
+            .filter((privilege) => !row.privileges.includes(privilege))
+            .map((privilege) => `${role} on ${row.name}: lacks ${privilege}`)
+        : [];
+    return [...extra, ...lacking];
+  });
+}
+
 describe('database catalog (ADR-0013 p. 8)', () => {
   it('every table in schema pharmacy is in TABLE_CLASSES and vice versa', async () => {
     const rows = await query<{ name: string }>(
       `select relname as name from pg_class
        where relnamespace = 'pharmacy'::regnamespace and relkind in ('r', 'p')
+       order by 1`,
+    );
+    // Views, materialized views and foreign tables escape the manifest and its isolation checks,
+    // so none may exist in the schema (pg_trgm creates no relations).
+    const otherRelations = await query<{ violation: string }>(
+      `select relname || ': ' || case relkind when 'v' then 'view'
+                                              when 'm' then 'materialized view'
+                                              else 'foreign table' end as violation
+       from pg_class
+       where relnamespace = 'pharmacy'::regnamespace and relkind in ('v', 'm', 'f')
        order by 1`,
     );
     const actual = rows.map((row) => row.name);
@@ -47,7 +110,8 @@ describe('database catalog (ADR-0013 p. 8)', () => {
         (table) => !Object.hasOwn(TABLE_CLASSES, table),
       ),
       missingInDatabase: manifest.filter((table) => !actual.includes(table)),
-    }).toEqual({ notInManifest: [], missingInDatabase: [] });
+      notATable: otherRelations.map((row) => row.violation),
+    }).toEqual({ notInManifest: [], missingInDatabase: [], notATable: [] });
   });
 
   it('RLS is enabled and forced on tenant, tenant-export, platform and system tables', async () => {
@@ -65,34 +129,79 @@ describe('database catalog (ADR-0013 p. 8)', () => {
     expect(rows.map((row) => `${row.name}: ${row.problem}`)).toEqual([]);
   });
 
-  it('pharmacy_app has no insert/update/delete on platform tables', async () => {
-    const rows = await query<{ violation: string }>(
-      `select t.name || ': ' || coalesce(p.privilege, 'missing') as violation
+  it('pharmacy_app has exactly SELECT, INSERT, UPDATE, DELETE on tenant tables', async () => {
+    expect(
+      await tablePrivilegeViolations(
+        'pharmacy_app',
+        tablesOf('tenant'),
+        ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+        'exact',
+      ),
+    ).toEqual([]);
+  });
+
+  it('pharmacy_app has at most SELECT on platform tables', async () => {
+    const tableLevel = await tablePrivilegeViolations(
+      'pharmacy_app',
+      tablesOf('platform'),
+      ['SELECT'],
+      'at most',
+    );
+    const columnLevel = await query<{ violation: string }>(
+      `select 'pharmacy_app on ' || t.name || ': column ' || p.privilege as violation
        from (${MANIFEST_TABLES}) t
-       left join unnest(array['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE']) as p(privilege)
-         on t.oid is not null
-       where t.oid is null
-          or has_table_privilege('pharmacy_app', t.oid, p.privilege)
-          or (p.privilege in ('INSERT', 'UPDATE')
-              and has_any_column_privilege('pharmacy_app', t.oid, p.privilege))
+       cross join unnest(array['INSERT', 'UPDATE', 'REFERENCES']) as p(privilege)
+       where t.oid is not null and has_any_column_privilege('pharmacy_app', t.oid, p.privilege)
        order by 1`,
       [tablesOf('platform')],
+    );
+    expect([...tableLevel, ...columnLevel.map((row) => row.violation)]).toEqual(
+      [],
+    );
+  });
+
+  it('pharmacy_platform has at most SELECT, INSERT, UPDATE on platform tables', async () => {
+    expect(
+      await tablePrivilegeViolations(
+        'pharmacy_platform',
+        tablesOf('platform'),
+        ['SELECT', 'INSERT', 'UPDATE'],
+        'at most',
+      ),
+    ).toEqual([]);
+  });
+
+  it('no runtime role has TRUNCATE, REFERENCES, TRIGGER or MAINTAIN on any pharmacy table', async () => {
+    // Every relation of the schema, not only the manifest; column-level REFERENCES counts too.
+    const rows = await query<{ violation: string }>(
+      `select r.role || ' on ' || c.relname || ': has ' || p.privilege as violation
+       from pg_class c
+       cross join unnest($1::text[]) as r(role)
+       cross join unnest(array['TRUNCATE', 'REFERENCES', 'TRIGGER', 'MAINTAIN']) as p(privilege)
+       where c.relnamespace = 'pharmacy'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f')
+         and has_table_privilege(r.role, c.oid, p.privilege)
+       union all
+       select r.role || ' on ' || c.relname || ': has column REFERENCES'
+       from pg_class c
+       cross join unnest($1::text[]) as r(role)
+       where c.relnamespace = 'pharmacy'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f')
+         and not has_table_privilege(r.role, c.oid, 'REFERENCES')
+         and has_any_column_privilege(r.role, c.oid, 'REFERENCES')
+       order by 1`,
+      [RUNTIME_ROLES],
     );
     expect(rows.map((row) => row.violation)).toEqual([]);
   });
 
   it('pharmacy_platform has no table privileges on tenant tables and only the registry columns of stores', async () => {
-    const tableLevel = await query<{ violation: string }>(
-      `select t.name || ': ' || coalesce(p.privilege, 'missing') as violation
-       from (${MANIFEST_TABLES}) t
-       left join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'])
-         as p(privilege) on t.oid is not null
-       where t.oid is null or has_table_privilege('pharmacy_platform', t.oid, p.privilege)
-       order by 1`,
-      [tablesOf('tenant')],
+    const tableLevel = await tablePrivilegeViolations(
+      'pharmacy_platform',
+      tablesOf('tenant'),
+      [],
+      'exact',
     );
     const columnLevel = await query<{ violation: string }>(
-      `select t.name || ': column ' || p.privilege as violation
+      `select 'pharmacy_platform on ' || t.name || ': column ' || p.privilege as violation
        from (${MANIFEST_TABLES}) t
        cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'REFERENCES']) as p(privilege)
        where t.oid is not null and t.name <> 'stores'
@@ -112,7 +221,7 @@ describe('database catalog (ADR-0013 p. 8)', () => {
       ).map((row) => row.name);
 
     expect({
-      tableLevel: tableLevel.map((row) => row.violation),
+      tableLevel,
       columnLevel: columnLevel.map((row) => row.violation),
       storesSelect: await storeColumns('SELECT'),
       storesUpdate: await storeColumns('UPDATE'),
@@ -241,6 +350,22 @@ describe('database catalog (ADR-0013 p. 8)', () => {
        from pg_default_acl d
        cross join lateral aclexplode(d.defaclacl) a
        where a.grantee in (0::oid, 'pharmacy_app'::regrole::oid)
+       order by 1`,
+    );
+    expect(rows.map((row) => row.violation)).toEqual([]);
+  });
+
+  it('no role- or database-level default for app.* settings', async () => {
+    // A default app.tenant_id / app.actor would give every connection a context before
+    // set_config(..., true) runs, defeating the fail-closed tenant filter.
+    const rows = await query<{ violation: string }>(
+      `select coalesce(d.datname, 'all databases') || ' / ' || coalesce(r.rolname, 'all roles')
+                || ': ' || s.setting as violation
+       from pg_db_role_setting rs
+       cross join lateral unnest(rs.setconfig) as s(setting)
+       left join pg_database d on d.oid = rs.setdatabase
+       left join pg_roles r on r.oid = rs.setrole
+       where s.setting like 'app.%'
        order by 1`,
     );
     expect(rows.map((row) => row.violation)).toEqual([]);

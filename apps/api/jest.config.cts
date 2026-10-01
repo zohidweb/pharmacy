@@ -17,5 +17,7 @@ module.exports = {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
+  // ESM-only packages compiled by SWC; the list is shared with the integration config.
+  transformIgnorePatterns: require('./jest.esm-packages.cjs').transformIgnorePatterns,
   coverageDirectory: 'test-output/jest/coverage',
 };

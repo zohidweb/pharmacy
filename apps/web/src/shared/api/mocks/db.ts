@@ -4,6 +4,7 @@ import type {
   MyTerminal,
   TenantNotification,
 } from '@pharmacy/shared-dto';
+import { createPosDb, type PosMockDb } from './db-pos';
 import {
   MOCK_PASSWORD,
   boundTerminal,
@@ -25,6 +26,7 @@ export interface MockDb {
   notifications: TenantNotification[];
   terminals: Record<string, MyTerminal[]>;
   activity: ActivityEntry[];
+  pos: PosMockDb;
 }
 
 const minutesAgo = (minutes: number) =>
@@ -159,6 +161,7 @@ function createDb(): MockDb {
     notifications: initialNotifications(),
     terminals: initialTerminals(),
     activity: initialActivity(),
+    pos: createPosDb(),
   };
 }
 

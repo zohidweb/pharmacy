@@ -1,7 +1,9 @@
-/* libs/ui styles entry: fonts → tokens → base. Imported once by each app into `layer(base)`. */
+/* libs/ui styles entry: fonts → tokens → base → controls → print. Imported once by each app into `layer(base)`. */
 @import './fonts.css';
 @import './tokens/primitives.css';
 @import './tokens/semantic.css';
 @import './tokens/components.css';
+@import './tokens/print.css';
 @import './base.css';
 @import './controls.css';
+@import './print.css';

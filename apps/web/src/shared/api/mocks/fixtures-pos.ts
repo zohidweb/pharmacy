@@ -1,0 +1,230 @@
+/*
+ * Synthetic POS data of the mocks (UI mockups «Касса», «Смена», «Возврат»): catalog of the store,
+ * an open shift, receipts to return. Expiry dates are relative to today so batch states stay
+ * meaningful; barcodes and the taxpayer number are invented.
+ */
+import type { DiscountRule } from '@pharmacy/shared-domain';
+import type {
+  PosBatch,
+  PosCategory,
+  PosProduct,
+  PosStoreSettings,
+} from '@pharmacy/shared-dto';
+
+export const DAY_MS = 86_400_000;
+
+export const dateIn = (days: number) =>
+  new Date(Date.now() + days * DAY_MS).toISOString().slice(0, 10);
+
+export const minutesAgo = (minutes: number) =>
+  new Date(Date.now() - minutes * 60_000).toISOString();
+
+export const categories: PosCategory[] = [
+  { id: 'cat-analgesics', name: 'Анальгетики' },
+  { id: 'cat-antibiotics', name: 'Антибиотики' },
+  { id: 'cat-vitamins', name: 'Витамины' },
+  { id: 'cat-children', name: 'Детское' },
+  { id: 'cat-other', name: 'Прочее' },
+];
+
+export const discountRules: DiscountRule[] = [
+  { id: 'rule-3', minSubtotalMinor: 50_000, percent: 3 },
+  { id: 'rule-5', minSubtotalMinor: 100_000, percent: 5 },
+];
+
+export const storeSettings = (
+  storeName: string,
+  storeAddress: string,
+): PosStoreSettings => ({
+  networkName: 'Аптечная сеть «Шифо»',
+  storeName,
+  storeAddress,
+  taxId: '020012345',
+  receiptFooter:
+    'Спасибо за покупку! Обмен и возврат — 14 дней при наличии чека.',
+  returnWindowDays: 14,
+});
+
+const batch = (
+  id: string,
+  number: string,
+  days: number,
+  quantityPieces: number,
+  costMinor: number,
+): PosBatch => ({
+  id,
+  number,
+  expiresOn: dateIn(days),
+  quantityPieces,
+  costMinor,
+});
+
+/** Catalog of every store in the mocks (stock is per data set, not per store). */
+export function initialProducts(): PosProduct[] {
+  return [
+    {
+      id: 'p-paracetamol',
+      name: 'Парацетамол 500 мг, таб. №10',
+      inn: 'Paracetamol',
+      manufacturer: 'Фармстандарт',
+      country: 'RU',
+      form: 'таблетки 500 мг',
+      categoryId: 'cat-analgesics',
+      barcodes: ['4870001000017'],
+      piecesPerPack: 10,
+      divisible: true,
+      prescription: 'none',
+      priceMinor: 450,
+      piecePriceMinor: 45,
+      batches: [
+        batch('b-p-2288', 'P-2288', 45, 70, 300),
+        batch('b-p-2311', 'P-2311', 180, 480, 310),
+        batch('b-p-2201', 'P-2201', -31, 30, 290),
+      ],
+    },
+    {
+      id: 'p-amoxicillin',
+      name: 'Амоксициллин 500 мг, капс. №16',
+      inn: 'Amoxicillin',
+      manufacturer: 'Sandoz',
+      country: 'AT',
+      form: 'капсулы 500 мг',
+      categoryId: 'cat-antibiotics',
+      barcodes: ['4870001000024'],
+      piecesPerPack: 16,
+      divisible: true,
+      prescription: 'rx',
+      priceMinor: 2_800,
+      piecePriceMinor: 175,
+      batches: [batch('b-a-1187', 'A-1187', 300, 192, 1_900)],
+    },
+    {
+      id: 'p-ibuprofen-400',
+      name: 'Ибупрофен 400 мг, таб. №20',
+      inn: 'Ibuprofen',
+      manufacturer: 'Борисовский ЗМП',
+      country: 'BY',
+      form: 'таблетки 400 мг',
+      categoryId: 'cat-analgesics',
+      barcodes: ['4870001000031'],
+      piecesPerPack: 20,
+      divisible: false,
+      prescription: 'none',
+      priceMinor: 1_200,
+      piecePriceMinor: null,
+      batches: [],
+    },
+    {
+      id: 'p-ibuprofen-200',
+      name: 'Ибупрофен 200 мг, таб. №20',
+      inn: 'Ibuprofen',
+      manufacturer: 'Дори-Дармон',
+      country: 'TJ',
+      form: 'таблетки 200 мг',
+      categoryId: 'cat-analgesics',
+      barcodes: ['4870001000048'],
+      piecesPerPack: 20,
+      divisible: false,
+      prescription: 'none',
+      priceMinor: 850,
+      piecePriceMinor: null,
+      batches: [batch('b-i-3301', 'I-3301', 200, 440, 520)],
+    },
+    {
+      id: 'p-nurofen',
+      name: 'Нурофен 200 мг, таб. №10',
+      inn: 'Ibuprofen',
+      manufacturer: 'Reckitt',
+      country: 'UK',
+      form: 'таблетки 200 мг',
+      categoryId: 'cat-analgesics',
+      barcodes: ['4870001000055'],
+      piecesPerPack: 10,
+      divisible: false,
+      prescription: 'none',
+      priceMinor: 1_900,
+      piecePriceMinor: null,
+      batches: [batch('b-n-4471', 'N-4471', 12, 180, 1_250)],
+    },
+    {
+      id: 'p-ibufen',
+      name: 'Ибуфен сусп. 100 мг/5 мл, 100 мл',
+      inn: 'Ibuprofen',
+      manufacturer: 'Polpharma',
+      country: 'PL',
+      form: 'суспензия 100 мг/5 мл',
+      categoryId: 'cat-children',
+      barcodes: ['4870001000062'],
+      piecesPerPack: 1,
+      divisible: false,
+      prescription: 'none',
+      priceMinor: 3_400,
+      piecePriceMinor: null,
+      batches: [batch('b-ib-120', 'IB-120', 400, 5, 2_300)],
+    },
+    {
+      id: 'p-vitamin-d3',
+      name: 'Витамин D3 2000 МЕ, капс. №60',
+      inn: 'Colecalciferol',
+      manufacturer: 'Solgar',
+      country: 'US',
+      form: 'капсулы 2000 МЕ',
+      categoryId: 'cat-vitamins',
+      barcodes: ['4870001000079'],
+      piecesPerPack: 60,
+      divisible: false,
+      prescription: 'none',
+      priceMinor: 6_500,
+      piecePriceMinor: null,
+      batches: [batch('b-v-9021', 'V-9021', 500, 1_860, 4_100)],
+    },
+    {
+      id: 'p-tramadol',
+      name: 'Трамадол 50 мг, капс. №20',
+      inn: 'Tramadol',
+      manufacturer: 'Zentiva',
+      country: 'CZ',
+      form: 'капсулы 50 мг',
+      categoryId: 'cat-analgesics',
+      barcodes: ['4870001000086'],
+      piecesPerPack: 20,
+      divisible: false,
+      prescription: 'controlled',
+      priceMinor: 4_200,
+      piecePriceMinor: null,
+      batches: [batch('b-t-0712', 'T-0712', 250, 120, 2_900)],
+    },
+    {
+      id: 'p-saline',
+      name: 'Физраствор 0,9% 200 мл',
+      inn: 'Natrii chloridum',
+      manufacturer: 'Дори-Дармон',
+      country: 'TJ',
+      form: 'раствор 0,9%',
+      categoryId: 'cat-other',
+      barcodes: ['4870001000093'],
+      piecesPerPack: 1,
+      divisible: false,
+      prescription: 'none',
+      priceMinor: 620,
+      piecePriceMinor: null,
+      batches: [batch('b-f-0902', 'F-0902', 40, 90, 380)],
+    },
+    {
+      id: 'p-nurofen-kids',
+      name: 'Нурофен для детей сусп. 100 мг/5 мл, 150 мл',
+      inn: 'Ibuprofen',
+      manufacturer: 'Reckitt',
+      country: 'UK',
+      form: 'суспензия 100 мг/5 мл',
+      categoryId: 'cat-children',
+      barcodes: ['4870001000109'],
+      piecesPerPack: 1,
+      divisible: false,
+      prescription: 'none',
+      priceMinor: 3_600,
+      piecePriceMinor: null,
+      batches: [batch('b-nd-55', 'ND-55', 220, 14, 2_450)],
+    },
+  ];
+}

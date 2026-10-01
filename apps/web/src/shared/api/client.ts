@@ -13,6 +13,7 @@ import {
   type ApiResponse,
   type ApiRouteKey,
 } from './routes';
+import { reportRequest } from './connectivity';
 
 const API_BASE = '/api/v1';
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -25,7 +26,7 @@ export interface ApiFieldError {
 export class ApiError extends Error {
   constructor(
     readonly status: number,
-    /** Machine code from problem+json `code` (or "network" / "timeout" / "unexpected"). */
+    /** Machine code from problem+json `code` (or "network" / "timeout" / "aborted" / "unexpected"). */
     readonly code: string,
     readonly correlationId: string,
     readonly errors: ApiFieldError[] = [],
@@ -91,6 +92,9 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
       signal,
     });
   } catch {
+    // cancelled by the caller (navigation, refetch) — not a connection failure
+    if (options.signal?.aborted)
+      throw new ApiError(0, 'aborted', correlationId);
     throw new ApiError(
       0,
       timeout.aborted ? 'timeout' : 'network',
@@ -123,9 +127,23 @@ export function setApiTransport(next: ApiTransport): void {
   transport = next;
 }
 
-export function apiRequest<K extends ApiRouteKey>(
+const unreachable = (error: unknown) =>
+  error instanceof ApiError &&
+  (error.code === 'network' || error.code === 'timeout');
+
+export async function apiRequest<K extends ApiRouteKey>(
   route: K,
   options: ApiRequestOptions<K> = {},
 ): Promise<ApiResponse<K>> {
-  return transport(route, options, crypto.randomUUID());
+  try {
+    const response = await transport(route, options, crypto.randomUUID());
+    reportRequest(true);
+    return response;
+  } catch (error) {
+    // any answer of the server, even an error, means it is reachable; a cancelled request says nothing
+    if (!(error instanceof ApiError && error.code === 'aborted')) {
+      reportRequest(!unreachable(error));
+    }
+    throw error;
+  }
 }

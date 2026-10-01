@@ -1,4 +1,5 @@
 export {
+  applyScenario,
   mockTransport,
   startMockImpersonation,
   unbindMockTerminal,

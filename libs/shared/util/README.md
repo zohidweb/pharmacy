@@ -1,7 +1,10 @@
-# shared-util
+# @pharmacy/shared-util
 
-This library was generated with [Nx](https://nx.dev).
+Utilities shared by `apps/api`, `apps/web` and `apps/admin` (`type:util`).
 
-## Running unit tests
+- `formatMoney`, `parseMoneyToMinor` — money in integer dirams, TJS only (ADR-0016).
+- `formatDateOnly`, `formatDateTime`, `toAppDate`, `daysBetween` — dates in Asia/Dushanbe.
+- `uuidv7` — time-ordered ids and the Idempotency-Key of buffered POS operations (ADR-0015, `uuid`).
+- `receiptRow`, `receiptWrap`, `receiptCenter`, `receiptRule` — fixed-width lines of printed receipts.
 
-Run `nx test shared-util` to execute the unit tests via [Jest](https://jestjs.io).
+`npx nx test shared-util` — unit tests (Jest).

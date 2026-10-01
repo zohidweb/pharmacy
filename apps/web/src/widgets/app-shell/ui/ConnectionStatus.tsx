@@ -2,22 +2,28 @@
 
 import type { SessionStore } from '@pharmacy/shared-dto';
 import { formatDateTime } from '@pharmacy/shared-util';
-import { Icon } from '@pharmacy/ui';
+import { Icon, type IconName } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useSyncExternalStore } from 'react';
 import { useTranslations } from 'use-intl';
-import { apiRequest } from '@/shared/api';
-import { useOnline } from '../model/use-online';
+import { useOutboxCounts, useTerminalRuntime } from '@/entities/terminal';
+import { apiRequest, isOnline, subscribeConnectivity } from '@/shared/api';
 
 const SYNC_REFRESH_MS = 60_000;
 
 /**
- * Connection of the working store: a cloud store shows browser connectivity; an offline store shows
- * its last sync with the cloud and the queue of operations waiting to be sent (ADR-0014).
- * Icon + text, never color alone; changes are announced politely.
+ * Connection of the working store and the unsent POS operations the cashier always sees
+ * (ADR-0015): a cloud store shows the API reachability and the browser buffer; an offline store
+ * also shows its last sync with the cloud (ADR-0014). Icon + text, never color alone.
  */
 export function ConnectionStatus({ store }: { store: SessionStore | null }) {
   const t = useTranslations('shell.connection');
-  const online = useOnline();
+  const online = useSyncExternalStore(
+    subscribeConnectivity,
+    isOnline,
+    () => true,
+  );
+  const counts = useOutboxCounts(useTerminalRuntime());
   const offlineStore = store?.mode === 'offline';
   const sync = useQuery({
     queryKey: ['sync', 'status', store?.id],
@@ -26,10 +32,10 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
     refetchInterval: SYNC_REFRESH_MS,
   });
 
-  let icon: 'refresh-cw' | 'cloud' | 'cloud-off' = online
-    ? 'cloud'
-    : 'cloud-off';
-  let text = online ? t('online') : t('offline');
+  let icon: IconName = online ? 'cloud' : 'cloud-off';
+  let text = online
+    ? t('online', { count: counts.pending })
+    : t('offline', { count: counts.pending });
   let tone = online ? 'text-fg-muted' : 'text-danger';
 
   if (offlineStore) {
@@ -48,12 +54,18 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
   }
 
   return (
-    <p
-      role="status"
-      className={`flex min-w-0 items-center gap-2 text-xs ${tone}`}
-    >
-      <Icon name={icon} size="sm" />
-      <span className="truncate">{text}</span>
+    <p role="status" className="flex min-w-0 flex-col items-end text-xs">
+      <span className={`flex items-center gap-2 ${tone}`}>
+        <Icon name={icon} size="sm" />
+        <span className="truncate">{text}</span>
+      </span>
+      {counts.quarantine > 0 && (
+        <span className="flex items-center gap-1 font-medium text-danger">
+          <Icon name="triangle-alert" size="xs" />
+          {t('quarantine', { count: counts.quarantine })}
+        </span>
+      )}
+      {counts.paused && <span className="text-warning">{t('paused')}</span>}
     </p>
   );
 }

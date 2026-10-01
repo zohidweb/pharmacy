@@ -23,7 +23,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
-import { useSignOut } from '@/features/sign-out';
+import { SignOutButton } from '@/features/sign-out';
 import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { locales, setLocale, type Locale } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
@@ -446,7 +446,6 @@ function TerminalsCard({ canUnbind }: { canUnbind: boolean }) {
 export function ProfilePage() {
   const t = useTranslations('profile');
   const { data: session } = useSession();
-  const signOut = useSignOut();
   const me = useQuery({
     queryKey: meKey,
     queryFn: ({ signal }) => apiRequest('me.get', { signal }),
@@ -478,14 +477,7 @@ export function ProfilePage() {
                       ` · ${t('lastLogin', { at: formatDateTime(data.lastLoginAt) })}`}
                   </p>
                 </div>
-                <Button
-                  variant="secondary"
-                  iconStart="log-out"
-                  loading={signOut.isPending}
-                  onClick={() => signOut.mutate()}
-                >
-                  {t('signOut')}
-                </Button>
+                <SignOutButton variant="secondary" />
               </Card>
               <MainInfo me={data} readOnly={readOnly} />
               <div className="grid grid-cols-2 items-start gap-4">

@@ -99,6 +99,16 @@ export {
 } from './lib/overlay/Toast';
 
 export {
+  printReceipt,
+  RECEIPT_COLUMNS,
+  ReceiptPreview,
+  ReceiptPrint,
+  type PaperWidth,
+  type ReceiptPreviewProps,
+  type ReceiptPrintProps,
+} from './lib/print/ReceiptPrint';
+
+export {
   BarChart,
   type BarChartItem,
   type BarChartProps,

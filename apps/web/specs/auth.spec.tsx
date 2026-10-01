@@ -43,7 +43,9 @@ describe('LoginPage on a bound terminal', () => {
     expect(
       await screen.findByRole('heading', { name: 'PIN кассира' }),
     ).toBeTruthy();
-    expect(screen.getByText('Аптека №3 · Рудаки · Касса 1 · Аптека №3')).toBeTruthy();
+    expect(
+      screen.getByText('Аптека №3 · Рудаки · Касса 1 · Аптека №3'),
+    ).toBeTruthy();
     const cashiers = screen.getByRole('group', { name: 'Кассир' });
     expect(within(cashiers).getAllByRole('radio')).toHaveLength(3);
 
@@ -52,13 +54,11 @@ describe('LoginPage on a bound terminal', () => {
     expect(
       (screen.getByLabelText(/^PIN/, { selector: 'input' }) as HTMLInputElement)
         .value,
-    ).toBe(
-      '2580',
-    );
+    ).toBe('2580');
     fireEvent.click(screen.getByRole('button', { name: 'Войти' }));
 
-    // a cashier has no dashboard: the first ready screen is the profile
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/profile'));
+    // a cashier has no dashboard: the first ready screen of the role is the POS
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/pos'));
   });
 
   it('locks the PIN after three failures and asks for the password', async () => {
@@ -123,7 +123,7 @@ describe('LoginPage by password', () => {
     await scenario('unbound-terminal');
     renderWithProviders(<LoginPage />);
     await signInByPassword('zarina');
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/profile'));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/pos'));
   });
 
   it('does not tell which field of a wrong pair was wrong', async () => {
@@ -146,7 +146,9 @@ describe('LoginPage by password', () => {
     await scenario('unbound-terminal');
     renderWithProviders(<LoginPage />);
     expect(await screen.findByRole('heading', { name: 'Вход' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Вход кассира по PIN' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Вход кассира по PIN' }),
+    ).toBeNull();
   });
 
   it('has no axe violations on the password step', async () => {

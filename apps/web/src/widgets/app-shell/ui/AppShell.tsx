@@ -7,6 +7,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useTranslations } from 'use-intl';
 import { currentStoreOf, useSession } from '@/entities/session';
 import { routes } from '@/shared/config';
+import { useShellChrome } from '@/shared/lib/shell-chrome';
 import { landingRoute } from '../config/navigation';
 import { ConnectionStatus } from './ConnectionStatus';
 import { ImpersonationBanner } from './ImpersonationBanner';
@@ -25,6 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const tErrors = useTranslations('errors');
   const router = useRouter();
   const session = useSession();
+  const fullscreen = useShellChrome((s) => s.fullscreen);
   const needsSignIn =
     session.isSuccess && (!session.data || !session.data.currentStoreId);
 
@@ -68,31 +70,44 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {t('skipToContent')}
       </a>
-      <header className="sticky top-0 z-(--ph-z-sticky) flex h-topbar items-center gap-4 border-b border-border bg-surface px-4">
-        <Link
-          href={landingRoute(data)}
-          aria-label={t('home')}
-          className="flex min-h-touch items-center gap-2 rounded-md px-2"
-        >
-          <span className="grid size-avatar-sm place-items-center rounded-md bg-primary text-on-primary">
-            <Icon name="pill" size="md" />
+      {fullscreen ? (
+        // POS full screen: no menu, but the store and the unsent operations stay visible
+        <header className="sticky top-0 z-(--ph-z-sticky) flex items-center gap-4 border-b border-border bg-surface px-4 py-2">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <Icon name="store" size="sm" />
+            {currentStoreOf(data)?.name}
           </span>
-          <span
-            aria-hidden="true"
-            className="text-lg font-bold tracking-tight text-fg"
+          <div className="flex min-w-0 flex-1 justify-end">
+            <ConnectionStatus store={currentStoreOf(data)} />
+          </div>
+        </header>
+      ) : (
+        <header className="sticky top-0 z-(--ph-z-sticky) flex h-topbar items-center gap-4 border-b border-border bg-surface px-4">
+          <Link
+            href={landingRoute(data)}
+            aria-label={t('home')}
+            className="flex min-h-touch items-center gap-2 rounded-md px-2"
           >
-            {t('productName')}
-          </span>
-        </Link>
-        <StoreSwitcher session={data} />
-        <div className="flex min-w-0 flex-1 justify-end">
-          <ConnectionStatus store={currentStoreOf(data)} />
-        </div>
-        <NotificationsBell />
-        <UserMenu session={data} />
-      </header>
+            <span className="grid size-avatar-sm place-items-center rounded-md bg-primary text-on-primary">
+              <Icon name="pill" size="md" />
+            </span>
+            <span
+              aria-hidden="true"
+              className="text-lg font-bold tracking-tight text-fg"
+            >
+              {t('productName')}
+            </span>
+          </Link>
+          <StoreSwitcher session={data} />
+          <div className="flex min-w-0 flex-1 justify-end">
+            <ConnectionStatus store={currentStoreOf(data)} />
+          </div>
+          <NotificationsBell />
+          <UserMenu session={data} />
+        </header>
+      )}
       <div className="flex">
-        <Sidebar />
+        {!fullscreen && <Sidebar />}
         <main
           id="main"
           tabIndex={-1}

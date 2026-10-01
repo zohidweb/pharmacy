@@ -1,0 +1,41 @@
+/*
+ * Printing: only the print root reaches the printer (receipts, Z-reports); black on white,
+ * no page margins so Chrome prints no headers and footers.
+ */
+.ph-print-root {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  body > :not(.ph-print-root) {
+    display: none !important; /* ignore-design: only the print root may reach the printer */
+  }
+
+  * {
+    box-shadow: none !important; /* ignore-design: thermal print has no shadows */
+    print-color-adjust: economy;
+  }
+
+  .ph-print-root {
+    display: block;
+    inline-size: min(
+      var(--ph-receipt-width),
+      calc(var(--ph-receipt-cols) * 1ch)
+    );
+    padding-inline: var(--ph-receipt-padding-inline);
+    font-family: var(--ph-receipt-font);
+    font-size: var(--ph-receipt-font-size);
+    line-height: var(--ph-receipt-line-height);
+    color: black; /* ignore-design: thermal print is monochrome by definition */
+    background: none;
+  }
+
+  .ph-print-line {
+    white-space: pre;
+    break-inside: avoid;
+  }
+}

@@ -126,6 +126,27 @@ describe('PlatformDatabase.platformTransaction', () => {
     expect(second.actor).toBe('system:next-job');
   });
 
+  it('platform: leaves no app.actor on the connection after commit (set_config is transaction-local)', async () => {
+    const inside = await db.platformTransaction(
+      { kind: 'system', job: 'local-check' },
+      sessionState,
+    );
+
+    // The root Kysely, outside any transaction, gets the same single pooled connection.
+    const root = db['db'];
+    const { rows } = await sql<{
+      actor: string | null;
+      statementTimeout: string;
+      backendPid: number;
+    }>`
+      select current_setting('app.actor', true) as actor,
+             current_setting('statement_timeout') as statement_timeout,
+             pg_backend_pid() as backend_pid`.execute(root);
+    expect(rows[0].backendPid).toBe(inside.backendPid);
+    expect(['', null]).toContain(rows[0].actor);
+    expect(rows[0].statementTimeout).not.toBe('200ms');
+  });
+
   it('rolls back when work throws', async () => {
     const actor: PlatformActor = { kind: 'system', job: 'rollback-check' };
     await expect(

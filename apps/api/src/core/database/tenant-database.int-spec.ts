@@ -149,6 +149,29 @@ describe('TenantDatabase.withTenant', () => {
     expect(second.storeTenants).not.toContain(a.tenantId);
   });
 
+  it('leaves no tenant context on the connection after commit (set_config is transaction-local)', async () => {
+    const inside = await db.withTenant(a.tenantId, sessionState);
+
+    // The root Kysely, outside any transaction, gets the same single pooled connection.
+    const root = db['db'];
+    const { rows } = await sql<{
+      tenantId: string | null;
+      statementTimeout: string;
+      backendPid: number;
+    }>`
+      select current_setting('app.tenant_id', true) as tenant_id,
+             current_setting('statement_timeout') as statement_timeout,
+             pg_backend_pid() as backend_pid`.execute(root);
+    expect(rows[0].backendPid).toBe(inside.backendPid);
+    expect(['', null]).toContain(rows[0].tenantId);
+    expect(rows[0].statementTimeout).not.toBe('200ms');
+
+    // The fail-closed tenant filter rejects a query without a tenant context.
+    await expect(
+      root.selectFrom('stores').select('id').execute(),
+    ).rejects.toMatchObject({ code: expect.stringMatching(/^(22P02|42704)$/) });
+  });
+
   it('applies statement_timeout', async () => {
     await expect(
       db.withTenant(a.tenantId, (trx) => sql`select pg_sleep(1)`.execute(trx)),

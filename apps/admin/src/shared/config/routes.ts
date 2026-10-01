@@ -8,6 +8,8 @@ export const routes = {
   statistics: () => '/statistics',
   companies: () => '/companies',
   companyCreate: () => '/companies/new',
+  company: (id: string) => `/companies/view?id=${encodeURIComponent(id)}`,
+  store: (id: string) => `/stores/view?id=${encodeURIComponent(id)}`,
   invoices: () => '/billing',
   services: () => '/billing/services',
   licenses: () => '/offline/licenses',
@@ -19,3 +21,10 @@ export const routes = {
 } as const;
 
 export type RouteName = keyof typeof routes;
+
+/** Routes without parameters (navigation menu, redirects). */
+export type StaticRouteName = {
+  [K in RouteName]: Parameters<(typeof routes)[K]>['length'] extends 0
+    ? K
+    : never;
+}[RouteName];

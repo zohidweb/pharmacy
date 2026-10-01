@@ -3,44 +3,168 @@
  * its method, path and DTO types from @pharmacy/shared-dto. Paths are relative to /api/v1.
  */
 import type {
+  BlockTenantRequest,
+  CreateTenantRequest,
+  CreateTenantResponse,
+  ImpersonationHandoff,
+  ImpersonationRequest,
+  MigrateStoreToCloudRequest,
   OperatorLoginRequest,
   OperatorSession,
+  AuditEntry,
+  Page,
+  StoreDetails,
+  StoreSummary,
+  TenantDetails,
+  TenantInvoiceItem,
+  TenantListQuery,
+  TenantListResponse,
+  TenantPaymentItem,
+  TenantServiceItem,
+  TenantStats,
+  UpdateStoreLicenseSettingsRequest,
+  UpdateStoreRequest,
 } from '@pharmacy/shared-dto';
 
-interface RouteDef<Body, Response> {
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  path: string;
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type QueryValue = string | number | boolean | undefined;
+
+interface RouteDef<Params, Query, Body, Response> {
+  method: Method;
+  path: (params: Params) => string;
   /** Phantom fields: carry the types only. */
+  params?: Params;
+  query?: Query;
   body?: Body;
   response?: Response;
 }
 
-function route<Body = undefined, Response = void>(
-  method: RouteDef<Body, Response>['method'],
-  path: string,
-): RouteDef<Body, Response> {
+function route<
+  Response,
+  Body = undefined,
+  Params = undefined,
+  Query = undefined,
+>(
+  method: Method,
+  path: (params: Params) => string,
+): RouteDef<Params, Query, Body, Response> {
   return { method, path };
 }
 
+const id = (params: { id: string }) => encodeURIComponent(params.id);
+
 export const apiRoutes = {
-  'operator.sessions.create': route<OperatorLoginRequest, OperatorSession>(
+  'operator.sessions.create': route<OperatorSession, OperatorLoginRequest>(
     'POST',
-    '/operator/sessions',
+    () => '/operator/sessions',
   ),
-  'operator.sessions.current': route<undefined, OperatorSession>(
+  'operator.sessions.current': route<OperatorSession>(
     'GET',
-    '/operator/sessions/current',
+    () => '/operator/sessions/current',
   ),
-  'operator.sessions.delete': route<undefined, void>(
+  'operator.sessions.delete': route<void>(
     'DELETE',
-    '/operator/sessions/current',
+    () => '/operator/sessions/current',
   ),
+  'operator.impersonations.create': route<
+    ImpersonationHandoff,
+    ImpersonationRequest
+  >('POST', () => '/operator/impersonations'),
+
+  'tenants.list': route<
+    TenantListResponse,
+    undefined,
+    undefined,
+    TenantListQuery
+  >('GET', () => '/platform/tenants'),
+  'tenants.create': route<CreateTenantResponse, CreateTenantRequest>(
+    'POST',
+    () => '/platform/tenants',
+  ),
+  'tenants.get': route<TenantDetails, undefined, { id: string }>(
+    'GET',
+    (p) => `/platform/tenants/${id(p)}`,
+  ),
+  'tenants.block': route<TenantDetails, BlockTenantRequest, { id: string }>(
+    'POST',
+    (p) => `/platform/tenants/${id(p)}/block`,
+  ),
+  'tenants.unblock': route<TenantDetails, undefined, { id: string }>(
+    'POST',
+    (p) => `/platform/tenants/${id(p)}/unblock`,
+  ),
+  'tenants.stores': route<StoreSummary[], undefined, { id: string }>(
+    'GET',
+    (p) => `/platform/tenants/${id(p)}/stores`,
+  ),
+  'tenants.invoices': route<TenantInvoiceItem[], undefined, { id: string }>(
+    'GET',
+    (p) => `/platform/tenants/${id(p)}/invoices`,
+  ),
+  'tenants.payments': route<TenantPaymentItem[], undefined, { id: string }>(
+    'GET',
+    (p) => `/platform/tenants/${id(p)}/payments`,
+  ),
+  'tenants.services': route<TenantServiceItem[], undefined, { id: string }>(
+    'GET',
+    (p) => `/platform/tenants/${id(p)}/services`,
+  ),
+  'tenants.stats': route<TenantStats, undefined, { id: string }>(
+    'GET',
+    (p) => `/platform/tenants/${id(p)}/stats`,
+  ),
+  'tenants.audit': route<
+    Page<AuditEntry>,
+    undefined,
+    { id: string },
+    { limit?: number; offset?: number }
+  >('GET', (p) => `/platform/tenants/${id(p)}/audit-log`),
+
+  'stores.get': route<StoreDetails, undefined, { id: string }>(
+    'GET',
+    (p) => `/platform/stores/${id(p)}`,
+  ),
+  'stores.update': route<StoreDetails, UpdateStoreRequest, { id: string }>(
+    'PATCH',
+    (p) => `/platform/stores/${id(p)}`,
+  ),
+  'stores.updateLicenseSettings': route<
+    StoreDetails,
+    UpdateStoreLicenseSettingsRequest,
+    { id: string }
+  >('PATCH', (p) => `/platform/stores/${id(p)}/license-settings`),
+  'stores.requestSync': route<void, undefined, { id: string }>(
+    'POST',
+    (p) => `/platform/stores/${id(p)}/sync-requests`,
+  ),
+  'stores.migrateToCloud': route<
+    StoreDetails,
+    MigrateStoreToCloudRequest,
+    { id: string }
+  >('POST', (p) => `/platform/stores/${id(p)}/cloud-migrations`),
 } as const;
 
 export type ApiRouteKey = keyof typeof apiRoutes;
 
 type RouteOf<K extends ApiRouteKey> = (typeof apiRoutes)[K];
-export type ApiBody<K extends ApiRouteKey> =
-  RouteOf<K> extends RouteDef<infer B, unknown> ? B : never;
-export type ApiResponse<K extends ApiRouteKey> =
-  RouteOf<K> extends RouteDef<unknown, infer R> ? R : never;
+type Parts<K extends ApiRouteKey> =
+  RouteOf<K> extends RouteDef<infer P, infer Q, infer B, infer R>
+    ? { params: P; query: Q; body: B; response: R }
+    : never;
+export type ApiParams<K extends ApiRouteKey> = Parts<K>['params'];
+export type ApiQuery<K extends ApiRouteKey> = Parts<K>['query'];
+export type ApiBody<K extends ApiRouteKey> = Parts<K>['body'];
+export type ApiResponse<K extends ApiRouteKey> = Parts<K>['response'];
+
+/** Serializes defined query values; booleans and numbers as strings. */
+export function toQueryString(
+  query: Record<string, QueryValue> | undefined,
+): string {
+  if (!query) return '';
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== '') search.set(key, String(value));
+  }
+  const text = search.toString();
+  return text ? `?${text}` : '';
+}

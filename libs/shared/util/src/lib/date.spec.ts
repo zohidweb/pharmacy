@@ -1,4 +1,4 @@
-import { formatDateOnly, formatDateTime } from './date';
+import { daysBetween, formatDateOnly, formatDateTime, toAppDate } from './date';
 
 describe('formatDateOnly', () => {
   it('formats YYYY-MM-DD as dd.MM.yyyy without time zone shifts', () => {
@@ -20,5 +20,24 @@ describe('formatDateTime', () => {
 
   it('rejects invalid input', () => {
     expect(() => formatDateTime('not a date')).toThrow(RangeError);
+  });
+});
+
+describe('toAppDate', () => {
+  it('returns the Dushanbe calendar date of an instant', () => {
+    expect(toAppDate(new Date('2026-09-30T18:59:00Z'))).toBe('2026-09-30');
+    expect(toAppDate(new Date('2026-09-30T19:00:00Z'))).toBe('2026-10-01');
+  });
+});
+
+describe('daysBetween', () => {
+  it('counts calendar days across months and both directions', () => {
+    expect(daysBetween('2026-09-30', '2026-10-07')).toBe(7);
+    expect(daysBetween('2026-10-07', '2026-09-30')).toBe(-7);
+    expect(daysBetween('2026-10-01', '2026-10-01')).toBe(0);
+  });
+
+  it('rejects other shapes', () => {
+    expect(() => daysBetween('01.10.2026', '2026-10-01')).toThrow(RangeError);
   });
 });

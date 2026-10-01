@@ -8,7 +8,11 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
@@ -19,9 +23,14 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
-    "types": ["jest", "node"],
+    "types": [
+      "jest",
+      "node"
+    ],
     "outDir": "dist",
     "rootDir": ".",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
@@ -36,7 +45,8 @@
     "../../apps/admin/.next/types/**/*.ts",
     "../../dist/apps/admin/.next/types/**/*.ts",
     "index.d.ts",
-    "next-env.d.ts"
+    "next-env.d.ts",
+    "src/**/*.json"
   ],
   "exclude": [
     "out-tsc",
@@ -49,7 +59,9 @@
     ".next",
     "eslint.config.js",
     "eslint.config.cjs",
-    "eslint.config.mjs"
+    "eslint.config.mjs",
+    "src/**/*.spec.tsx",
+    "src/**/*.test.tsx"
   ],
   "references": [
     {

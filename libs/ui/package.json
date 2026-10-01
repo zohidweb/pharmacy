@@ -9,7 +9,12 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./testing": {
+      "types": "./src/testing/platform-polyfills.ts",
+      "import": "./src/testing/platform-polyfills.ts",
+      "default": "./src/testing/platform-polyfills.ts"
+    }
   },
   "nx": {
     "name": "ui",

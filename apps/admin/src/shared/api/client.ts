@@ -6,7 +6,10 @@
  */
 import {
   apiRoutes,
+  toQueryString,
   type ApiBody,
+  type ApiParams,
+  type ApiQuery,
   type ApiResponse,
   type ApiRouteKey,
 } from './routes';
@@ -33,7 +36,11 @@ export class ApiError extends Error {
 }
 
 export interface ApiRequestOptions<K extends ApiRouteKey> {
+  params?: ApiParams<K>;
+  query?: ApiQuery<K>;
   body?: ApiBody<K>;
+  /** Sent as Idempotency-Key: the same key for retries of one user action. */
+  idempotencyKey?: string;
   signal?: AbortSignal;
 }
 
@@ -50,7 +57,15 @@ interface ProblemDetails {
 }
 
 const fetchTransport: ApiTransport = async (route, options, correlationId) => {
-  const { method, path } = apiRoutes[route];
+  const definition = apiRoutes[route] as unknown as {
+    method: string;
+    path: (params: unknown) => string;
+  };
+  const { method } = definition;
+  const url = `${API_BASE}${definition.path(options.params)}${toQueryString(
+    options.query as
+      Record<string, string | number | boolean | undefined> | undefined,
+  )}`;
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const signal = options.signal
     ? AbortSignal.any([options.signal, timeout])
@@ -58,12 +73,15 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(url, {
       method,
       credentials: 'same-origin',
       headers: {
         Accept: 'application/json, application/problem+json',
         'X-Correlation-Id': correlationId,
+        ...(options.idempotencyKey && {
+          'Idempotency-Key': options.idempotencyKey,
+        }),
         ...(options.body !== undefined && {
           'Content-Type': 'application/json',
         }),

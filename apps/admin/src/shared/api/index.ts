@@ -6,6 +6,7 @@ export {
   type ApiTransport,
 } from './client';
 export { apiRoutes, type ApiRouteKey } from './routes';
+export { useApiErrorMessage } from './error-message';
 
 /** True when the admin runs against in-memory mocks instead of apps/api. */
 export const apiMocksEnabled = process.env.NEXT_PUBLIC_API_MOCKS === 'true';
@@ -25,4 +26,10 @@ export function loadMockTransport() {
     return Promise.reject(new Error('API mocks are disabled'));
   }
   return mockModule().then((module) => module.mockTransport);
+}
+
+/** Restores the mock data set (tests and the dev catalog only). */
+export async function resetApiMocks(): Promise<void> {
+  if (!mockModule) return;
+  (await mockModule()).resetMockDb();
 }

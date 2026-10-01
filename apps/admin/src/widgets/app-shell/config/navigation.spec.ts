@@ -9,6 +9,7 @@ describe('activeRoute', () => {
     ['/billing', 'invoices'],
     ['/billing/services', 'services'],
     ['/offline/licenses', 'licenses'],
+    ['/stores/view', 'companies'],
     ['/profile', null],
   ])('maps %s to %s', (pathname, expected) => {
     expect(activeRoute(pathname)).toBe(expected);

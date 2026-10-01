@@ -1,1 +1,1 @@
-export { routes, type RouteName } from './routes';
+export { routes, type RouteName, type StaticRouteName } from './routes';

@@ -26,3 +26,18 @@ export interface OperatorSession {
   /** ISO instant of the password authentication (step-up age, ADR-0008). */
   authenticatedAt: string;
 }
+
+/** POST /api/v1/operator/impersonations (ADR-0008, «От имени»): needs a fresh step-up. */
+export interface ImpersonationRequest {
+  tenantId: string;
+  /** Stated in the tenant's audit log. */
+  reason: string;
+}
+
+export interface ImpersonationHandoff {
+  impersonationId: string;
+  /** One-time code (TTL ≤ 60 s) posted in a form body to `handoffUrl`, never in a URL. */
+  handoffCode: string;
+  /** Endpoint on the client-product origin that exchanges the code for a read-only session. */
+  handoffUrl: string;
+}

@@ -37,3 +37,26 @@ export function formatDateTime(isoInstant: string): string {
   }
   return dateTimeFormat.format(date);
 }
+
+const isoDateInZone = new Intl.DateTimeFormat('en-CA', {
+  timeZone: APP_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Calendar date (YYYY-MM-DD) of an instant in Asia/Dushanbe; defaults to now. */
+export function toAppDate(instant: Date = new Date()): string {
+  return isoDateInZone.format(instant);
+}
+
+/** Whole days from `from` to `to` (both YYYY-MM-DD); negative when `to` is earlier. */
+export function daysBetween(from: string, to: string): number {
+  const toUtc = (value: string) => {
+    const match = DATE_ONLY.exec(value);
+    if (!match)
+      throw new RangeError(`Expected a YYYY-MM-DD date, got "${value}"`);
+    return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  };
+  return Math.round((toUtc(to) - toUtc(from)) / 86_400_000);
+}

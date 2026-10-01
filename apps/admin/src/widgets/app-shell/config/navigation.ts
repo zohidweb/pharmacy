@@ -1,5 +1,5 @@
 import type { IconName } from '@pharmacy/ui';
-import { routes, type RouteName } from '@/shared/config';
+import { routes, type StaticRouteName } from '@/shared/config';
 
 type NavLabelKey =
   | 'dashboard'
@@ -15,7 +15,7 @@ type NavLabelKey =
   | 'settings';
 
 export interface NavItem {
-  route: RouteName;
+  route: StaticRouteName;
   label: NavLabelKey;
   icon: IconName;
 }
@@ -65,9 +65,19 @@ export const navigation: NavSection[] = [
   },
 ];
 
+/** Screens without a menu item of their own, shown under a parent item. */
+const parentSection: Array<[prefix: string, parent: string]> = [
+  ['/stores', '/companies'],
+];
+
 /** The nav item whose path is the longest prefix of the current path (/companies/new → create). */
-export function activeRoute(pathname: string): RouteName | null {
-  let best: { route: RouteName; length: number } | null = null;
+export function activeRoute(rawPathname: string): StaticRouteName | null {
+  const alias = parentSection.find(
+    ([prefix]) =>
+      rawPathname === prefix || rawPathname.startsWith(`${prefix}/`),
+  );
+  const pathname = alias ? alias[1] : rawPathname;
+  let best: { route: StaticRouteName; length: number } | null = null;
   for (const section of navigation) {
     for (const item of section.items) {
       const path = routes[item.route]();

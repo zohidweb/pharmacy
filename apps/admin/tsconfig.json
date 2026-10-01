@@ -53,6 +53,9 @@
   ],
   "references": [
     {
+      "path": "../../libs/shared/util"
+    },
+    {
       "path": "../../libs/ui"
     }
   ]

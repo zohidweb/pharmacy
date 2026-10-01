@@ -3,6 +3,24 @@
  * its method, path and DTO types from @pharmacy/shared-dto. Paths are relative to /api/v1.
  */
 import type {
+  Announcement,
+  AttentionCounts,
+  ChangePasswordRequest,
+  CreateAnnouncementRequest,
+  CreateOperatorRequest,
+  DashboardResponse,
+  NotificationListResponse,
+  NotificationPreferences,
+  NotificationTopic,
+  OperatorActivityItem,
+  OperatorAuditEntry,
+  OperatorAuditQuery,
+  OperatorMe,
+  OperatorSessionInfo,
+  PlatformOperator,
+  PlatformSettings,
+  UpdateMeRequest,
+  UsageStatsResponse,
   BillingSummary,
   CancelPaymentRequest,
   GenerateInvoicesRequest,
@@ -294,6 +312,95 @@ export const apiRoutes = {
       `/platform/installations/${encodeURIComponent(p.storeId)}/update-plans`,
   ),
   'releases.list': route<Release[]>('GET', () => '/platform/releases'),
+  'attention.counts': route<AttentionCounts>(
+    'GET',
+    () => '/platform/attention-counts',
+  ),
+  'dashboard.get': route<DashboardResponse>('GET', () => '/platform/dashboard'),
+  'usage.stats': route<
+    UsageStatsResponse,
+    undefined,
+    undefined,
+    { period: string; tenantId?: string }
+  >('GET', () => '/platform/usage-stats'),
+
+  'notifications.list': route<
+    NotificationListResponse,
+    undefined,
+    undefined,
+    { topic?: NotificationTopic; limit?: number; offset?: number }
+  >('GET', () => '/platform/notifications'),
+  'notifications.readAll': route<void>(
+    'POST',
+    () => '/platform/notifications/read-all',
+  ),
+  'announcements.list': route<Announcement[]>(
+    'GET',
+    () => '/platform/announcements',
+  ),
+  'announcements.create': route<Announcement, CreateAnnouncementRequest>(
+    'POST',
+    () => '/platform/announcements',
+  ),
+  'announcements.cancel': route<Announcement, undefined, { id: string }>(
+    'POST',
+    (p) => `/platform/announcements/${id(p)}/cancellation`,
+  ),
+  'me.notificationPreferences': route<NotificationPreferences>(
+    'GET',
+    () => '/operator/me/notification-preferences',
+  ),
+  'me.updateNotificationPreferences': route<
+    NotificationPreferences,
+    NotificationPreferences
+  >('PUT', () => '/operator/me/notification-preferences'),
+
+  'operatorAudit.list': route<
+    Page<OperatorAuditEntry>,
+    undefined,
+    undefined,
+    OperatorAuditQuery
+  >('GET', () => '/platform/operator-audit-log'),
+
+  'settings.get': route<PlatformSettings>('GET', () => '/platform/settings'),
+  'settings.update': route<PlatformSettings, PlatformSettings>(
+    'PUT',
+    () => '/platform/settings',
+  ),
+  'operators.list': route<PlatformOperator[]>(
+    'GET',
+    () => '/platform/operators',
+  ),
+  'operators.create': route<PlatformOperator, CreateOperatorRequest>(
+    'POST',
+    () => '/platform/operators',
+  ),
+  'operators.disable': route<PlatformOperator, undefined, { id: string }>(
+    'POST',
+    (p) => `/platform/operators/${id(p)}/deactivation`,
+  ),
+
+  'me.get': route<OperatorMe>('GET', () => '/operator/me'),
+  'me.update': route<OperatorMe, UpdateMeRequest>(
+    'PATCH',
+    () => '/operator/me',
+  ),
+  'me.changePassword': route<void, ChangePasswordRequest>(
+    'POST',
+    () => '/operator/me/password',
+  ),
+  'me.sessions': route<OperatorSessionInfo[]>(
+    'GET',
+    () => '/operator/me/sessions',
+  ),
+  'me.endOtherSessions': route<void>(
+    'DELETE',
+    () => '/operator/me/sessions/others',
+  ),
+  'me.activity': route<OperatorActivityItem[]>(
+    'GET',
+    () => '/operator/me/activity',
+  ),
 } as const;
 
 export type ApiRouteKey = keyof typeof apiRoutes;

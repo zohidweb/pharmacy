@@ -17,6 +17,9 @@ const knownCodes = [
   'license_exists',
   'license_revoked',
   'validation_failed',
+  'login_taken',
+  'cannot_disable_self',
+  'wrong_password',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

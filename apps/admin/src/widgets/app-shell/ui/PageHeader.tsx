@@ -1,17 +1,10 @@
 'use client';
 
-import {
-  buttonClassName,
-  EmptyState,
-  IconButton,
-  Popover,
-  SegmentedControl,
-} from '@pharmacy/ui';
-import Link from 'next/link';
+import { SegmentedControl } from '@pharmacy/ui';
 import type { ReactNode } from 'react';
 import { useTranslations } from 'use-intl';
 import { locales, setLocale, useLocale } from '@/shared/i18n';
-import { routes } from '@/shared/config';
+import { NotificationsBell } from './NotificationsBell';
 
 export interface PageHeaderProps {
   title: string;
@@ -48,38 +41,7 @@ export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
           ariaLabel: t(`locales.${value}`),
         }))}
       />
-      <Popover
-        label={t('shell.notifications')}
-        trigger={(props) => (
-          <IconButton
-            icon="bell"
-            label={t('shell.notifications')}
-            variant="surface"
-            {...props}
-          />
-        )}
-      >
-        {(close) => (
-          <div className="flex flex-col">
-            <p className="border-b border-border px-4 py-3 text-sm font-bold">
-              {t('shell.notifications')}
-            </p>
-            <EmptyState icon="bell-off" title={t('shell.noNotifications')} />
-            <div className="border-t border-border p-2">
-              <Link
-                href={routes.notifications()}
-                onClick={close}
-                className={buttonClassName({
-                  variant: 'tertiary',
-                  block: true,
-                })}
-              >
-                {t('shell.allNotifications')}
-              </Link>
-            </div>
-          </div>
-        )}
-      </Popover>
+      <NotificationsBell />
     </header>
   );
 }

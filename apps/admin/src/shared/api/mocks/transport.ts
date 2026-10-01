@@ -15,13 +15,15 @@ import type {
 import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { billingHandlers } from './handlers-billing';
+import { systemHandlers } from './handlers-system';
 import { audit, findStore, findTenant } from './helpers';
 import type { MockHandlers, MockRequest } from './types';
 import { mockDb, mockStats } from './db';
-import { demoOperator, demoOperatorPassword } from './fixtures';
+import { demoOperator } from './fixtures';
 
 const SESSION_KEY = 'pharmacy-admin-mock-session';
-const LATENCY_MS = 300;
+/** Simulated network latency in development; none in tests (fast, deterministic). */
+const LATENCY_MS = process.env.NODE_ENV === 'test' ? 0 : 300;
 
 function readSession(): OperatorSession | null {
   try {
@@ -93,10 +95,11 @@ function toListItem(tenant: TenantDetails): TenantListItem {
 
 const handlers: MockHandlers = {
   ...billingHandlers,
+  ...systemHandlers,
   'operator.sessions.create': ({ body, correlationId }) => {
     if (
       body?.login.trim().toLowerCase() !== demoOperator.login ||
-      body.password !== demoOperatorPassword
+      body.password !== mockDb().system.password
     ) {
       throw new ApiError(401, 'invalid_credentials', correlationId);
     }

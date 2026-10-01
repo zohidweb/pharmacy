@@ -3,7 +3,8 @@
 import { Alert, Button, Spinner } from '@pharmacy/ui';
 import type { ReactNode } from 'react';
 import { useTranslations } from 'use-intl';
-import { useApiErrorMessage } from '@/shared/api';
+import { ApiError, useApiErrorMessage } from '@/shared/api';
+import { StateScreen } from './StateScreen';
 
 export interface QueryStateProps<T> {
   query: {
@@ -19,6 +20,17 @@ export interface QueryStateProps<T> {
 export function QueryState<T>({ query, children }: QueryStateProps<T>) {
   const t = useTranslations('shell');
   const message = useApiErrorMessage(query.error);
+  if (query.error instanceof ApiError && query.error.status === 403) {
+    return (
+      <StateScreen
+        kind="forbidden"
+        note={t('deniedNote', { correlationId: query.error.correlationId })}
+      />
+    );
+  }
+  if (query.error instanceof ApiError && query.error.status === 503) {
+    return <StateScreen kind="maintenance" />;
+  }
   if (query.error) {
     return (
       <div className="flex flex-col items-start gap-3">

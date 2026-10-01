@@ -10,6 +10,7 @@ import type {
   TenantStats,
 } from '@pharmacy/shared-dto';
 import { seedBilling, type BillingDb } from './db-billing';
+import { seedSystem, type SystemDb } from './db-system';
 
 const LATEST_VERSION = '2.4.0';
 
@@ -45,6 +46,7 @@ export interface MockDb {
   tenants: TenantDetails[];
   stores: StoreDetails[];
   billing: BillingDb;
+  system: SystemDb;
   services: Record<string, TenantServiceItem[]>;
   audit: Record<string, AuditEntry[]>;
 }
@@ -262,6 +264,7 @@ function seed(): MockDb {
     tenants,
     stores,
     billing: seedBilling(),
+    system: seedSystem(),
     services: {
       't-1': [
         {

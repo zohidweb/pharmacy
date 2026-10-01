@@ -18,6 +18,8 @@ export interface NavItem {
   route: StaticRouteName;
   label: NavLabelKey;
   icon: IconName;
+  /** Field of AttentionCounts shown as a counter next to the item. */
+  counter?: 'serviceRequests' | 'expiringLicenses' | 'unreadNotifications';
 }
 
 export interface NavSection {
@@ -45,20 +47,35 @@ export const navigation: NavSection[] = [
     title: 'billing',
     items: [
       { route: 'invoices', label: 'invoices', icon: 'receipt' },
-      { route: 'services', label: 'services', icon: 'sparkles' },
+      {
+        route: 'services',
+        label: 'services',
+        icon: 'sparkles',
+        counter: 'serviceRequests',
+      },
     ],
   },
   {
     title: 'offline',
     items: [
-      { route: 'licenses', label: 'licenses', icon: 'key-round' },
+      {
+        route: 'licenses',
+        label: 'licenses',
+        icon: 'key-round',
+        counter: 'expiringLicenses',
+      },
       { route: 'versions', label: 'versions', icon: 'package' },
     ],
   },
   {
     title: 'system',
     items: [
-      { route: 'notifications', label: 'notifications', icon: 'bell' },
+      {
+        route: 'notifications',
+        label: 'notifications',
+        icon: 'bell',
+        counter: 'unreadNotifications',
+      },
       { route: 'auditLog', label: 'auditLog', icon: 'scroll-text' },
       { route: 'settings', label: 'settings', icon: 'settings' },
     ],

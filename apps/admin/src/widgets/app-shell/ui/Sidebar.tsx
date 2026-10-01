@@ -1,9 +1,10 @@
 'use client';
 
-import { Avatar, cx, Icon } from '@pharmacy/ui';
+import { Avatar, CountBadge, cx, Icon } from '@pharmacy/ui';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'use-intl';
+import { useAttentionCounts } from '@/entities/event';
 import { useSession } from '@/entities/session';
 import { routes } from '@/shared/config';
 import { activeRoute, navigation } from '../config/navigation';
@@ -13,6 +14,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const active = activeRoute(pathname ?? '/');
   const { data: session } = useSession();
+  const { data: counts } = useAttentionCounts();
 
   return (
     <aside className="sticky top-0 flex h-dvh w-sidebar shrink-0 flex-col border-e border-border bg-surface px-3 py-4">
@@ -61,6 +63,15 @@ export function Sidebar() {
                         <span className="truncate">
                           {t(`nav.${item.label}`)}
                         </span>
+                        {item.counter && counts && (
+                          <CountBadge
+                            className="ms-auto"
+                            count={counts[item.counter]}
+                            label={t(`shell.counters.${item.counter}`, {
+                              count: counts[item.counter],
+                            })}
+                          />
+                        )}
                       </Link>
                     </li>
                   );

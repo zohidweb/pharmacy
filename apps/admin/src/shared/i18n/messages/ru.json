@@ -1,0 +1,75 @@
+{
+  "common": {
+    "close": "Закрыть",
+    "cancel": "Отмена",
+    "required": "обязательно"
+  },
+  "shell": {
+    "productName": "Platform Admin",
+    "productTagline": "SaaS для аптечных сетей",
+    "skipToContent": "Перейти к содержимому",
+    "navLabel": "Основная навигация",
+    "operatorRole": "Оператор платформы",
+    "openProfile": "Профиль: {name}",
+    "localeLabel": "Язык интерфейса",
+    "notifications": "Уведомления",
+    "allNotifications": "Все уведомления",
+    "noNotifications": "Новых уведомлений нет",
+    "retry": "Повторить"
+  },
+  "locales": {
+    "ru": "Русский",
+    "tg": "Тоҷикӣ"
+  },
+  "nav": {
+    "overview": "Обзор",
+    "clients": "Клиенты",
+    "billing": "Биллинг",
+    "offline": "Офлайн",
+    "system": "Система",
+    "dashboard": "Дашборд",
+    "statistics": "Статистика",
+    "companies": "Компании",
+    "createCompany": "Создать компанию",
+    "invoices": "Счета и платежи",
+    "services": "Услуги",
+    "licenses": "Лицензионные ключи",
+    "versions": "Версии установок",
+    "notifications": "Уведомления",
+    "auditLog": "Журнал действий",
+    "settings": "Настройки платформы"
+  },
+  "dashboard": {
+    "title": "Дашборд",
+    "subtitle": "Обзор платформы",
+    "emptyTitle": "Дашборд в разработке",
+    "emptyDescription": "Показатели платформы появятся вместе с экранами компаний и биллинга."
+  },
+  "auth": {
+    "title": "Вход в Platform Admin",
+    "subtitle": "Для сотрудников оператора платформы",
+    "login": "Рабочая почта",
+    "loginHint": "Используется как логин",
+    "password": "Пароль",
+    "showPassword": "Показать пароль",
+    "hidePassword": "Скрыть пароль",
+    "submit": "Войти",
+    "invalidCredentials": "Неверная почта или пароль",
+    "errors": {
+      "loginRequired": "Укажите рабочую почту",
+      "loginFormat": "Почта указана неверно",
+      "passwordRequired": "Укажите пароль"
+    },
+    "promo": {
+      "title": "Управление клиентами платформы в одном месте",
+      "companies": "Компании, точки и владельцы",
+      "billing": "Счета, платежи и дополнительные услуги",
+      "licenses": "Лицензионные ключи и версии офлайн-точек",
+      "footnote": "Все действия операторов записываются в неизменяемый журнал."
+    }
+  },
+  "errors": {
+    "network": "Нет связи с сервером. Проверьте подключение и повторите попытку.",
+    "unexpected": "Что-то пошло не так. Повторите попытку; если ошибка повторится, сообщите код: {correlationId}"
+  }
+}

@@ -84,14 +84,19 @@
     "node": "^22.20.0 || >=24.0.0"
   },
   "dependencies": {
+    "@hookform/resolvers": "5.9.1",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@tanstack/react-query": "5.104.0",
     "axios": "^1.6.0",
     "next": "~16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hook-form": "7.89.0",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "use-intl": "4.14.8",
+    "zod": "4.6.5"
   }
 }

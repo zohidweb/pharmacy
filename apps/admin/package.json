@@ -12,7 +12,10 @@
     "targets": {
       "dev": {
         "options": {
-          "command": "next dev -p 4300"
+          "command": "next dev -p 4300",
+          "env": {
+            "NEXT_PUBLIC_API_MOCKS": "true"
+          }
         }
       },
       "fsd": {

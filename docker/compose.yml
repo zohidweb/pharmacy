@@ -50,6 +50,19 @@ services:
       retries: 10
     logging: *logging
 
+  # One-shot: applies SQL migrations as pharmacy_owner before the API starts (ADR-0006).
+  # PHARMACY_OWNER_PASSWORD is passed to this service only - never to api.
+  migrate:
+    image: pharmacy/api:${IMAGE_TAG:-local}
+    command: ['node', 'scripts/migrate.mjs']
+    environment:
+      MIGRATION_DATABASE_URL: postgres://pharmacy_owner:${PHARMACY_OWNER_PASSWORD:?set in the env file}@postgres:5432/${POSTGRES_DB:-pharmacy}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+    logging: *logging
+
   api:
     build:
       context: ..
@@ -69,6 +82,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     logging: *logging
 
 volumes:

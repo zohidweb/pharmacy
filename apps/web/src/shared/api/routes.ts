@@ -3,6 +3,35 @@
  * to its method, path and DTO types from @pharmacy/shared-dto. Paths are relative to /api/v1.
  */
 import type {
+  AcceptTransferRequest,
+  DiscrepancyResolution,
+  DocumentListQuery,
+  GoodsReceipt,
+  GoodsReceiptInput,
+  GoodsReceiptListResponse,
+  PurchaseOrderOption,
+  RejectionReason,
+  SaveStockCountRequest,
+  StartStockCountRequest,
+  StockCount,
+  StockCountListItem,
+  StockDocumentKind,
+  StockListQuery,
+  StockListResponse,
+  StockProductOption,
+  SupplierOption,
+  SupplierReturn,
+  SupplierReturnInput,
+  SupplierReturnListResponse,
+  Transfer,
+  TransferInput,
+  TransferOverview,
+  TransferRequest,
+  TransferRequestInput,
+  UnpostCheck,
+  WriteOff,
+  WriteOffInput,
+  WriteOffListResponse,
   BoundTerminal,
   CashMovementRequest,
   CatalogSnapshot,
@@ -165,6 +194,185 @@ export const apiRoutes = {
     'POST',
     () => '/returns',
   ),
+  'stock.list': route<StockListResponse, undefined, undefined, StockListQuery>(
+    'GET',
+    () => '/stock',
+  ),
+  'stock.products': route<
+    StockProductOption[],
+    undefined,
+    { storeId: string },
+    { query?: string; limit?: number }
+  >('GET', (p) => `/stores/${encodeURIComponent(p.storeId)}/stock-products`),
+  'suppliers.options': route<SupplierOption[]>(
+    'GET',
+    () => '/suppliers/options',
+  ),
+  'purchaseOrders.open': route<
+    PurchaseOrderOption[],
+    undefined,
+    undefined,
+    { supplierId: string }
+  >('GET', () => '/purchase-orders/open'),
+
+  'documents.unpostCheck': route<
+    UnpostCheck,
+    undefined,
+    { kind: StockDocumentKind; id: string }
+  >('GET', (p) => `/stock-documents/${p.kind}/${id(p)}/unposting-check`),
+
+  'goodsReceipts.list': route<
+    GoodsReceiptListResponse,
+    undefined,
+    undefined,
+    DocumentListQuery
+  >('GET', () => '/goods-receipts'),
+  'goodsReceipts.get': route<GoodsReceipt, undefined, { id: string }>(
+    'GET',
+    (p) => `/goods-receipts/${id(p)}`,
+  ),
+  'goodsReceipts.create': route<GoodsReceipt, GoodsReceiptInput>(
+    'POST',
+    () => '/goods-receipts',
+  ),
+  'goodsReceipts.update': route<
+    GoodsReceipt,
+    GoodsReceiptInput,
+    { id: string }
+  >('PUT', (p) => `/goods-receipts/${id(p)}`),
+  'goodsReceipts.post': route<GoodsReceipt, undefined, { id: string }>(
+    'POST',
+    (p) => `/goods-receipts/${id(p)}/posting`,
+  ),
+  'goodsReceipts.unpost': route<GoodsReceipt, undefined, { id: string }>(
+    'POST',
+    (p) => `/goods-receipts/${id(p)}/unposting`,
+  ),
+
+  'writeOffs.list': route<
+    WriteOffListResponse,
+    undefined,
+    undefined,
+    DocumentListQuery
+  >('GET', () => '/write-offs'),
+  'writeOffs.get': route<WriteOff, undefined, { id: string }>(
+    'GET',
+    (p) => `/write-offs/${id(p)}`,
+  ),
+  'writeOffs.create': route<WriteOff, WriteOffInput>(
+    'POST',
+    () => '/write-offs',
+  ),
+  'writeOffs.update': route<WriteOff, WriteOffInput, { id: string }>(
+    'PUT',
+    (p) => `/write-offs/${id(p)}`,
+  ),
+  'writeOffs.post': route<WriteOff, undefined, { id: string }>(
+    'POST',
+    (p) => `/write-offs/${id(p)}/posting`,
+  ),
+  'writeOffs.unpost': route<WriteOff, undefined, { id: string }>(
+    'POST',
+    (p) => `/write-offs/${id(p)}/unposting`,
+  ),
+
+  'supplierReturns.list': route<
+    SupplierReturnListResponse,
+    undefined,
+    undefined,
+    DocumentListQuery
+  >('GET', () => '/supplier-returns'),
+  'supplierReturns.get': route<SupplierReturn, undefined, { id: string }>(
+    'GET',
+    (p) => `/supplier-returns/${id(p)}`,
+  ),
+  'supplierReturns.create': route<SupplierReturn, SupplierReturnInput>(
+    'POST',
+    () => '/supplier-returns',
+  ),
+  'supplierReturns.update': route<
+    SupplierReturn,
+    SupplierReturnInput,
+    { id: string }
+  >('PUT', (p) => `/supplier-returns/${id(p)}`),
+  'supplierReturns.post': route<SupplierReturn, undefined, { id: string }>(
+    'POST',
+    (p) => `/supplier-returns/${id(p)}/posting`,
+  ),
+  'supplierReturns.unpost': route<SupplierReturn, undefined, { id: string }>(
+    'POST',
+    (p) => `/supplier-returns/${id(p)}/unposting`,
+  ),
+
+  'stockCounts.list': route<
+    {
+      items: StockCountListItem[];
+      total: number;
+      limit: number;
+      offset: number;
+    },
+    undefined,
+    undefined,
+    DocumentListQuery
+  >('GET', () => '/stock-counts'),
+  'stockCounts.get': route<StockCount, undefined, { id: string }>(
+    'GET',
+    (p) => `/stock-counts/${id(p)}`,
+  ),
+  'stockCounts.start': route<StockCount, StartStockCountRequest>(
+    'POST',
+    () => '/stock-counts',
+  ),
+  'stockCounts.save': route<StockCount, SaveStockCountRequest, { id: string }>(
+    'PUT',
+    (p) => `/stock-counts/${id(p)}`,
+  ),
+  'stockCounts.post': route<StockCount, undefined, { id: string }>(
+    'POST',
+    (p) => `/stock-counts/${id(p)}/posting`,
+  ),
+  'stockCounts.unpost': route<StockCount, undefined, { id: string }>(
+    'POST',
+    (p) => `/stock-counts/${id(p)}/unposting`,
+  ),
+
+  'transfers.overview': route<
+    TransferOverview,
+    undefined,
+    undefined,
+    { status?: string }
+  >('GET', () => '/transfers/overview'),
+  'transfers.get': route<Transfer, undefined, { id: string }>(
+    'GET',
+    (p) => `/transfers/${id(p)}`,
+  ),
+  'transfers.create': route<Transfer, TransferInput>(
+    'POST',
+    () => '/transfers',
+  ),
+  'transfers.accept': route<Transfer, AcceptTransferRequest, { id: string }>(
+    'POST',
+    (p) => `/transfers/${id(p)}/acceptance`,
+  ),
+  'transfers.resolve': route<
+    Transfer,
+    { resolution: DiscrepancyResolution },
+    { id: string }
+  >('POST', (p) => `/transfers/${id(p)}/discrepancy-resolution`),
+  'transferRequests.get': route<TransferRequest, undefined, { id: string }>(
+    'GET',
+    (p) => `/transfer-requests/${id(p)}`,
+  ),
+  'transferRequests.create': route<TransferRequest, TransferRequestInput>(
+    'POST',
+    () => '/transfer-requests',
+  ),
+  'transferRequests.reject': route<
+    TransferRequest,
+    { reason: RejectionReason; comment: string },
+    { id: string }
+  >('POST', (p) => `/transfer-requests/${id(p)}/rejection`),
+
   'returns.list': route<
     ReturnListResponse,
     undefined,

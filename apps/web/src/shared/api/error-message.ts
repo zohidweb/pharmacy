@@ -21,6 +21,11 @@ const knownCodes = [
   'return_window_expired',
   'return_quantity_exceeded',
   'forbidden',
+  'offline_store_read_only',
+  'unpost_blocked',
+  'document_posted',
+  'stock_insufficient',
+  'transfer_not_in_transit',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

@@ -5,6 +5,7 @@ import type {
   TenantNotification,
 } from '@pharmacy/shared-dto';
 import { createPosDb, type PosMockDb } from './db-pos';
+import { createStockDb, type StockMockDb } from './db-stock';
 import {
   MOCK_PASSWORD,
   boundTerminal,
@@ -27,6 +28,7 @@ export interface MockDb {
   terminals: Record<string, MyTerminal[]>;
   activity: ActivityEntry[];
   pos: PosMockDb;
+  stock: StockMockDb;
 }
 
 const minutesAgo = (minutes: number) =>
@@ -149,6 +151,7 @@ function initialActivity(): ActivityEntry[] {
 }
 
 function createDb(): MockDb {
+  const pos = createPosDb();
   return {
     employees: employees.map((employee) => ({
       ...employee,
@@ -161,7 +164,8 @@ function createDb(): MockDb {
     notifications: initialNotifications(),
     terminals: initialTerminals(),
     activity: initialActivity(),
-    pos: createPosDb(),
+    pos,
+    stock: createStockDb(pos.products),
   };
 }
 

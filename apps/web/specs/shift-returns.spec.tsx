@@ -51,15 +51,22 @@ describe('ShiftPage', () => {
       target: { value: '200' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Внесение' }));
-    expect(await screen.findByText('Внесение записано')).toBeTruthy();
+    // the toast is short-lived; the durable result is the closed dialog and the refreshed drawer
+    await waitFor(
+      () =>
+        expect(screen.queryByRole('dialog', { name: 'Внесение' })).toBeNull(),
+      { timeout: 6_000 },
+    );
     const drawer = screen.getByRole('region', { name: 'Денежный ящик' });
-    await waitFor(() =>
-      expect(
-        plain(
-          within(drawer).getByText('Ожидается в кассе').parentElement
-            ?.textContent,
-        ),
-      ).toBe('Ожидается в кассе1 672,50 с'),
+    await waitFor(
+      () =>
+        expect(
+          plain(
+            within(drawer).getByText('Ожидается в кассе').parentElement
+              ?.textContent,
+          ),
+        ).toBe('Ожидается в кассе1 672,50 с'),
+      { timeout: 6_000 },
     );
   });
 

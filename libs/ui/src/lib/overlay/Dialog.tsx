@@ -13,12 +13,14 @@ import { IconButton } from '../button/IconButton';
 import { Icon } from '../icon/Icon';
 import type { IconName } from '../icon/icons';
 
-export type DialogSize = 'sm' | 'md' | 'lg';
+/** xl — document editors with wide line tables (stock documents). */
+export type DialogSize = 'sm' | 'md' | 'lg' | 'xl';
 
 const sizeClass: Record<DialogSize, string> = {
   sm: 'w-(--ph-size-dialog-sm)',
   md: 'w-(--ph-size-dialog-md)',
   lg: 'w-(--ph-size-dialog-lg)',
+  xl: 'w-(--ph-size-dialog-xl)',
 };
 
 export type DialogTone =

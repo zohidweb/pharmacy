@@ -103,9 +103,13 @@
   --spacing-avatar-lg: var(--ph-size-avatar-lg);
   --spacing-sidebar: var(--ph-size-sidebar);
   --spacing-topbar: var(--ph-size-topbar);
+  --spacing-cell-sm: var(--ph-size-cell-sm);
+  --spacing-cell-md: var(--ph-size-cell-md);
+  --spacing-cell-lg: var(--ph-size-cell-lg);
   --spacing-dialog-sm: var(--ph-size-dialog-sm);
   --spacing-dialog-md: var(--ph-size-dialog-md);
   --spacing-dialog-lg: var(--ph-size-dialog-lg);
+  --spacing-dialog-xl: var(--ph-size-dialog-xl);
   --spacing-content-max: var(--ph-size-content-max);
 
   --font-sans: var(--ph-font-sans);

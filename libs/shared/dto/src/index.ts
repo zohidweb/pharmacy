@@ -6,3 +6,4 @@ export type * from './lib/platform-system.js';
 export type * from './lib/tenant-auth.js';
 export type * from './lib/tenant-home.js';
 export type * from './lib/tenant-pos.js';
+export type * from './lib/tenant-inventory.js';

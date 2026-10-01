@@ -73,15 +73,14 @@
         }
       },
       "integration": {
-        "executor": "@nx/jest:jest",
+        "executor": "nx:run-commands",
         "cache": false,
-        "outputs": [
-          "{workspaceRoot}/coverage/{projectRoot}"
-        ],
         "options": {
-          "jestConfig": "apps/api/jest.integration.config.cts",
-          "runInBand": true,
-          "passWithNoTests": false
+          "command": "jest --config jest.integration.config.cts --runInBand",
+          "cwd": "{projectRoot}",
+          "env": {
+            "TS_NODE_COMPILER_OPTIONS": "{\"moduleResolution\":\"node10\",\"module\":\"commonjs\",\"customConditions\":null}"
+          }
         }
       }
     },

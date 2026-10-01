@@ -31,7 +31,8 @@ erDiagram
 | `code` | text unique | Код сети для входа по паролю: `^[a-z0-9-]{3,32}$` |
 | `name` | text | Название сети |
 | `status` | text | `active` / `blocked` (АП 2, 6). Заблокированный тенант не входит, данные сохраняются |
-| `billing_name`, `billing_tax_id`, `billing_address`, `billing_contact` | text null | Реквизиты для счёта платформы (вопрос 13) |
+| `billing_name`, `billing_tax_id`, `billing_address`, `billing_phone`, `billing_email` | text null | Реквизиты для счёта платформы отдельными полями; ИНН — проверка формата в приложении (решение 2026-10-01) |
+| `billing_bank_details` | text null | Банковские реквизиты одним текстом |
 | `created_at`, `updated_at` | timestamptz | |
 
 ## `tenant_settings` — настройки сети (класс `tenant`, одна строка на тенанта)
@@ -49,6 +50,9 @@ erDiagram
 | `receipt_footer` | jsonb null | | Текст внизу чека по языкам (КП 5) |
 | `expiry_reminder_days` | integer | 30 | БЛ W1-17 |
 | `supplier_payment_reminder_days` | integer | 3 | БЛ W2-02 |
+| `piece_price_rounding_dirams` | integer ≥ 1 | 10 | Шаг округления вверх расчётной цены штуки (решение 2026-09-30) |
+| `backdating_max_days` | integer ≥ 0 | 30 | На сколько дней назад можно поставить дату документа (решение 2026-10-01) |
+| `prescription_retention_days` | integer 1…3650 | 90 | Срок хранения данных рецептов ПКУ (решение 2026-09-30; подтвердить с юристом) |
 | `updated_at`, `updated_by` | | | |
 
 ## `legal_entities` — юрлица сети (класс `tenant`, D5)
@@ -60,6 +64,10 @@ erDiagram
 | `name` | text | Полное название юрлица / ИП для чека |
 | `tax_id` | text | ИНН; уникален в `(tenant_id, tax_id)` среди активных |
 | `legal_address` | text | |
+| `phone`, `email` | text null | |
+| `bank_details` | text null | Банковские реквизиты одним текстом (решение 2026-10-01) |
+| `closed_until` | date null | Закрытый период (решение 2026-10-01): документы точек этого юрлица с датой ≤ `closed_until` нельзя проводить и отменять. Закрывает вручную владелец или бухгалтер, обычно после выгрузки в 1С; каждое изменение — в `audit_log` |
+| `closed_until_set_by`, `closed_until_set_at` | null | |
 | `status`, `archived_at` | text / timestamptz | `active` / `archived` |
 
 ## `stores` — точка (класс `tenant`)
@@ -70,8 +78,9 @@ erDiagram
 |---|---|---|
 | `legal_entity_id` | uuid | → `legal_entities` |
 | `name` | text | |
+| `code` | text | Короткий код точки для номеров документов (`01`, `DSH1`): шаблон `^[A-Z0-9]{1,8}$`, уникален в `(tenant_id, code)`; задаёт владелец (решение 2026-09-30) |
 | `address` | text | Фактический адрес для чека |
-| `kind` | text | `pharmacy` / `warehouse` (вопрос 6): у склада нет терминалов и смен |
+| `kind` | text | `pharmacy` / `warehouse` (решение 2026-10-01): склад пока не продаёт — терминалы и смены для него запрещает приложение, а не база, чтобы позже разрешить розницу без миграции; в биллинг не входит; может быть офлайн-точкой |
 | `mode` | text | `online` / `offline_pending` / `offline`. `offline_pending`: выпущен флеш-комплект, запись склада в облаке закрыта (ADR-0014 §4) |
 | `status` | text | `active` / `closed`. «Ожидает активации» в макете — это `mode = 'offline_pending'` |
 | `print_receipt_default` | boolean | true (КП 5) |

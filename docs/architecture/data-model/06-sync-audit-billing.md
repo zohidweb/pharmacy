@@ -55,13 +55,14 @@
 
 | Таблица | Класс | Колонки и правила |
 |---|---|---|
-| `platform_settings` | platform | Одна строка: `vat_bp`, `store_monthly_price_dirams`, `feed_window_days` (90), `revoked_key_grace_days` (30) |
+| `platform_settings` | platform | Одна строка: `vat_bp`, `store_monthly_price_dirams`, `offline_store_billing_kind` `monthly` / `one_time` / `free` и `offline_store_price_dirams` (тариф офлайн-точки настраивается, решение 2026-10-01), `feed_window_days` (90), `revoked_key_grace_days` (30) |
 | `store_billing` | platform | Ключ `(tenant_id, store_id)`: `paid_until date null`. Ведёт оператор; поле «оплачено до» не в `stores`, потому что `stores` пишет владелец |
 | `store_usage_monthly` | tenant-export | Ключ `(tenant_id, store_id, month)`: `receipts_count`, `first_sale_at`, `last_sale_at`, `computed_at`. Пересчёт ночью, отсечка — 3-е число (ADR-0013) |
 | `tenant_stats_daily` | tenant-export | Ключ `(tenant_id, day)`: счётчики чеков и активных точек, без сумм позиций и ПДн |
-| `invoices` | platform | `tenant_id`, `period_month`, `number` unique, `status` `issued` / `paid` / `cancelled`, `subtotal_dirams`, `vat_bp`, `vat_dirams`, `total_dirams`, `issued_at`. PDF генерируется по данным при запросе, не хранится |
-| `invoice_lines` | platform | `invoice_id`, `kind` `store` / `service`, `store_id null`, `service_id null`, `active_days`, `amount_dirams` |
-| `tenant_payments` | platform | `tenant_id`, `invoice_id null`, `amount_dirams`, `paid_on`, `recorded_by`. Оператор фиксирует вручную и продлевает `store_billing.paid_until` |
+| `invoices` | platform | `tenant_id`, `period_month`, `number` unique, `status` `issued` / `partially_paid` / `paid` / `cancelled` (статус оплаты выводится из распределённых платежей), `subtotal_dirams`, `vat_bp`, `vat_dirams`, `total_dirams`, `issued_at`. Один счёт в месяц: точки, офлайн-точки и услуги — отдельными строками. PDF генерируется по данным при запросе, не хранится |
+| `invoice_lines` | platform | `invoice_id`, `kind` `store` / `offline_store` / `service`, `store_id null`, `service_id null`, `active_days null`, `amount_dirams` |
+| `tenant_payments` | platform | `tenant_id`, `amount_dirams`, `paid_on`, `method text`, `comment`, `recorded_by`. **Оплаты через платформу нет** (решение 2026-10-01): оператор вручную отмечает в админке, кто и сколько оплатил. Платёж не обязательно привязан к счёту |
+| `tenant_payment_allocations` | platform | Ключ `(payment_id, invoice_id)`, `amount_dirams > 0`. По умолчанию платёж закрывает самые ранние неоплаченные счета, оператор может распределить вручную; нераспределённый остаток — аванс. По распределению обновляются `invoices.status` и `store_billing.paid_until` |
 | `services` | shared | Каталог услуг: `name jsonb`, `billing_kind` `one_time` / `monthly`, `price_dirams`, `status` |
 | `tenant_services` | platform | `tenant_id`, `service_id`, `status` `active` / `disabled`, `activated_at`, `activated_by`. Тенант читает свои строки |
 | `service_requests` | tenant-export | Заявка владельца: `service_id`, `requested_by`, `requested_at`, `comment`. Пишет тенант, видит оператор. Подключение — запись в `tenant_services`; статус заявки выводится из неё |

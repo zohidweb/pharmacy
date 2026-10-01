@@ -41,12 +41,13 @@ erDiagram
 | `inn` | jsonb null | МНН; индекс по `lower(inn->>'ru')` для поиска аналогов |
 | `dosage_form`, `dosage`, `manufacturer`, `country`, `unit` | text null | Значения из `dictionary_values`, хранятся текстом |
 | `pieces_per_pack` | integer ≥ 1 | 1 — не делится |
-| `sold_by_piece` | boolean | Разрешена поштучная продажа; при `pieces_per_pack = 1` — false |
+| `sold_by_piece` | boolean | Разрешена поштучная продажа — включается для каждого товара отдельно; при `pieces_per_pack = 1` — false |
 | `is_prescription`, `is_controlled` | boolean | Рецептурный — предупреждение; ПКУ — право `pos:sell-controlled` и рецепт |
 | `is_price_regulated` | boolean | |
 | `max_retail_price_per_pack_dirams` | bigint null | Обязателен при `is_price_regulated` |
 | `category_id` | uuid null | → `categories` |
 | `markup_bp` | integer null | Пусто — наценка категории |
+| `default_min_stock_pieces` | integer null | Минимальный остаток по умолчанию для всех точек (решение 2026-10-01) |
 | `article` | text null | Для сопоставления с 1С; уникален в тенанте, если задан |
 | `drug_reference_id` | uuid null | → `drug_reference` |
 | `origin` | text | `cloud` / `local` |
@@ -86,11 +87,12 @@ erDiagram
 | Колонка | Тип | Правило |
 |---|---|---|
 | `retail_price_per_pack_dirams` | bigint null | Пусто — товар на точке не продаётся |
+| `retail_price_per_piece_dirams` | bigint null | Своя цена штуки (решение 2026-09-30). Пусто — `ceil(цена упаковки / pieces_per_pack)` до шага `tenant_settings.piece_price_rounding_dirams`. Имеет смысл только при `products.sold_by_piece` |
 | `price_version` | integer | Растёт при каждом изменении; основа конфликта цен (ADR-0014) |
 | `price_changed_at`, `price_changed_by`, `price_source` | | `cloud` / `store` (локальное изменение офлайн-точки) |
 | `draft_price_per_pack_dirams` | bigint null | Черновик после прихода по наценке (КП 6.1); применяется подтверждением |
 | `draft_source_document_id` | uuid null | Приход, который предложил цену |
-| `min_stock_pieces` | integer null | Минимальный остаток для «Мало на складе» (вопрос 10) |
+| `min_stock_pieces` | integer null | Переопределение для точки; пусто — `products.default_min_stock_pieces`. Порог для «Мало на складе» и «заполнить по дефициту» |
 | `updated_at` | | |
 
 Синхронизация: цена сети — облако → точка; локальное изменение — точка → облако (`price.changed-locally`). Предупреждения «выше предельной» и «ниже закупочной» — в приложении, база их не блокирует. История цен — в `audit_log`.

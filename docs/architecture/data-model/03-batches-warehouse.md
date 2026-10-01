@@ -49,7 +49,7 @@ erDiagram
 | `store_id` | uuid | Точка документа (для перемещения — отправитель) |
 | `type` | text | `goods_receipt`, `opening_balance`, `transfer`, `transfer_request`, `write_off`, `inventory`, `supplier_return` |
 | `number` | text | Уникален в `(tenant_id, store_id, type, number)`; из `document_counters` |
-| `document_date` | date | Дата документа; можно задним числом (КП 3.5) |
+| `document_date` | date | Дата документа; можно задним числом (КП 3.5), но не раньше чем `tenant_settings.backdating_max_days` дней от бизнес-даты и не в закрытом периоде `legal_entities.closed_until`. Проверяет приложение при проведении. Факты офлайн-точки, пришедшие с датой в закрытом периоде, облако принимает (продажа — факт) и показывает бухгалтеру как «после закрытия периода» |
 | `status` | text | См. «Статусы» ниже |
 | `created_by`, `posted_by`, `posted_at` | | |
 | `unposted_by`, `unposted_at` | null | Последняя отмена проведения |
@@ -62,6 +62,8 @@ erDiagram
 | `purchase_order_id` | uuid null | → `purchase_orders` |
 | `source_document_id` | uuid null | Возврат поставщику → исходный приход (необязательно) |
 | `claim_text` | text null | Претензия поставщику |
+| **Списание** | | |
+| `source_customer_return_id` | uuid null | Автоматическое списание просроченного товара, возвращённого покупателем ([04](04-pos.md)) |
 | **Перемещение, заявка** | | |
 | `destination_store_id` | uuid null | Обязателен для `transfer`, `transfer_request`; ≠ `store_id` |
 | `request_document_id` | uuid null | Перемещение по заявке |
@@ -90,7 +92,7 @@ erDiagram
 | `transfer_lines` | `source_batch_id`, `qty_sent_pieces > 0`, `qty_received_pieces null` (при приёмке), `target_batch_id null` (партия получателя, D2), `discrepancy_resolution null` — `write_off` / `resend` |
 | `transfer_request_lines` | `product_id`, `qty_requested_pieces > 0`. Выполненное количество — по связанным перемещениям |
 | `write_off_lines` | `batch_id`, `qty_pieces > 0`, `reason_code` (из `dictionary_values`, `write_off_reason`) |
-| `inventory_lines` | `product_id`, `batch_id null` (пусто — излишек без партии), `book_qty_pieces` (на момент начала), `counted_qty_pieces`, `sold_since_start_pieces` (при проведении), `surplus_batch_id null` |
+| `inventory_lines` | `product_id`, `batch_id null` (пусто — найден товар без учётной партии), `book_qty_pieces` (на момент начала), `counted_qty_pieces`, `sold_since_start_pieces` (при проведении), `surplus_expiry_date null`, `surplus_purchase_price_per_pack_dirams null`, `surplus_batch_id null`. Расхождение по строке с партией — движение `inventory_gain` / `inventory_loss` по этой партии. Строка без партии — новая партия `inventory_surplus`; срок и закупочную цену **вводит сотрудник** при проведении, без них документ не проводится (решение 2026-09-30) |
 | `supplier_return_lines` | `batch_id`, `qty_pieces > 0`, `amount_dirams` |
 
 ## `stock_movements` — движение остатка (класс `tenant`, только добавление)
@@ -119,6 +121,24 @@ erDiagram
 
 ## `document_counters` — нумерация (класс `tenant`)
 
-Ключ `(tenant_id, store_id, kind)`, колонки `prefix`, `last_number bigint`. `kind` — типы документов плюс `receipt`, `customer_return`, `z_report`, `purchase_order`. Номер берётся `UPDATE … RETURNING` в транзакции документа.
+Ключ `(tenant_id, store_id, kind, year)`, колонка `last_number bigint`. Счётчик свой на каждый год: внутри года номера только растут, 1 января начинаются с 1. `kind` — типы документов плюс `receipt`, `customer_return`, `z_report`, `purchase_order`. Номер берётся `INSERT … ON CONFLICT DO UPDATE … RETURNING` в транзакции документа; год — по бизнес-дате документа.
+
+**Формат номера** (решение 2026-09-30): `<префикс>-<код точки>-<год>-<номер>`, номер дополняется нулями до 6 знаков (у чека — до 9, без префикса).
+
+| Тип | Префикс | Пример |
+|---|---|---|
+| Приход | `ПР` | `ПР-01-2026-000123` |
+| Перемещение | `ПМ` | `ПМ-01-2026-000017` |
+| Заявка на перемещение | `ЗП` | `ЗП-01-2026-000012` |
+| Списание | `СП` | `СП-01-2026-000009` |
+| Инвентаризация | `ИН` | `ИН-01-2026-000003` |
+| Возврат поставщику | `ВП` | `ВП-01-2026-000045` |
+| Ввод начальных остатков | `НО` | `НО-01-2026-000001` |
+| Заказ поставщику | `ЗК` | `ЗК-01-2026-000030` |
+| Возврат покупателя | `ВЗ` | `ВЗ-01-2026-000210` |
+| Z-отчёт | `Z` | `Z-01-2026-000087` |
+| Чек | — | `01-2026-000001234` |
+
+Префиксы — константы кода, а не колонка: при изменении префикса старые номера остаются как были.
 
 Офлайн-точка нумерует свои документы сама, облако её счётчики не трогает, поэтому номера не пересекаются.

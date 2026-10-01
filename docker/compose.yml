@@ -20,6 +20,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in the env file}
       PHARMACY_OWNER_PASSWORD: ${PHARMACY_OWNER_PASSWORD:?set in the env file}
       PHARMACY_APP_PASSWORD: ${PHARMACY_APP_PASSWORD:?set in the env file}
+      PHARMACY_PLATFORM_PASSWORD: ${PHARMACY_PLATFORM_PASSWORD:?set in the env file}
+      PHARMACY_TEST_DATABASE: ${PHARMACY_TEST_DATABASE:-}
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
@@ -57,8 +59,8 @@ services:
       NODE_ENV: production
       APP_ENV: ${APP_ENV:?set in the env file}
       PORT: 3000
-      # Used once the data layer (ADR-0006) and sessions (ADR-0008) are implemented
       DATABASE_URL: postgres://pharmacy_app:${PHARMACY_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-pharmacy}
+      PLATFORM_DATABASE_URL: postgres://pharmacy_platform:${PHARMACY_PLATFORM_PASSWORD}@postgres:5432/${POSTGRES_DB:-pharmacy}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     ports:
       - '127.0.0.1:${API_PORT:?set in the env file}:3000'

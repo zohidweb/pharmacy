@@ -1,6 +1,8 @@
 # dev: local development. PostgreSQL and Redis are published on localhost for `npx nx serve api`.
 services:
   postgres:
+    environment:
+      PHARMACY_TEST_DATABASE: pharmacy_test
     ports:
       - '127.0.0.1:5432:5432'
   redis:

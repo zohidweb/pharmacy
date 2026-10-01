@@ -1,17 +1,20 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { render } from '@testing-library/react';
-import RoutePage from '../app/page';
-import { HomePage } from '@/pages/home';
+import DashboardRoute from '../app/(shell)/page';
+import ProfileRoute from '../app/(shell)/profile/page';
+import LoginRoute from '../app/login/page';
+import NotFoundRoute from '../app/not-found';
+import { DashboardPage } from '@/pages/dashboard';
+import { LoginPage } from '@/pages/login';
+import { NotFoundPage } from '@/pages/not-found';
+import { ProfilePage } from '@/pages/profile';
 
 describe('web FSD structure', () => {
-  it('renders the root route through the pages layer', () => {
-    const { baseElement } = render(<RoutePage />);
-    expect(baseElement).toBeTruthy();
-  });
-
-  it('exposes HomePage via the slice public API', () => {
-    expect(typeof HomePage).toBe('function');
+  it('routes re-export pages from the pages layer', () => {
+    expect(LoginRoute).toBe(LoginPage);
+    expect(DashboardRoute).toBe(DashboardPage);
+    expect(ProfileRoute).toBe(ProfilePage);
+    expect(NotFoundRoute).toBe(NotFoundPage);
   });
 
   it('keeps the empty root pages/ folder that shields src/pages from Next.js routing', () => {

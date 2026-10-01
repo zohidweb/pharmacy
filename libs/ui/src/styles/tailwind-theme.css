@@ -102,6 +102,7 @@
   --spacing-avatar-md: var(--ph-size-avatar-md);
   --spacing-avatar-lg: var(--ph-size-avatar-lg);
   --spacing-sidebar: var(--ph-size-sidebar);
+  --spacing-topbar: var(--ph-size-topbar);
   --spacing-dialog-sm: var(--ph-size-dialog-sm);
   --spacing-dialog-md: var(--ph-size-dialog-md);
   --spacing-dialog-lg: var(--ph-size-dialog-lg);

@@ -1,6 +1,7 @@
 import type {
   InputHTMLAttributes,
   ReactNode,
+  Ref,
   TextareaHTMLAttributes,
 } from 'react';
 import { cx } from '../cx';
@@ -19,6 +20,8 @@ export interface TextFieldProps
   endAdornment?: ReactNode;
   /** Monospace value (keys, codes). */
   mono?: boolean;
+  /** The input element, e.g. to return focus after an on-screen keypad. */
+  ref?: Ref<HTMLInputElement>;
 }
 
 export function TextField({

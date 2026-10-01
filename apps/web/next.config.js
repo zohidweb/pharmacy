@@ -8,6 +8,8 @@
 const nextConfig = {
   output: 'export',
   images: { unoptimized: true },
+  // Always defined so the bundler can fold mock-only code away; the dev target sets it to true.
+  env: { NEXT_PUBLIC_API_MOCKS: process.env.NEXT_PUBLIC_API_MOCKS ?? 'false' },
 };
 
 // Dev only: proxy /api/* to apps/api so the browser sees a single origin (as behind the

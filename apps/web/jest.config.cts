@@ -14,6 +14,7 @@ const config = {
   coverageDirectory: '../../coverage/apps/web',
   testEnvironment: 'jsdom',
   moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+  setupFilesAfterEnv: ['<rootDir>/specs/setup.ts'],
 };
 
 const jestConfig = createJestConfig(config);
@@ -26,5 +27,10 @@ module.exports = async () => {
       value[1] = { ...value[1], resolvedBaseUrl: undefined };
     }
   }
+  // use-intl and its ICU dependencies ship ESM only: let SWC transform them.
+  resolved.transformIgnorePatterns = [
+    '/node_modules/(?!(use-intl|icu-minify|intl-messageformat|@formatjs|@schummar)/)',
+    '^.+\\.module\\.(css|sass|scss)$',
+  ];
   return resolved;
 };

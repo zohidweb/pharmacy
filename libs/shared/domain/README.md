@@ -1,7 +1,10 @@
-# shared-domain
+# @pharmacy/shared-domain
 
-This library was generated with [Nx](https://nx.dev).
+Domain model shared by `apps/api`, `apps/web` and `apps/admin` (`type:domain`: depends on nothing applied).
 
-## Running unit tests
+- `permissions` — the permission catalog `<module>:<action>` and special permissions (ADR-0018);
+  `hasPermissions`, `exceedingPermissions` (escalation check), `isPermission`.
+- `checkPin`, `isTrivialPin` — PIN policy of terminal sign-in (ADR-0008).
+- `roleTemplates` — the four role templates copied into a new tenant (owner is a system role).
 
-Run `nx test shared-domain` to execute the unit tests via [Jest](https://jestjs.io).
+`npx nx test shared-domain` — unit tests (Jest).

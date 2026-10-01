@@ -91,6 +91,7 @@
   --ph-size-avatar-md: 3rem; /* 48 */
   --ph-size-avatar-lg: 4rem; /* 64 */
   --ph-size-sidebar: 15.75rem; /* 252 */
+  --ph-size-topbar: 4rem; /* 64 — top bar of apps/web */
   --ph-size-dialog-sm: 27.5rem; /* 440 */
   --ph-size-dialog-md: 32.5rem; /* 520 */
   --ph-size-dialog-lg: 38.75rem; /* 620 */

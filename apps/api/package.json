@@ -63,6 +63,41 @@
         "options": {
           "passWithNoTests": true
         }
+      },
+      "migrate": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node apps/api/scripts/migrate.mjs",
+          "cwd": "{workspaceRoot}"
+        }
+      },
+      "db-types": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "kysely-codegen",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "db-types-verify": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "kysely-codegen --verify",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "integration": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "jest --config jest.integration.config.cts --runInBand",
+          "cwd": "{projectRoot}",
+          "env": {
+            "TS_NODE_COMPILER_OPTIONS": "{\"moduleResolution\":\"node10\",\"module\":\"commonjs\",\"customConditions\":null}"
+          }
+        }
       }
     },
     "tags": [
@@ -77,11 +112,17 @@
     "@nestjs/platform-express": "^11.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "kysely": "0.29.6",
+    "node-pg-migrate": "9.0.0",
+    "pg": "8.23.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "uuid": "14.0.2"
   },
   "devDependencies": {
-    "@nestjs/testing": "^11.0.0"
+    "@nestjs/testing": "^11.0.0",
+    "@types/pg": "8.23.1",
+    "kysely-codegen": "0.20.0"
   }
 }

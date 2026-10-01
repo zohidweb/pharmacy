@@ -9,8 +9,11 @@
   "include": [
     "jest.config.ts",
     "jest.config.cts",
+    "jest.integration.config.cts",
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
+    "src/**/*.int-spec.ts",
+    "test/**/*.ts",
     "src/**/*.d.ts"
   ],
   "references": [

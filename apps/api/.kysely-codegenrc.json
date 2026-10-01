@@ -1,0 +1,9 @@
+{
+  "dialect": "postgres",
+  "camelCase": true,
+  "url": "env(MIGRATION_DATABASE_URL)",
+  "defaultSchemas": ["pharmacy"],
+  "includePattern": "pharmacy.*",
+  "typeMapping": { "int8": "bigint", "date": "string" },
+  "outFile": "src/core/database/db.generated.ts"
+}

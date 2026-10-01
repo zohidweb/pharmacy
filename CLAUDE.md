@@ -99,6 +99,9 @@ npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
 npx nx dev admin                     # http://localhost:4300
 npx nx e2e api-e2e                   # e2e API (поднимает api сам)
+npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
+npx nx run api:integration           # интеграционные тесты на БД pharmacy_test (нужен npm run dev:deps)
+npx nx run api:db-types              # перегенерация типов Kysely из мигрированной БД; db-types-verify — проверка актуальности
 
 npm run dev:deps                     # PostgreSQL + Redis в Docker (dev), затем npm run dev
 npm run dev                          # api + web + admin с hot reload
@@ -214,15 +217,25 @@ npm run prod:build / prod:up / prod:down
 - Env-файлы сред лежат в `docker/env/`, а не `.env.test`: Nx автоматически грузит `.env.<имя>`
   в задачи (`.env.test` попал бы в `nx test`). В корневом `.env` не задавать `NODE_ENV`.
 - `APP_ENV` (dev|test|prod) — среда развёртывания; `NODE_ENV` в test/prod всегда `production`.
+- В env-файлах сред обязательны `PHARMACY_OWNER_PASSWORD`, `PHARMACY_APP_PASSWORD` и `PHARMACY_PLATFORM_PASSWORD`.
+  Роли создаёт initdb только на пустом томе: существующие тома (`pharmacy-<env>_pg-data`) после появления
+  новых ролей нужно пересоздать (`docker volume rm`, данные теряются — только для test/dev).
 - web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (ADR-0012, proposed).
 - Сейчас обе среды запускаются локально; хостинг — открытый вопрос № 1 stack.md.
 
 ## Containers (ADR-0005)
 
 - Образы: `apps/api/Dockerfile` (multi-stage, `nx run api:prune`, non-root), `docker/postgres`
-  (роли `pharmacy_owner` / `pharmacy_app`, схема `pharmacy`, `pg_trgm`), `docker/redis` (без
-  персистентности). Контекст сборки — корень репозитория (`.dockerignore`).
-- API в рантайме подключается ТОЛЬКО ролью `pharmacy_app`; `pharmacy_owner` — для миграций.
+  (роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver`, схема
+  `pharmacy`, `pg_trgm`), `docker/redis` (без персистентности). Контекст сборки — корень репозитория
+  (`.dockerignore`).
+- Роли БД (ADR-0006, ADR-0013): база принадлежит `pharmacy_owner`. API в рантайме подключается ролями
+  `pharmacy_app` (tenant-путь, `DATABASE_URL`) и `pharmacy_platform` (только `app/platform/**` и
+  `app/sync/**`, `PLATFORM_DATABASE_URL`); `pharmacy_resolver` — NOLOGIN (владелец функций SECURITY DEFINER).
+  `pharmacy_owner` используется только сервисом `migrate`; `PHARMACY_OWNER_PASSWORD` не передаётся в `api`.
+- Миграции: одноразовый сервис `migrate` (тот же образ `pharmacy/api`, `node scripts/migrate.mjs`) применяет
+  SQL-миграции ролью `pharmacy_owner` до старта API (`api` ждёт `service_completed_successfully`). Скрипт и
+  `migrations/` попадают в образ через assets webpack.
 - web/admin контейнеризуются вместе с reverse proxy после принятия ADR-0012 (proposed); до этого — `npx nx dev`.
 - Порты в compose публикуются только на `127.0.0.1`.
 

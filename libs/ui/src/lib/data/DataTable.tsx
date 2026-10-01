@@ -90,7 +90,8 @@ export function DataTable<Row, K extends string = string>({
       role="region"
       aria-labelledby={captionId}
       tabIndex={0}
-      className={cx('w-full overflow-x-auto', className)}
+      // relative: visually hidden labels (absolute) stay inside the scroll area
+      className={cx('relative w-full overflow-x-auto', className)}
     >
       <table
         className={cx(

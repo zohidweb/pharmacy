@@ -32,11 +32,9 @@ export function createTenantSchema(today: string) {
       .string()
       .regex(DATE, { error: 'dateFromToday' })
       .refine((value) => value >= today, { error: 'dateFromToday' }),
-    price: z
-      .string()
-      .refine((value) => (parseMoneyToMinor(value) ?? 0) > 0, {
-        error: 'money',
-      }),
+    price: z.string().refine((value) => (parseMoneyToMinor(value) ?? 0) > 0, {
+      error: 'money',
+    }),
   });
 }
 

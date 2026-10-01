@@ -5,15 +5,9 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "preserve",
-    "types": [
-      "jest",
-      "node",
-      "jest-axe"
-    ],
+    "types": ["jest", "node", "jest-axe"],
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"]
     }
   },
   "include": [

@@ -8,6 +8,7 @@ import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { TenantStatusPill, useTenant } from '@/entities/tenant';
 import { ImpersonateTenant } from '@/features/impersonate-tenant';
+import { RecordPayment } from '@/features/record-payment';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -67,6 +68,7 @@ function CompanyView() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <RecordPayment tenantId={company.id} variant="tertiary" />
                   <ImpersonateTenant
                     tenant={company}
                     disabled={company.status === 'blocked'}

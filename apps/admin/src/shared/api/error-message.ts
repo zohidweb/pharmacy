@@ -10,6 +10,13 @@ const knownCodes = [
   'inn_taken',
   'not_offline',
   'sync_queue_not_empty',
+  'period_not_closed',
+  'invoices_already_generated',
+  'invoice_paid',
+  'payment_cancelled',
+  'license_exists',
+  'license_revoked',
+  'validation_failed',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

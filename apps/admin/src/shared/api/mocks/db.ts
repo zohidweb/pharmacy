@@ -6,11 +6,10 @@ import type {
   AuditEntry,
   StoreDetails,
   TenantDetails,
-  TenantInvoiceItem,
-  TenantPaymentItem,
   TenantServiceItem,
   TenantStats,
 } from '@pharmacy/shared-dto';
+import { seedBilling, type BillingDb } from './db-billing';
 
 const LATEST_VERSION = '2.4.0';
 
@@ -45,8 +44,7 @@ function store(
 export interface MockDb {
   tenants: TenantDetails[];
   stores: StoreDetails[];
-  invoices: Record<string, TenantInvoiceItem[]>;
-  payments: Record<string, TenantPaymentItem[]>;
+  billing: BillingDb;
   services: Record<string, TenantServiceItem[]>;
   audit: Record<string, AuditEntry[]>;
 }
@@ -263,68 +261,7 @@ function seed(): MockDb {
   return {
     tenants,
     stores,
-    invoices: {
-      't-1': [
-        {
-          id: 'inv-1',
-          number: 'СЧ-2026-09-001',
-          period: '2026-09',
-          stores: 2,
-          hasServices: true,
-          totalMinor: 195_730,
-          status: 'paid',
-        },
-        {
-          id: 'inv-2',
-          number: 'СЧ-2026-08-001',
-          period: '2026-08',
-          stores: 2,
-          hasServices: false,
-          totalMinor: 27_600,
-          status: 'paid',
-        },
-      ],
-      't-2': [
-        {
-          id: 'inv-3',
-          number: 'СЧ-2026-09-003',
-          period: '2026-09',
-          stores: 2,
-          hasServices: false,
-          totalMinor: 41_400,
-          status: 'overdue',
-        },
-      ],
-      't-3': [
-        {
-          id: 'inv-4',
-          number: 'СЧ-2026-09-002',
-          period: '2026-09',
-          stores: 1,
-          hasServices: false,
-          totalMinor: 13_800,
-          status: 'issued',
-        },
-      ],
-    },
-    payments: {
-      't-1': [
-        {
-          id: 'pay-1',
-          paidOn: '2026-09-05',
-          amountMinor: 195_730,
-          method: 'bank_transfer',
-          recordedBy: 'Демо Оператор',
-        },
-        {
-          id: 'pay-2',
-          paidOn: '2026-08-04',
-          amountMinor: 27_600,
-          method: 'cash',
-          recordedBy: 'Демо Оператор',
-        },
-      ],
-    },
+    billing: seedBilling(),
     services: {
       't-1': [
         {

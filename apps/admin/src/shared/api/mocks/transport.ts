@@ -13,13 +13,10 @@ import type {
   TenantListItem,
 } from '@pharmacy/shared-dto';
 import { ApiError, type ApiTransport } from '../client';
-import type {
-  ApiBody,
-  ApiParams,
-  ApiQuery,
-  ApiResponse,
-  ApiRouteKey,
-} from '../routes';
+import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
+import { billingHandlers } from './handlers-billing';
+import { audit, findStore, findTenant } from './helpers';
+import type { MockHandlers, MockRequest } from './types';
 import { mockDb, mockStats } from './db';
 import { demoOperator, demoOperatorPassword } from './fixtures';
 
@@ -42,32 +39,6 @@ function writeSession(session: OperatorSession | null): void {
   } catch {
     // storage unavailable (private mode): the mock session lives only until reload
   }
-}
-
-interface Request<K extends ApiRouteKey> {
-  params: ApiParams<K>;
-  query: ApiQuery<K>;
-  body: ApiBody<K>;
-  correlationId: string;
-}
-
-type Handlers = {
-  [K in ApiRouteKey]: (request: Request<K>) => ApiResponse<K>;
-};
-
-const notFound = (correlationId: string) =>
-  new ApiError(404, 'not_found', correlationId);
-
-function findTenant(id: string, correlationId: string): TenantDetails {
-  const tenant = mockDb().tenants.find((t) => t.id === id);
-  if (!tenant) throw notFound(correlationId);
-  return tenant;
-}
-
-function findStore(id: string, correlationId: string): StoreDetails {
-  const found = mockDb().stores.find((s) => s.id === id);
-  if (!found) throw notFound(correlationId);
-  return found;
 }
 
 function matchesFilter(
@@ -120,23 +91,8 @@ function toListItem(tenant: TenantDetails): TenantListItem {
   return item;
 }
 
-function audit(
-  tenantId: string,
-  action: string,
-  storeName: string | null = null,
-) {
-  const entries = (mockDb().audit[tenantId] ??= []);
-  entries.unshift({
-    id: `a-${Date.now()}`,
-    at: new Date().toISOString(),
-    actorName: demoOperator.fullName,
-    actorIsPlatformOperator: true,
-    storeName,
-    action,
-  });
-}
-
-const handlers: Handlers = {
+const handlers: MockHandlers = {
+  ...billingHandlers,
   'operator.sessions.create': ({ body, correlationId }) => {
     if (
       body?.login.trim().toLowerCase() !== demoOperator.login ||
@@ -307,8 +263,6 @@ const handlers: Handlers = {
       .stores.filter((s) => s.tenantId === params.id)
       .map(toSummary);
   },
-  'tenants.invoices': ({ params }) => mockDb().invoices[params.id] ?? [],
-  'tenants.payments': ({ params }) => mockDb().payments[params.id] ?? [],
   'tenants.services': ({ params }) => mockDb().services[params.id] ?? [],
   'tenants.stats': ({ params, correlationId }) => {
     findTenant(params.id, correlationId);
@@ -377,7 +331,7 @@ export const mockTransport: ApiTransport = async (
   await new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
   if (options.signal?.aborted) throw new ApiError(0, 'network', correlationId);
   const handler = handlers[route] as (
-    request: Request<typeof route>,
+    request: MockRequest<typeof route>,
   ) => ApiResponse<typeof route>;
   // copy: callers must not mutate the mock database through responses
   const result = handler({

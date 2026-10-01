@@ -25,6 +25,7 @@ import {
 import Link from 'next/link';
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'use-intl';
+import { InvoiceStatusPill } from '@/entities/invoice';
 import { StoreModePill, StoreStatusPill } from '@/entities/store';
 import {
   useTenantAudit,
@@ -121,12 +122,6 @@ export function StoresTab({ tenantId }: { tenantId: string }) {
   );
 }
 
-const invoiceTone = {
-  issued: 'info',
-  paid: 'success',
-  overdue: 'danger',
-} as const;
-
 export function BillingTab({ tenantId }: { tenantId: string }) {
   const t = useTranslations('company.billing');
   const invoices = useTenantInvoices(tenantId);
@@ -163,11 +158,7 @@ export function BillingTab({ tenantId }: { tenantId: string }) {
       key: 'status',
       header: t('columns.status'),
       nowrap: true,
-      cell: (invoice) => (
-        <StatusPill tone={invoiceTone[invoice.status]}>
-          {t(`status.${invoice.status}`)}
-        </StatusPill>
-      ),
+      cell: (invoice) => <InvoiceStatusPill status={invoice.status} />,
     },
   ];
 

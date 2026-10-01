@@ -3,6 +3,35 @@
  * its method, path and DTO types from @pharmacy/shared-dto. Paths are relative to /api/v1.
  */
 import type {
+  BillingSummary,
+  CancelPaymentRequest,
+  GenerateInvoicesRequest,
+  GenerateInvoicesResponse,
+  InstallationFilter,
+  InstallationListResponse,
+  InvoiceDetails,
+  InvoiceGenerationPreview,
+  InvoiceListFilter,
+  InvoiceListResponse,
+  IssueLicenseRequest,
+  LicenseListFilter,
+  LicenseListItem,
+  LicenseListResponse,
+  LicenseSortKey,
+  OfflineStoreOption,
+  PaymentListItem,
+  PlatformService,
+  RecalculationPreview,
+  RecordPaymentRequest,
+  RejectServiceRequest,
+  Release,
+  RenewLicenseRequest,
+  RevokeLicenseRequest,
+  ScheduleUpdateRequest,
+  ServiceRequestItem,
+  UpdatePaymentRequest,
+  UpsertServiceRequest,
+  InstallationItem,
   BlockTenantRequest,
   CreateTenantRequest,
   CreateTenantResponse,
@@ -142,6 +171,129 @@ export const apiRoutes = {
     MigrateStoreToCloudRequest,
     { id: string }
   >('POST', (p) => `/platform/stores/${id(p)}/cloud-migrations`),
+  'billing.summary': route<
+    BillingSummary,
+    undefined,
+    undefined,
+    { period?: string }
+  >('GET', () => '/platform/billing/summary'),
+  'invoices.list': route<
+    InvoiceListResponse,
+    undefined,
+    undefined,
+    { filter?: InvoiceListFilter; limit?: number; offset?: number }
+  >('GET', () => '/platform/invoices'),
+  'invoices.get': route<InvoiceDetails, undefined, { id: string }>(
+    'GET',
+    (p) => `/platform/invoices/${id(p)}`,
+  ),
+  'invoices.generationPreview': route<
+    InvoiceGenerationPreview,
+    undefined,
+    undefined,
+    { period: string }
+  >('GET', () => '/platform/invoices/generation-preview'),
+  'invoices.generate': route<GenerateInvoicesResponse, GenerateInvoicesRequest>(
+    'POST',
+    () => '/platform/invoices/generations',
+  ),
+  'invoices.recalculationPreview': route<
+    RecalculationPreview,
+    undefined,
+    { id: string }
+  >('GET', (p) => `/platform/invoices/${id(p)}/recalculation-preview`),
+  'invoices.recalculate': route<InvoiceDetails, undefined, { id: string }>(
+    'POST',
+    (p) => `/platform/invoices/${id(p)}/recalculation`,
+  ),
+  'payments.list': route<
+    Page<PaymentListItem>,
+    undefined,
+    undefined,
+    { limit?: number; offset?: number }
+  >('GET', () => '/platform/payments'),
+  'payments.record': route<PaymentListItem, RecordPaymentRequest>(
+    'POST',
+    () => '/platform/payments',
+  ),
+  'payments.update': route<
+    PaymentListItem,
+    UpdatePaymentRequest,
+    { id: string }
+  >('PATCH', (p) => `/platform/payments/${id(p)}`),
+  'payments.cancel': route<
+    PaymentListItem,
+    CancelPaymentRequest,
+    { id: string }
+  >('POST', (p) => `/platform/payments/${id(p)}/cancellation`),
+
+  'services.list': route<PlatformService[]>('GET', () => '/platform/services'),
+  'services.create': route<PlatformService, UpsertServiceRequest>(
+    'POST',
+    () => '/platform/services',
+  ),
+  'services.update': route<
+    PlatformService,
+    UpsertServiceRequest,
+    { id: string }
+  >('PUT', (p) => `/platform/services/${id(p)}`),
+  'serviceRequests.list': route<ServiceRequestItem[]>(
+    'GET',
+    () => '/platform/service-requests',
+  ),
+  'serviceRequests.approve': route<void, undefined, { id: string }>(
+    'POST',
+    (p) => `/platform/service-requests/${id(p)}/approval`,
+  ),
+  'serviceRequests.reject': route<void, RejectServiceRequest, { id: string }>(
+    'POST',
+    (p) => `/platform/service-requests/${id(p)}/rejection`,
+  ),
+
+  'licenses.list': route<
+    LicenseListResponse,
+    undefined,
+    undefined,
+    {
+      filter?: LicenseListFilter;
+      sort?: LicenseSortKey;
+      direction?: 'asc' | 'desc';
+    }
+  >('GET', () => '/platform/licenses'),
+  'licenses.issue': route<LicenseListItem, IssueLicenseRequest>(
+    'POST',
+    () => '/platform/licenses',
+  ),
+  'licenses.renew': route<LicenseListItem, RenewLicenseRequest, { id: string }>(
+    'POST',
+    (p) => `/platform/licenses/${id(p)}/renewal`,
+  ),
+  'licenses.revoke': route<
+    LicenseListItem,
+    RevokeLicenseRequest,
+    { id: string }
+  >('POST', (p) => `/platform/licenses/${id(p)}/revocation`),
+  'stores.offlineOptions': route<OfflineStoreOption[]>(
+    'GET',
+    () => '/platform/stores/offline-options',
+  ),
+
+  'installations.list': route<
+    InstallationListResponse,
+    undefined,
+    undefined,
+    { filter?: InstallationFilter }
+  >('GET', () => '/platform/installations'),
+  'installations.scheduleUpdate': route<
+    InstallationItem,
+    ScheduleUpdateRequest,
+    { storeId: string }
+  >(
+    'POST',
+    (p) =>
+      `/platform/installations/${encodeURIComponent(p.storeId)}/update-plans`,
+  ),
+  'releases.list': route<Release[]>('GET', () => '/platform/releases'),
 } as const;
 
 export type ApiRouteKey = keyof typeof apiRoutes;

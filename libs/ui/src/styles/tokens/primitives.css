@@ -35,6 +35,7 @@
   --ph-green-400: oklch(80% 0.182 151.7);
   --ph-green-600: oklch(62.7% 0.17 149.2);
   --ph-green-700: oklch(52.7% 0.137 150.1);
+  --ph-green-800: oklch(44.8% 0.119 151.3);
   --ph-amber-100: oklch(96.2% 0.058 95.6);
   --ph-amber-500: oklch(78.3% 0.168 66.2);
   --ph-amber-700: oklch(55.5% 0.146 49);
@@ -94,6 +95,9 @@
   --ph-size-dialog-md: 32.5rem; /* 520 */
   --ph-size-dialog-lg: 38.75rem; /* 620 */
   --ph-size-content-max: 90rem; /* 1440 */
+  --ph-size-table-md: 45rem; /* 720 — min table width before horizontal scroll */
+  --ph-size-table-lg: 57.5rem; /* 920 */
+  --ph-size-chart-height: 10rem; /* 160 */
 
   /* Typography: families (--ph-font-face-sans comes from fonts.css), sizes in rem only (WCAG 1.4.4) */
   --ph-font-sans:

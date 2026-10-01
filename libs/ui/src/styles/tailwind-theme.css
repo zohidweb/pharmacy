@@ -54,6 +54,7 @@
   --color-success: var(--ph-color-success);
   --color-success-subtle: var(--ph-color-success-subtle);
   --color-success-border: var(--ph-color-success-border);
+  --color-success-hover: var(--ph-color-success-hover);
   --color-on-success: var(--ph-color-on-success);
   --color-warning: var(--ph-color-warning);
   --color-warning-subtle: var(--ph-color-warning-subtle);

@@ -35,6 +35,8 @@
 
   --ph-dialog-radius: var(--ph-radius-lg);
   --ph-dialog-shadow: var(--ph-shadow-lg);
+  --ph-dialog-max-block: calc(100dvh - var(--ph-space-8));
+  --ph-dialog-max-inline: calc(100vw - var(--ph-space-8));
 
   --ph-table-row-height: var(--ph-size-row-dense);
   --ph-table-cell-padding-x: var(--ph-space-5);

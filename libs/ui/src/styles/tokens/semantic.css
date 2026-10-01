@@ -51,6 +51,7 @@
   --ph-color-success: var(--ph-green-700);
   --ph-color-success-subtle: var(--ph-green-100);
   --ph-color-success-border: var(--ph-green-600);
+  --ph-color-success-hover: var(--ph-green-800);
   --ph-color-on-success: var(--ph-neutral-0);
 
   --ph-color-warning: var(--ph-amber-700);

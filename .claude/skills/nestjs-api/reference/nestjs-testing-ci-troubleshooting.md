@@ -74,8 +74,8 @@ npx nx e2e api-e2e
 | Проблема | Симптом | Решение |
 |---|---|---|
 | **DI не резолвится** | `Nest can't resolve dependencies of X (?)` | Позиция `?` = индекс параметра конструктора; добавить провайдер/мок с тем же токеном (класс или Symbol-токен, напр. `FISCAL_REGISTRAR`) |
-| **Нет метаданных декораторов** | `design:paramtypes` undefined, DI получает `undefined` | `emitDecoratorMetadata` + `experimentalDecorators` в `tsconfig.spec.json`; transform — `ts-jest` из Nx-пресета |
-| **Не находит алиас** | `Cannot find module '@pharmacy/shared-dto'` | Путь в `tsconfig.base.json` → `paths`; конфиг наследует `jest.preset.js` Nx |
+| **Нет метаданных декораторов** | `design:paramtypes` undefined, DI получает `undefined` | transform `@swc/jest`; в `apps/api/.spec.swcrc` — `decoratorMetadata` и `legacyDecorator` |
+| **Не находит алиас** | `Cannot find module '@pharmacy/shared-dto'` | Библиотеки — пакеты npm workspaces; исходники находятся по условию `@pharmacy/source` (`customConditions` в `tsconfig.base.json`, без `paths`); проверить `exports` в `package.json` библиотеки и `npm install` |
 | **Jest не завершается** | `Jest did not exit one second after the test run` | Закрывать `app.close()`, пул БД, Redis-клиент в `afterAll`; диагностика — `--detectOpenHandles` |
 | **Таймаут** | `Exceeded timeout of 5000 ms` | Для e2e `testTimeout: 60_000`; в unit — fake timers вместо реальных ожиданий; искать незавершённые промисы |
 | **Нет соединения с БД в e2e** | `ECONNREFUSED` / `database does not exist` | Поднят ли `postgres` из docker compose; задан ли `TEST_DATABASE_URL`; применены ли миграции в globalSetup |
@@ -107,10 +107,10 @@ await Test.createTestingModule({
 
 ```typescript
 // ❌ missing await — assertion runs before the promise settles
-it('sells', () => { service.completeReceipt(storeId, dto, key); expect(repo.insert).toHaveBeenCalled(); });
+it('sells', () => { service.completeReceipt(storeId, dto); expect(repo.insert).toHaveBeenCalled(); });
 
 // ✅
-it('sells', async () => { await service.completeReceipt(storeId, dto, key); expect(repo.insert).toHaveBeenCalled(); });
+it('sells', async () => { await service.completeReceipt(storeId, dto); expect(repo.insert).toHaveBeenCalled(); });
 ```
 
 ## Нагрузочная проверка

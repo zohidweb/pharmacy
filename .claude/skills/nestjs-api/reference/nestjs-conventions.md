@@ -63,7 +63,7 @@ api, web, admin). Доменные типы и каталог прав — `libs
   только через `TenantDatabase.tenantTransaction()` и tenant-scoped репозитории, принимающие
   `TenantTransaction` (см. `nestjs-config-data-access.md`); RLS в PostgreSQL — второй рубеж.
   Кросс-тенантное — только `PlatformDatabase` в `app/platform/**` (ADR-0013).
-- **Идентификаторы** — `newId()` (UUIDv7, `core/database/ids.ts`); ключ тенантной таблицы —
+- **Идентификаторы** — `newId()` (UUIDv7, файл `core/database/ids.ts`; импорт — только из `core/database` (index): экспорт добавить вместе с первым использующим его сервисом, глубокий импорт запрещает ESLint); ключ тенантной таблицы —
   `(tenant_id, id)` (модель данных `docs/architecture/data-model/`).
 - **Деньги** — integer в дирамах (minor units TJS). Никаких `float`, `toFixed`, `parseFloat`,
   `decimal.js` для сумм. Округление себестоимости штуки при делении упаковки — вверх

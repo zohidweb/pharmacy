@@ -146,7 +146,7 @@ insert(trx: TenantTransaction, tenantId: string, storeId: string, dto: CompleteR
 - **Блокировка отдельно от подсчёта** (ADR-0006 п. 2): `FOR UPDATE` — одним оператором, `SUM`
   движений — следующим. Объединённый «`FOR UPDATE` + подзапрос `SUM`» в READ COMMITTED видит
   старый снимок и приводит к перепродаже (воспроизведено в spike ADR-0006).
-- id новых строк — `newId()` (UUIDv7 из `core/database/ids.ts`); у `id` нет `default` в БД
+- id новых строк — `newId()` (UUIDv7, файл `core/database/ids.ts`; импорт — только из `core/database` (index): экспорт добавить вместе с первым использующим его сервисом, глубокий импорт запрещает ESLint); у `id` нет `default` в БД
   (ADR-0014 §2: строки создаёт и офлайн-точка).
 - Бюджет кассы ≤ 1 сек: в транзакции нет HTTP-вызовов (фискализация — после коммита через
   очередь, `nestjs-messaging-basics.md`).

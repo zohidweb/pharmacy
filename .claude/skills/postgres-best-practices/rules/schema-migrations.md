@@ -17,6 +17,10 @@ tags: migrations, node-pg-migrate, rls, grants, backfill, offline-store
 1. **Только Up.** Секции `-- Down Migration` нет; откат — новой миграцией или из бэкапа.
 2. **Транзакция.** Каждый `.sql` выполняется в транзакции. `CREATE INDEX CONCURRENTLY` и другие
    операции вне транзакции — отдельной `.mjs`-миграцией с `pgm.noTransaction()`.
+   **Внимание:** сейчас образ `pharmacy/api` копирует только `migrations/*.sql`
+   (`apps/api/webpack.config.js`, assets). Первая `.mjs`-миграция идёт в одном PR с правкой glob на
+   `*.{sql,mjs}` и проверкой, что файл есть в `dist` — иначе в dev она применится, а в test/prod и
+   на офлайн-точке сервис `migrate` её молча пропустит.
 3. **Изоляция в той же миграции:** таблица по модели данных (ключ `(tenant_id, id)`, `id` без
    `default`, составные ссылки), `enable` + `force row level security`, политики с явным
    `TO <роль>` в fail-closed форме, **явные гранты по классу таблицы** (default privileges для

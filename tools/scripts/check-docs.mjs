@@ -34,6 +34,18 @@ const RULES = [
   ['rls-missing-ok', /current_setting\('app\.tenant_id',\s*true\)/i],
   ['uuid-default', /gen_random_uuid\(\)/i],
   ['old-alias', /@pharmacy\/shared\/(dto|domain|util)/],
+  // ADR-0018: one catalog string `module:action`; read/sell/run/import are not catalog actions
+  ['perm-two-args', /RequirePermission\(\s*('[^':]+'|module)\s*,/],
+  ['perm-not-in-catalog', /'[a-z0-9-]+:(read|sell|run|import)'/],
+  ['old-app-structure', /\.\.\/modules\/|\bCoreModule\b|core\/core\.module|'\.\.\/config\/config\.module/],
+  ['cors-enabled', /enableCors|SECURITY_CORS_ORIGINS/], // ADR-0008: CORS is off, single origin
+  ['ts-jest', /(?<!golevelup\/)\bts-jest\b/], // apps/api uses @swc/jest
+  ['orm-after-adr', /ORM[^.|]*после ADR|ORM per ADR|когда будет выбран|выбранного ORM|инструмент — по ADR/i],
+  ['deep-db-import', /from '[^']*core\/database\/(?!index'|platform')[\w./-]+'/], // index; platform — app/platform, app/sync
+  ['ctx-getter-missing', /\bget(CorrelationId|TenantId)\(/], // request-context exports getRequestContext()
+  ['health-route', /\/api\/health\b|VERSION_NEUTRAL/], // the route is /api/v1/health
+  ['inbox-on-conflict', /ON CONFLICT \(tenant_id, store_id, operation_id\)/i], // partitioned sync_inbox
+  ['job-queue-columns', /\b(locked_by|locked_at|run_after)\b/], // data model: run_at, lease_until
 ];
 
 const LINK = /\]\(([^)\s]+)\)/g;

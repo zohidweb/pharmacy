@@ -83,17 +83,11 @@ grep -rnE "from '(bullmq|amqplib|kafkajs|@opentelemetry|pino|winston|@nestjs/pla
 
 ## 4. CORS
 
-```typescript
-app.enableCors({
-  origin: secCfg.corsOrigins,   // explicit list: web and admin origins of this environment
-  credentials: true,            // required for cookie sessions (if ADR chooses cookies)
-  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'X-Correlation-Id', 'Idempotency-Key'],
-  exposedHeaders: ['X-Correlation-Id'],
-  maxAge: 600,
-});
-```
+**CORS выключен (ADR-0008).** web, admin и API работают на одном origin (reverse proxy в
+test/prod, rewrite `/api/*` в dev), поэтому CORS не нужен и не включается: tenant-cookie
+принимается только с origin web, operator-cookie — только с origin admin. Разрешённый CORS с
+`credentials: true` дал бы одному продукту читать ответы другого по его cookie (на localhost
+cookie не различают порты), а CSRF-проверка закрывает только изменяющие методы.
 
-- `origin: '*'` вместе с `credentials: true` — запрещено (и не работает в браузерах).
-- Если web/admin и api отдаются с одного origin, CORS не нужен вовсе — не включайте «на всякий случай».
+Аудит: в `apps/api/src` не должно быть включения CORS — поиск по `main.ts` и модулям перед PR.
 - Заголовки безопасности (helmet) — `nestjs-enterprise-infrastructure.md`.

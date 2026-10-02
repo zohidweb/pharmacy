@@ -40,7 +40,8 @@ last-reviewed: "2026-09-29"
    - ключи идемпотентности с уникальным ограничением для чеков и синхронизации (HIGH);
    - формат миграции (ADR-0006): `apps/api/migrations/*.sql`, **только Up** (нет `-- Down
      Migration`; откат — новой миграцией или из бэкапа); `CREATE INDEX CONCURRENTLY` и прочее вне
-     транзакции — отдельной `.mjs` с `pgm.noTransaction()`; блокировки на больших таблицах (HIGH);
+     транзакции — отдельной `.mjs` с `pgm.noTransaction()` (и тогда в том же PR — `*.{sql,mjs}` в
+     assets `apps/api/webpack.config.js`, иначе образ её не содержит); блокировки на больших таблицах (HIGH);
    - бэкфилл тенантных данных — с `set_config('app.tenant_id', …, true)` по тенантам (FORCE RLS
      действует и на `pharmacy_owner`) (HIGH);
    - совместимость с ещё не обновлёнными офлайн-точками — expand/contract (HIGH);

@@ -170,7 +170,7 @@ export async function retry<T>(operation: (attempt: number) => Promise<T>, opts:
 }
 ```
 
-Та же `backoffDelay` вычисляет `run_after` при повторе задач очереди-таблицы (`nestjs-messaging-basics.md`). Длинные повторы (минуты/часы) — через очередь, а не циклом в памяти процесса.
+Та же `backoffDelay` вычисляет `run_at` при повторе задач очереди-таблицы (`nestjs-messaging-basics.md`). Длинные повторы (минуты/часы) — через очередь, а не циклом в памяти процесса.
 
 ## 3. Timeout
 

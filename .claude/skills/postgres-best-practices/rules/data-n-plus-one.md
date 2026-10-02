@@ -34,7 +34,7 @@ where p.tenant_id = $1
 ```
 
 Application pattern: collect IDs in the service, one query with `= any($n::uuid[])`, map results
-in memory. Проверяйте ORM/слой доступа (когда будет выбран ADR) на ленивую загрузку связей — это
-типичный источник N+1.
+in memory. В Kysely (ADR-0006) ленивой загрузки нет, но `await repo.findX()` в цикле по строкам — тот же
+N+1: заменяйте одним запросом с `= any(...)` или join.
 
 Reference: [Row and Array Comparisons](https://www.postgresql.org/docs/current/functions-comparisons.html)

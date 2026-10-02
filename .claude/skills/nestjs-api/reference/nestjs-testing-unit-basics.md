@@ -17,13 +17,14 @@
 ## Jest-конфигурация (генерируется Nx)
 
 ```typescript
-// apps/api/jest.config.ts
-export default {
+// apps/api/jest.config.cts (real file, abridged)
+module.exports = {
   displayName: 'api',
-  preset: '../../jest.preset.js',            // @nx/jest preset: resolves tsconfig.base.json paths
+  preset: '../../jest.preset.js',            // @nx/jest preset
   testEnvironment: 'node',
   transform: {
-    '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
+    // SWC with decoratorMetadata + legacyDecorator from apps/api/.spec.swcrc (Nest DI needs them)
+    '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
   clearMocks: true,                          // same as jest.clearAllMocks() before each test

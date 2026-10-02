@@ -10,6 +10,7 @@
 // apps/api/src/app/pos/receipts.controller.spec.ts
 import { Test } from '@nestjs/testing';
 import { UnprocessableEntityException } from '@nestjs/common';
+import { IdempotencyKeyMismatchException } from '../../common/errors/idempotency-key-mismatch.exception';
 import { ReceiptsController } from './receipts.controller';
 import { ReceiptsService } from './receipts.service';
 
@@ -25,22 +26,30 @@ describe('ReceiptsController', () => {
     controller = moduleRef.get(ReceiptsController);
   });
 
+  const operationId = '01920000-0000-7000-8000-000000000001'; // UUIDv7 from the POS = Idempotency-Key
   const dto = {
+    operationId,
     lines: [{ batchId: '00000000-0000-4000-8000-000000000101', quantity: 2, unitPriceDirams: 1250 }],
     payments: [{ method: 'cash' as const, amountDirams: 2500 }],
   };
 
-  it('passes storeId, idempotency key and DTO to the service', async () => {
+  it('passes storeId and DTO to the service when the header equals dto.operationId', async () => {
     service.completeReceipt.mockResolvedValue({ id: 'r-1', totalDirams: 2500 });
 
-    await expect(controller.complete('store-1', 'idem-1', dto)).resolves.toEqual({ id: 'r-1', totalDirams: 2500 });
-    expect(service.completeReceipt).toHaveBeenCalledWith('store-1', dto, 'idem-1');
+    await expect(controller.complete('store-1', operationId, dto)).resolves.toEqual({ id: 'r-1', totalDirams: 2500 });
+    expect(service.completeReceipt).toHaveBeenCalledWith('store-1', dto);
+  });
+
+  it('rejects an Idempotency-Key that differs from dto.operationId (422) without calling the service', async () => {
+    await expect(controller.complete('store-1', '01920000-0000-7000-8000-0000000000ff', dto))
+      .rejects.toThrow(IdempotencyKeyMismatchException);
+    expect(service.completeReceipt).not.toHaveBeenCalled();
   });
 
   it('propagates domain exceptions unchanged (the global filter maps them to problem+json)', async () => {
     service.completeReceipt.mockRejectedValue(new UnprocessableEntityException());
 
-    await expect(controller.complete('store-1', 'idem-1', dto)).rejects.toThrow(UnprocessableEntityException);
+    await expect(controller.complete('store-1', operationId, dto)).rejects.toThrow(UnprocessableEntityException);
   });
 });
 ```

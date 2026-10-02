@@ -98,7 +98,7 @@ beforeEach(async () => {
 ```
 
 ### Метаданные декораторов не генерируются
-Симптом: DI получает `undefined`, `design:paramtypes` отсутствует. Решение: `emitDecoratorMetadata` и `experimentalDecorators` в `tsconfig.spec.json`; transform `ts-jest` из Nx-пресета (не заменять на транспилятор без поддержки метаданных).
+Симптом: DI получает `undefined`, `design:paramtypes` отсутствует. Решение: transform `@swc/jest` с `jsc.transform.decoratorMetadata` и `legacyDecorator` в `apps/api/.spec.swcrc` (так настроено в `apps/api/jest.config.cts`; не заменять на транспилятор без поддержки метаданных).
 
 ### "Jest did not exit one second after the test run has completed"
 Открытые хэндлы: `app.close()`, пул БД, Redis-клиент, таймеры `@nestjs/schedule` в `afterAll`. Диагностика — `npx nx test api --detectOpenHandles`.

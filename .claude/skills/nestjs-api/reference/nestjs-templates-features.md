@@ -107,7 +107,7 @@ export class CatalogModule {}
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateProductDto, Page, ProductListQueryDto, ProductResponseDto, UpdateProductDto } from '@pharmacy/shared-dto';
-import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { RequirePermission } from '../auth/decorators'; // apps/api/src/app/auth/decorators.ts
 import { ProductsService } from './products.service';
 
 @ApiTags('catalog')
@@ -117,26 +117,26 @@ export class ProductsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermission('catalog', 'create')
+  @RequirePermission('catalog:create')
   @ApiOperation({ summary: 'Create a product card' })
   create(@Body() dto: CreateProductDto): Promise<ProductResponseDto> {
     return this.products.create(dto);
   }
 
   @Get()
-  @RequirePermission('catalog', 'read')
+  @RequirePermission('catalog:view')
   list(@Query() query: ProductListQueryDto): Promise<Page<ProductResponseDto>> {
     return this.products.list(query);
   }
 
   @Get(':id')
-  @RequirePermission('catalog', 'read')
+  @RequirePermission('catalog:view')
   get(@Param('id', ParseUUIDPipe) id: string): Promise<ProductResponseDto> {
     return this.products.get(id);
   }
 
   @Patch(':id')
-  @RequirePermission('catalog', 'update')
+  @RequirePermission('catalog:update')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto): Promise<ProductResponseDto> {
     return this.products.update(id, dto);
   }
@@ -148,7 +148,7 @@ export class ProductsController {
 
 Каталог — справочник уровня сети, поэтому без охвата точек. Для точечных ресурсов
 (остатки, смены, документы) охват обязателен:
-`@RequirePermission('inventory', 'read', { storeParam: 'storeId' })` на маршруте
+`@RequirePermission('inventory:view', { storeParam: 'storeId' })` на маршруте
 `/api/v1/stores/:storeId/stock` (`nestjs-security-auth.md`).
 
 ## Сервис

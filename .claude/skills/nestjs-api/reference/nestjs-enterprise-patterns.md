@@ -85,8 +85,9 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logge
 import type { Request, Response } from 'express';
 import type { ProblemDetails } from '@pharmacy/shared-dto';
 import { DomainException } from '../exceptions/domain.exceptions';
-import { getCorrelationId } from '../context/request-context';
-import { pgErrorCode, PG_CHECK_VIOLATION, PG_FOREIGN_KEY_VIOLATION, PG_UNIQUE_VIOLATION } from '../../core/database/pg-errors';
+import { getRequestContext } from '../context/request-context';
+// pg-errors (to be added) is exported from the core/database index — deep imports are rejected by ESLint
+import { pgErrorCode, PG_CHECK_VIOLATION, PG_FOREIGN_KEY_VIOLATION, PG_UNIQUE_VIOLATION } from '../../core/database';
 
 const urn = (slug: string) => `urn:pharmacy:problem:${slug}`;
 
@@ -97,7 +98,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const req = host.switchToHttp().getRequest<Request>();
     const res = host.switchToHttp().getResponse<Response>();
-    const problem = this.toProblem(exception, req.path, getCorrelationId() ?? 'unknown');
+    const problem = this.toProblem(exception, req.path, getRequestContext()?.correlationId ?? 'unknown');
 
     if (problem.status >= 500) {
       this.logger.error(`${req.method} ${req.path} -> ${problem.status}`, exception instanceof Error ? exception.stack : undefined);
@@ -168,7 +169,7 @@ URI-версионирование: `app.setGlobalPrefix('api')` + `enableVersio
 @Controller({ path: 'receipts', version: '1' })   // /api/v1/receipts
 export class ReceiptsController {}
 
-@Controller({ path: 'health', version: VERSION_NEUTRAL }) // /api/health
+@Controller('health')                              // /api/v1/health (default version)
 export class HealthController {}
 ```
 

@@ -157,8 +157,8 @@ export default registerAs('fiscal', () => {
 });
 ```
 
-Аналогично: `redis.config.ts` (`REDIS_URL`), `security.config.ts` (`SECURITY_CORS_ORIGINS` —
-список, без `*`). Настройки БД уже валидируются в `apps/api/src/app/config/env.validation.ts`
+Аналогично: `redis.config.ts` (`REDIS_URL`), `security.config.ts` (сессии, PIN, pepper — ADR-0008;
+CORS-настроек нет: CORS выключен, один origin). Настройки БД уже валидируются в `apps/api/src/app/config/env.validation.ts`
 и собираются в `DatabaseSettings` модулями `core/database` (`DATABASE_URL` — роль
 `pharmacy_app`, `PLATFORM_DATABASE_URL` — роль `pharmacy_platform`, пулы и таймауты).
 `MIGRATION_DATABASE_URL` (роль `pharmacy_owner`) читает только мигратор — API его не получает.
@@ -181,8 +181,6 @@ DB_STATEMENT_TIMEOUT_MS=5000
 DB_LOCK_TIMEOUT_MS=2000
 DB_CONNECTION_TIMEOUT_MS=5000
 REDIS_URL=redis://:change-me-local-only@127.0.0.1:6379
-
-SECURITY_CORS_ORIGINS=http://localhost:4200,http://localhost:4300
 
 SESSION_IDLE_TIMEOUT_MIN_SECONDS=300
 SESSION_IDLE_TIMEOUT_MAX_SECONDS=43200

@@ -27,22 +27,26 @@ update audit_log set details = '...' where id = 42;
 **Correct:**
 
 ```sql
-create table audit_log (
-  id uuid primary key,                      -- generated on cloud and offline stores alike
-  tenant_id uuid not null,
-  store_id uuid,
-  actor_employee_id uuid,
-  on_behalf_operator_id uuid,               -- platform operator acting "on behalf"
-  action text not null,
-  entity_type text not null,
-  entity_id uuid,
-  details jsonb not null default '{}',      -- no raw personal data, mask before insert
-  correlation_id uuid not null,
-  occurred_at timestamptz not null default now()
-);
-
-revoke update, delete, truncate on audit_log from pharmacy_app;
-grant select, insert on audit_log to pharmacy_app;
+-- Columns per data model 06 (audit_log): monthly partitions by recorded_at (schema-partitioning.md)
+create table pharmacy.audit_log (
+  tenant_id          uuid not null references pharmacy.tenants (id),
+  id                 uuid not null,                 -- newId() (UUIDv7) on cloud and offline stores alike
+  recorded_at        timestamptz not null default now(),
+  business_date      date not null,                 -- tenant time zone (tenant_settings.timezone)
+  employee_id        uuid,
+  store_id           uuid,
+  terminal_id        uuid,
+  acting_operator_id uuid,                          -- impersonation (ADR-0008)
+  impersonation_id   uuid,
+  correlation_id     text not null,
+  action             text not null,                 -- receipt.completed, price.changed, access.denied…
+  entity_type        text,
+  entity_id          uuid,
+  details            jsonb not null default '{}',   -- no secrets or raw personal data, mask before insert
+  source             text not null check (source in ('cloud', 'offline_store')),
+  primary key (tenant_id, id, recorded_at)          -- the partition key must be part of the key
+) partition by range (recorded_at);
+-- monthly partitions are created ahead by a migration/job (schema-partitioning.md)
 
 create or replace function forbid_mutation() returns trigger
 language plpgsql as $$
@@ -53,21 +57,21 @@ end;
 $$;
 
 create trigger audit_log_no_update_delete
-  before update or delete on audit_log
+  before update or delete on pharmacy.audit_log   -- row triggers on a partitioned table reach every partition
   for each row execute function forbid_mutation();
 
 create trigger audit_log_no_truncate
-  before truncate on audit_log
+  before truncate on pharmacy.audit_log
   for each statement execute function forbid_mutation();
 
 -- RLS for tenant isolation: SELECT/INSERT policies only
-alter table audit_log enable row level security;
-alter table audit_log force row level security;
-create policy audit_read on audit_log for select to pharmacy_app
+alter table pharmacy.audit_log enable row level security;
+alter table pharmacy.audit_log force row level security;
+create policy audit_read on pharmacy.audit_log for select to pharmacy_app
   using (tenant_id = (select current_setting('app.tenant_id')::uuid));
-create policy audit_write on audit_log for insert to pharmacy_app
+create policy audit_write on pharmacy.audit_log for insert to pharmacy_app
   with check (tenant_id = (select current_setting('app.tenant_id')::uuid));
-grant select, insert on audit_log to pharmacy_app;   -- exact set; the catalog test pins it
+grant select, insert on pharmacy.audit_log to pharmacy_app;   -- exact set; no update/delete/truncate
 ```
 
 Та же схема защиты — у `stock_movements`, `shift_cash_operations`, `supplier_ledger_entries`,

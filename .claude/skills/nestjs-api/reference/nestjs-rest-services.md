@@ -84,7 +84,7 @@ PostgreSQL (`nestjs-messaging-basics.md`): недоступность ККМ н�
 import { BadGatewayException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import fiscalConfig from '../../config/fiscal.config';
-import { getCorrelationId } from '../../common/context/request-context';
+import { getRequestContext } from '../../common/context/request-context';
 import { FiscalReceipt, FiscalRegistrar, FiscalResult } from './fiscal-registrar.port';
 
 @Injectable()
@@ -102,14 +102,14 @@ export class HttpFiscalRegistrar implements FiscalRegistrar {
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKey,          // header name — per vendor spec
-          'X-Correlation-Id': getCorrelationId() ?? idempotencyKey,
+          'X-Correlation-Id': getRequestContext()?.correlationId ?? idempotencyKey,
         },
         body: JSON.stringify(this.toVendorPayload(receipt)), // amounts stay integer dirams (TJS only)
       });
       if (!res.ok) throw new Error(`KKM vendor responded ${res.status}`);
       return this.parse(await res.text()); // strict parsing, reject unknown shapes
     } catch (error) {
-      this.logger.warn(`fiscal registration failed receipt=${receipt.receiptId} [cid=${getCorrelationId()}]: ${(error as Error).message}`);
+      this.logger.warn(`fiscal registration failed receipt=${receipt.receiptId} [cid=${getRequestContext()?.correlationId}]: ${(error as Error).message}`);
       throw new BadGatewayException('Fiscal registrar is unavailable');
     }
   }

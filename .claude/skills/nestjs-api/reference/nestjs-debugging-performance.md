@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — ориентир «операция кассы ≤ 1 сек»; Prisma-middleware заменён на средства PostgreSQL (ORM — после ADR); публичный memory-эндпоинт и сброс circuit breaker через API удалены. Ограничения: `CLAUDE.md`. <!-- docs-check: ok -->
+> **Pharmacy:** адаптировано под стек Pharmacy — ориентир «операция кассы ≤ 1 сек»; Prisma-middleware заменён на средства PostgreSQL и Kysely (ADR-0006); публичный memory-эндпоинт и сброс circuit breaker через API удалены. Ограничения: `CLAUDE.md`. <!-- docs-check: ok -->
 
 # NestJS Debugging — Performance & Memory
 
@@ -31,7 +31,7 @@ async findProducts() {
   const pool = createPool(process.env.DATABASE_URL);   // never closed
   return pool.query('...');
 }
-// GOOD: one pool per process, provided by the data-access module (ORM per ADR), closed on shutdown.
+// GOOD: one pool per process, created by core/database (TenantDatabase, ADR-0006) and closed on shutdown.
 
 // BAD: listener added repeatedly
 onModuleInit() {
@@ -78,9 +78,9 @@ const picks = await timed(this.logger, 'fefo-pick', () => this.batches.pickFefo(
 
 ## 3. Производительность БД
 
-Логирование SQL со стороны приложения — средствами выбранного ORM после ADR. Средствами PostgreSQL — `log_min_duration_statement`, `pg_stat_statements`, `EXPLAIN (ANALYZE, BUFFERS)` (`nestjs-debugging-logging.md`).
+Логирование SQL со стороны приложения — опция `log` у `Kysely` (только длительность и текст запроса, без параметров: в них ПДн). Средствами PostgreSQL — `log_min_duration_statement`, `pg_stat_statements`, `EXPLAIN (ANALYZE, BUFFERS)` (`nestjs-debugging-logging.md`).
 
-Горячие пути кассы и индексы-кандидаты (схема — миграциями после ADR):
+Горячие пути кассы и индексы-кандидаты (схема — миграциями node-pg-migrate, ADR-0006; итоговые индексы — в модели данных):
 
 | Запрос | Индекс-кандидат |
 |---|---|
@@ -120,7 +120,7 @@ node --prof dist/apps/api/main.js && node --prof-process isolate-*.log > profile
 ```typescript
 // apps/api/src/common/resilience/resilience-diagnostics.controller.ts
 @Controller({ path: 'internal/resilience', version: '1' })   // /api/v1/internal/resilience
-@RequirePermission('platform', 'diagnostics')          // permission decorator per nestjs-security-auth.md
+@RequireOperatorPermission('platform:diagnostics')     // operator contour (ADR-0013), see nestjs-debugging-production.md
 export class ResilienceDiagnosticsController {
   constructor(private readonly registry: CircuitBreakerRegistry) {}
 

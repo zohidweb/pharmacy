@@ -13,7 +13,7 @@
 
 ## Где применяется
 
-| Очередь (`queue`) | Модуль | Что делает | Постановка |
+| Тип задачи (`type`) | Модуль | Что делает | Постановка |
 |---|---|---|---|
 | `fiscal.send` | fiscal | Отправка чека в адаптер фискализации (в MVP — заглушка) | outbox в транзакции чека |
 | `sync.upload` | sync (офлайн-точка) | Досылка операций точки в облако по HTTPS | outbox в транзакции операции |
@@ -30,32 +30,30 @@ DDL иллюстративный — реальная схема создаёт�
 данных (`docs/architecture/data-model/06-sync-audit-billing.md`, класс `system`, ADR-0013).
 
 ```sql
-CREATE TABLE job_queue (
-  id               uuid        PRIMARY KEY,       -- newId() (UUIDv7), no default
-  tenant_id        uuid,                          -- NULL = platform-level job (e.g. billing period run)
-  queue            text        NOT NULL,
-  payload          jsonb       NOT NULL,          -- ids and parameters only, no PII
-  idempotency_key  text        NOT NULL,
-  correlation_id   text        NOT NULL,
-  status           text        NOT NULL DEFAULT 'pending'
-                   CHECK (status IN ('pending', 'processing', 'done', 'dead')),
-  attempts         int         NOT NULL DEFAULT 0,
-  max_attempts     int         NOT NULL DEFAULT 8,
-  run_after        timestamptz NOT NULL DEFAULT now(),
-  locked_by        text,
-  locked_at        timestamptz,
-  last_error       text,                          -- sanitized message, no PII
-  created_at       timestamptz NOT NULL DEFAULT now(),
-  updated_at       timestamptz NOT NULL DEFAULT now(),
-  UNIQUE NULLS NOT DISTINCT (tenant_id, queue, idempotency_key)   -- PostgreSQL 15+
+-- Columns follow the data model (06-sync-audit-billing.md, «Очередь задач»)
+CREATE TABLE pharmacy.job_queue (
+  id             uuid        PRIMARY KEY,         -- newId() (UUIDv7), no default
+  tenant_id      uuid        REFERENCES pharmacy.tenants (id), -- NULL = platform-level job
+  type           text        NOT NULL,            -- fiscal.send, sync.apply, export-1c.build, usage.recompute, billing.invoice…
+  payload        jsonb       NOT NULL,            -- ids and parameters only, no PII
+  status         text        NOT NULL DEFAULT 'pending'
+                 CHECK (status IN ('pending', 'processing', 'done', 'dead')),
+  attempts       int         NOT NULL DEFAULT 0,
+  run_at         timestamptz NOT NULL DEFAULT now(),
+  lease_until    timestamptz,                     -- set on claim; an expired lease = the worker died
+  last_error     text,                            -- sanitized message, no PII
+  correlation_id text        NOT NULL,
+  dedupe_key     text                             -- unique among unfinished jobs
 );
 
-CREATE INDEX job_queue_ready_idx ON job_queue (queue, run_after) WHERE status = 'pending';
-CREATE INDEX job_queue_stale_idx ON job_queue (locked_at) WHERE status = 'processing';
+CREATE UNIQUE INDEX job_queue_dedupe_uq ON pharmacy.job_queue (tenant_id, type, dedupe_key)
+  NULLS NOT DISTINCT WHERE dedupe_key IS NOT NULL AND status IN ('pending', 'processing'); -- PostgreSQL 15+
+CREATE INDEX job_queue_ready_idx ON pharmacy.job_queue (type, run_at) WHERE status = 'pending';
+CREATE INDEX job_queue_lease_idx ON pharmacy.job_queue (lease_until) WHERE status = 'processing';
 ```
 
-- `pending` → `processing` → `done`; ошибка с оставшимися попытками → снова `pending` с новым `run_after`; попытки исчерпаны → `dead` (dead-letter, разбирается вручную).
-- `UNIQUE NULLS NOT DISTINCT (tenant_id, queue, idempotency_key)` — повторная постановка не создаёт дубль (и для платформенных задач с `tenant_id IS NULL`).
+- `pending` → `processing` → `done`; ошибка с оставшимися попытками → снова `pending` с новым `run_at`; попытки исчерпаны (лимит — у обработчика типа, `maxAttempts`) → `dead` (dead-letter, разбирается вручную).
+- `dedupe_key` уникален среди **незавершённых** задач (`pending`/`processing`) — повторная постановка, пока задача не выполнена, не создаёт дубль (и для платформенных задач с `tenant_id IS NULL`). После `done` тот же ключ можно поставить снова: от повторного эффекта защищает идемпотентность обработчика.
 - Класс таблицы — `system` (ADR-0013): RLS `ENABLE` + `FORCE`; `pharmacy_app` видит и меняет
   только строки своего тенанта (политика тенанта); `pharmacy_platform` видит все строки
   (диагностика), а ставит и меняет только платформенные задачи (`tenant_id IS NULL`).
@@ -76,30 +74,33 @@ import type { TenantTransaction } from '../../core/database';
 
 export interface NewJob<P = unknown> {
   tenantId: string | null;              // null = platform-level job
-  queue: string;
+  type: string;
   payload: P;
-  idempotencyKey: string;
+  dedupeKey?: string;                   // unique among unfinished jobs of the same tenant and type
   correlationId: string;
-  maxAttempts?: number;
-  runAfter?: Date;
+  runAt?: Date;
 }
 
-export interface ClaimedJob<P = unknown> extends Required<Omit<NewJob<P>, 'runAfter'>> {
+export interface ClaimedJob<P = unknown> {
   id: string;
+  tenantId: string | null;
+  type: string;
+  payload: P;
+  correlationId: string;
   attempts: number;
 }
 
 export abstract class JobQueueRepository {
-  /** INSERT ... ON CONFLICT (tenant_id, queue, idempotency_key) DO NOTHING — inside the caller's trx (outbox). */
+  /** INSERT ... ON CONFLICT (tenant_id, type, dedupe_key) WHERE <index predicate> DO NOTHING — inside the caller's trx (outbox). */
   abstract enqueue(trx: TenantTransaction, job: NewJob): Promise<void>;
   /** Platform-level job (tenant_id = NULL) — inside PlatformDatabase.platformTransaction (ADR-0013). */
   abstract enqueuePlatform(job: NewJob & { tenantId: null }): Promise<void>;
   /** Claims jobs of ONE tenant inside its tenant transaction (RLS sees only that tenant's rows). */
-  abstract claim(trx: TenantTransaction, queue: string, limit: number, workerId: string): Promise<ClaimedJob[]>;
+  abstract claim(trx: TenantTransaction, type: string, limit: number, leaseMs: number): Promise<ClaimedJob[]>;
   abstract complete(id: string): Promise<void>;
-  /** nextRunAfter = null → status 'dead'. */
-  abstract fail(id: string, error: string, nextRunAfter: Date | null): Promise<void>;
-  abstract releaseStale(olderThanMs: number): Promise<number>;
+  /** nextRunAt = null → status 'dead'. */
+  abstract fail(id: string, error: string, nextRunAt: Date | null): Promise<void>;
+  abstract releaseExpiredLeases(): Promise<number>;
 }
 ```
 
@@ -115,10 +116,10 @@ return this.db.tenantTransaction(async (trx) => {
   // ... idempotent replay, batch locks, stock check, receipt, movements, audit ...
   await this.jobs.enqueue(trx, {
     tenantId,                                         // from requireTenantId() at the top of the method
-    queue: 'fiscal.send',
+    type: 'fiscal.send',
     payload: { receiptId: receipt.id },
-    idempotencyKey: `receipt:${receipt.id}`,
-    correlationId: getCorrelationId() ?? receipt.id,
+    dedupeKey: `receipt:${receipt.id}`,
+    correlationId: getRequestContext()?.correlationId ?? receipt.id,
   });
   return this.toResponse(receipt); // receipt, movements, audit and the job commit or roll back together
 });
@@ -128,15 +129,15 @@ return this.db.tenantTransaction(async (trx) => {
 
 ```sql
 WITH next AS (
-  SELECT id FROM job_queue
-  WHERE queue = $1 AND status = 'pending' AND run_after <= now()
-  ORDER BY run_after, id
+  SELECT id FROM pharmacy.job_queue
+  WHERE type = $1 AND status = 'pending' AND run_at <= now()
+  ORDER BY run_at, id
   FOR UPDATE SKIP LOCKED
   LIMIT $2
 )
-UPDATE job_queue j
-SET status = 'processing', locked_by = $3, locked_at = now(),
-    attempts = j.attempts + 1, updated_at = now()
+UPDATE pharmacy.job_queue j
+SET status = 'processing', lease_until = now() + make_interval(secs => $3),
+    attempts = j.attempts + 1
 FROM next
 WHERE j.id = next.id
 RETURNING j.*;
@@ -146,11 +147,11 @@ RETURNING j.*;
 - **Эффект только в нашей БД** (`billing.invoice` по тенанту, пересчёт витрин) — можно захватить и обработать в одной tenant-транзакции: изменения и `status = 'done'` коммитятся атомарно.
 - **Вызов внешней системы** (`fiscal.send`, `sync.upload`) — короткая транзакция захвата → вызов вне транзакции (не держим блокировку и соединение) → отдельная транзакция `complete`/`fail`. Вызов обязан быть идемпотентным: во внешнюю систему передаётся idempotency key задачи, т.к. после сбоя задача может выполниться повторно (at-least-once).
 
-Зависшие `processing` (воркер упал) возвращаются в `pending` — тоже в цикле по тенантам:
+Задачи с истёкшей арендой (воркер упал) возвращаются в `pending` — тоже в цикле по тенантам:
 
 ```sql
-UPDATE job_queue SET status = 'pending', locked_by = NULL, locked_at = NULL, updated_at = now()
-WHERE status = 'processing' AND locked_at < now() - make_interval(secs => $1);
+UPDATE pharmacy.job_queue SET status = 'pending', lease_until = NULL
+WHERE status = 'processing' AND lease_until < now();
 ```
 
 ### Retry с backoff и dead-letter
@@ -161,12 +162,12 @@ import { backoffDelay } from '../resilience/retry';
 
 private async handleFailure(job: ClaimedJob, error: unknown): Promise<void> {
   const message = sanitizeError(error);               // no PII, no payload dump
-  const exhausted = job.attempts >= job.maxAttempts;
-  const nextRunAfter = exhausted
+  const exhausted = job.attempts >= this.handlerFor(job.type).maxAttempts;
+  const nextRunAt = exhausted
     ? null                                            // → status 'dead'
     : new Date(Date.now() + backoffDelay(job.attempts, 5_000, 30 * 60_000));
-  await this.jobs.fail(job.id, message, nextRunAfter);
-  this.logger[exhausted ? 'error' : 'warn']({ msg: 'job failed', jobId: job.id, queue: job.queue, attempts: job.attempts, dead: exhausted });
+  await this.jobs.fail(job.id, message, nextRunAt);
+  this.logger[exhausted ? 'error' : 'warn']({ msg: 'job failed', jobId: job.id, type: job.type, attempts: job.attempts, dead: exhausted });
 }
 ```
 
@@ -176,12 +177,14 @@ private async handleFailure(job: ClaimedJob, error: unknown): Promise<void> {
 // apps/api/src/common/job-queue/job-worker.ts
 import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
-import { hostname } from 'node:os';
+import { TenantDatabase } from '../../core/database';
 import { runWithContext } from '../context/request-context';
+import { ActiveTenants } from './active-tenants';   // cloud: PlatformDatabase resolver; offline store: its one tenant
 import { ClaimedJob, JobQueueRepository } from './job-queue.repository';
 
 export interface JobHandler<P = unknown> {
-  readonly queue: string;
+  readonly type: string;
+  readonly maxAttempts: number;          // e.g. 8; exhausted → 'dead'
   /** Must be idempotent: the same job can be delivered more than once. */
   handle(payload: P, job: ClaimedJob<P>): Promise<void>;
 }
@@ -191,11 +194,13 @@ export const JOB_HANDLERS = Symbol('JOB_HANDLERS');
 @Injectable()
 export class JobWorker implements OnApplicationShutdown {
   private readonly logger = new Logger(JobWorker.name);
-  private readonly workerId = `${hostname()}:${process.pid}`;
+  private readonly leaseMs = 5 * 60_000;              // longer than the slowest handler
   private running = false;
   private stopping = false;
 
   constructor(
+    private readonly db: TenantDatabase,
+    private readonly tenants: ActiveTenants,
     private readonly jobs: JobQueueRepository,
     @Inject(JOB_HANDLERS) private readonly handlers: JobHandler[],
   ) {}
@@ -205,17 +210,25 @@ export class JobWorker implements OnApplicationShutdown {
     if (this.running || this.stopping) return;        // no overlapping ticks
     this.running = true;
     try {
-      for (const handler of this.handlers) {
-        const claimed = await this.jobs.claim(handler.queue, 10, this.workerId);
-        for (const job of claimed) await this.process(handler, job);
+      // "Per tenant in a loop" (ADR-0013 §4): claim under RLS of one tenant at a time
+      for (const tenantId of await this.tenants.list()) {
+        for (const handler of this.handlers) {
+          const claimed = await this.db.withTenant(tenantId, (trx) =>
+            this.jobs.claim(trx, handler.type, 10, this.leaseMs));
+          for (const job of claimed) await this.process(handler, job); // outside the claim transaction
+        }
       }
     } finally {
       this.running = false;
     }
   }
 
-  // Simplified: the real tick iterates active tenants (TenantJobRunner.forEachActiveTenant) and claims
-  // inside TenantDatabase.withTenant(tenantId, trx => this.jobs.claim(trx, …)); see the bullets above.
+  private handlerFor(type: string): JobHandler {
+    const handler = this.handlers.find((h) => h.type === type);
+    if (!handler) throw new Error(`No handler for job type ${type}`);
+    return handler;
+  }
+
   private process(handler: JobHandler, job: ClaimedJob): Promise<void> {
     // Restore context from the job row: logs carry correlationId, data access is tenant-scoped.
     return runWithContext({ correlationId: job.correlationId, tenantId: job.tenantId ?? undefined }, async () => {
@@ -240,7 +253,7 @@ export class JobWorker implements OnApplicationShutdown {
 
 ## Планировщик: `@nestjs/schedule`
 
-`@nestjs/schedule` — пакет экосистемы NestJS (в рамках ADR-0003), не отдельная технология стека. Cron срабатывает **на каждом инстансе**, поэтому cron только ставит задачу с idempotency key периода — дубль отсечёт `UNIQUE`:
+`@nestjs/schedule` — пакет экосистемы NestJS (в рамках ADR-0003), не отдельная технология стека. Cron срабатывает **на каждом инстансе**, поэтому cron только ставит задачу с `dedupe_key` периода — дубль незавершённой задачи отсечёт уникальный индекс, а обработчик идемпотентен по периоду:
 
 ```typescript
 // apps/api/src/app/billing/billing-invoice.scheduler.ts
@@ -254,10 +267,10 @@ export class BillingInvoiceScheduler {
     return runWithContext({ correlationId: newId() }, () =>
       this.jobs.enqueuePlatform({                      // platform path (PlatformDatabase, system actor), tenant_id = NULL
         tenantId: null,
-        queue: 'billing.invoice',
+        type: 'billing.invoice',
         payload: { period },
-        idempotencyKey: `billing-invoice:${period}`,
-        correlationId: getCorrelationId()!,
+        dedupeKey: `billing-invoice:${period}`,
+        correlationId: getRequestContext()!.correlationId,
       }));
   }
 }
@@ -282,8 +295,11 @@ export class BillingInvoiceScheduler {
    `Authorization: Bearer phk_<keyId>_<secret>`; retry с backoff + circuit breaker
    (`nestjs-resilience-circuit-breaker.md`) — пока связи нет, точка не «долбит» облако.
 3. **В облаке — применение в самом запросе** (не воркером): `LicenseKeyGuard` → tenant-транзакция
-   → `pg_advisory_xact_lock` точки → `INSERT INTO sync_inbox … ON CONFLICT (tenant_id, store_id,
-   operation_id) DO NOTHING` → применение операции и её движений в той же транзакции. Ответ —
+   → `pg_advisory_xact_lock` точки → поиск `operation_id` в `sync_inbox` под этой блокировкой
+   (таблица секционирована по `received_at`, уникального ключа по трём колонкам нет — `ON CONFLICT`
+   невозможен; правило `postgres-best-practices/rules/data-idempotency-keys.md`) → найден —
+   `duplicate` (или `rejected: id-reused` при другом хеше), нет — вставка в inbox, применение
+   операции и её движений в той же транзакции. Ответ —
    статус по каждому `operation_id`: `applied`, `duplicate`, `quarantined`, `rejected`,
    `pending_dependency`. Повтор с тем же id и другим хешем — `rejected: id-reused`.
 4. **Порядок и карантин.** Операции точки применяются по `store_seq`; операция с нарушенной
@@ -304,9 +320,9 @@ export class BillingInvoiceScheduler {
 - **Наблюдаемость** — без Bull Board: SQL-запросы состояния и сводка в readiness/health (`nestjs-observability.md`):
 
   ```sql
-  SELECT queue, status, count(*), min(run_after) FROM job_queue GROUP BY queue, status;
+  SELECT type, status, count(*), min(run_at) FROM pharmacy.job_queue GROUP BY type, status;
   ```
 
-- **Разбор dead-letter** — действие оператора в админке (с правом и записью в аудит): исправить причину → `UPDATE job_queue SET status = 'pending', attempts = 0, run_after = now() WHERE id = $1 AND status = 'dead'`.
-- **Очистка** — плановая задача удаляет `done` старше N дней (N — настройка). Аудит и журнал ПКУ в очереди не хранятся.
+- **Разбор dead-letter** — действие оператора в админке (с правом и записью в аудит): исправить причину → `UPDATE pharmacy.job_queue SET status = 'pending', attempts = 0, run_at = now() WHERE id = $1 AND status = 'dead'`.
+- **Очистка** — плановая задача удаляет `done` с `run_at` старше N дней (N — настройка). Аудит и журнал ПКУ в очереди не хранятся.
 - **Тесты** — `nestjs-testing-patterns.md` (раздел «Очередь-таблица»).

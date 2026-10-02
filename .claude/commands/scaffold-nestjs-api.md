@@ -32,9 +32,9 @@ source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
    Перед запуском посмотри доступные опции: `npx nx g @nx/nest:application --help`.
 4. HTTP-адаптер — стандартный NestJS (Express). Fastify — только после ADR.
 5. Каркас по шаблонам скила: `main.ts` (глобальный префикс `api`, версия `v1`, `ValidationPipe`
-   с whitelist/transform, exception filter RFC 7807 `application/problem+json`, Helmet, CORS только
-   для origin'ов web/admin), `AppModule` → `ConfigModule` (fail-fast валидация env) → `DatabaseModule` + `RedisModule`
-   (correlation ID через AsyncLocalStorage, контекст tenant/user/store) → доменные модули.
+   с whitelist/transform, exception filter RFC 7807 `application/problem+json`, Helmet, CORS выключен — один
+   origin, ADR-0008; correlation ID через AsyncLocalStorage, контекст tenant/user/store), `AppModule` →
+   `ConfigModule` (fail-fast валидация env) → `DatabaseModule` + `RedisModule` → доменные модули.
 6. Пустые доменные модули по ADR-0002: `catalog`, `inventory`, `pos`, `purchasing`, `pricing`,
    `returns`, `billing`, `sync`, `fiscal`, `export-1c`, `audit` — каждый через `npx nx g @nx/nest:module`
    (с `--help` для проверки опций), без бизнес-логики.
@@ -62,4 +62,4 @@ source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
 ## Итог
 
 Выведи: созданные проекты Nx, установленные зависимости (с версиями), результаты проверок из шага 11,
-и список отложенных решений, требующих ADR (ORM, миграции и т.д.).
+и список отложенных решений, требующих ADR (например, хранение файлов, мониторинг, reverse proxy — ADR-0012 proposed).

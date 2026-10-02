@@ -45,8 +45,8 @@ app.getHttpAdapter().getInstance().disable('x-powered-by');
 выбран через ADR). Без аутентификации, без детальной информации об окружении.
 
 ```typescript
-// apps/api/src/app/health/health.controller.ts (exists: liveness today; readiness to be added)
-import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
+// apps/api/src/app/health/health.controller.ts (exists: liveness GET /api/v1/health; readiness to be added)
+import { Controller, Get } from '@nestjs/common';
 import { HealthCheck, HealthCheckService, HealthIndicatorService } from '@nestjs/terminus';
 import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators';
@@ -55,7 +55,7 @@ import { RedisService } from '../../core/redis/redis.service';
 
 @Public()
 @SkipThrottle()
-@Controller({ path: 'health', version: VERSION_NEUTRAL }) // /api/health/...
+@Controller('health') // default version 1 -> /api/v1/health (Dockerfile healthcheck, web connectivity ping)
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
@@ -64,12 +64,12 @@ export class HealthController {
     private readonly redis: RedisService,
   ) {}
 
-  @Get('live')
-  live() {
+  @Get() // liveness: /api/v1/health — the path is used by apps/api/Dockerfile and apps/web, do not move it
+  check() {
     return { status: 'ok' };
   }
 
-  @Get('ready')
+  @Get('ready') // readiness: /api/v1/health/ready
   @HealthCheck()
   ready() {
     return this.health.check([

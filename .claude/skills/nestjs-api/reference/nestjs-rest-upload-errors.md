@@ -10,7 +10,7 @@ PDF счёта тенанта (billing), при необходимости — �
 // apps/api/src/app/export-1c/export-1c.controller.ts
 import { Controller, Get, Query, StreamableFile } from '@nestjs/common';
 import { ExportPeriodQueryDto } from '@pharmacy/shared-dto';
-import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { RequirePermission } from '../auth/decorators';
 import { Export1cService } from './export-1c.service';
 
 @Controller({ path: 'exports/1c', version: '1' }) // /api/v1/exports/1c?from=2026-09-01&to=2026-09-30&storeId=...
@@ -18,7 +18,7 @@ export class Export1cController {
   constructor(private readonly exports: Export1cService) {}
 
   @Get()
-  @RequirePermission('export-1c', 'run', { storeQuery: 'storeId' })
+  @RequirePermission('export-1c:export', { storeQuery: 'storeId' })
   async download(@Query() q: ExportPeriodQueryDto): Promise<StreamableFile> {
     const { stream, fileName } = await this.exports.buildCommerceMl(q); // audit record inside
     return new StreamableFile(stream, {
@@ -48,7 +48,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 @Controller({ path: 'stores/:storeId/opening-balance-imports', version: '1' })
 export class OpeningBalanceImportsController {
   @Post()
-  @RequirePermission('inventory', 'import', { storeParam: 'storeId' })
+  @RequirePermission('inventory:create', { storeParam: 'storeId' }) // the import creates an opening-balance document
   // no 'dest'/'storage' -> Multer keeps the file in memory (Buffer), nothing is written to disk
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES, files: 1 } }))
   upload(

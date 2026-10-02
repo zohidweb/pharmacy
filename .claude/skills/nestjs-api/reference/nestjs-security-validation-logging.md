@@ -114,7 +114,7 @@ ADR-0008). Защита
 - [ ] **A02 Cryptographic Failures** — только хеширование паролей/PIN из accepted ADR (ADR-0008), HTTPS везде, токены сессий хранятся хешем.
 - [ ] **A03 Injection** — параметризованный SQL, whitelist сортировок, DTO с whitelist.
 - [ ] **A04 Insecure Design** — инварианты: остатки из движений, append-only аудит, идемпотентность финопераций.
-- [ ] **A05 Misconfiguration** — helmet, явный CORS, Swagger выключен в проде, fail-fast конфиг.
+- [ ] **A05 Misconfiguration** — helmet, CORS выключен (ADR-0008), Swagger выключен в проде, fail-fast конфиг.
 - [ ] **A06 Vulnerable Components** — `npm audit` перед MR, только технологии из stack.md и accepted ADR.
 - [ ] **A07 Auth Failures** — блокировки после неудач (пароль и PIN), idle-таймаут сети тенанта, отзыв всех сессий при смене пароля.
 - [ ] **A08 Integrity Failures** — лицензионный ключ точки, идемпотентная очередь синхронизации, миграции только версионированные.

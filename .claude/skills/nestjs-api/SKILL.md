@@ -109,7 +109,7 @@ API gateway / ESB, push → не используются.
 | **Config** | `@nestjs/config` + `registerAs()`, fail-fast; секреты — env; в git только `.env.example` |
 | **Logging** | Встроенный `Logger`, correlation ID, маскирование ПДн/секретов |
 | **Migrations** | node-pg-migrate, `.sql` только Up, роль `pharmacy_owner`; `CONCURRENTLY` — `.mjs` + `pgm.noTransaction()`; schema-sync запрещён |
-| **IDs** | `newId()` — UUIDv7 из приложения (`core/database/ids.ts`), у `id` нет `default` в БД |
+| **IDs** | `newId()` — UUIDv7 из приложения (`core/database/ids.ts`, импорт только через index `core/database`), у `id` нет `default` в БД |
 
 ## Reference Files
 
@@ -119,7 +119,7 @@ API gateway / ESB, push → не используются.
 | `reference/nestjs-config-basics.md` | Fail-fast env reader, `registerAs()`, `.env.example` | Конфигурация |
 | `reference/nestjs-config-npm-ts.md` | Зависимости (разрешённые/запрещённые), tsconfig, Nx targets | Зависимости, сборка |
 | `reference/nestjs-config-data-access.md` | `TenantDatabase`/`PlatformDatabase` на Kysely, RLS, чек + движения, коды ошибок, `bigint`, kysely-codegen, node-pg-migrate, интеграционные тесты | Любой доступ к БД |
-| `reference/nestjs-templates-core.md` | `main.ts`, `AppModule`, `CoreModule`, correlation ID | Bootstrap |
+| `reference/nestjs-templates-core.md` | `main.ts`, `AppModule`, глобальные модули ядра, correlation ID | Bootstrap |
 | `reference/nestjs-templates-features.md` | Модуль catalog: DTO, контроллер, сервис, аудит | Новый модуль/ресурс |
 | `reference/nestjs-templates-infrastructure.md` | Dockerfile, compose dev/offline, Jest-конфиг Nx | Docker, тест-раннер |
 | `reference/nestjs-enterprise-patterns.md` | Исключения, RFC 7807 фильтр, статусы, версионирование | Ошибки, валидация |

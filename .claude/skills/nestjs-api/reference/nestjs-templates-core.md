@@ -1,98 +1,87 @@
-# NestJS Core Templates — main.ts, AppModule, CoreModule
+# NestJS Core Templates — main.ts, AppModule, глобальные модули ядра
 
-Шаблоны точки входа и корневых модулей `apps/api` (Express-адаптер по умолчанию).
+Шаблоны точки входа и корневого модуля `apps/api` (Express-адаптер). Основа — реальные
+`apps/api/src/main.ts` и `apps/api/src/app/app.module.ts`; строки с пометкой «to be added»
+появятся вместе с аутентификацией (ADR-0008), Redis и лимитами. Перед правкой сверяйтесь с файлами.
 
 ## main.ts (apps/api/src/main.ts)
 
 ```typescript
-import { Logger, VersioningType } from '@nestjs/common';
-import { ConfigType } from '@nestjs/config';
+import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import helmet from 'helmet';
-
+import helmet from 'helmet'; // to be added with ADR-0008 security headers
 import { AppModule } from './app/app.module';
-import applicationConfig from './config/application.config';
-import securityConfig from './config/security.config';
 
-async function bootstrap(): Promise<void> {
-  const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
-
-  const appCfg = app.get<ConfigType<typeof applicationConfig>>(applicationConfig.KEY);
-  const secCfg = app.get<ConfigType<typeof securityConfig>>(securityConfig.KEY);
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
 
   app.use(helmet());
-  app.enableCors({
-    origin: secCfg.corsOrigins, // explicit list from env, never '*'
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'X-Correlation-Id', 'Idempotency-Key'],
-    exposedHeaders: ['X-Correlation-Id'],
-  });
+  // No CORS: web/admin and the API share one origin (reverse proxy in test/prod, rewrite in dev).
+  // ADR-0008: "CORS выключен" — the session cookie is accepted only from its own origin.
 
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' }); // -> /api/v1/...
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+  );
   app.enableShutdownHooks();
 
-  if (appCfg.enableSwagger && appCfg.nodeEnv !== 'production') {
-    const doc = SwaggerModule.createDocument(
-      app,
-      new DocumentBuilder().setTitle('Pharmacy API').setVersion('1').build(),
-    );
-    SwaggerModule.setup('api/docs', app, doc);
-  }
-
-  await app.listen(appCfg.port);
-  logger.log(`api listening on :${appCfg.port} (mode: ${appCfg.deploymentMode})`);
+  const port = app.get(ConfigService).get<number>('PORT', 3000);
+  await app.listen(port);
+  Logger.log(`API is running on http://localhost:${port}/api/v1`, 'Bootstrap');
 }
 
-void bootstrap();
+bootstrap();
 ```
 
 Заметки:
 - Ошибки старта (конфиг, БД) должны ронять процесс — не глушить `catch`-ом.
+- CORS не включается (ADR-0008): браузер ходит в API с того же origin. Запросы с чужого origin
+  отсекает CSRF-проверка (`Origin`, Fetch Metadata) — `nestjs-security-auth.md`.
 - `trust proxy` (`app.getHttpAdapter().getInstance().set('trust proxy', 1)`) включать только
   если перед api реально стоит обратный прокси — иначе `req.ip` подделывается заголовком.
-- Лимит тела запроса Express по умолчанию 100 KB; для больших чеков/пакетов синхронизации
-  задать явно (`bodyParser`-опции `NestFactory.create`) — осознанно, не «на всякий случай».
+- Лимит тела запроса Express по умолчанию 100 KB; для пакетов синхронизации (≤ 2 МБ после
+  распаковки, ADR-0014) задать явно — осознанно, не «на всякий случай».
 
 ## AppModule (apps/api/src/app/app.module.ts)
 
 ```typescript
-import { MiddlewareConsumer, Module, NestModule, ValidationPipe } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { TenantAwareThrottlerGuard } from '../common/throttling/tenant-aware-throttler.guard';
-
-import { ConfigModule } from '../config/config.module';
-import { CoreModule } from '../core/core.module';
-import { AuthModule } from '../auth/auth.module';
-import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
-import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { ProblemDetailsFilter } from '../common/filters/problem-details.filter';
-import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
-
-import { AuditModule } from '../modules/audit/audit.module';
-import { BillingModule } from '../modules/billing/billing.module';
-import { CatalogModule } from '../modules/catalog/catalog.module';
-import { Export1cModule } from '../modules/export-1c/export-1c.module';
-import { FiscalModule } from '../modules/fiscal/fiscal.module';
-import { InventoryModule } from '../modules/inventory/inventory.module';
-import { PosModule } from '../modules/pos/pos.module';
-import { PricingModule } from '../modules/pricing/pricing.module';
-import { PurchasingModule } from '../modules/purchasing/purchasing.module';
-import { ReturnsModule } from '../modules/returns/returns.module';
-import { SyncModule } from '../modules/sync/sync.module';
+import { DatabaseModule } from '../core/database';
+import { RedisModule } from '../core/redis/redis.module';                          // to be added
+import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware'; // to be added
+import { ProblemDetailsFilter } from '../common/filters/problem-details.filter';  // to be added
+import { TenantAwareThrottlerGuard } from '../common/throttling/tenant-aware-throttler.guard'; // to be added
+import { validateEnv } from './config/env.validation';
+import { HealthController } from './health/health.controller';
+import { AuthModule } from './auth/auth.module';                                   // to be added
+import { SessionAuthGuard } from './auth/guards/session-auth.guard';              // to be added
+import { PermissionsGuard } from './auth/guards/permissions.guard';               // to be added
+import { CatalogModule } from './catalog/catalog.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { PosModule } from './pos/pos.module';
+import { PurchasingModule } from './purchasing/purchasing.module';
+import { PricingModule } from './pricing/pricing.module';
+import { ReturnsModule } from './returns/returns.module';
+import { BillingModule } from './billing/billing.module';
+import { SyncModule } from './sync/sync.module';
+import { FiscalModule } from './fiscal/fiscal.module';
+import { Export1cModule } from './export-1c/export-1c.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
-    ConfigModule,
-    CoreModule,
+    ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
+    DatabaseModule,
+    RedisModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({ throttlers: [{ name: 'default', ttl: 60_000, limit: 300 }] }),
     AuthModule,
-    AuditModule,
     CatalogModule,
     InventoryModule,
     PosModule,
@@ -103,19 +92,11 @@ import { SyncModule } from '../modules/sync/sync.module';
     SyncModule,
     FiscalModule,
     Export1cModule,
+    AuditModule,
   ],
+  controllers: [HealthController],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },
-    {
-      provide: APP_PIPE,
-      useValue: new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        forbidUnknownValues: true,
-        validationError: { target: false, value: false }, // never echo input (may contain PII)
-      }),
-    },
     // Order matters: authenticate (fills tenant/employee context) -> throttle per employee -> authorize
     { provide: APP_GUARD, useClass: SessionAuthGuard },
     { provide: APP_GUARD, useClass: TenantAwareThrottlerGuard },
@@ -129,6 +110,11 @@ export class AppModule implements NestModule {
 }
 ```
 
+- Раскладка: доменные модули — `apps/api/src/app/<module>/`, аутентификация и права —
+  `apps/api/src/app/auth/` (`nestjs-security-auth.md`), сквозное — `apps/api/src/common/`, ядро
+  доступа к данным — `apps/api/src/core/database` (импорт только через его `index`).
+- `ValidationPipe` остаётся в `main.ts` (как сейчас в коде); `validationError: { target: false,
+  value: false }` добавить при первом DTO с персональными данными — ввод не эхом в ошибке.
 - `SessionAuthGuard` глобальный: маршрут без сессии возможен только с явным `@Public()`
   (логин, health). Детали — `nestjs-security-auth.md`; лимиты — `nestjs-rate-limiting.md`.
 - `enableImplicitConversion` не включаем: неявное приведение строк к числам в query маскирует

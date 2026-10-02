@@ -125,7 +125,7 @@ export class RequestLoggingInterceptor implements NestInterceptor {
 
 ## Health-чеки
 
-Liveness/readiness (`/api/health/live`, `/api/health/ready`: PostgreSQL + Redis, без деталей окружения) — `nestjs-enterprise-infrastructure.md`. Внешние интеграции (фискализация, синхронизация) в readiness не входят: их недоступность деградирует функции, но не выводит api из работы.
+Liveness/readiness (`/api/v1/health`, `/api/v1/health/ready`: PostgreSQL + Redis, без деталей окружения) — `nestjs-enterprise-infrastructure.md`. Внешние интеграции (фискализация, синхронизация) в readiness не входят: их недоступность деградирует функции, но не выводит api из работы.
 
 Подробности (задержка БД, глубина очередей, `dead`-задачи, состояния circuit breaker-ов, лаг синхронизации точек) — только во внутреннем диагностическом эндпоинте под правом оператора платформы (`nestjs-debugging-production.md`).
 

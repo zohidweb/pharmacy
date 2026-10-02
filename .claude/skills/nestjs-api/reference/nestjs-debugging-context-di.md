@@ -13,16 +13,13 @@
 | Таймеры/слушатели, созданные при старте | Колбэк привязан к контексту момента регистрации (пустому) | Создавать контекст внутри колбэка; `setTimeout` из запроса контекст сохраняет |
 | Сторонние колбэк-API | Некоторые пулы/эмиттеры теряют async-цепочку | Обернуть: `AsyncResource.bind(fn)` из `node:async_hooks` |
 
-Проверка в слое доступа к данным (ORM-независимо):
+Проверка в слое доступа к данным уже есть в коде — `requireTenantId()`:
 
 ```typescript
-// apps/api/src/common/data-access/tenant-scope.ts
-export function tenantScopeOrFail(): string {
-  const tenantId = getTenantId();
-  if (!tenantId) {
-    // Log once with correlationId; never fall back to an unscoped query.
-    throw new TenantContextMissingError();
-  }
+// apps/api/src/common/context/request-context.ts (real file, fragment)
+export function requireTenantId(): string {
+  const tenantId = getRequestContext()?.tenantId;
+  if (!tenantId) throw new TenantContextMissingError(); // 500, never an unscoped query
   return tenantId;
 }
 ```

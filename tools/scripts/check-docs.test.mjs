@@ -20,10 +20,29 @@ test('flags each stale pattern with its rule name', () => {
     'rls-missing-ok': "using (tenant_id = current_setting('app.tenant_id', true)::uuid)",
     'uuid-default': 'id uuid primary key default gen_random_uuid()',
     'old-alias': "import { CreateReceiptDto } from '@pharmacy/shared/dto';",
+    'perm-two-args': "@RequirePermission('catalog', 'create')",
+    'perm-not-in-catalog': "@RequirePermission('catalog:read')",
+    'old-app-structure': "import { CatalogModule } from '../modules/catalog/catalog.module';",
+    'cors-enabled': 'app.enableCors({ origin: secCfg.corsOrigins, credentials: true });',
+    'ts-jest': "transform: { '^.+\\\\.ts$': 'ts-jest' }",
+    'orm-after-adr': 'логирование SQL — средствами выбранного ORM после ADR',
+    'deep-db-import': "import { newId } from '../../core/database/ids';",
+    'ctx-getter-missing': 'const correlationId = getCorrelationId();',
+    'health-route': 'GET /api/health/ready — readiness',
+    'inbox-on-conflict': 'ON CONFLICT (tenant_id, store_id, operation_id) DO NOTHING',
+    'job-queue-columns': 'update pharmacy.job_queue set locked_by = $1',
   };
   for (const [rule, line] of Object.entries(cases)) {
     assert.deepEqual(rulesOf(line), [rule], `line: ${line}`);
   }
+});
+
+test('allows legitimate neighbours of the stale-pattern rules', () => {
+  assert.deepEqual(rulesOf('`@golevelup/ts-jest` is not used'), []);
+  assert.deepEqual(rulesOf('**File:** `apps/api/src/app/config/config.module.ts`'), []);
+  assert.deepEqual(rulesOf("import { PlatformDatabase } from '../../core/database/platform';"), []);
+  assert.deepEqual(rulesOf("import { DatabaseModule } from '../core/database';"), []);
+  assert.deepEqual(rulesOf("@RequirePermission('pos:sell-controlled', { storeParam: 'storeId' })"), []);
 });
 
 test('skips a line marked docs-check: ok', () => {

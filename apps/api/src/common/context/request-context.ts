@@ -28,7 +28,9 @@ export interface RequestContext {
   readonly principal: EmployeePrincipal | null;
 }
 
-export const requestContextStorage = new AsyncLocalStorage<RequestContext>();
+// Module-private: only runWithContext enters a context, so every stored context is a frozen copy
+// that passed its checks.
+const requestContextStorage = new AsyncLocalStorage<RequestContext>();
 
 export const getRequestContext = (): RequestContext | undefined =>
   requestContextStorage.getStore();
@@ -87,5 +89,10 @@ function deepFreeze<T>(value: T): T {
  * (queue workers, cron) and tests. The given object is neither frozen nor retained.
  */
 export function runWithContext<T>(context: RequestContext, fn: () => T): T {
+  const { tenantId, principal } = context;
+  if (tenantId !== undefined && principal && tenantId !== principal.tenantId) {
+    // A programming error: data access would run under a tenant other than the principal's.
+    throw new Error('Request context tenant does not match the principal');
+  }
   return requestContextStorage.run(deepFreeze(deepCopy(context)), fn);
 }

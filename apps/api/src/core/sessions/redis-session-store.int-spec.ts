@@ -16,7 +16,7 @@ function record(overrides: Partial<SessionRecord> = {}): SessionRecord {
     employeeId: EMPLOYEE,
     auth: 'password',
     authenticatedAt: new Date().toISOString(),
-    permissions: ['sales:read'] as SessionRecord['permissions'],
+    permissions: ['pos:view', 'catalog:view'],
     permissionsVersion: 3,
     storeScope: 'all',
     currentStoreId: null,

@@ -131,6 +131,21 @@ describe('request context', () => {
     expect(context.tenantId).toBe(TENANT_B);
   });
 
+  it('runWithContext rejects a tenant that differs from the principal tenant', () => {
+    const fn = jest.fn();
+    expect(() =>
+      runWithContext(
+        {
+          correlationId: 'corr-0001',
+          tenantId: TENANT_B,
+          principal: makePrincipal({ tenantId: TENANT_A }),
+        },
+        fn,
+      ),
+    ).toThrow('Request context tenant does not match the principal');
+    expect(fn).not.toHaveBeenCalled();
+  });
+
   it('a storeScope of "all" is kept as is', () => {
     runWithContext(
       {

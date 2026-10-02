@@ -97,15 +97,7 @@ async completeReceipt(storeId: string, dto: CompleteReceiptDto): Promise<Receipt
 
     // 2. Lock the batches — one statement, stable order (fewer deadlocks)
     const batchIds = [...new Set(dto.lines.map((l) => l.batchId))].sort();
-    const locked = await trx
-      .selectFrom('batches')
-      .select('id')
-      .where('tenantId', '=', tenantId)
-      .where('storeId', '=', storeId)
-      .where('id', 'in', batchIds)
-      .orderBy('id')
-      .forUpdate()
-      .execute();
+    const locked = await this.batches.lockForSale(trx, tenantId, storeId, batchIds);
     if (locked.length !== batchIds.length) throw new BatchNotFoundException();
 
     // 3. Count stock in the NEXT statement: stock is the sum of movements, never stored
@@ -127,6 +119,19 @@ async completeReceipt(storeId: string, dto: CompleteReceiptDto): Promise<Receipt
 ```
 
 ```typescript
+// batches.repository.ts (fragment) — the lock is its own statement
+lockForSale(trx: TenantTransaction, tenantId: string, storeId: string, batchIds: string[]) {
+  return trx
+    .selectFrom('batches')
+    .select('id')
+    .where('tenantId', '=', tenantId)
+    .where('storeId', '=', storeId)
+    .where('id', 'in', batchIds)
+    .orderBy('id')
+    .forUpdate()
+    .execute();
+}
+
 // receipts.repository.ts (fragment) — idempotent insert
 insert(trx: TenantTransaction, tenantId: string, storeId: string, dto: CompleteReceiptDto) {
   return trx

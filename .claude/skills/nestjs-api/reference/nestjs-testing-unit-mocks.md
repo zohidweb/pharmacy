@@ -1,23 +1,26 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest; мок `DatabaseService`/репозиториев вместо Prisma-клиента (ORM не выбран — ADR); настоящий контекст запроса вместо мока; внешние HTTP — только закрытый список интеграций. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest; мок `TenantDatabase` и репозиториев вместо клиента ORM; настоящий контекст запроса вместо мока; внешние HTTP — только закрытый список интеграций; правила ADR-0009 (фейки портов, без nock/MSW/faker/`@golevelup/ts-jest`). Ограничения: `CLAUDE.md`.
 
 # NestJS Unit Testing — Mock Patterns & Conventions
 
-## Мок слоя данных (ORM-независимо)
+## Мок слоя данных
 
-Контракт слоя — `nestjs-config-data-access.md`: `DatabaseService.tenantTransaction(work)` + репозитории модулей, принимающие `Tx`. В unit-тестах мокаются именно они. Глубокие моки ORM (`mockDeep<PrismaClient>()` и т.п.) не используем: они привязывают тесты к ORM, который ещё не выбран.
+Контракт слоя — `nestjs-config-data-access.md`: сервис вызывает `TenantDatabase.tenantTransaction(work)`
+и передаёт `trx` репозиториям; **все запросы — в репозиториях**. Поэтому в unit-тесте `trx` —
+непрозрачный объект, а мокаются `TenantDatabase` и репозитории. Глубокие моки Kysely не пишем:
+SQL, RLS и откат проверяют интеграционные тесты на реальной PostgreSQL (`*.int-spec.ts`).
 
 ```typescript
 // apps/api/test/mocks/database.mock.ts
-import type { Tx } from '../../src/core/database/database.service';
+import type { TenantDatabase, TenantTransaction } from '../../src/core/database';
 
-/** tenantTransaction runs the callback immediately with a fake tx — tests can assert "same tx everywhere". */
-export function createDatabaseServiceMock(tenantId = 'tenant-a') {
-  const tx = { tenantId, query: jest.fn() } as unknown as jest.Mocked<Tx>;
+/** tenantTransaction runs the callback immediately with one fake trx — tests can assert "same trx everywhere". */
+export function createTenantDatabaseMock() {
+  const trx = { fake: 'trx' } as unknown as TenantTransaction;
   const db = {
-    tenantTransaction: jest.fn(async <T>(work: (t: Tx) => Promise<T>) => work(tx)),
-    ping: jest.fn(),
-  };
-  return { db, tx };
+    tenantTransaction: jest.fn(async <T>(work: (t: TenantTransaction) => Promise<T>) => work(trx)),
+    withTenant: jest.fn(async <T>(_tenantId: string, work: (t: TenantTransaction) => Promise<T>) => work(trx)),
+  } satisfies Partial<Record<keyof TenantDatabase, unknown>>;
+  return { db, trx };
 }
 ```
 
@@ -25,9 +28,9 @@ export function createDatabaseServiceMock(tenantId = 'tenant-a') {
 // apps/api/test/mocks/context.ts
 import { runWithContext, type RequestContext } from '../../src/common/context/request-context';
 
-/** Runs fn inside a real AsyncLocalStorage context — no need to mock getTenantId()/getCorrelationId(). */
+/** Runs fn inside a real AsyncLocalStorage context — requireTenantId() works without mocks. */
 export function inContext<T>(ctx: Partial<RequestContext>, fn: () => Promise<T>): Promise<T> {
-  return runWithContext({ correlationId: 'corr-test', storeScope: 'all', ...ctx }, fn);
+  return runWithContext({ correlationId: 'corr-test', ...ctx }, fn);
 }
 ```
 
@@ -35,53 +38,54 @@ export function inContext<T>(ctx: Partial<RequestContext>, fn: () => Promise<T>)
 
 ```typescript
 // apps/api/src/app/pos/receipts.service.spec.ts (fragment)
-const { db, tx } = createDatabaseServiceMock('tenant-a');
-const receipts = { findByIdempotencyKey: jest.fn(), insert: jest.fn() };
-const stock = { availableByBatch: jest.fn(), insertMovements: jest.fn() };
+const { db, trx } = createTenantDatabaseMock();
+const TENANT = '01920000-0000-7000-8000-000000000001'; // synthetic UUIDv7-shaped ids
+const BATCH = '01920000-0000-7000-8000-000000000101';
+const receipts = { findByOperationId: jest.fn(), insert: jest.fn() };
+const batches = { lockForSale: jest.fn() };
+const stock = { onHandByBatch: jest.fn(), insertSaleMovements: jest.fn() };
 const audit = { append: jest.fn() };
-const BATCH = '00000000-0000-4000-8000-000000000101';
-const dto = { lines: [{ batchId: BATCH, quantity: 2, unitPriceDirams: 1250 }], payments: [{ method: 'cash', amountDirams: 2500 }] };
+const dto = { operationId: '01920000-0000-7000-8000-0000000000aa',
+  lines: [{ batchId: BATCH, qtyPieces: 2, unitPriceDirams: 1250 }], payments: [{ paymentMethodId: 'cash', amountDirams: 2500 }] };
 
 beforeEach(() => {
-  receipts.findByIdempotencyKey.mockResolvedValue(undefined);
-  tx.query.mockResolvedValue([{ id: BATCH }]);               // FOR UPDATE lock on batches
+  receipts.findByOperationId.mockResolvedValue(undefined);
+  batches.lockForSale.mockResolvedValue([{ id: BATCH }]);
 });
 
-it('writes receipt, negative movements and audit with the same tx', async () => {
-  stock.availableByBatch.mockResolvedValue(new Map([[BATCH, 10]]));
+it('writes receipt, negative movements and audit with the same trx', async () => {
+  stock.onHandByBatch.mockResolvedValue(new Map([[BATCH, 10n]]));   // stock is bigint (int8 parser)
   receipts.insert.mockResolvedValue({ id: 'r-1' });
 
-  await inContext({ tenantId: 'tenant-a' }, () => service.completeReceipt('store-1', dto, 'idem-1'));
+  await inContext({ tenantId: TENANT }, () => service.completeReceipt('store-1', dto));
 
   expect(db.tenantTransaction).toHaveBeenCalledTimes(1);
-  expect(receipts.insert).toHaveBeenCalledWith(tx, 'store-1', dto, 'idem-1');
-  expect(stock.insertMovements).toHaveBeenCalledWith(tx, [
-    expect.objectContaining({ batchId: BATCH, quantity: -2, sourceType: 'receipt', sourceId: 'r-1' }),
-  ]);
-  expect(audit.append).toHaveBeenCalledWith(tx, expect.objectContaining({ action: 'receipt.completed' }));
+  expect(receipts.insert).toHaveBeenCalledWith(trx, TENANT, 'store-1', dto);
+  expect(stock.insertSaleMovements).toHaveBeenCalledWith(trx, TENANT, 'store-1', 'r-1', dto.lines);
+  expect(audit.append).toHaveBeenCalledWith(trx, expect.objectContaining({ action: 'receipt.completed' }));
 });
 
 it('writes nothing when stock is insufficient', async () => {
-  stock.availableByBatch.mockResolvedValue(new Map([[BATCH, 1]]));
+  stock.onHandByBatch.mockResolvedValue(new Map([[BATCH, 1n]]));
 
-  await expect(inContext({ tenantId: 'tenant-a' }, () => service.completeReceipt('store-1', dto, 'idem-2')))
+  await expect(inContext({ tenantId: TENANT }, () => service.completeReceipt('store-1', dto)))
     .rejects.toThrow(InsufficientStockException);
   expect(receipts.insert).not.toHaveBeenCalled();
-  expect(stock.insertMovements).not.toHaveBeenCalled();
+  expect(stock.insertSaleMovements).not.toHaveBeenCalled();
 });
 
-it('replays the original result for the same idempotency key', async () => {
-  receipts.findByIdempotencyKey.mockResolvedValue({ id: 'r-1', payload_hash: '…' });
+it('replays the original result for the same operationId', async () => {
+  receipts.findByOperationId.mockResolvedValue({ id: 'r-1', payloadHash: '…' });
 
-  await inContext({ tenantId: 'tenant-a' }, () => service.completeReceipt('store-1', dto, 'idem-1'));
+  await inContext({ tenantId: TENANT }, () => service.completeReceipt('store-1', dto));
 
   expect(receipts.insert).not.toHaveBeenCalled();
 });
 ```
 
-Реальный откат транзакции, гонку одинаковых запросов и RLS unit-тестом не проверить — это обязательные e2e-кейсы (`nestjs-testing-integration-patterns.md`).
+Реальный откат транзакции, гонку одинаковых запросов и RLS unit-тестом не проверить — это обязательные интеграционные и e2e-кейсы (`nestjs-testing-integration-patterns.md`).
 
-`@golevelup/ts-jest` (`createMock<T>()` с автомоком всех методов) удобен, но это новая dev-зависимость — **согласовать**; до этого — явные объекты `{ method: jest.fn() }`.
+Моки — явные типизированные объекты `{ method: jest.fn() }` и фабрики в `apps/api/test/mocks` / `libs/shared/testing`; `@golevelup/ts-jest` не используем (ADR-0009, ось Г).
 
 ## Кэш (Redis)
 
@@ -129,7 +133,7 @@ describe('HttpFiscalRegistrar', () => {
 });
 ```
 
-`nock` — альтернатива подмене `fetch`, но это новая dev-зависимость — **согласовать**.
+`nock` и MSW не используем (ADR-0009, ось Б): потребители мокают порт, клиент — `jest.spyOn(global.fetch)`. В `setupFiles` unit-тестов стоит предохранитель: `fetch` по умолчанию бросает ошибку «реальная сеть в тесте», тест разрешает его явно через `spyOn`.
 
 ## ConfigService
 
@@ -189,8 +193,8 @@ npx nx test shared-util                           # имя проекта биб
 ---
 
 **Главное:**
-1. Мокать `DatabaseService`, репозитории модулей, клиенты интеграций — не ORM.
+1. Мокать `TenantDatabase`, репозитории модулей, порты интеграций — не Kysely и не пул.
 2. Контекст (тенант, сотрудник, correlationId) — настоящий, через `inContext()`.
 3. Моки — через `useValue` в `Test.createTestingModule`; `clearMocks: true` в jest-конфиге.
 4. Деньги — integer, время — фиксировано, данные — синтетические.
-5. Откат транзакций, изоляция тенантов и идемпотентность под гонкой подтверждаются e2e против реальной PostgreSQL.
+5. Откат транзакций, изоляция тенантов и идемпотентность под гонкой подтверждаются интеграционными тестами (`npx nx run api:integration`) и e2e против реальной PostgreSQL.

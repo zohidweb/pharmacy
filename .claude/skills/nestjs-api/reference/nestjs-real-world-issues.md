@@ -152,11 +152,8 @@ export class PriceEventsService implements OnModuleDestroy {
 
 ---
 
-## `createMock<T>()` из `@golevelup/ts-jest`
+## Автомоки (`@golevelup/ts-jest`) — не используем
 
-Автомок всех методов типа — удобно для сервисов с большим числом методов. Это новая dev-зависимость — **согласовать** перед добавлением; до этого — явные объекты `{ method: jest.fn() }` (`nestjs-testing-unit-mocks.md`).
-
-```typescript
-import { createMock } from '@golevelup/ts-jest';
-const repo = createMock<ReceiptsRepository>(); // every method is jest.fn()
-```
+ADR-0009 (ось Г): моки — явные типизированные объекты `{ method: jest.fn() }` и фабрики в
+`apps/api/test/mocks` / `libs/shared/testing` (`nestjs-testing-unit-mocks.md`). Автомок всех
+методов скрывает, какие зависимости сервис реально вызывает.

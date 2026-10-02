@@ -15,7 +15,8 @@
     "test-env:down": "node tools/scripts/stack.mjs test down",
     "prod:build": "node tools/scripts/stack.mjs prod build",
     "prod:up": "node tools/scripts/stack.mjs prod up",
-    "prod:down": "node tools/scripts/stack.mjs prod down"
+    "prod:down": "node tools/scripts/stack.mjs prod down",
+    "docs:check": "node tools/scripts/check-docs.mjs"
   },
   "private": true,
   "devDependencies": {

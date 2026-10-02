@@ -9,8 +9,11 @@ tags: connection-pooling, pool-size, stateless, nestjs, pgbouncer, offline
 
 Соединение PostgreSQL — отдельный процесс (несколько МБ RAM, дорогое установление). Соединение
 «на каждый запрос» под нагрузкой кассы исчерпает `max_connections` и добавит десятки мс к каждой
-операции. В Pharmacy пулинг — **на стороне приложения**: пул драйвера/ORM внутри каждого
-stateless-инстанса `apps/api` (ORM и драйвер не выбраны — **требует ADR через `/03-adr`**).
+операции. В Pharmacy пулинг — **на стороне приложения**: `pg.Pool` внутри Kysely в каждом
+stateless-инстансе `apps/api` (ADR-0006, `apps/api/src/core/database/pool.ts`). Пулов **два**
+(ADR-0013): tenant (`pharmacy_app`, `application_name = api-tenant`, `DB_POOL_MAX`, по умолчанию
+10) и platform (`pharmacy_platform`, `api-platform`, `PLATFORM_DB_POOL_MAX`, 3; на офлайн-точке
+1–2). Пулы создаются лениво — при первой транзакции.
 
 **Incorrect (соединение на запрос / пул «на глаз»):**
 
@@ -28,14 +31,14 @@ select count(*) from pg_stat_activity where datname = 'pharmacy';   -- 300+ duri
 единицы, а не сотни. Пул нужен, чтобы держать пики и отчёты, а не «по соединению на кассира».
 
 ```
-per_instance_pool_max ≈ 10            -- start here, adjust by measurement (pg_stat_activity)
-total = api_instances × per_instance_pool_max
-      + sync/queue workers + migrations/maintenance (≈ 5)
+tenant_pool ≈ 10, platform_pool ≈ 3   -- start here, adjust by measurement (pg_stat_activity)
+total = api_instances × (tenant_pool + platform_pool)
+      + migrate service / maintenance (≈ 5)
       + superuser_reserved_connections (3)
 total ≤ max_connections × 0.8          -- keep headroom
 
-cloud example:   3 instances × 10 + 5 + 5 + 3 = 43   → max_connections = 100
-offline store:   1 instance  × 5  + 2 + 3     = 10   → max_connections = 30
+cloud example:   3 instances × (10 + 3) + 5 + 3 = 47   → max_connections = 100
+offline store:   1 instance  × (5 + 2)  + 2 + 3 = 12   → max_connections = 30
 ```
 
 Ориентир верхней границы активных соединений для самой БД — `(CPU cores × 2) + дисков`; больше
@@ -51,8 +54,10 @@ group by state;
 
 Правила для пула в `apps/api`:
 
-- Таймаут ожидания свободного соединения из пула — короче SLA кассы (например, 2–3 с), ошибка —
-  в RFC 7807, а не бесконечное ожидание.
+- Таймаут ожидания свободного соединения из пула — `DB_CONNECTION_TIMEOUT_MS`
+  (`connectionTimeoutMillis`), ошибка — в RFC 7807, а не бесконечное ожидание.
+- Ошибки простаивающих соединений ловит `pool.on('error')` (иначе процесс падает) — лог без
+  строки подключения.
 - Любая работа с данными тенанта — внутри транзакции с `set_config('app.tenant_id', …, true)`;
   сессионное состояние на пуловом соединении запрещено (см. `conn-session-state.md`).
 

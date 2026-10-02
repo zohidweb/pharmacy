@@ -40,19 +40,31 @@ last-reviewed: "2026-09-29"
 - Финансовые операции и синхронизация — idempotency key + correlation ID.
 - Межмодульное взаимодействие — только через публичные интерфейсы модулей.
 
+## Решено принятыми ADR (используй, не выбирай заново)
+Доступ к данным — `TenantDatabase` / `PlatformDatabase` на Kysely + `pg`, миграции node-pg-migrate
+(ADR-0006, ADR-0013; `reference/nestjs-config-data-access.md`); аутентификация — scrypt из
+`node:crypto`, cookie-сессии, node-redis (ADR-0008); авторизация — каталог прав `модуль:действие`,
+`@RequirePermission`, охват точек, запрет эскалации (ADR-0018; `reference/nestjs-security-auth.md`);
+схема — модель данных `docs/architecture/data-model/`; тесты и CI — ADR-0009.
+
 ## Требует ADR до использования (СТОП и сообщить пользователю)
-ORM/слой доступа к данным и инструмент миграций (пока не выбраны), Fastify-адаптер, брокеры
-сообщений и BullMQ (вместо них — очереди-таблицы PostgreSQL, ADR-0002), внешние библиотеки
-логирования/мониторинга, библиотека хеширования паролей, любые новые npm-зависимости уровня
+Fastify-адаптер, брокеры сообщений и BullMQ (вместо них — очереди-таблицы PostgreSQL, ADR-0002),
+внешние библиотеки логирования/мониторинга, хранение файлов, любые новые npm-зависимости уровня
 фреймворка, любые интеграции вне закрытого списка (1С, фискализация, синхронизация точек; валюта только TJS — ADR-0016).
 ADR оформляется в архитектурном репозитории командой `/03-adr` ДО кода.
 
 ## Порядок работы над фичей
 1. Прочитать `nestjs-api` (Iron Law: `reference/nestjs-conventions.md`) и нужные reference-файлы.
-2. Схема/миграция (чистый SQL или выбранный по ADR инструмент) — с `tenant_id`, индексами, ограничениями.
+2. Схема — миграция node-pg-migrate `apps/api/migrations/*.sql` (только Up) по модели данных: ключ
+   `(tenant_id, id)`, составные ссылки, RLS `TO pharmacy_app`, явные гранты, запись в
+   `table-classes.ts`; затем `npx nx run api:migrate` и `npx nx run api:db-types`.
 3. DTO (create / update / response) в `libs/shared/dto`.
-4. Репозиторий с tenant-scoped доступом; сервис с бизнес-логикой и транзакциями.
+4. Репозиторий (Kysely-запросы с фильтром `tenantId`, принимает `TenantTransaction`); сервис с
+   бизнес-логикой в `TenantDatabase.tenantTransaction()`; id — `newId()`.
 5. Контроллер `/api/v1/<resource>` (kebab-case, множественное число), guards прав.
-6. Регистрация в модуле домена; unit-тесты сервиса, e2e контроллера, тест изоляции тенантов.
-7. Проверка: `npx nx affected -t build test lint` или `npm run check` (вручную — CI пока не выбран).
+6. Регистрация в модуле домена; unit-тесты сервиса, интеграционный тест (`*.int-spec.ts`) с
+   изоляцией тенантов, e2e контроллера.
+7. Проверка: `npx nx affected -t build test lint`, `npx nx run api:integration`,
+   `npx nx run api:db-types-verify`; перед PR — `npm run check` (CI — GitHub Actions по ADR-0009,
+   workflow-файлов пока нет).
 8. Секреты — только в `.env` (в `.gitignore`), в git — лишь `.env.example` без реальных значений.

@@ -63,14 +63,18 @@ create trigger audit_log_no_truncate
 -- RLS for tenant isolation: SELECT/INSERT policies only
 alter table audit_log enable row level security;
 alter table audit_log force row level security;
-create policy audit_read on audit_log for select
+create policy audit_read on audit_log for select to pharmacy_app
   using (tenant_id = (select current_setting('app.tenant_id')::uuid));
-create policy audit_write on audit_log for insert
+create policy audit_write on audit_log for insert to pharmacy_app
   with check (tenant_id = (select current_setting('app.tenant_id')::uuid));
+grant select, insert on audit_log to pharmacy_app;   -- exact set; the catalog test pins it
 ```
 
-Журнал ПКУ (`controlled_substance_journal`) — та же схема защиты. Ошибочная запись исправляется
-новой записью-корректировкой со ссылкой на исходную (`corrects_entry_id`), исходная не меняется.
+Та же схема защиты — у `stock_movements`, `shift_cash_operations`, `supplier_ledger_entries`,
+`platform_audit_log` и `controlled_sale_records` (модель данных; у последней триггер разрешает
+только очистку данных рецепта по сроку хранения). Журнал ПКУ — выборка по движениям и записям
+продаж ПКУ, отдельной таблицы нет. Ошибочная запись исправляется новой записью (сторно,
+корректировка), исходная не меняется.
 
 Нюансы:
 

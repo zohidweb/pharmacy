@@ -28,6 +28,7 @@ test('flags each stale pattern with its rule name', () => {
 
 test('skips a line marked docs-check: ok', () => {
   assert.deepEqual(rulesOf('Prisma отклонена (ADR-0006) <!-- docs-check: ok -->'), []);
+  assert.deepEqual(rulesOf('  id uuid default gen_random_uuid() primary key  -- docs-check: ok'), []);
 });
 
 test('reports a relative link to a missing file and accepts an existing one', () => {

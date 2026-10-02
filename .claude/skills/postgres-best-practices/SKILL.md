@@ -1,6 +1,6 @@
 ---
 name: postgres-best-practices
-description: PostgreSQL best practices for the Pharmacy multi-tenant SaaS (pharmacy chains, Tajikistan) — 34 impact-rated rules (CRITICAL→LOW) on plain SQL for the cloud database and the offline store's local PostgreSQL in Docker. Covers tenant isolation (tenant_id everywhere, RLS via current_setting('app.tenant_id') set with SET LOCAL / set_config per transaction, FORCE RLS, non-owner app role), money as bigint dirams, stock derived from batch movements (FEFO, FOR UPDATE, one atomic transaction), idempotency keys for receipts and offline sync (ON CONFLICT DO NOTHING), append-only audit log and ПКУ journal, SKIP LOCKED table queues / outbox instead of message brokers, app-side connection pooling, tenant-leading indexes, RU/TJ catalog search (tsvector russian/simple, pg_trgm, barcodes), VACUUM, EXPLAIN. Use when writing, reviewing or optimizing SQL, schema, migrations or queries in apps/api — касса, чек, склад, партии, остатки, движения, мультитенантность, аудит, синхронизация офлайн-точек.
+description: PostgreSQL best practices for the Pharmacy multi-tenant SaaS (pharmacy chains, Tajikistan) — 35 impact-rated rules (CRITICAL→LOW) on plain SQL for the cloud database and the offline store's local PostgreSQL in Docker. Covers tenant isolation (tenant_id everywhere, RLS via current_setting('app.tenant_id') set with SET LOCAL / set_config per transaction, FORCE RLS, non-owner app role, roles pharmacy_owner/app/platform/resolver per ADR-0013), node-pg-migrate SQL migrations (only Up), money as bigint dirams, stock derived from batch movements (FEFO, FOR UPDATE, one atomic transaction), idempotency keys for receipts and offline sync (ON CONFLICT DO NOTHING), append-only audit log and ПКУ journal, SKIP LOCKED table queues / outbox instead of message brokers, app-side connection pooling, tenant-leading indexes, RU/TJ catalog search (tsvector russian/simple, pg_trgm, barcodes), VACUUM, EXPLAIN. Use when writing, reviewing or optimizing SQL, schema, migrations or queries in apps/api — касса, чек, склад, партии, остатки, движения, мультитенантность, аудит, синхронизация офлайн-точек.
 argument-hint: "[category or specific rule name]"
 allowed-tools: Read
 context: fork
@@ -38,15 +38,20 @@ last-reviewed: "2026-09-29"
 - Добавлены доменные правила: деньги в дирамах, остатки из движений, идемпотентность,
   append-only аудит/ПКУ, очереди-таблицы для синхронизации/outbox, поиск по каталогу RU/TJ.
 
+**Решено принятыми ADR:**
+
+- Доступ к данным — Kysely поверх `pg`, миграции — node-pg-migrate (`.sql`, только Up) —
+  ADR-0006. Примеры правил — на SQL (то, что пишется в миграциях и видно в логах).
+- Модель ролей — ADR-0013: `pharmacy_owner` (миграции), `pharmacy_app` (tenant-путь),
+  `pharmacy_platform` (платформа, без `BYPASSRLS`), `pharmacy_resolver` (владелец
+  SECURITY DEFINER-резолверов), классы таблиц и манифест `table-classes.ts`.
+- Схема — модель данных `docs/architecture/data-model/` (ключ `(tenant_id, id)`, UUIDv7 из
+  приложения, `_dirams`/`_pieces`/`_bp`, названия `jsonb` по языкам, секции по месяцам).
+
 **Не решено → требует ADR через `/03-adr` до использования:**
 
-- ORM / слой доступа к данным (Prisma, TypeORM, Drizzle, Kysely…) и драйвер — примеры в скиле
-  на чистом SQL, без привязки к библиотеке.
-- Инструмент миграций — «фиксируется первым ADR разработки»; миграции версионированные,
-  никакого schema-sync в проде.
 - PgBouncer или любой внешний пулер — отдельный компонент инфраструктуры.
 - Производный кэш остатков (если замеры покажут, что агрегация движений не укладывается в SLA).
-- Модель ролей для кросс-тенантных путей (биллинг оператора, воркер очередей всех тенантов).
 
 **Нельзя:** брокеры сообщений без ADR (по ADR-0002 очереди — таблицы с `SKIP LOCKED`, пока ADR
 не пересмотрит решение); внешние SaaS-БД для данных тенантов (правило проекта); системы
@@ -91,13 +96,13 @@ CHANGING CONFIGURATION OR ADDING INDEXES. И второй закон Pharmacy: *
 
 ## Rule Categories by Priority
 
-34 правила (в оригинале заявлено 33, фактически было 30 файлов; добавлено 4 новых).
+35 правил (в оригинале заявлено 33, фактически было 30 файлов; добавлено 5 новых).
 
 | Priority | Category | Prefix | Rules | CRITICAL |
 |---|---|---|---|---|
 | 1 | Security & Tenant Isolation | `security-` | 3 | rls-basics |
 | 2 | Data Integrity & Access Patterns | `data-` | 6 | stock-from-movements, idempotency-keys |
-| 3 | Schema Design | `schema-` | 7 | money-integer |
+| 3 | Schema Design | `schema-` | 8 | money-integer |
 | 4 | Query Performance | `query-` | 5 | missing-indexes |
 | 5 | Connection Management | `conn-` | 4 | session-state |
 | 6 | Concurrency & Locking | `lock-` | 4 | — |
@@ -111,7 +116,7 @@ CHANGING CONFIGURATION OR ADDING INDEXES. И второй закон Pharmacy: *
 ### Security & Tenant Isolation
 - `rules/security-rls-basics.md` — CRITICAL — tenant_id, FORCE RLS, `app.tenant_id`, составные FK
 - `rules/security-rls-performance.md` — HIGH — политика = одно равенство `(select current_setting(...))`, индексы с ведущим tenant_id, права — в приложении
-- `rules/security-privileges.md` — HIGH — роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_readonly`, default privileges, секреты вне миграций
+- `rules/security-privileges.md` — HIGH — роли ADR-0013 (`pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver`), явные гранты по классу таблицы, без default privileges, секреты вне миграций
 
 ### Data Integrity & Access Patterns
 - `rules/data-stock-from-movements.md` — CRITICAL — остатки из движений, FEFO + `FOR UPDATE`, атомарность
@@ -128,7 +133,8 @@ CHANGING CONFIGURATION OR ADDING INDEXES. И второй закон Pharmacy: *
 - `rules/schema-data-types.md` — HIGH — `timestamptz`, `date` для сроков годности, штрихкоды `text`
 - `rules/schema-foreign-key-indexes.md` — HIGH — индексы составных FK, диагностический запрос
 - `rules/schema-lowercase-identifiers.md` — MEDIUM — snake_case в БД, camelCase в JSON, имена из глоссария
-- `rules/schema-partitioning.md` — MEDIUM — на MVP не нужно; кандидаты — аудит (retention), движения
+- `rules/schema-partitioning.md` — MEDIUM — месячные секции `stock_movements`, `audit_log`, `sync_inbox` (модель данных)
+- `rules/schema-migrations.md` — HIGH — node-pg-migrate: только Up, `noTransaction`, роль owner, FORCE RLS и бэкфиллы, гранты и манифест классов
 
 ### Query Performance
 - `rules/query-missing-indexes.md` — CRITICAL — горячие пути кассы/склада
@@ -160,35 +166,29 @@ CHANGING CONFIGURATION OR ADDING INDEXES. И второй закон Pharmacy: *
 
 ## Интеграция с NestJS (`apps/api`)
 
-- Слой доступа к данным (выбирается ADR) обязан предоставлять **один** способ работы с
-  прикладными таблицами — транзакцию с контекстом тенанта; tenant берётся из серверной сессии
-  (Redis) или из лицензионного ключа точки, никогда из тела запроса.
+- Единственный путь к прикладным таблицам — `TenantDatabase.withTenant` / `tenantTransaction`
+  (`apps/api/src/core/database`): транзакция Kysely, первым оператором `set_config('app.tenant_id',
+  …, true)` и таймауты; tenant — из серверной сессии или лицензионного ключа точки, никогда из
+  тела запроса. Кросс-тенантное — `PlatformDatabase` (роль `pharmacy_platform`, ADR-0013).
 - Контроллеры не ходят в БД; сервис модуля вызывает хелпер транзакции; внешние вызовы — до или
   после неё (`lock-short-transactions.md`).
 - Ошибки БД мапятся в RFC 7807: дубль по ключу идемпотентности (пустой `RETURNING`) → вернуть
   сохранённый результат, тот же ключ с другим `request_hash` → 409/422;
   `40P01`/`55P03` → ограниченный повтор транзакции; нехватка остатка → 409/422 с понятным текстом.
 
-Иллюстрация контракта (не выбор библиотеки: `Db`/`Tx` — интерфейсы будущего слоя доступа):
+Реальный код (`apps/api/src/core/database/tenant-database.ts`, фрагмент):
 
 ```ts
-export interface Tx {
-  query<T>(sql: string, params: readonly unknown[]): Promise<T[]>;
-}
-export interface Db {
-  transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;
-}
-
-export function withTenantTx<T>(db: Db, tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return db.transaction(async (tx) => {
-    // is_local = true: context lives only until COMMIT/ROLLBACK (see conn-session-state.md)
-    await tx.query("select set_config('app.tenant_id', $1, true)", [tenantId]);
-    return fn(tx);
-  });
-}
+return this.db.transaction().execute(async (trx) => {
+  // is_local = true: context and timeouts live only until COMMIT/ROLLBACK (see conn-session-state.md)
+  await sql`select set_config('app.tenant_id', ${tenantId}, true),
+                   set_config('statement_timeout', ${this.statementTimeout}, true),
+                   set_config('lock_timeout', ${this.lockTimeout}, true)`.execute(trx);
+  return work(trx);
+});
 ```
 
-Тесты (Jest, `npx nx test api`; интеграционные — `npx nx e2e api-e2e`) на реальной PostgreSQL
+Тесты (Jest; интеграционные — `npx nx run api:integration` на БД `pharmacy_test`) на реальной PostgreSQL
 обязательно покрывают: изоляцию тенантов под ролью приложения, параллельную продажу одной партии,
 повтор чека с тем же ключом идемпотентности, запрет UPDATE/DELETE в аудите.
 

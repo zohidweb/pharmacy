@@ -10,13 +10,16 @@ tags: privileges, security, roles, permissions, rls, append-only
 Владелец таблицы и superuser обходят RLS (без `FORCE`), могут отключить триггеры и выполнить
 `TRUNCATE`. Поэтому `apps/api` в рантайме никогда не подключается владельцем.
 
-Минимальная модель ролей (одинаковая в облаке и в офлайн-дистрибутиве):
+Модель ролей — ADR-0013 (одинаковая в облаке и на офлайн-точке; создаётся
+`docker/postgres/initdb/01-roles.sh`, `BYPASSRLS` — только у суперпользователя образа):
 
-| Роль | Назначение | Логин |
+| Роль | Атрибуты | Назначение |
 |---|---|---|
-| `pharmacy_owner` | владеет схемой и таблицами; под ней применяются миграции | только для инструмента миграций |
-| `pharmacy_app` | рантайм `apps/api`: DML по нужным таблицам, без DDL | да |
-| `pharmacy_readonly` | диагностика/поддержка, только SELECT (с RLS) | по необходимости |
+| `pharmacy_owner` | LOGIN, `NOBYPASSRLS`, владелец БД и схемы | только миграции (`apps/api/scripts/migrate.mjs`, сервис `migrate`) |
+| `pharmacy_app` | LOGIN, `NOBYPASSRLS`, не член других ролей | рантайм tenant-пути: HTTP клиентского продукта, «от имени», задачи тенантов |
+| `pharmacy_platform` | LOGIN, `NOBYPASSRLS`, отдельный пароль | рантайм платформы: `/api/v1/operator/*`, платформенные задачи; права только на платформенные таблицы, витрины и колонки реестра `stores` |
+| `pharmacy_resolver` | NOLOGIN, `NOBYPASSRLS` | владелец SECURITY DEFINER-резолверов (код сети, лицензионный ключ, терминал, сессия офлайн-точки) |
+| `pharmacy_readonly` | по необходимости | диагностика с RLS |
 
 **Incorrect (одна роль на всё):**
 
@@ -30,29 +33,45 @@ create role app_user login password 'secret';   -- password in a migration file
 **Correct (раздельные роли, точечные права):**
 
 ```sql
-create role pharmacy_owner nologin;
-create role pharmacy_app login nosuperuser nocreatedb nocreaterole nobypassrls;
--- Password is set out of band from the environment/secret store, never in migrations or git
+-- initdb (superuser), passwords from env — never in migrations or git
+create role pharmacy_owner    login nosuperuser nocreatedb nocreaterole nobypassrls password :'owner_pw';
+create role pharmacy_app      login nosuperuser nocreatedb nocreaterole nobypassrls password :'app_pw';
+create role pharmacy_platform login nosuperuser nocreatedb nocreaterole nobypassrls password :'platform_pw';
+create role pharmacy_resolver nologin nosuperuser nocreatedb nocreaterole nobypassrls;
+grant pharmacy_resolver to pharmacy_owner;            -- migrations may hand functions over to the resolver
 
-create schema pharmacy authorization pharmacy_owner;
+-- 02-database.sql (as pharmacy_owner)
 revoke all on schema public from public;
-grant usage on schema pharmacy to pharmacy_app;
+create schema pharmacy;
+grant usage on schema pharmacy to pharmacy_app, pharmacy_platform, pharmacy_resolver;
+grant create on schema pharmacy to pharmacy_resolver;  -- ALTER FUNCTION … OWNER TO pharmacy_resolver
+alter default privileges for role pharmacy_owner revoke execute on functions from public;
+-- NO default privileges for pharmacy_app: a new platform table must never get DML silently
 
--- Regular tables: read/write, no TRUNCATE, no DDL
-grant select, insert, update, delete on pharmacy.receipts, pharmacy.receipt_lines to pharmacy_app;
-
--- Append-only tables: insert + select only (see schema-append-only-audit.md)
-grant select, insert on pharmacy.stock_movements, pharmacy.audit_log to pharmacy_app;
-
--- Future objects created by the owner get the same baseline
-alter default privileges for role pharmacy_owner in schema pharmacy
-  grant select, insert, update, delete on tables to pharmacy_app;
-alter default privileges for role pharmacy_owner in schema pharmacy
-  grant usage, select on sequences to pharmacy_app;
+-- Every migration grants explicitly by table class (ADR-0013 §1):
+grant select, insert, update, delete on pharmacy.receipts, pharmacy.receipt_lines to pharmacy_app;  -- tenant
+grant select, insert on pharmacy.stock_movements, pharmacy.audit_log to pharmacy_app;               -- append-only
+grant select, insert, update on pharmacy.license_keys to pharmacy_platform;                         -- platform
 ```
 
-После `alter default privileges` таблицы append-only нужно явно «урезать»
-(`revoke update, delete on … from pharmacy_app`) в той же миграции, где они создаются.
+Тест каталога (`catalog.int-spec.ts`) сверяет **точные** наборы прав по ролям и классам таблиц:
+лишний `TRUNCATE` (обходит RLS), `REFERENCES`, `TRIGGER` или `MAINTAIN` у рантайм-роли — падение.
+
+Резолвер (SECURITY DEFINER) — только поиск по точному равенству уникального ключа или хеша,
+результат — идентификаторы и статус:
+
+```sql
+create function pharmacy.resolve_license_key(p_key_hash bytea)
+returns table (tenant_id uuid, store_id uuid, status text, valid_until timestamptz)
+language sql stable security definer set search_path = '' as $$
+  select k.tenant_id, k.store_id, k.status, k.valid_until
+  from pharmacy.license_keys k                    -- fully qualified: pg_temp is searched first otherwise
+  where k.key_hash = p_key_hash
+$$;
+alter function pharmacy.resolve_license_key(bytea) owner to pharmacy_resolver;
+revoke all on function pharmacy.resolve_license_key(bytea) from public;
+grant execute on function pharmacy.resolve_license_key(bytea) to pharmacy_app;
+```
 
 Прочее:
 

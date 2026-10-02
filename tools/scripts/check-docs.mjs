@@ -1,6 +1,7 @@
 // Checks skills, agents, commands and architecture docs for wording that contradicts accepted ADRs
 // and for broken relative links. Usage: node tools/scripts/check-docs.mjs [paths…]
-// A line containing `<!-- docs-check: ok -->` is an intentional mention and is skipped.
+// A line containing `docs-check: ok` (as `<!-- docs-check: ok -->` in prose or a code comment)
+// is an intentional mention and is skipped.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +18,7 @@ const DEFAULT_PATHS = [
   'docs/architecture/c4',
 ];
 
-const OK_MARKER = '<!-- docs-check: ok -->';
+const OK_MARKER = 'docs-check: ok';
 
 const RULES = [
   ['orm-undecided', /ORM (и инструмент миграций )?(НЕ )?не выбран|ORM не выбран/i],

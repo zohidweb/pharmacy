@@ -4,7 +4,7 @@
 //   npm run stack -- <env> <command> [service...] [--skip-checks]
 //
 //   env:      dev | test | prod
-//   commands: init    create the env file from its example with random passwords (test, prod)
+//   commands: init    create the env file from its example with random passwords and keys (test, prod)
 //             build   quality gate (lint, test, build) + static web/admin + Docker images
 //             up      start containers (detached) and wait until they are healthy
 //             down    stop containers (data volumes are kept)
@@ -68,12 +68,12 @@ function composeArgs(envName, env) {
 function init(envName, env) {
   if (envName === 'dev') fail('dev uses the root .env — copy it from .env.example.');
   if (existsSync(join(root, env.envFile))) fail(`${env.envFile} already exists — not overwriting it.`);
-  const content = readFileSync(join(root, env.example), 'utf8').replace(
-    /change-me/g,
-    () => randomBytes(18).toString('base64url'),
-  );
+  // `generate-key` placeholders (JWT keys, password peppers) get 32 random bytes; passwords get 18.
+  const content = readFileSync(join(root, env.example), 'utf8')
+    .replace(/generate-key/g, () => randomBytes(32).toString('base64url'))
+    .replace(/change-me/g, () => randomBytes(18).toString('base64url'));
   writeFileSync(join(root, env.envFile), content, { mode: 0o600 });
-  console.log(`✔ Created ${env.envFile} with random passwords. Keep it out of git and chats.`);
+  console.log(`✔ Created ${env.envFile} with random passwords and keys. Keep it out of git and chats.`);
 }
 
 function build(envName, env, skipChecks) {

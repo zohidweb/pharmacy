@@ -26,6 +26,8 @@ export type TenantSortKey =
 export interface TenantOwner {
   fullName: string;
   phone: string;
+  /** Optional; a sign-in identifier, unique on the whole platform with login and phone (ADR-0008). */
+  email?: string;
   login: string;
 }
 
@@ -243,6 +245,12 @@ export interface CreateTenantRequest {
 
 export type LicenseTerm = 'week' | 'quarter' | 'year';
 
+/**
+ * 201 from POST /platform/tenants. `activationCode` is the owner's one-time activation code: shown
+ * to the operator once (it is stored as a hash only) and handed to the owner, who passes it to
+ * POST /api/v1/activations to set the first password.
+ */
 export interface CreateTenantResponse {
   id: string;
+  activationCode: string;
 }

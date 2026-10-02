@@ -72,7 +72,7 @@ guard'ов и контроллеров):
 
 | Порт | Назначение | Реализации |
 |---|---|---|
-| `PasswordHasher` | `hash`, `verify`, `needsRehash` для пароля, PIN и одноразового кода | scrypt (`node:crypto`) |
+| `PasswordHasher` | `hash`, `verify`, `needsRehash` для пароля и PIN (одноразовый код — не он: `sha256()`, раздел 6) | scrypt (`node:crypto`) |
 | `SessionTokenService` | `sign(claims)`, `verify(token, audience)` | `@nestjs/jwt` |
 | `TokenExtractor` | достать токен из запроса | cookie (web, admin); Bearer для `aud=mobile` — после ADR мобильного клиента |
 | `SessionStore` | `create`, `get`, `touch`, `update`, `destroy`, `destroyAllFor(employee)`, `destroyForTerminal(terminal)` | Redis (облако), PostgreSQL (офлайн) |
@@ -179,7 +179,8 @@ sequenceDiagram
 
 **Активация и сброс пароля владельца:** `POST /api/v1/activations { login, code, newPassword }`
 (`@Public`). Код — 128 бит из `randomBytes`, показывается оператору один раз, в
-`employee_credentials.one_time_code_hash` — только хеш, срок `ACTIVATION_CODE_TTL_HOURS` (72).
+`employee_credentials.one_time_code_hash` — только hex SHA-256 (энтропия кода делает scrypt и pepper
+лишними; как секрет терминала), срок `ACTIVATION_CODE_TTL_HOURS` (72); сверка — `timingSafeEqual`.
 Код гасится в той же транзакции, где задаётся пароль; лимиты — как у пароля; ответ 204, затем
 обычный вход. Оператор выдаёт код при создании сети и для сброса пароля владельца (часть 3);
 `CreateTenantResponse` дополняется полем `activationCode` (поправка контракта).

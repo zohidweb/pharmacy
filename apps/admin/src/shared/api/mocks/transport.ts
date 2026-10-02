@@ -238,7 +238,8 @@ const handlers: MockHandlers = {
       syncQueue: [],
     });
     audit(id, 'Компания создана оператором платформы');
-    return { id };
+    // Synthetic value: the real code is 128 bits of randomBytes (ADR-0008, amendment 2026-10-02).
+    return { id, activationCode: 'mock-activation-code' };
   },
   'tenants.get': ({ params, correlationId }) =>
     findTenant(params.id, correlationId),

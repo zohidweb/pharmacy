@@ -28,7 +28,7 @@ erDiagram
 | Колонка | Тип | Правило |
 |---|---|---|
 | `id` | uuid PK | |
-| `code` | text unique | Код сети для входа по паролю: `^[a-z0-9-]{3,32}$` |
+| `code` | text unique | Код сети: `^[a-z0-9-]{3,32}$`. Во входе не участвует (сеть определяется по идентификатору сотрудника, поправка 2026-10-02) |
 | `name` | text | Название сети |
 | `status` | text | `active` / `blocked` (АП 2, 6). Заблокированный тенант не входит, данные сохраняются |
 | `billing_name`, `billing_tax_id`, `billing_address`, `billing_phone`, `billing_email` | text null | Реквизиты для счёта платформы отдельными полями; ИНН — проверка формата в приложении (решение 2026-10-01) |
@@ -95,14 +95,16 @@ erDiagram
 | Колонка | Тип | Правило |
 |---|---|---|
 | `role_id` | uuid | → `roles`; одна роль (ADR-0018) |
-| `login` | text | Уникален в `(tenant_id, lower(login))` |
+| `login` | text | Глобально уникален: `lower(login)` на всей платформе (вход по логину, телефону или e-mail; поправка 2026-10-02) |
 | `full_name` | text | |
 | `employee_code` | text null | Табельный код для выбора кассира на терминале; уникален в тенанте |
-| `phone` | text null | Вопрос 9 разбора ТЗ: нужен для доставки ключа по SMS |
+| `phone` | text null | E.164 (`check` формата); глобально уникален среди заданных; идентификатор входа. Вопрос 9 разбора ТЗ: нужен для доставки ключа по SMS |
+| `email` | text null | Глобально уникален: `lower(email)` среди заданных; идентификатор входа (поправка 2026-10-02) |
 | `language` | text null | `ru` / `tj`; пусто — язык сети |
 | `store_scope` | text | `all` / `list`; при `list` точки — в `employee_stores` |
 | `status` | text | `active` / `blocked` / `archived` |
 | `permissions_version` | bigint default 1 | Растёт при изменении роли, прав, охвата или блокировке (ADR-0018 п. 7) |
+| `last_login_at` | timestamptz null | Время последнего успешного входа; показывается в `GET /me` (поправка 2026-10-02) |
 | `updated_at` | | |
 
 ## `employee_credentials` — учётные данные (класс `tenant`)
@@ -117,14 +119,14 @@ erDiagram
 | `pin_hash`, `pin_pepper_version` | text / integer null | |
 | `pin_failed_attempts` | integer default 0 | После 3 — блокировка PIN |
 | `pin_locked_at` | timestamptz null | |
-| `one_time_code_hash`, `one_time_code_expires_at` | text / timestamptz null | Первый вход на офлайн-точке и сброс пароля |
+| `one_time_code_hash`, `one_time_code_expires_at` | text / timestamptz null | Код активации владельца, первый вход на офлайн-точке и сброс пароля. Код — 128 бит из `randomBytes`; хранится hex SHA-256 (не scrypt и без pepper, поправка 2026-10-02); срок — `ACTIVATION_CODE_TTL_HOURS` |
 | `updated_at` | | |
 
 ## `roles`, `role_permissions`, `employee_stores` (класс `tenant`, ADR-0018)
 
 Синхронизация: облако → точка.
 
-- **`roles`:** `name jsonb` (D6), `is_owner boolean` — одна роль-владелец на тенанта (уникальный частичный индекс), `status`.
+- **`roles`:** `name jsonb` (D6), `is_owner boolean` — одна роль-владелец на тенанта (уникальный частичный индекс), `template_key text null` — шаблон, из которого создана роль (`owner` / `manager` / `cashier` / `accountant`, ключи `RoleTemplateKey` в `libs/shared/domain`; у своих ролей — null), `status`.
 - **`role_permissions`:** ключ `(tenant_id, role_id, permission)`, `permission text` по шаблону `^[a-z0-9-]+:[a-z0-9-]+$`. Каталог прав — в коде `libs/shared/domain`, проверка допустимости — в приложении.
 - **`employee_stores`:** ключ `(tenant_id, employee_id, store_id)`, обе ссылки составные.
 
@@ -172,3 +174,11 @@ erDiagram
 | `replaces_key_id` | uuid null | Ротация: старый действует до первого прогона с новым |
 
 У точки не больше одного ключа `active` (уникальный частичный индекс по `(tenant_id, store_id)`).
+
+## Поправка 2026-10-02 (аутентификация)
+
+Решения архитектора по спецификации `docs/superpowers/specs/2026-10-02-auth-design.md` (ADR-0008 и ADR-0013, поправки той же даты); миграции — в части 1 реализации.
+
+- **Вход по глобально уникальному идентификатору.** `employees.login`, `phone` (E.164) и `email` уникальны на всей платформе (`lower(login)`, `phone`, `lower(email)`); индекс `employees_login_uq (tenant_id, lower(login))` заменяется глобальными. Сеть при входе определяет резолвер `resolve_login(kind, value)`; `tenants.code` во входе не участвует.
+- Новые колонки `employees.email`, `employees.last_login_at`, `roles.template_key`.
+- Одноразовый код (`employee_credentials.one_time_code_hash`) — hex SHA-256 от 128 бит `randomBytes`.

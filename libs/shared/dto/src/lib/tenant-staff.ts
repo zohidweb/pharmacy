@@ -39,10 +39,15 @@ export interface EmployeeListQuery {
 /** GET /api/v1/employees?storeId=&roleId=&status=&limit=&offset= */
 export type EmployeeListResponse = Page<EmployeeListItem>;
 
-/** POST /api/v1/employees — password and PIN follow ADR-0008 (PIN by the network minimum). */
+/**
+ * POST /api/v1/employees — password and PIN follow ADR-0008 (PIN by the network minimum). Login,
+ * phone (E.164) and e-mail are unique on the whole platform and double as sign-in identifiers.
+ */
 export interface CreateEmployeeRequest {
   fullName: string;
   phone: string;
+  /** Optional; an additional sign-in identifier (ADR-0008, amendment 2026-10-02). */
+  email?: string;
   login: string;
   password: string;
   /** Empty — the employee signs in by password only. */

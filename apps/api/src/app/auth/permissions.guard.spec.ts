@@ -78,6 +78,31 @@ class CatalogController {
   }
 }
 
+@Public()
+class PublicController {
+  open(): void {
+    return undefined;
+  }
+
+  @RequirePermission('inventory:post')
+  guarded(): void {
+    return undefined;
+  }
+
+  @Authenticated()
+  profile(): void {
+    return undefined;
+  }
+}
+
+@RequirePermission('inventory:post')
+class GuardedController {
+  @Public()
+  open(): void {
+    return undefined;
+  }
+}
+
 const TRX = { trx: true } as unknown as TenantTransaction;
 
 function setup() {
@@ -192,6 +217,55 @@ describe('PermissionsGuard', () => {
       await expect(
         problemOf(() => run('post', testPrincipal(), {}, CatalogController)),
       ).resolves.toEqual(forbidden);
+    });
+  });
+
+  describe('nearest level wins (class @Public never overrides a handler marker)', () => {
+    it('a @Public() class still lets its unmarked handler through', async () => {
+      const { run } = setup();
+      await expect(run('open', null, {}, PublicController)).resolves.toBe(true);
+    });
+
+    it('a handler @RequirePermission in a @Public() class rejects a guest with 401', async () => {
+      const { run, append } = setup();
+      await expect(
+        problemOf(() => run('guarded', null, {}, PublicController)),
+      ).resolves.toEqual({ status: 401, code: 'unauthenticated' });
+      expect(append).not.toHaveBeenCalled();
+    });
+
+    it('a handler @RequirePermission in a @Public() class denies a principal without it', async () => {
+      const { run, append } = setup();
+      await expect(
+        problemOf(() => run('guarded', testPrincipal(), {}, PublicController)),
+      ).resolves.toEqual(forbidden);
+      expect(append).toHaveBeenCalledWith(TRX, {
+        action: 'access.denied',
+        details: { permission: 'inventory:post', reason: 'missing_permission' },
+      });
+      await expect(
+        run(
+          'guarded',
+          testPrincipal({ permissions: ['inventory:post'] }),
+          {},
+          PublicController,
+        ),
+      ).resolves.toBe(true);
+    });
+
+    it('a handler @Authenticated in a @Public() class rejects a guest with 401', async () => {
+      const { run } = setup();
+      await expect(
+        problemOf(() => run('profile', null, {}, PublicController)),
+      ).resolves.toEqual({ status: 401, code: 'unauthenticated' });
+    });
+
+    it('a handler @Public in a @RequirePermission class is public', async () => {
+      const { run, append } = setup();
+      await expect(run('open', null, {}, GuardedController)).resolves.toBe(
+        true,
+      );
+      expect(append).not.toHaveBeenCalled();
     });
   });
 

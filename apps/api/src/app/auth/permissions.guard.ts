@@ -12,30 +12,16 @@ import {
   getPrincipal,
 } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
-import {
-  IS_AUTHENTICATED_KEY,
-  IS_PUBLIC_KEY,
-} from '../../common/guards/decorators';
+import type { StoreScopeOptions } from '../../common/guards/decorators';
+import { resolveRouteAccess } from '../../common/guards/route-access';
 import { isUuid, TenantDatabase } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
-import {
-  type PermissionRequirement,
-  REQUIRED_PERMISSION_KEY,
-  type StoreScopeOptions,
-} from './decorators';
 
 type DenyReason =
   | 'no_permission_declared'
   | 'missing_permission'
   | 'store_missing'
   | 'store_out_of_scope';
-
-type Access = PermissionRequirement | 'authenticated' | null;
-
-// A route handler or a controller class: where decorators put their metadata.
-type MetadataTarget =
-  | ReturnType<ExecutionContext['getHandler']>
-  | ReturnType<ExecutionContext['getClass']>;
 
 // A non-empty string value, or null (missing, repeated or of another type).
 function stringValue(value: unknown): string | null {
@@ -89,7 +75,9 @@ function describeFailure(error: unknown): string {
 
 // Global authorization guard (ADR-0018 p. 1, 3, 5, 9; auth design 2026-10-02, section 7,
 // guard 4). Deny by default: a route needs @Public(), @Authenticated() or @RequirePermission().
-// Handler metadata takes precedence over class metadata. The permission must be in the session's
+// The route's marker is resolved at the nearest level (resolveRouteAccess, shared with AuthGuard):
+// a handler marker replaces the class marker, so a class @Public() never opens a handler that
+// declares a permission or @Authenticated(). The permission must be in the session's
 // snapshot, and the store named by the request must be in the principal's scope. Every 403 is
 // written to audit_log as access.denied (permission and store); a failed audit write is logged
 // and the request is still denied.
@@ -104,21 +92,16 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const handler = context.getHandler();
-    const controller = context.getClass();
-    const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(
-      IS_PUBLIC_KEY,
-      [handler, controller],
-    );
-    if (isPublic) return true;
+    const access = resolveRouteAccess(this.reflector, context);
+    if (access.kind === 'public') return true;
 
     // AuthGuard runs first; this is a second line, and a guest has no tenant to audit in.
     const principal = getPrincipal();
     if (!principal) throw new ProblemException(401, 'unauthenticated');
 
-    const access = this.accessOf(handler) ?? this.accessOf(controller);
-    if (access === 'authenticated') return true;
-    if (access === null) return this.deny(null, 'no_permission_declared');
+    if (access.kind === 'authenticated') return true;
+    if (access.kind === 'none')
+      return this.deny(null, 'no_permission_declared');
 
     const { permission, scope } = access;
     if (!principal.permissions.includes(permission)) {
@@ -136,19 +119,6 @@ export class PermissionsGuard implements CanActivate {
       }
     }
     return true;
-  }
-
-  private accessOf(target: MetadataTarget): Access {
-    const requirement = this.reflector.get<PermissionRequirement | undefined>(
-      REQUIRED_PERMISSION_KEY,
-      target,
-    );
-    if (requirement) return requirement;
-    const authenticated = this.reflector.get<boolean | undefined>(
-      IS_AUTHENTICATED_KEY,
-      target,
-    );
-    return authenticated ? 'authenticated' : null;
   }
 
   private async deny(

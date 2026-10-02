@@ -5,11 +5,31 @@ import {
   runAs,
   testPrincipal,
 } from '../../../test/guards';
+import { RequirePermission } from '../../app/auth/decorators';
 import { AuthGuard } from './auth.guard';
 import { Authenticated, Public } from './decorators';
 
+// A class marker applies only to handlers without a marker of their own: the nearest level wins.
 @Public()
 class PublicController {
+  open(): void {
+    return undefined;
+  }
+
+  @RequirePermission('catalog:view')
+  guarded(): void {
+    return undefined;
+  }
+
+  @Authenticated()
+  profile(): void {
+    return undefined;
+  }
+}
+
+@RequirePermission('catalog:view')
+class GuardedController {
+  @Public()
   open(): void {
     return undefined;
   }
@@ -44,6 +64,27 @@ describe('AuthGuard', () => {
     expect(
       runAs(null, () =>
         guard.canActivate(httpContext(PublicController, 'open')),
+      ),
+    ).toBe(true);
+  });
+
+  it.each(['guarded', 'profile'])(
+    'rejects a guest on a %s handler of a @Public() class with 401 (class @Public never overrides a handler marker)',
+    async (handler) => {
+      await expect(
+        problemOf(() =>
+          runAs(null, () =>
+            guard.canActivate(httpContext(PublicController, handler)),
+          ),
+        ),
+      ).resolves.toEqual({ status: 401, code: 'unauthenticated' });
+    },
+  );
+
+  it('lets a guest through a @Public() handler of a @RequirePermission class', () => {
+    expect(
+      runAs(null, () =>
+        guard.canActivate(httpContext(GuardedController, 'open')),
       ),
     ).toBe(true);
   });

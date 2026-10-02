@@ -6,20 +6,19 @@ import {
 import { Reflector } from '@nestjs/core';
 import { getPrincipal } from '../context/request-context';
 import { ProblemException } from '../errors/problem.exception';
-import { IS_PUBLIC_KEY } from './decorators';
+import { resolveRouteAccess } from './route-access';
 
-// First global guard (auth design 2026-10-02, section 7, guard 1): every route except @Public()
-// needs the principal the session middleware put into the request context.
+// First global guard (auth design 2026-10-02, section 7, guard 1): every route except a public
+// one needs the principal the session middleware put into the request context. Public is resolved
+// at the nearest level (resolveRouteAccess), the same way PermissionsGuard resolves it.
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(
-      IS_PUBLIC_KEY,
-      [context.getHandler(), context.getClass()],
-    );
-    if (isPublic) return true;
+    if (resolveRouteAccess(this.reflector, context).kind === 'public') {
+      return true;
+    }
     if (!getPrincipal()) throw new ProblemException(401, 'unauthenticated');
     return true;
   }

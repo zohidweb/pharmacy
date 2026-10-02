@@ -168,4 +168,12 @@ export class RedisPermissionsVersionCache extends PermissionsVersionCache {
       expiration: { type: 'EX', value: PERMISSIONS_VERSION_TTL_SECONDS },
     });
   }
+
+  async setIfAbsent(tenantId: string, employeeId: string, version: number): Promise<void> {
+    // SET ... NX EX: atomic, a cached value always wins over this (possibly stale) one.
+    await this.redis.set(versionKey(tenantId, employeeId), String(version), {
+      condition: 'NX',
+      expiration: { type: 'EX', value: PERMISSIONS_VERSION_TTL_SECONDS },
+    });
+  }
 }

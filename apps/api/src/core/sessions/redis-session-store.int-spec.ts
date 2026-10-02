@@ -227,6 +227,20 @@ describe('RedisPermissionsVersionCache (integration)', () => {
     expect(await versions.get(TENANT, EMPLOYEE)).toBe(13);
   });
 
+  it('setIfAbsent writes a missing version with the bounded lifetime', async () => {
+    await versions.setIfAbsent(TENANT, EMPLOYEE, 5);
+    expect(await versions.get(TENANT, EMPLOYEE)).toBe(5);
+    const ttl = await redis.ttl(`pv:${TENANT}:${EMPLOYEE}`);
+    expect(ttl).toBeGreaterThan(7 * 24 * 60 * 60 - 60);
+    expect(ttl).toBeLessThanOrEqual(7 * 24 * 60 * 60);
+  });
+
+  it('setIfAbsent never overwrites an existing version', async () => {
+    await versions.set(TENANT, EMPLOYEE, 6);
+    await versions.setIfAbsent(TENANT, EMPLOYEE, 5);
+    expect(await versions.get(TENANT, EMPLOYEE)).toBe(6);
+  });
+
   it('keeps versions of different employees apart and gives them a bounded lifetime', async () => {
     await versions.set(TENANT, EMPLOYEE, 1);
     await versions.set(TENANT, OTHER_EMPLOYEE, 2);

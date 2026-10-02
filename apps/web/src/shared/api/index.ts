@@ -1,6 +1,7 @@
 export {
   ApiError,
   apiRequest,
+  isUnreachable,
   setApiTransport,
   type ApiFieldError,
   type ApiTransport,

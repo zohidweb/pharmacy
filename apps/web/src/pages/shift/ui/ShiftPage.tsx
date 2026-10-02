@@ -44,6 +44,7 @@ import {
   OpenShiftDialog,
 } from './ShiftDialogs';
 import { WithMessages } from '@/shared/i18n';
+import { rememberShift } from '@/shared/lib/terminal-cache';
 
 function useZLabels(): ZReportLabels {
   const t = useTranslations('shift.z');
@@ -371,6 +372,7 @@ function ShiftPageView() {
         events: [],
       };
       queryClient.setQueryData(shiftQueryKey(storeId), local);
+      void rememberShift(storeId ?? '', local);
       toast.show(t('opened'));
     });
 
@@ -415,6 +417,7 @@ function ShiftPageView() {
         },
       });
       queryClient.setQueryData(shiftQueryKey(storeId), null);
+      void rememberShift(storeId ?? '', null);
     });
 
   const quarantined = (records.data ?? []).filter(

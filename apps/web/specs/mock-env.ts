@@ -14,6 +14,7 @@ import {
   type MockScenario,
 } from '@/shared/api';
 import { resetTerminalRuntimes } from '@/shared/lib/offline-queue';
+import { resetTerminalCache } from '@/shared/lib/terminal-cache';
 import { useShellChrome } from '@/shared/lib/shell-chrome';
 
 export const MOCK_PASSWORD = 'Demo1234';
@@ -32,6 +33,7 @@ export function useMockApi() {
     // a fresh terminal: no IndexedDB, no outbox sender, no draft, connection up
     await resetTerminalRuntimes();
     globalThis.indexedDB = new IDBFactory();
+    resetTerminalCache();
     resetConnectivity();
     usePosStore.setState({
       draft: emptyDraft(),

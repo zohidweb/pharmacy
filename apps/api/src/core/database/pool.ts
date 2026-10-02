@@ -21,6 +21,8 @@ export interface PoolOptions {
   applicationName: string;
   max: number;
   connectionTimeoutMillis: number;
+  /** Connection-level statement_timeout, for a pool whose queries run outside a transaction. */
+  statementTimeoutMillis?: number;
 }
 
 export function createPool(options: PoolOptions): Pool {
@@ -29,6 +31,9 @@ export function createPool(options: PoolOptions): Pool {
     application_name: options.applicationName,
     max: options.max,
     connectionTimeoutMillis: options.connectionTimeoutMillis,
+    ...(options.statementTimeoutMillis === undefined
+      ? {}
+      : { statement_timeout: options.statementTimeoutMillis }),
     types: pgTypes,
   });
   const logger = new Logger(`Pool:${options.applicationName}`);

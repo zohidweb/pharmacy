@@ -23,6 +23,19 @@ describe('createPool', () => {
       connectionTimeoutMillis: 100,
     });
     expect(pool.options).toMatchObject({ application_name: 'api-tenant', max: 2, connectionTimeoutMillis: 100 });
+    expect(pool.options).not.toHaveProperty('statement_timeout');
+    return pool.end();
+  });
+
+  it('sets a connection-level statement timeout when asked to', () => {
+    const pool = createPool({
+      connectionString: 'postgres://u:p@127.0.0.1:1/d',
+      applicationName: 'api-resolver',
+      max: 2,
+      connectionTimeoutMillis: 100,
+      statementTimeoutMillis: 1500,
+    });
+    expect(pool.options).toMatchObject({ application_name: 'api-resolver', statement_timeout: 1500 });
     return pool.end();
   });
 });

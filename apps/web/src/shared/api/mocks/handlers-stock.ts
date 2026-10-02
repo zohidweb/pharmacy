@@ -40,6 +40,7 @@ import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
 import { stores } from './fixtures';
 import { categories } from './fixtures-pos';
+import { completeStoreClosing } from './owner-stores';
 import { setStorePrice, storePrice } from './pricing';
 import { authorize } from './session';
 import type { MockHandlers } from './types';
@@ -98,7 +99,7 @@ export function inScope(
 }
 
 /** The cloud does not write the stock of an offline store (ADR-0014). */
-function writable(
+export function writable(
   session: EmployeeSession,
   storeId: string,
   correlationId: string,
@@ -1270,6 +1271,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       : null;
     const request = db().transferRequests.find((r) => r.id === doc.requestId);
     if (request) request.status = short ? 'partial' : 'done';
+    completeStoreClosing(doc.id);
     return doc;
   },
   'transfers.resolve': ({ params, body, correlationId }) => {

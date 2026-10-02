@@ -5,12 +5,15 @@ import type {
   TenantNotification,
 } from '@pharmacy/shared-dto';
 import { createCatalogDb, type CatalogMockDb } from './db-catalog';
+import { createOwnerDb, type OwnerMockDb } from './db-owner';
 import { createPosDb, type PosMockDb } from './db-pos';
 import { createStockDb, type StockMockDb } from './db-stock';
 import {
   MOCK_PASSWORD,
   boundTerminal,
   employees,
+  initialStores,
+  stores,
   type MockEmployee,
 } from './fixtures';
 
@@ -19,6 +22,8 @@ export interface MockEmployeeState extends MockEmployee {
   pinFailures: number;
   pinLocked: boolean;
   lastLoginAt: string | null;
+  roleId: string;
+  status: 'active' | 'blocked';
 }
 
 export interface MockDb {
@@ -31,6 +36,7 @@ export interface MockDb {
   pos: PosMockDb;
   stock: StockMockDb;
   catalog: CatalogMockDb;
+  owner: OwnerMockDb;
 }
 
 const minutesAgo = (minutes: number) =>
@@ -153,6 +159,8 @@ function initialActivity(): ActivityEntry[] {
 }
 
 function createDb(): MockDb {
+  // the store list is shared by reference with the handlers: reset it in place
+  stores.splice(0, stores.length, ...initialStores());
   const pos = createPosDb();
   return {
     employees: employees.map((employee) => ({
@@ -161,6 +169,8 @@ function createDb(): MockDb {
       pinFailures: 0,
       pinLocked: false,
       lastLoginAt: daysAgo(1),
+      roleId: `role-${employee.role}`,
+      status: employee.blocked ? 'blocked' : 'active',
     })),
     terminal: { ...boundTerminal },
     notifications: initialNotifications(),
@@ -169,6 +179,7 @@ function createDb(): MockDb {
     pos,
     stock: createStockDb(pos.products),
     catalog: createCatalogDb(),
+    owner: createOwnerDb(),
   };
 }
 

@@ -36,6 +36,7 @@ import { StoreModeBadge } from '@/entities/store';
 import { apiRequest } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { WithMessages } from '@/shared/i18n';
 
 const periods: DashboardPeriod[] = ['today', 'week', 'month'];
 
@@ -228,7 +229,7 @@ function Activity({ data }: { data: TenantDashboard }) {
 }
 
 /** Network overview (UI mockup «Дашборд») over the stores of the employee scope. */
-export function DashboardPage() {
+function DashboardPageView() {
   const t = useTranslations('dashboard');
   const { data: session } = useSession();
   const [period, setPeriod] = useState<DashboardPeriod>('today');
@@ -292,5 +293,13 @@ export function DashboardPage() {
         </QueryState>
       </div>
     </>
+  );
+}
+
+export function DashboardPage() {
+  return (
+    <WithMessages groups={['home']}>
+      <DashboardPageView />
+    </WithMessages>
   );
 }

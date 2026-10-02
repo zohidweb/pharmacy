@@ -30,7 +30,7 @@ import {
   loadMessages,
   useLocale,
   type Locale,
-  type Messages,
+  type CoreMessages,
 } from '@/shared/i18n';
 import { ServiceWorker } from './ServiceWorker';
 
@@ -43,7 +43,10 @@ function createQueryClient() {
 }
 
 function useMessages(locale: Locale) {
-  const [loaded, setLoaded] = useState<{ locale: Locale; messages: Messages }>({
+  const [loaded, setLoaded] = useState<{
+    locale: Locale;
+    messages: CoreMessages;
+  }>({
     locale: defaultLocale,
     messages: defaultMessages,
   });

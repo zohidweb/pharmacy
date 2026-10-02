@@ -29,6 +29,7 @@ import {
   TransferDetailDialog,
   TransferDialog,
 } from './TransferDialogs';
+import { WithMessages } from '@/shared/i18n';
 
 type Open =
   | { kind: 'request' }
@@ -38,7 +39,7 @@ type Open =
   | null;
 
 /** Requests (ЗП) and transfers (ПМ) between stores (UI mockup «Перемещения и заявки»). */
-export function TransfersPage() {
+function TransfersPageView() {
   const t = useTranslations('transfers');
   const tDocs = useTranslations('stockDocs');
   const access = useStockAccess();
@@ -264,5 +265,13 @@ export function TransfersPage() {
         />
       )}
     </>
+  );
+}
+
+export function TransfersPage() {
+  return (
+    <WithMessages groups={['stock']}>
+      <TransfersPageView />
+    </WithMessages>
   );
 }

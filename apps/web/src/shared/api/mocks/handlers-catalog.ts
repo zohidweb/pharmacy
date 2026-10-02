@@ -28,7 +28,7 @@ import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
 import type { DiscountRuleRecord, ProductExtras } from './db-catalog';
-import { roleNames, stores } from './fixtures';
+import { stores } from './fixtures';
 import { categories } from './fixtures-pos';
 import { context, findDoc, page, stockAt, storeName } from './handlers-stock';
 import { piecePrice, setStorePrice, storePrice } from './pricing';
@@ -535,7 +535,9 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
       ...ruleInput(body, session, correlationId),
       author: {
         ...author(),
-        role: employee ? roleNames[employee.role] : '—',
+        role:
+          mockDb().owner.roles.find((r) => r.id === employee?.roleId)?.name ??
+          '—',
       },
     };
     catalog().discountRules.unshift(rule);

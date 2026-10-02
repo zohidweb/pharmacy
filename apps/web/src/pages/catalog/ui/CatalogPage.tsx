@@ -40,6 +40,7 @@ import {
   inputOf,
   type ProductDraft,
 } from './ProductForm';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 20;
 const FLAGS: CatalogFlag[] = ['rx', 'controlled', 'regulated', 'no_barcode'];
@@ -76,7 +77,7 @@ export function useSupplierOptions() {
 }
 
 /** Catalog of products (UI mockup «Каталог товаров»). */
-export function CatalogPage() {
+function CatalogPageView() {
   const t = useTranslations('products');
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
@@ -486,5 +487,13 @@ function NewProductDialog({
         <Alert tone="info">{t('priceFromReceipt')}</Alert>
       </div>
     </Dialog>
+  );
+}
+
+export function CatalogPage() {
+  return (
+    <WithMessages groups={['stock', 'purchasing']}>
+      <CatalogPageView />
+    </WithMessages>
   );
 }

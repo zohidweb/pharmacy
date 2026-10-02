@@ -32,6 +32,7 @@ import {
   type GoodsReceiptPrefill,
 } from '@/widgets/goods-receipt-editor';
 import { OrderEditor } from './OrderEditor';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 10;
 const STATUSES: PurchaseOrderStatus[] = [
@@ -42,7 +43,7 @@ const STATUSES: PurchaseOrderStatus[] = [
 ];
 
 /** Purchase orders (UI mockup «Заказы поставщикам»). */
-export function OrdersPage() {
+function OrdersPageView() {
   const t = useTranslations('orders');
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
@@ -290,5 +291,13 @@ export function OrdersPage() {
         />
       )}
     </>
+  );
+}
+
+export function OrdersPage() {
+  return (
+    <WithMessages groups={['stock', 'purchasing']}>
+      <OrdersPageView />
+    </WithMessages>
   );
 }

@@ -1,6 +1,6 @@
 /*
  * Synthetic data set of the mocks (UI mockups «Клиентский продукт»): network «Шифо», four stores,
- * four employees with the base roles. No real people or clients; logins, passwords and PINs below
+ * employees with the base roles. No real people or clients; logins, passwords and PINs below
  * exist only in the mocks (apps/web/README.md).
  */
 import type { RoleTemplateKey } from '@pharmacy/shared-domain';
@@ -10,7 +10,8 @@ export const MOCK_PASSWORD = 'Demo1234';
 
 export const tenant = { id: 'tenant-shifo', name: 'Шифо' };
 
-export const stores: SessionStore[] = [
+/** Stores of the network; the mutable `stores` list is reset with the mock database. */
+export const initialStores = (): SessionStore[] => [
   {
     id: 'store-1',
     name: 'Аптека №1 · Центр',
@@ -37,6 +38,8 @@ export const stores: SessionStore[] = [
   },
 ];
 
+export const stores: SessionStore[] = initialStores();
+
 export interface MockEmployee {
   id: string;
   fullName: string;
@@ -48,6 +51,7 @@ export interface MockEmployee {
   storeIds: string[] | null;
   pin: string | null;
   locale: UiLocale;
+  blocked?: boolean;
 }
 
 export const roleNames: Record<RoleTemplateKey, string> = {
@@ -112,6 +116,29 @@ export const employees: MockEmployee[] = [
     storeIds: null,
     pin: null,
     locale: 'ru',
+  },
+  {
+    id: 'emp-cashier-4',
+    fullName: 'Нигина Расулова',
+    shortName: 'Нигина Р.',
+    login: 'nigina',
+    phone: '+992 98 600-41-07',
+    role: 'cashier',
+    storeIds: ['store-4'],
+    pin: '4815',
+    locale: 'tg',
+  },
+  {
+    id: 'emp-cashier-5',
+    fullName: 'Рустам Назаров',
+    shortName: 'Рустам Н.',
+    login: 'rustam',
+    phone: '+992 98 600-77-19',
+    role: 'cashier',
+    storeIds: ['store-4'],
+    pin: null,
+    locale: 'tg',
+    blocked: true,
   },
 ];
 

@@ -1,6 +1,10 @@
 'use client';
 
-import { checkPin } from '@pharmacy/shared-domain';
+import {
+  checkPin,
+  passwordProblems,
+  passwordRules as domainPasswordRules,
+} from '@pharmacy/shared-domain';
 import type { EmployeeMe, MyTerminal } from '@pharmacy/shared-dto';
 import { formatDateTime } from '@pharmacy/shared-util';
 import {
@@ -25,19 +29,18 @@ import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
 import { SignOutButton } from '@/features/sign-out';
 import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
-import { locales, setLocale, type Locale } from '@/shared/i18n';
+import { locales, setLocale, type Locale, WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 const meKey = ['me'] as const;
 const terminalsKey = ['me', 'terminals'] as const;
 
-/** Password rules shown as a checklist (the same as the operator admin). */
-const passwordRules = [
-  { key: 'length', test: (value: string) => value.length >= 8 },
-  { key: 'upper', test: (value: string) => /\p{Lu}/u.test(value) },
-  { key: 'digit', test: (value: string) => /\d/.test(value) },
-] as const;
+/** Password rules shown as a checklist (ADR-0008, shared-domain `passwordProblems`). */
+const passwordRules = domainPasswordRules.map((key) => ({
+  key,
+  test: (value: string) => !passwordProblems(value).includes(key),
+}));
 
 const fieldErrorOf = (error: unknown, field: string) =>
   error instanceof ApiError && error.errors.some((e) => e.field === field);
@@ -443,7 +446,7 @@ function TerminalsCard({ canUnbind }: { canUnbind: boolean }) {
 }
 
 /** Profile of the signed-in employee (UI mockup «Профиль»). */
-export function ProfilePage() {
+function ProfilePageView() {
   const t = useTranslations('profile');
   const { data: session } = useSession();
   const me = useQuery({
@@ -496,5 +499,13 @@ export function ProfilePage() {
         </QueryState>
       </div>
     </>
+  );
+}
+
+export function ProfilePage() {
+  return (
+    <WithMessages groups={['home']}>
+      <ProfilePageView />
+    </WithMessages>
   );
 }

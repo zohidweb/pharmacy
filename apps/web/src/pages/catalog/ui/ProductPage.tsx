@@ -29,6 +29,7 @@ import {
   inputOf,
   type ProductDraft,
 } from './ProductForm';
+import { WithMessages } from '@/shared/i18n';
 
 function ProductView() {
   const t = useTranslations('products.card');
@@ -215,10 +216,18 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
 }
 
 /** Product card (UI mockup «Карточка товара»): `/catalog/view?id=` — static export, no dynamic route. */
-export function ProductPage() {
+function ProductPageView() {
   return (
     <Suspense>
       <ProductView />
     </Suspense>
+  );
+}
+
+export function ProductPage() {
+  return (
+    <WithMessages groups={['stock', 'purchasing']}>
+      <ProductPageView />
+    </WithMessages>
   );
 }

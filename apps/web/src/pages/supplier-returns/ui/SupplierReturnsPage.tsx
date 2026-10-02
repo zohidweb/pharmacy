@@ -30,11 +30,12 @@ import {
   SUPPLIER_RETURN_REASONS,
   SupplierReturnEditor,
 } from './SupplierReturnEditor';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 10;
 
 /** Journal of returns to suppliers (UI mockup «Возврат поставщику»). */
-export function SupplierReturnsPage() {
+function SupplierReturnsPageView() {
   const t = useTranslations('supplierReturns');
   const tDocs = useTranslations('stockDocs');
   const access = useStockAccess();
@@ -250,5 +251,13 @@ export function SupplierReturnsPage() {
         />
       )}
     </>
+  );
+}
+
+export function SupplierReturnsPage() {
+  return (
+    <WithMessages groups={['stock']}>
+      <SupplierReturnsPageView />
+    </WithMessages>
   );
 }

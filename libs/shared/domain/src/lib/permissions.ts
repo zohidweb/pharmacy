@@ -106,3 +106,16 @@ export function exceedingPermissions(
   const own = new Set(editor);
   return [...new Set(role)].filter((permission) => !own.has(permission));
 }
+
+/**
+ * Scope check of an assignment (ADR-0018, п. 4): the stores given to an employee must lie within
+ * the editor's own scope. `null` is the whole network.
+ */
+export function scopeWithin(
+  editor: readonly string[] | null,
+  assigned: readonly string[] | null,
+): boolean {
+  if (editor === null) return true;
+  if (assigned === null) return false;
+  return assigned.every((storeId) => editor.includes(storeId));
+}

@@ -179,7 +179,7 @@ function ledgerOf(supplierId: string): {
   };
 }
 
-function debtOf(supplierId: string) {
+export function debtOf(supplierId: string) {
   const { invoices, credits } = ledgerOf(supplierId);
   return supplierDebt(invoices, credits, today());
 }

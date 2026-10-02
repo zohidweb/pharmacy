@@ -28,11 +28,12 @@ import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { GoodsReceiptEditor } from '@/widgets/goods-receipt-editor';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 10;
 
 /** Journal of goods receipts (UI mockup «Приход товара»). */
-export function GoodsReceiptsPage() {
+function GoodsReceiptsPageView() {
   const t = useTranslations('goodsReceipts');
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
@@ -260,5 +261,13 @@ export function GoodsReceiptsPage() {
         />
       )}
     </>
+  );
+}
+
+export function GoodsReceiptsPage() {
+  return (
+    <WithMessages groups={['stock']}>
+      <GoodsReceiptsPageView />
+    </WithMessages>
   );
 }

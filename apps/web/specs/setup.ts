@@ -15,3 +15,11 @@ expect.extend(toHaveNoViolations);
 
 // IndexedDB writes of the outbox take longer on a loaded machine (parallel nx tasks)
 configure({ asyncUtilTimeout: 3_000 });
+
+// a page that forgot a dictionary group renders key paths: fail the test instead (ADR-0009)
+const consoleError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+  const text = args.map((arg) => String(arg)).join(' ');
+  if (text.includes('MISSING_MESSAGE')) throw new Error(text);
+  consoleError(...args);
+};

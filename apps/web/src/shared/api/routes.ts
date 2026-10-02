@@ -3,6 +3,40 @@
  * to its method, path and DTO types from @pharmacy/shared-dto. Paths are relative to /api/v1.
  */
 import type {
+  AuditListResponse,
+  AuditQuery,
+  CategoryMarkup,
+  CloseStoreRequest,
+  CloseStoreResponse,
+  CreateEmployeeRequest,
+  EmployeeCard,
+  EmployeeListQuery,
+  EmployeeListResponse,
+  Export1cPreview,
+  Export1cRequest,
+  Export1cResult,
+  NetworkSettings,
+  OfflineQueueResponse,
+  OfflineStoreSync,
+  OwnerStore,
+  ReportKind,
+  ReportTable,
+  ResetEmployeePasswordRequest,
+  ResolveDuplicateRequest,
+  Role,
+  RoleInput,
+  SetArticle1cRequest,
+  SetEmployeeStatusRequest,
+  StoreClosingPreview,
+  StoreInput,
+  StoresOverview,
+  SyncRunResult,
+  TenantBilling,
+  TenantService,
+  TenantServiceKey,
+  TenantTerminal,
+  UpdateEmployeeRequest,
+  UpdateMarkupsRequest,
   CatalogDuplicate,
   CatalogListQuery,
   CatalogListResponse,
@@ -352,6 +386,120 @@ export const apiRoutes = {
     DiscountRuleInput,
     { id: string }
   >('PUT', (p) => `/discount-rules/${id(p)}`),
+
+  'employees.list': route<
+    EmployeeListResponse,
+    undefined,
+    undefined,
+    EmployeeListQuery
+  >('GET', () => '/employees'),
+  'employees.get': route<EmployeeCard, undefined, { id: string }>(
+    'GET',
+    (p) => `/employees/${id(p)}`,
+  ),
+  'employees.create': route<EmployeeCard, CreateEmployeeRequest>(
+    'POST',
+    () => '/employees',
+  ),
+  'employees.update': route<
+    EmployeeCard,
+    UpdateEmployeeRequest,
+    { id: string }
+  >('PUT', (p) => `/employees/${id(p)}`),
+  'employees.resetPassword': route<
+    void,
+    ResetEmployeePasswordRequest,
+    { id: string }
+  >('POST', (p) => `/employees/${id(p)}/password`),
+  'employees.setStatus': route<
+    EmployeeCard,
+    SetEmployeeStatusRequest,
+    { id: string }
+  >('POST', (p) => `/employees/${id(p)}/status`),
+  'roles.list': route<Role[]>('GET', () => '/roles'),
+  'roles.create': route<Role, RoleInput>('POST', () => '/roles'),
+  'roles.update': route<Role, RoleInput, { id: string }>(
+    'PUT',
+    (p) => `/roles/${id(p)}`,
+  ),
+  'terminals.list': route<TenantTerminal[]>('GET', () => '/terminals'),
+  'auditLog.list': route<AuditListResponse, undefined, undefined, AuditQuery>(
+    'GET',
+    () => '/audit-log',
+  ),
+
+  'stores.overview': route<StoresOverview>('GET', () => '/stores'),
+  'stores.create': route<OwnerStore, StoreInput>('POST', () => '/stores'),
+  'stores.update': route<OwnerStore, StoreInput, { id: string }>(
+    'PUT',
+    (p) => `/stores/${id(p)}`,
+  ),
+  'stores.closingPreview': route<
+    StoreClosingPreview,
+    undefined,
+    { id: string }
+  >('GET', (p) => `/stores/${id(p)}/closing-preview`),
+  'stores.close': route<CloseStoreResponse, CloseStoreRequest, { id: string }>(
+    'POST',
+    (p) => `/stores/${id(p)}/closing`,
+  ),
+  'services.list': route<TenantService[]>('GET', () => '/services'),
+  'services.request': route<
+    TenantService,
+    undefined,
+    { key: TenantServiceKey }
+  >('POST', (p) => `/services/${p.key}/requests`),
+  'billing.get': route<TenantBilling>('GET', () => '/billing'),
+
+  'reports.get': route<
+    ReportTable,
+    undefined,
+    { kind: ReportKind },
+    { from: string; to: string; storeId?: string }
+  >('GET', (p) => `/reports/${p.kind}`),
+  'export1c.preview': route<
+    Export1cPreview,
+    undefined,
+    undefined,
+    { from: string; to: string; storeId?: string }
+  >('GET', () => '/exports/1c/preview'),
+  'export1c.setArticle': route<
+    void,
+    SetArticle1cRequest,
+    { productId: string }
+  >(
+    'PUT',
+    (p) => `/catalog/products/${encodeURIComponent(p.productId)}/article-1c`,
+  ),
+  'export1c.run': route<Export1cResult, Export1cRequest>(
+    'POST',
+    () => '/exports/1c',
+  ),
+
+  'settings.get': route<NetworkSettings>('GET', () => '/settings'),
+  'settings.update': route<NetworkSettings, NetworkSettings>(
+    'PUT',
+    () => '/settings',
+  ),
+  'settings.markups': route<CategoryMarkup[]>('GET', () => '/settings/markups'),
+  'settings.updateMarkups': route<CategoryMarkup[], UpdateMarkupsRequest>(
+    'PUT',
+    () => '/settings/markups',
+  ),
+
+  'sync.stores': route<OfflineStoreSync[]>('GET', () => '/sync/stores'),
+  'sync.queue': route<
+    OfflineQueueResponse,
+    undefined,
+    undefined,
+    { limit?: number; offset?: number }
+  >('GET', () => '/sync/queue'),
+  'sync.run': route<SyncRunResult>('POST', () => '/sync/runs'),
+  'catalog.resolveDuplicate': route<
+    void,
+    ResolveDuplicateRequest,
+    { id: string }
+  >('POST', (p) => `/catalog/duplicates/${id(p)}/resolve`),
 
   'documents.unpostCheck': route<
     UnpostCheck,

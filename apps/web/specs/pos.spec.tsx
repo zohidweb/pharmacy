@@ -286,8 +286,11 @@ describe('PosPage', () => {
     expect(
       await screen.findAllByText('Смена не открыта: продажа недоступна'),
     ).not.toHaveLength(0);
+    // the link needs the permissions of the session, which may arrive after the shift
     expect(
-      screen.getByRole('link', { name: 'Открыть смену' }).getAttribute('href'),
+      (await screen.findByRole('link', { name: 'Открыть смену' })).getAttribute(
+        'href',
+      ),
     ).toBe('/shift');
   });
 

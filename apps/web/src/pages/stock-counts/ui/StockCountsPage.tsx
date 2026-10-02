@@ -29,9 +29,10 @@ import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { StockCountEditor } from './StockCountEditor';
+import { WithMessages } from '@/shared/i18n';
 
 /** Stock counts (UI mockup «Инвентаризация»). */
-export function StockCountsPage() {
+function StockCountsPageView() {
   const t = useTranslations('stockCounts');
   const tDocs = useTranslations('stockDocs');
   const queryClient = useQueryClient();
@@ -236,5 +237,13 @@ export function StockCountsPage() {
         />
       )}
     </>
+  );
+}
+
+export function StockCountsPage() {
+  return (
+    <WithMessages groups={['stock']}>
+      <StockCountsPageView />
+    </WithMessages>
   );
 }

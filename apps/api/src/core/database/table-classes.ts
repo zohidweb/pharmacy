@@ -20,10 +20,20 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     role_permissions: 'tenant',
     employee_stores: 'tenant',
     terminals: 'tenant',
+    audit_log: 'tenant',
   });
 
-// SECURITY DEFINER resolver functions owned by pharmacy_resolver (ADR-0013 p. 3); none yet.
-export const RESOLVER_FUNCTIONS: readonly string[] = Object.freeze([]);
+// Tenant tables that are append-only (insert and select only; a trigger rejects update, delete
+// and truncate). pharmacy_app has exactly SELECT, INSERT on them instead of full DML.
+export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
+  'audit_log',
+]);
+
+// SECURITY DEFINER resolver functions owned by pharmacy_resolver (ADR-0013 p. 3 and its
+// amendment 2026-10-02: resolve_login replaces resolve_tenant_by_code).
+export const RESOLVER_FUNCTIONS: readonly string[] = Object.freeze([
+  'resolve_login',
+]);
 
 // Columns of stores visible to pharmacy_platform (the store registry without the address).
 export const STORE_PLATFORM_COLUMNS: readonly string[] = Object.freeze([

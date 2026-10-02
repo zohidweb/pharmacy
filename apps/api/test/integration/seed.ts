@@ -71,3 +71,49 @@ export async function seedTenant(code: string): Promise<SeededTenant> {
 
   return { tenantId, legalEntityId, storeId };
 }
+
+export interface SeedEmployeeInput {
+  login: string;
+  phone?: string;
+  email?: string;
+  roleId?: string;
+}
+
+export interface SeededEmployee {
+  employeeId: string;
+  roleId: string;
+}
+
+// Synthetic employee with store scope 'all' on the tenant path. Without roleId a new role is
+// created for it. login, phone and email are globally unique (unique per test run).
+export async function seedEmployee(
+  tenantId: string,
+  input: SeedEmployeeInput,
+): Promise<SeededEmployee> {
+  const employeeId = newId();
+  const roleId = input.roleId ?? newId();
+
+  await asTenant(tenantId, async (client) => {
+    if (!input.roleId) {
+      await client.query(
+        `insert into roles (id, tenant_id, name) values ($1, $2, $3)`,
+        [roleId, tenantId, { ru: `Test role ${input.login}` }],
+      );
+    }
+    await client.query(
+      `insert into employees (id, tenant_id, role_id, login, full_name, phone, email, store_scope)
+       values ($1, $2, $3, $4, $5, $6, $7, 'all')`,
+      [
+        employeeId,
+        tenantId,
+        roleId,
+        input.login,
+        `Test employee ${input.login}`,
+        input.phone ?? null,
+        input.email ?? null,
+      ],
+    );
+  });
+
+  return { employeeId, roleId };
+}

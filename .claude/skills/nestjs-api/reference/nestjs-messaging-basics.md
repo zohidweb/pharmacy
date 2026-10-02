@@ -17,19 +17,21 @@
 |---|---|---|---|
 | `fiscal.send` | fiscal | Отправка чека в адаптер фискализации (в MVP — заглушка) | outbox в транзакции чека |
 | `sync.upload` | sync (офлайн-точка) | Досылка операций точки в облако по HTTPS | outbox в транзакции операции |
-| `sync.apply` | sync (облако) | Применение принятых операций точки | при приёме пачки |
 | `export-1c.build` | export-1c | Формирование файла CommerceML/XML за период | по запросу пользователя |
 | `billing.invoice` | billing | Счета тенантам за период (в сомони, ADR-0016) | планировщик |
 
-Названия и состав очередей — иллюстрация; фиксируются при реализации модулей.
+Названия и состав очередей — иллюстрация; фиксируются при реализации модулей. Приём операций
+офлайн-точки в облаке (`sync.apply`) **не** идёт через очередь: операции применяются в самом
+запросе `POST /sync/operations` с карантином (ADR-0014 §6, вариант 3б).
 
 ## Схема таблицы
 
-DDL иллюстративный — реальная схема создаётся миграцией (инструмент — первым ADR разработки).
+DDL иллюстративный — реальная схема создаётся миграцией node-pg-migrate (ADR-0006) по модели
+данных (`docs/architecture/data-model/06-sync-audit-billing.md`, класс `system`, ADR-0013).
 
 ```sql
 CREATE TABLE job_queue (
-  id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id               uuid        PRIMARY KEY,       -- newId() (UUIDv7), no default
   tenant_id        uuid,                          -- NULL = platform-level job (e.g. billing period run)
   queue            text        NOT NULL,
   payload          jsonb       NOT NULL,          -- ids and parameters only, no PII
@@ -54,13 +56,23 @@ CREATE INDEX job_queue_stale_idx ON job_queue (locked_at) WHERE status = 'proces
 
 - `pending` → `processing` → `done`; ошибка с оставшимися попытками → снова `pending` с новым `run_after`; попытки исчерпаны → `dead` (dead-letter, разбирается вручную).
 - `UNIQUE NULLS NOT DISTINCT (tenant_id, queue, idempotency_key)` — повторная постановка не создаёт дубль (и для платформенных задач с `tenant_id IS NULL`).
-- Таблица системная: захват/завершение задач всех тенантов идёт системным путём без тенант-контекста (отдельная роль/политика БД для воркера — зафиксировать в ADR кросс-тенантного доступа, `nestjs-config-data-access.md`), но **обработчик каждой задачи выполняется в контексте её `tenant_id`** — все его запросы идут через `DatabaseService.tenantTransaction()` с фильтром тенанта и RLS.
+- Класс таблицы — `system` (ADR-0013): RLS `ENABLE` + `FORCE`; `pharmacy_app` видит и меняет
+  только строки своего тенанта (политика тенанта); `pharmacy_platform` видит все строки
+  (диагностика), а ставит и меняет только платформенные задачи (`tenant_id IS NULL`).
+- **Задачи тенантов — «по тенанту в цикле»** (ADR-0013 §4): воркер получает список активных
+  тенантов (облако — через `PlatformDatabase`, офлайн-точка — один тенант) и для каждого в
+  `runWithContext({ correlationId, tenantId })` открывает `TenantDatabase.withTenant(tenantId, …)`
+  и захватывает **свои** задачи `FOR UPDATE SKIP LOCKED` под RLS. Обработчик ничем не отличается
+  от HTTP-запроса. Справедливость между тенантами — бонус цикла; N коротких транзакций на опрос
+  при ~15 тенантах пренебрежимы.
+- **Платформенные задачи** (`tenant_id IS NULL`, например оркестратор `billing.invoice`) —
+  через `PlatformDatabase.platformTransaction({ kind: 'system', job: 'billing.invoice' }, …)`.
 
-## Порт очереди (ORM-независимо)
+## Порт очереди
 
 ```typescript
 // apps/api/src/common/job-queue/job-queue.repository.ts
-import type { Tx } from '../../core/database/database.service';
+import type { TenantTransaction } from '../../core/database';
 
 export interface NewJob<P = unknown> {
   tenantId: string | null;              // null = platform-level job
@@ -78,11 +90,12 @@ export interface ClaimedJob<P = unknown> extends Required<Omit<NewJob<P>, 'runAf
 }
 
 export abstract class JobQueueRepository {
-  /** INSERT ... ON CONFLICT (tenant_id, queue, idempotency_key) DO NOTHING — inside the caller's tx (outbox). */
-  abstract enqueue(tx: Tx, job: NewJob): Promise<void>;
-  /** Platform-level job outside a tenant transaction (system path, see ADR on cross-tenant access). */
+  /** INSERT ... ON CONFLICT (tenant_id, queue, idempotency_key) DO NOTHING — inside the caller's trx (outbox). */
+  abstract enqueue(trx: TenantTransaction, job: NewJob): Promise<void>;
+  /** Platform-level job (tenant_id = NULL) — inside PlatformDatabase.platformTransaction (ADR-0013). */
   abstract enqueuePlatform(job: NewJob & { tenantId: null }): Promise<void>;
-  abstract claim(queue: string, limit: number, workerId: string): Promise<ClaimedJob[]>;
+  /** Claims jobs of ONE tenant inside its tenant transaction (RLS sees only that tenant's rows). */
+  abstract claim(trx: TenantTransaction, queue: string, limit: number, workerId: string): Promise<ClaimedJob[]>;
   abstract complete(id: string): Promise<void>;
   /** nextRunAfter = null → status 'dead'. */
   abstract fail(id: string, error: string, nextRunAfter: Date | null): Promise<void>;
@@ -90,18 +103,18 @@ export abstract class JobQueueRepository {
 }
 ```
 
-Реализация — SQL ниже, выполняемый через выбранный слой доступа к данным (после ADR).
+Реализация — Kysely-запросы по SQL ниже (`forUpdate().skipLocked()`, `onConflict(...).doNothing()`).
 
 ### Постановка в транзакции операции (outbox)
 
 Дополнение к транзакции чека из `nestjs-config-data-access.md` — задача фискализации ставится в той же транзакции:
 
 ```typescript
-// apps/api/src/modules/pos/receipts.service.ts (fragment of completeReceipt)
-return this.db.tenantTransaction(async (tx) => {
+// apps/api/src/app/pos/receipts.service.ts (fragment of completeReceipt)
+return this.db.tenantTransaction(async (trx) => {
   // ... idempotent replay, batch locks, stock check, receipt, movements, audit ...
-  await this.jobs.enqueue(tx, {
-    tenantId: tx.tenantId,
+  await this.jobs.enqueue(trx, {
+    tenantId,                                         // from requireTenantId() at the top of the method
     queue: 'fiscal.send',
     payload: { receiptId: receipt.id },
     idempotencyKey: `receipt:${receipt.id}`,
@@ -130,10 +143,10 @@ RETURNING j.*;
 ```
 
 Два режима обработки:
-- **Эффект только в нашей БД** (`sync.apply`, `billing.invoice`) — можно захватить и обработать в одной транзакции: изменения и `status = 'done'` коммитятся атомарно.
+- **Эффект только в нашей БД** (`billing.invoice` по тенанту, пересчёт витрин) — можно захватить и обработать в одной tenant-транзакции: изменения и `status = 'done'` коммитятся атомарно.
 - **Вызов внешней системы** (`fiscal.send`, `sync.upload`) — короткая транзакция захвата → вызов вне транзакции (не держим блокировку и соединение) → отдельная транзакция `complete`/`fail`. Вызов обязан быть идемпотентным: во внешнюю систему передаётся idempotency key задачи, т.к. после сбоя задача может выполниться повторно (at-least-once).
 
-Зависшие `processing` (воркер упал) возвращаются в `pending`:
+Зависшие `processing` (воркер упал) возвращаются в `pending` — тоже в цикле по тенантам:
 
 ```sql
 UPDATE job_queue SET status = 'pending', locked_by = NULL, locked_at = NULL, updated_at = now()
@@ -201,6 +214,8 @@ export class JobWorker implements OnApplicationShutdown {
     }
   }
 
+  // Simplified: the real tick iterates active tenants (TenantJobRunner.forEachActiveTenant) and claims
+  // inside TenantDatabase.withTenant(tenantId, trx => this.jobs.claim(trx, …)); see the bullets above.
   private process(handler: JobHandler, job: ClaimedJob): Promise<void> {
     // Restore context from the job row: logs carry correlationId, data access is tenant-scoped.
     return runWithContext({ correlationId: job.correlationId, tenantId: job.tenantId ?? undefined }, async () => {
@@ -228,7 +243,7 @@ export class JobWorker implements OnApplicationShutdown {
 `@nestjs/schedule` — пакет экосистемы NestJS (в рамках ADR-0003), не отдельная технология стека. Cron срабатывает **на каждом инстансе**, поэтому cron только ставит задачу с idempotency key периода — дубль отсечёт `UNIQUE`:
 
 ```typescript
-// apps/api/src/modules/billing/billing-invoice.scheduler.ts
+// apps/api/src/app/billing/billing-invoice.scheduler.ts
 @Injectable()
 export class BillingInvoiceScheduler {
   constructor(private readonly jobs: JobQueueRepository) {}
@@ -236,8 +251,8 @@ export class BillingInvoiceScheduler {
   @Cron('0 6 1 * *', { timeZone: 'Asia/Dushanbe' })
   scheduleMonthlyRun(): Promise<void> {
     const period = previousMonthInDushanbe();          // 'YYYY-MM'
-    return runWithContext({ correlationId: randomUUID() }, () =>
-      this.jobs.enqueuePlatform({                      // system path: the period run is platform-wide, tenant_id = NULL
+    return runWithContext({ correlationId: newId() }, () =>
+      this.jobs.enqueuePlatform({                      // platform path (PlatformDatabase, system actor), tenant_id = NULL
         tenantId: null,
         queue: 'billing.invoice',
         payload: { period },
@@ -258,12 +273,29 @@ export class BillingInvoiceScheduler {
 
 Офлайн-точка — та же система в Docker с локальной PostgreSQL.
 
-1. **На точке.** Каждая операция (чек, документ) в своей транзакции пишет запись в `sync_outbox` с `operation_id` (UUID, генерируется на точке) и монотонным `sequence` точки.
-2. **Досылка.** Задача `sync.upload` отправляет пачки по HTTPS с лицензионным ключом точки; retry с backoff + circuit breaker (`nestjs-resilience-circuit-breaker.md`) — пока связи нет, точка не «долбит» облако.
-3. **В облаке.** Приём пачки: `INSERT INTO sync_inbox … ON CONFLICT (store_id, operation_id) DO NOTHING` — повтор той же пачки не создаёт дублей; ответ — подтверждение (ack) по каждому `operation_id`, включая уже виденные.
-4. **Применение** (`sync.apply`) — по порядку `sequence` внутри точки, операция и её движения — в одной транзакции.
-5. **Конфликты** (цена, дубль товара — см. глоссарий «Конфликт синхронизации») фиксируются как записи конфликта и решаются по правилам ТЗ, не перезаписываются молча.
-6. Отозванный лицензионный ключ — отказ при следующей синхронизации.
+Протокол — ADR-0014; таблицы — модель данных `06-sync-audit-billing.md`.
+
+1. **На точке.** Каждая операция (чек, возврат, проведённый документ, смена…) в своей транзакции
+   пишет запись в `sync_outbox`: `operation_id` (UUIDv7, `newId()`), `store_seq` (локальный
+   `bigint identity`), тип и версия, `payload_hash` (SHA-256), `correlation_id`, автор.
+2. **Досылка.** Задача `sync.upload` отправляет батчи (≤ 500 операций, ≤ 2 МБ) по HTTPS с
+   `Authorization: Bearer phk_<keyId>_<secret>`; retry с backoff + circuit breaker
+   (`nestjs-resilience-circuit-breaker.md`) — пока связи нет, точка не «долбит» облако.
+3. **В облаке — применение в самом запросе** (не воркером): `LicenseKeyGuard` → tenant-транзакция
+   → `pg_advisory_xact_lock` точки → `INSERT INTO sync_inbox … ON CONFLICT (tenant_id, store_id,
+   operation_id) DO NOTHING` → применение операции и её движений в той же транзакции. Ответ —
+   статус по каждому `operation_id`: `applied`, `duplicate`, `quarantined`, `rejected`,
+   `pending_dependency`. Повтор с тем же id и другим хешем — `rejected: id-reused`.
+4. **Порядок и карантин.** Операции точки применяются по `store_seq`; операция с нарушенной
+   зависимостью или невалидная (суммы строк ≠ итог, знаки движений) уходит в карантин, а не
+   ломает батч. Облако не пересчитывает FEFO и не проверяет остаток при приёме фактов точки —
+   отрицательный остаток выявляет сверка `stock.checkpoint`.
+5. **Лента «облако → точка»** (`sync_changes`, окно 90 дней) — справочники, цены, роли,
+   сотрудники без хешей, входящие перемещения, решения по конфликтам цен, статус лицензии.
+6. **Конфликты** — только два: цена (решает владелец в облаке) и дубль товара (решает точка);
+   записи `sync_conflicts`, не молчаливая перезапись.
+7. **Лицензия** — статус в каждом ответе (`Pharmacy-License-Status`); отозванный или истёкший
+   ключ — льготный период приёма, `revoked-hard` — `401` (`nestjs-security-auth.md`).
 
 Буфер перебоев связи в браузере кассы (apps/web) — отдельный механизм фронтенда с той же идемпотентной досылкой.
 

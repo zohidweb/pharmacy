@@ -7,7 +7,7 @@
 | [nestjs-conventions.md](nestjs-conventions.md) | **Перед любым модулем** — Iron Law | Стек, раскладка apps/api, модули, инварианты данных, REST, именование, логи |
 | [nestjs-config-basics.md](nestjs-config-basics.md) | Настройка конфигурации | Fail-fast env reader, `registerAs()`, `.env.example` |
 | [nestjs-config-npm-ts.md](nestjs-config-npm-ts.md) | Зависимости, tsconfig, Nx targets | Разрешённые/запрещённые пакеты, `tsconfig.app.json`, алиасы libs |
-| [nestjs-config-data-access.md](nestjs-config-data-access.md) | Любой доступ к БД, миграции | `DatabaseService.tenantTransaction`, `set_config('app.tenant_id')`, RLS, чек + движения атомарно, 23505 → 409, append-only, миграции; Prisma — вариант А при ADR |
+| [nestjs-config-data-access.md](nestjs-config-data-access.md) | Любой доступ к БД, миграции | `TenantDatabase.tenantTransaction` / `PlatformDatabase` на Kysely, `set_config('app.tenant_id')`, RLS, чек + движения атомарно, коды ошибок, `bigint`, kysely-codegen, node-pg-migrate, интеграционные тесты |
 | [nestjs-templates-core.md](nestjs-templates-core.md) | Bootstrap приложения | `main.ts` (Express), `AppModule` с 11 модулями, глобальные guards/pipe/filter, correlation ID, `CoreModule` |
 | [nestjs-templates-features.md](nestjs-templates-features.md) | Новый доменный модуль / ресурс | Модуль catalog: DTO в libs/shared/dto, контроллер с правами, сервис, аудит |
 | [nestjs-templates-infrastructure.md](nestjs-templates-infrastructure.md) | Docker, compose, Jest | Dockerfile api, compose локальной среды и офлайн-точки (ADR-0005), `jest.config.ts` Nx |

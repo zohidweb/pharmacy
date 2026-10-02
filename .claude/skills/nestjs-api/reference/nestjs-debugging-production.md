@@ -66,12 +66,13 @@ JOIN pg_stat_activity blocking ON blocking.pid = ANY(pg_blocking_pids(blocked.pi
 Публичные `/api/health/live|ready` — минимальные (`nestjs-enterprise-infrastructure.md`). Подробности — во внутреннем эндпоинте только для оператора платформы:
 
 ```typescript
-// apps/api/src/common/health/diagnostics.controller.ts
-@Controller({ path: 'internal/diagnostics', version: '1' })   // /api/v1/internal/diagnostics
-@RequirePermission('platform', 'diagnostics')
+// apps/api/src/app/platform/diagnostics/diagnostics.controller.ts
+@Controller({ path: 'operator/diagnostics', version: '1' })   // /api/v1/operator/diagnostics
+// Operator-only diagnostics live in app/platform/** (ADR-0013): operator session + PlatformDatabase
+@RequireOperatorPermission('platform:diagnostics')
 export class DiagnosticsController {
   constructor(
-    private readonly db: DatabaseService,
+    private readonly platform: PlatformDatabase,
     private readonly jobs: JobQueueStats,
     private readonly breakers: CircuitBreakerRegistry,
   ) {}
@@ -82,7 +83,8 @@ export class DiagnosticsController {
     return {
       uptimeSec: Math.round(process.uptime()),
       heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
-      dbLatencyMs: await timeMs(() => this.db.ping()),   // timeMs: small helper measuring a promise
+      dbLatencyMs: await timeMs(() =>                    // timeMs: small helper measuring a promise
+        this.platform.platformTransaction({ kind: 'system', job: 'diagnostics' }, async () => undefined)),
       queues: await this.jobs.summary(),            // counts by queue/status, dead count
       circuits: this.breakers.snapshots(),
     };

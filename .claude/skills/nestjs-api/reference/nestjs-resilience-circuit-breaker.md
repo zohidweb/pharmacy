@@ -188,7 +188,7 @@ export function withTimeout<T>(operation: (signal: AbortSignal) => Promise<T>, t
 Клиент `HttpFiscalRegistrar` (`nestjs-rest-services.md`) уже ограничивает вызов таймаутом (`AbortSignal.timeout`) и переводит сбой в `BadGatewayException`. Цепь и повторы добавляет вызывающая сторона — обработчик задачи очереди. Порядок: **retry( breaker( call-with-timeout ) )** — каждая попытка ограничена таймаутом и учитывается цепью; при OPEN повторы прекращаются, задача уходит в повтор очереди по backoff.
 
 ```typescript
-// apps/api/src/modules/fiscal/fiscal-send.job-handler.ts
+// apps/api/src/app/fiscal/fiscal-send.job-handler.ts
 type FiscalSendPayload = { receiptId: string };
 
 @Injectable()
@@ -205,7 +205,7 @@ export class FiscalSendJobHandler implements JobHandler<FiscalSendPayload> {
   }
 
   async handle({ receiptId }: FiscalSendPayload, job: ClaimedJob<FiscalSendPayload>): Promise<void> {
-    const receipt = await this.fiscal.loadReceipt(receiptId);          // tenantTransaction, read-only
+    const receipt = await this.fiscal.loadReceipt(receiptId);          // TenantDatabase.tenantTransaction, read-only
     const result = await retry(
       () => this.breaker.execute(() => this.registrar.register(receipt, job.idempotencyKey)), // same key on every attempt
       { attempts: 3, baseDelayMs: 500, maxDelayMs: 5_000 },

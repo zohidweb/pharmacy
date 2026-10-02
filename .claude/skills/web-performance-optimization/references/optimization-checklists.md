@@ -249,10 +249,10 @@ Next.js (может потребоваться webpack-сборка для ан�
 **Бэкенд-валидация в клиентском бандле:**
 ```ts
 // Before — value import pulls class-validator/class-transformer into the browser bundle
-import { CreateReceiptDto } from '@pharmacy/shared/dto';
+import { CreateReceiptDto } from '@pharmacy/shared-dto';
 
 // After — type-only import is erased at compile time
-import type { CreateReceiptDto } from '@pharmacy/shared/dto';
+import type { CreateReceiptDto } from '@pharmacy/shared-dto';
 ```
 Алиас — по `tsconfig.base.json`. Включить `@typescript-eslint/consistent-type-imports` в линтере — дёшево и страхует.
 

@@ -36,12 +36,14 @@
 
 ```bash
 # check syntax for your Nx version: npx nx g @nx/nest:<generator> --help
-npx nx g @nx/nest:controller apps/api/src/modules/pos/receipts
-npx nx g @nx/nest:service    apps/api/src/modules/pos/receipts
+npx nx g @nx/nest:controller apps/api/src/app/pos/receipts
+npx nx g @nx/nest:service    apps/api/src/app/pos/receipts
 ```
 
-- Репозиторий: SQL с `tenant_id`, принимает `Tx`.
-- Сервис: бизнес-правила, транзакция `db.tenantTransaction()`, аудит в той же транзакции.
+- Миграция (если меняется схема): `apps/api/migrations/*.sql` по модели данных, запись в
+  `table-classes.ts`, `npx nx run api:migrate`, `npx nx run api:db-types`.
+- Репозиторий: Kysely-запросы с `.where('tenantId', '=', tenantId)`, принимает `TenantTransaction`.
+- Сервис: бизнес-правила, `TenantDatabase.tenantTransaction()`, аудит в той же транзакции.
 - Контроллер: `@RequirePermission(...)`, DTO на входе/выходе, никакой логики.
 - Внешний вызов (фискализация, синхронизация) — только через клиент-адаптер модуля с таймаутом,
   никогда внутри транзакции кассы (`nestjs-rest-services.md`).
@@ -60,16 +62,16 @@ npx nx affected -t build test lint
 npx nx e2e api-e2e
 ```
 
-CI пока не выбран (вводится через ADR) — до ADR команды запускаются вручную; полный прогон — `npm run check`.
+Плюс `npx nx run api:integration` и `npx nx run api:db-types-verify`. CI — GitHub Actions (ADR-0009); пока workflow-файлов нет, перед PR — полный прогон `npm run check`.
 Затем — агенты ревью (SKILL.md, «Post-Code Review») и обязательное ревью человеком.
 
 ## Пример контроллера ресурса с идемпотентностью
 
 ```typescript
-// apps/api/src/modules/pos/receipts.controller.ts
+// apps/api/src/app/pos/receipts.controller.ts
 import { Body, Controller, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CompleteReceiptDto, ReceiptResponseDto } from '@pharmacy/shared/dto';
+import { CompleteReceiptDto, ReceiptResponseDto } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { IdempotencyKeyPipe } from '../../common/pipes/idempotency-key.pipe';
 import { ReceiptsService } from './receipts.service';

@@ -42,7 +42,7 @@ export default {
 ```
 
 - Декораторы: в `tsconfig.spec.json` должны действовать `experimentalDecorators` и `emitDecoratorMetadata` — иначе DI в `Test.createTestingModule` не резолвит типы.
-- Алиасы `@pharmacy/shared/dto`, `@pharmacy/shared/util` берутся из `tsconfig.base.json` — отдельный `moduleNameMapper` не нужен.
+- Алиасы `@pharmacy/shared-dto`, `@pharmacy/shared-util` берутся из `tsconfig.base.json` — отдельный `moduleNameMapper` не нужен.
 - Пороги покрытия — стартовое предложение; окончательные значения фиксирует команда (`nestjs-testing-ci-troubleshooting.md`).
 
 ## Паттерн unit-теста сервиса
@@ -50,7 +50,7 @@ export default {
 Слой данных — по `nestjs-config-data-access.md`: сервис открывает транзакцию через `DatabaseService.tenantTransaction()`, репозитории модуля принимают `Tx` (в нём `tenantId`). В unit-тесте мокаются `DatabaseService` и репозиторий — не ORM и не драйвер. Контекст запроса — настоящий `AsyncLocalStorage` через `runWithContext`, без мока.
 
 ```typescript
-// apps/api/src/modules/catalog/products.service.spec.ts
+// apps/api/src/app/catalog/products.service.spec.ts
 import { Test } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ProductsService } from './products.service';

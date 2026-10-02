@@ -8,7 +8,7 @@
 
 - HTTP — `supertest` против запущенного api (`request(baseUrl)`);
 - состояние БД — прямыми SQL-запросами через `TestDb` (сидирование и проверки);
-- типы запросов/ответов — из `@pharmacy/shared/dto`.
+- типы запросов/ответов — из `@pharmacy/shared-dto`.
 
 Запуск: `npx nx e2e api-e2e` (Nx поднимает зависимость `api` через `dependsOn`/globalSetup).
 

@@ -162,23 +162,22 @@ export class CorrelationIdMiddleware implements NestMiddleware {
 Полная модель контекста (AsyncLocalStorage, пробрасывание в воркеры) —
 `nestjs-resilience-context.md`.
 
-## CoreModule (apps/api/src/core/core.module.ts)
+## Глобальные модули ядра
+
+`DatabaseModule` уже есть (`apps/api/src/core/database/database.module.ts`, `@Global`,
+экспортирует только `TenantDatabase`) и подключён в `AppModule`. Redis и health добавляются
+своими модулями по тому же образцу:
 
 ```typescript
+// apps/api/src/core/redis/redis.module.ts (to be added with sessions)
 import { Global, Module } from '@nestjs/common';
-import { TerminusModule } from '@nestjs/terminus';
-import { DatabaseService } from './database/database.service';
-import { RedisService } from './redis/redis.service';
-import { HealthController } from './health/health.controller';
+import { RedisService } from './redis.service'; // node-redis 6 client, the project's only Redis client
 
 @Global()
-@Module({
-  imports: [TerminusModule],
-  controllers: [HealthController],
-  providers: [DatabaseService, RedisService],
-  exports: [DatabaseService, RedisService],
-})
-export class CoreModule {}
+@Module({ providers: [RedisService], exports: [RedisService] })
+export class RedisModule {}
 ```
 
-`DatabaseService` — `nestjs-config-data-access.md`; health — `nestjs-enterprise-infrastructure.md`.
+`PlatformDatabaseModule` **не** глобальный и не подключается в `AppModule` — его импортируют
+только модули `app/platform/**` и `app/sync/**` (ADR-0013). Доступ к данным —
+`nestjs-config-data-access.md`; health — `nestjs-enterprise-infrastructure.md`.

@@ -1,153 +1,56 @@
-# NestJS Infrastructure Templates — Docker, compose, Jest
+# NestJS Infrastructure — Docker, compose, Jest (реальные файлы репозитория)
 
-Docker в проекте — по ADR-0005 (`docs/architecture/adr/0005-vybor-docker.md`): **только** для офлайн-дистрибутива
-точки и локальной среды разработки. Файлы — в `docker/` монорепо. Оркестраторы,
-CI-пайплайны сборки образов и реестры — вне этого скила (пока не выбраны — вводятся через ADR).
-Базовые образы — только официальные образы (реестр образов определяется в рамках ADR-0005); теги — конкретные, не `latest`.
+Docker — по ADR-0005: облачные среды test/prod, офлайн-дистрибутив точки и локальная среда.
+Файлы уже есть в репозитории — этот справочник объясняет, где что лежит и какие правила
+действуют; содержимое файлов не дублируется. CI — GitHub Actions (ADR-0009); пока
+workflow-файлов нет, качество проверяется вручную `npm run check` и шагом `build` скрипта стека.
 
-## Dockerfile api (docker/api.Dockerfile)
+## Образ API — `apps/api/Dockerfile`
 
-```dockerfile
-# Build stage: whole monorepo, Nx builds only apps/api and its libs
-FROM node:24-alpine AS builder
-WORKDIR /workspace
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-# build target must have generatePackageJson: true -> dist/apps/api/package.json + lock file
-RUN npx nx build api --configuration=production
+- Multi-stage: сборка `npx nx run api:prune --configuration=production` → `apps/api/dist`
+  (`main.js`, урезанные `package.json` / `package-lock.json`, `scripts/migrate.mjs`,
+  `migrations/*.sql`) → runtime `npm ci --omit=dev`, пользователь `node`, healthcheck на
+  `/api/v1/health`.
+- Базовый образ `node:24.x-alpine` закреплён по версии **и digest**; обновление — осознанно.
+- Контекст сборки — корень репозитория (`.dockerignore` исключает env-файлы и `docker/env`).
+- Мигратор (`node-pg-migrate`) — runtime-зависимость: тот же образ запускает миграции.
 
-# Runtime stage: production deps only, non-root
-FROM node:24-alpine AS runner
-ENV NODE_ENV=production
-WORKDIR /app
-COPY --from=builder /workspace/dist/apps/api ./
-RUN npm ci --omit=dev && npm cache clean --force
-USER node
-EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -q --spider http://127.0.0.1:3000/api/health/live || exit 1
-CMD ["node", "main.js"]
-```
+## Compose — `docker/compose.yml` + `docker/compose.<dev|test|prod>.yml`
 
-- Секреты (`DATABASE_URL`, лицензионный ключ точки) не запекаются в образ — только env
-  при запуске (`env_file`, вне git).
-- Миграции — отдельная одноразовая команда перед стартом новой версии (инструмент — по ADR),
-  не в `CMD` приложения.
+| Сервис | Роль |
+|---|---|
+| `postgres` | образ `docker/postgres` (PostgreSQL 17, initdb: роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver`, БД принадлежит owner, схема `pharmacy`, `pg_trgm`; в dev — пустая `pharmacy_test`) |
+| `redis` | образ `docker/redis`, без персистентности, пароль обязателен |
+| `migrate` | образ API, `node scripts/migrate.mjs` ролью `pharmacy_owner`; one-shot до старта API |
+| `api` | `DATABASE_URL` (`pharmacy_app`), `PLATFORM_DATABASE_URL` (`pharmacy_platform`); пароль owner в API не передаётся; стартует после `migrate: service_completed_successfully` |
 
-## .dockerignore
+- Порты публикуются только на `127.0.0.1`. Env-файлы: dev — корневой `.env`, test/prod —
+  `docker/env/<env>.env` (не в git; `npm run stack -- <env> init` создаёт из примера со
+  случайными паролями).
+- initdb выполняется только на **пустом томе**: изменение ролей — пересоздание тома (с данными
+  — только по согласованию).
+- Команды: `npm run dev:deps` (PostgreSQL + Redis для `npx nx serve api`),
+  `npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs>`; упавшую миграцию смотреть
+  `npm run stack -- <env> logs migrate`.
 
-```
-node_modules
-dist
-coverage
-tmp
-.nx
-.git
-.env
-.env.*
-!.env.example
-**/*.spec.ts
-apps/*-e2e
-```
+## Офлайн-точка (ADR-0014)
 
-## Локальная среда разработки (docker/compose.dev.yml)
+Тот же образ API и PostgreSQL, один тенант, без Redis (сессии — `PgSessionStore`, throttler —
+in-memory), обновление — `pg_dump` → миграции тем же `scripts/migrate.mjs` → новый образ.
+Профиль compose офлайн-точки и флеш-комплект появятся с модулем `sync`; до этого ориентир —
+ADR-0014 §4–7. Доступ к точке с других ПК по LAN требует TLS и отдельного решения.
 
-Только зависимости; сами приложения — `npx nx serve api|web|admin` на хосте.
+## Jest
 
-```yaml
-services:
-  postgres:
-    image: postgres:17-alpine
-    ports: ["127.0.0.1:5432:5432"]
-    environment:
-      POSTGRES_USER: pharmacy
-      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:?set in docker/.env}
-      POSTGRES_DB: pharmacy
-    volumes: [pg-data:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pharmacy"]
-      interval: 10s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports: ["127.0.0.1:6379:6379"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      retries: 5
-
-volumes:
-  pg-data:
-```
-
-```bash
-docker compose -f docker/compose.dev.yml up -d
-```
-
-Порты публикуются только на `127.0.0.1`. Данные — синтетические, никаких реальных
-клиентских данных в локальной БД и фикстурах.
-
-## Офлайн-дистрибутив точки (docker/compose.offline.yml)
-
-Тот же артефакт api, что в облаке (ADR-0002), с `DEPLOYMENT_MODE=offline` и локальной PostgreSQL.
-
-```yaml
-services:
-  api:
-    image: pharmacy-api:${PHARMACY_VERSION:?}
-    env_file: ./offline.env            # not in git: DATABASE_URL, REDIS_URL, license key, cloud sync URL
-    environment:
-      DEPLOYMENT_MODE: offline
-    ports: ["127.0.0.1:3000:3000"]     # open to the store LAN only by explicit decision (TLS required)
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:17-alpine
-    env_file: ./offline.env
-    volumes: [pg-data:/var/lib/postgresql/data]   # not published to the host network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
-      interval: 10s
-      retries: 5
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-
-volumes:
-  pg-data:
-```
-
-Открытые вопросы — решать ADR до реализации, не «по месту»:
-- как раздаётся статика `apps/web` на офлайн-точке (например, `@nestjs/serve-static` в api
-  или отдельный веб-сервер — последний означает новую технологию);
-- TLS внутри точки, если к api подключаются терминалы по LAN;
-- резервное копирование локальной PostgreSQL и процедура обновления версии/миграций.
-
-## Jest (apps/api/jest.config.ts, генерирует Nx)
-
-```typescript
-export default {
-  displayName: 'api',
-  preset: '../../jest.preset.js',
-  testEnvironment: 'node',
-  transform: {
-    '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
-  },
-  moduleFileExtensions: ['ts', 'js', 'html'],
-  coverageDirectory: '../../coverage/apps/api',
-};
-```
-
-- Запуск: `npx nx test api` (`--coverage`, `--watch`), e2e: `npx nx e2e api-e2e`.
-- Алиасы `@pharmacy/shared/*` резолвит пресет Nx из `tsconfig.base.json` — отдельный
+- `apps/api/jest.config.cts` (unit, `*.spec.ts`) и `apps/api/jest.integration.config.cts`
+  (`*.int-spec.ts`, globalSetup пересоздаёт `pharmacy_test`) — трансформер `@swc/jest`.
+- ESM-only пакеты (`uuid`, `kysely`, `@nestjs/config`) — общий список
+  `apps/api/jest.esm-packages.cjs` в `transformIgnorePatterns` обоих конфигов: новый ESM-пакет
+  добавляется туда.
+- Запуск: `npx nx test api` (`--coverage`, `--watch`), `npx nx run api:integration`,
+  `npx nx e2e api-e2e`.
+- Библиотеки `@pharmacy/*` резолвятся как пакеты npm workspaces (`customConditions`) —
   `moduleNameMapper` не нужен.
 - Не включайте `retry` флейки-тестов: нестабильный тест чинится, а не перезапускается.
-- Пороги покрытия, интеграционные тесты с реальной PostgreSQL —
-  `nestjs-testing-integration-setup.md`, `nestjs-testing-ci-troubleshooting.md`.
+- Пороги покрытия и стенд — `nestjs-testing-integration-setup.md`,
+  `nestjs-testing-ci-troubleshooting.md`.

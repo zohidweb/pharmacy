@@ -7,9 +7,9 @@ PDF счёта тенанта (billing), при необходимости — �
 ## Выгрузка 1С (download, модуль export-1c)
 
 ```typescript
-// apps/api/src/modules/export-1c/export-1c.controller.ts
+// apps/api/src/app/export-1c/export-1c.controller.ts
 import { Controller, Get, Query, StreamableFile } from '@nestjs/common';
-import { ExportPeriodQueryDto } from '@pharmacy/shared/dto';
+import { ExportPeriodQueryDto } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { Export1cService } from './export-1c.service';
 

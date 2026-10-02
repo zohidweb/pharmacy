@@ -83,7 +83,7 @@ export class StaticConfigurationException extends Error {
 ```typescript
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import type { ProblemDetails } from '@pharmacy/shared/dto';
+import type { ProblemDetails } from '@pharmacy/shared-dto';
 import { DomainException } from '../exceptions/domain.exceptions';
 import { getCorrelationId } from '../context/request-context';
 import { pgErrorCode, PG_CHECK_VIOLATION, PG_FOREIGN_KEY_VIOLATION, PG_UNIQUE_VIOLATION } from '../../core/database/pg-errors';

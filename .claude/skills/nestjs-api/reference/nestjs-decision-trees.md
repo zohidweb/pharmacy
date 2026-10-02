@@ -18,11 +18,11 @@
 |      брокер -> очередь-таблица PostgreSQL (SKIP LOCKED, ADR-0002), nestjs-messaging-basics.md
 |      pino/winston/OTel -> встроенный Nest Logger + correlation ID, nestjs-observability.md
 |      Vault -> env-файлы / переменные окружения
-|      CI/CD -> ручной прогон `npm run check`
-|      bcrypt/argon2 -> порт PasswordHasher, реализация после accepted ADR-0008
-|      (сейчас proposed — решает архитектор проекта); самописная криптография запрещена
+|      CI -> GitHub Actions (ADR-0009); пока workflow-файлов нет — `npm run check` перед PR
+|      хеш паролей/PIN -> PasswordHasher = scrypt из node:crypto + pepper (ADR-0008);
+|      самописная криптография запрещена
 |
-+-- Не выбрано проектом (ORM, миграции, Fastify, Tailwind/UI-библиотеки)?
++-- Не выбрано проектом (Fastify, хранение файлов, раздача статики — ADR-0012 proposed, мониторинг)?
 |   -> /03-adr в архитектурном репозитории ДО кода
 |
 +-- Новая внешняя система?
@@ -41,7 +41,7 @@
 +-- Контракт API (request/response, query, коды ошибок) -> libs/shared/dto
 +-- Доменный тип/перечисление, общее для api и фронтендов -> libs/shared/domain
 +-- Деньги (дирамы, округление), даты, i18n RU/TJ -> libs/shared/util
-+-- Логика одного домена -> apps/api/src/modules/<module>
++-- Логика одного домена -> apps/api/src/app/<module>
 +-- Инфраструктура (БД, Redis, health) -> apps/api/src/core
 +-- Сквозное (фильтр ошибок, correlation ID, маскирование) -> apps/api/src/common
 +-- Сессии, PIN, права -> apps/api/src/auth
@@ -58,7 +58,7 @@
 |   -> никогда: чужой репозиторий или SQL по чужим таблицам
 |
 +-- Запись в рамках одной бизнес-операции (чек -> движения партий -> аудит)
-|   -> сервис-владелец операции открывает tenantTransaction и передаёт Tx
+|   -> сервис-владелец операции открывает tenantTransaction и передаёт trx (TenantTransaction)
 |      в публичные методы сервисов других модулей: одна транзакция, атомарно
 |
 +-- Реакция «потом», не блокирующая операцию (фискализация, отправка в синхронизацию)

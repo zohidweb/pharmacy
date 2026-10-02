@@ -1,7 +1,7 @@
 # NestJS Security — проверки зависимостей, ESLint, grep-аудит, CORS
 
-CI/CD пока не выбран (вводится через ADR), поэтому **никаких пайплайнов** (GitHub Actions,
-GitLab CI) здесь нет: до ADR всё запускается локально перед MR (`npm run check`). Внешние
+CI — GitHub Actions (ADR-0009): гейт `checks` на PR, ночью — `npm audit` и Trivy, Dependabot.
+Пока workflow-файлов нет, всё запускается локально перед PR (`npm run check`). Внешние
 SaaS-сканеры, которым уходит состав зависимостей или код (Snyk и т.п.), не используем без ADR.
 Валидация и маскирование ПДн — `nestjs-security-validation-logging.md`; аутентификация —
 `nestjs-security-auth.md`.

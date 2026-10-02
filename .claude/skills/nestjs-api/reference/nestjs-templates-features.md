@@ -8,9 +8,9 @@
 
 ```bash
 # Nx >= 20: generators take a path; check `npx nx g @nx/nest:<generator> --help` for your version
-npx nx g @nx/nest:module     apps/api/src/modules/catalog/catalog
-npx nx g @nx/nest:controller apps/api/src/modules/catalog/products
-npx nx g @nx/nest:service    apps/api/src/modules/catalog/products
+npx nx g @nx/nest:module     apps/api/src/app/catalog/catalog
+npx nx g @nx/nest:controller apps/api/src/app/catalog/products
+npx nx g @nx/nest:service    apps/api/src/app/catalog/products
 npx nx g @nx/js:library      libs/shared/dto   # once, if the lib does not exist yet
 ```
 
@@ -23,25 +23,27 @@ npx nx g @nx/js:library      libs/shared/dto   # once, if the lib does not exist
 
 ```typescript
 // libs/shared/dto/src/catalog/create-product.dto.ts
-import { ArrayMaxSize, IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsOptional, Matches, Min, ValidateNested } from 'class-validator';
+import { LocalizedTextDto } from '../common/localized-text.dto'; // { ru: string; tj?: string } — names are jsonb by language (data model D6)
 
 export class CreateProductDto {
-  @IsString() @IsNotEmpty() @MaxLength(300)
-  nameRu!: string;
-
-  @IsString() @IsNotEmpty() @MaxLength(300)
-  nameTj!: string;
+  @ValidateNested() @Type(() => LocalizedTextDto)
+  name!: LocalizedTextDto;
 
   /** International nonproprietary name (МНН) — basis for analog search at the POS */
-  @IsOptional() @IsString() @MaxLength(300)
-  inn?: string;
+  @IsOptional() @ValidateNested() @Type(() => LocalizedTextDto)
+  inn?: LocalizedTextDto;
+
+  @IsInt() @Min(1)
+  piecesPerPack!: number;
 
   @IsBoolean()
   isPrescription!: boolean;
 
-  /** Controlled substance (ПКУ): separate sale permission + mandatory prescription fields */
+  /** Controlled substance (ПКУ): separate sale permission pos:sell-controlled */
   @IsBoolean()
-  isControlledSubstance!: boolean;
+  isControlled!: boolean;
 
   @IsArray() @ArrayMaxSize(20) @Matches(/^\d{8,14}$/, { each: true })
   barcodes!: string[];
@@ -51,12 +53,13 @@ export class CreateProductDto {
 ```typescript
 // libs/shared/dto/src/catalog/update-product.dto.ts
 // Explicit class instead of PartialType: PartialType comes from @nestjs/* and is not allowed here
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsOptional, ValidateNested } from 'class-validator';
+import { LocalizedTextDto } from '../common/localized-text.dto';
 
 export class UpdateProductDto {
-  @IsOptional() @IsString() @MaxLength(300) nameRu?: string;
-  @IsOptional() @IsString() @MaxLength(300) nameTj?: string;
-  @IsOptional() @IsString() @MaxLength(300) inn?: string;
+  @IsOptional() @ValidateNested() @Type(() => LocalizedTextDto) name?: LocalizedTextDto;
+  @IsOptional() @ValidateNested() @Type(() => LocalizedTextDto) inn?: LocalizedTextDto;
   @IsOptional() @IsBoolean() isPrescription?: boolean;
   @IsOptional() @IsBoolean() archived?: boolean;
 }
@@ -66,11 +69,11 @@ export class UpdateProductDto {
 // libs/shared/dto/src/catalog/product.response.ts
 export interface ProductResponseDto {
   id: string;
-  nameRu: string;
-  nameTj: string;
-  inn: string | null;
+  name: LocalizedText;          // { ru: string; tj?: string }
+  inn: LocalizedText | null;
+  piecesPerPack: number;
   isPrescription: boolean;
-  isControlledSubstance: boolean;
+  isControlled: boolean;
   barcodes: string[];
   archived: boolean;
 }
@@ -83,7 +86,7 @@ export interface ProductResponseDto {
 ## Модуль
 
 ```typescript
-// apps/api/src/modules/catalog/catalog.module.ts
+// apps/api/src/app/catalog/catalog.module.ts
 import { Module } from '@nestjs/common';
 import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
@@ -100,10 +103,10 @@ export class CatalogModule {}
 ## Контроллер
 
 ```typescript
-// apps/api/src/modules/catalog/products.controller.ts
+// apps/api/src/app/catalog/products.controller.ts
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CreateProductDto, Page, ProductListQueryDto, ProductResponseDto, UpdateProductDto } from '@pharmacy/shared/dto';
+import { CreateProductDto, Page, ProductListQueryDto, ProductResponseDto, UpdateProductDto } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { ProductsService } from './products.service';
 
@@ -151,65 +154,71 @@ export class ProductsController {
 ## Сервис
 
 ```typescript
-// apps/api/src/modules/catalog/products.service.ts
+// apps/api/src/app/catalog/products.service.ts
 import { Injectable } from '@nestjs/common';
-import { CreateProductDto, Page, ProductListQueryDto, ProductResponseDto, UpdateProductDto } from '@pharmacy/shared/dto';
-import { DatabaseService } from '../../core/database/database.service';
+import { CreateProductDto, Page, ProductListQueryDto, ProductResponseDto, UpdateProductDto } from '@pharmacy/shared-dto';
+import { requireTenantId } from '../../common/context/request-context';
+import { TenantDatabase } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 import { ResourceNotFoundException } from '../../common/exceptions/domain.exceptions';
-import { ProductsRepository, ProductRow } from './products.repository';
+import { ProductsRepository, type ProductRow } from './products.repository';
 
 @Injectable()
 export class ProductsService {
   constructor(
-    private readonly db: DatabaseService,
+    private readonly db: TenantDatabase,
     private readonly repo: ProductsRepository,
     private readonly audit: AuditService,
   ) {}
 
   create(dto: CreateProductDto): Promise<ProductResponseDto> {
-    return this.db.tenantTransaction(async (tx) => {
-      const row = await this.repo.insert(tx, dto); // barcode unique per tenant -> 23505 -> 409
-      await this.audit.append(tx, { action: 'product.created', entityType: 'product', entityId: row.id });
+    const tenantId = requireTenantId();
+    return this.db.tenantTransaction(async (trx) => {
+      const row = await this.repo.insert(trx, tenantId, dto); // barcode unique per tenant -> 23505 -> 409
+      await this.audit.append(trx, { action: 'product.created', entityType: 'product', entityId: row.id });
       return toProductResponse(row);
     });
   }
 
   list(query: ProductListQueryDto): Promise<Page<ProductResponseDto>> {
-    return this.db.tenantTransaction(async (tx) => {
-      const { rows, total } = await this.repo.search(tx, query);
+    const tenantId = requireTenantId();
+    return this.db.tenantTransaction(async (trx) => {
+      const { rows, total } = await this.repo.search(trx, tenantId, query);
       return { items: rows.map(toProductResponse), total, limit: query.limit, offset: query.offset };
     });
   }
 
   get(id: string): Promise<ProductResponseDto> {
-    return this.db.tenantTransaction(async (tx) => {
-      const row = await this.repo.findById(tx, id);
+    const tenantId = requireTenantId();
+    return this.db.tenantTransaction(async (trx) => {
+      const row = await this.repo.findById(trx, tenantId, id);
       if (!row) throw new ResourceNotFoundException('product', id);
       return toProductResponse(row);
     });
   }
 
   update(id: string, dto: UpdateProductDto): Promise<ProductResponseDto> {
-    return this.db.tenantTransaction(async (tx) => {
-      const row = await this.repo.update(tx, id, dto);
+    const tenantId = requireTenantId();
+    return this.db.tenantTransaction(async (trx) => {
+      const row = await this.repo.update(trx, tenantId, id, dto);
       if (!row) throw new ResourceNotFoundException('product', id);
-      await this.audit.append(tx, { action: 'product.updated', entityType: 'product', entityId: id });
+      await this.audit.append(trx, { action: 'product.updated', entityType: 'product', entityId: id });
       return toProductResponse(row);
     });
   }
 }
 
+// Rows come camelCased from Kysely (CamelCasePlugin); names are jsonb by language (data model D6).
 function toProductResponse(row: ProductRow): ProductResponseDto {
   return {
     id: row.id,
-    nameRu: row.name_ru,
-    nameTj: row.name_tj,
+    name: row.name,                 // { ru: string; tj?: string }
     inn: row.inn,
-    isPrescription: row.is_prescription,
-    isControlledSubstance: row.is_controlled_substance,
+    piecesPerPack: row.piecesPerPack,
+    isPrescription: row.isPrescription,
+    isControlled: row.isControlled,
     barcodes: row.barcodes,
-    archived: row.archived_at !== null,
+    archived: row.status === 'archived',
   };
 }
 ```
@@ -219,6 +228,6 @@ function toProductResponse(row: ProductRow): ProductResponseDto {
 
 ## Репозиторий
 
-Шаблон и правила — `nestjs-config-data-access.md` (раздел «Tenant-scoped репозиторий»):
-каждый SQL содержит `tenant_id = $1`, принимает `Tx`, возвращает строки, маппинг в DTO —
-в сервисе. Поиск/сортировка/пагинация — `nestjs-rest-dto-pagination.md`.
+Шаблон и правила — `nestjs-config-data-access.md` (раздел «TenantDatabase»): каждый запрос
+содержит `.where('tenantId', '=', tenantId)`, репозиторий принимает `TenantTransaction`,
+возвращает строки, маппинг в DTO — в сервисе. Поиск/сортировка/пагинация — `nestjs-rest-dto-pagination.md`.

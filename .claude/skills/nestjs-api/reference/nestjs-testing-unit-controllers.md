@@ -7,7 +7,7 @@
 Контроллер тонкий (без бизнес-логики), поэтому его unit-тест проверяет только передачу параметров в сервис и проброс исключений. Валидация DTO, guards (сессия, права, охват точек), `IdempotencyKeyPipe` и фильтр RFC 7807 проверяются в e2e (`nestjs-testing-integration-patterns.md`).
 
 ```typescript
-// apps/api/src/modules/pos/receipts.controller.spec.ts
+// apps/api/src/app/pos/receipts.controller.spec.ts
 import { Test } from '@nestjs/testing';
 import { UnprocessableEntityException } from '@nestjs/common';
 import { ReceiptsController } from './receipts.controller';

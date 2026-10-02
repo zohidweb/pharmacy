@@ -200,7 +200,7 @@ JS, поведение длинных списков и печати на сла
 ### Problem: Бандл кассы вырос после импорта из libs
 **Symptoms:** first-load JS вырос на десятки КБ; в Coverage видны `class-validator`, `validator`, `reflect-metadata`
 **Solution:**
-- В web/admin импортировать контракты как типы: `import type { CreateReceiptDto } from '@pharmacy/shared/dto'` (имя алиаса — по `tsconfig.base.json`)
+- В web/admin импортировать контракты как типы: `import type { CreateReceiptDto } from '@pharmacy/shared-dto'` (имя алиаса — по `tsconfig.base.json`)
 - Если нужны значения (enum, константы) — держать их в модуле без декораторов; изменение границ lib обсуждать с командой (при смене границ модулей — ADR)
 - Проверить, что libs ESM и без побочных эффектов на верхнем уровне (tree shaking)
 

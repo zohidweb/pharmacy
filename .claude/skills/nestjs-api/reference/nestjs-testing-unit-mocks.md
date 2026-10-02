@@ -34,7 +34,7 @@ export function inContext<T>(ctx: Partial<RequestContext>, fn: () => Promise<T>)
 Пример — чек и движения партий пишутся в одной транзакции, при нехватке остатка ничего не пишется (сервис — как в `nestjs-config-data-access.md`, раздел «Транзакция чек + движения партий + аудит»):
 
 ```typescript
-// apps/api/src/modules/pos/receipts.service.spec.ts (fragment)
+// apps/api/src/app/pos/receipts.service.spec.ts (fragment)
 const { db, tx } = createDatabaseServiceMock('tenant-a');
 const receipts = { findByIdempotencyKey: jest.fn(), insert: jest.fn() };
 const stock = { availableByBatch: jest.fn(), insertMovements: jest.fn() };
@@ -99,7 +99,7 @@ export const createRedisMock = () => ({ get: jest.fn(), set: jest.fn(), del: jes
 - **Сам клиент** тестируется с подменой встроенного `fetch` (Node LTS) — без сети:
 
 ```typescript
-// apps/api/src/modules/fiscal/http-fiscal-registrar.spec.ts
+// apps/api/src/app/fiscal/http-fiscal-registrar.spec.ts
 import { BadGatewayException } from '@nestjs/common';
 import { HttpFiscalRegistrar } from './http-fiscal-registrar';
 import type { FiscalReceipt } from './fiscal-registrar.port';
@@ -160,7 +160,7 @@ afterEach(() => jest.useRealTimers());
 ## Именование и структура
 
 ```text
-apps/api/src/modules/pos/receipts.service.spec.ts   # unit, рядом с кодом
+apps/api/src/app/pos/receipts.service.spec.ts   # unit, рядом с кодом
 libs/shared/util/src/lib/money.spec.ts              # unit библиотеки
 apps/api-e2e/src/pos/receipts.spec.ts               # e2e (проект api-e2e)
 ```

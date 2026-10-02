@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Prisma middleware и Bull-процессоры удалены; контекст восстанавливается в воркерах очереди-таблицы и cron; DI-примеры на модулях api; конфигурация через `@nestjs/config`. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Prisma middleware и Bull-процессоры удалены; контекст восстанавливается в воркерах очереди-таблицы и cron; DI-примеры на модулях api; конфигурация через `@nestjs/config`. Ограничения: `CLAUDE.md`. <!-- docs-check: ok -->
 
 # NestJS Debugging — Context, DI & Configuration
 
@@ -27,7 +27,7 @@ export function tenantScopeOrFail(): string {
 }
 ```
 
-Для RLS `tenantId` передаётся в БД в начале каждой транзакции: `SELECT set_config('app.tenant_id', $1, true)` (эквивалент `SET LOCAL`). Параметр `is_local = true` действует только до конца транзакции — поэтому только внутри `DatabaseService.tenantTransaction()` (`nestjs-config-data-access.md`), иначе на пуле соединений тенант «протечёт» или потеряется.
+Для RLS `tenantId` передаётся в БД в начале каждой транзакции: `SELECT set_config('app.tenant_id', $1, true)` (эквивалент `SET LOCAL`). Параметр `is_local = true` действует только до конца транзакции — поэтому только внутри `TenantDatabase.tenantTransaction()` / `withTenant()` (`nestjs-config-data-access.md`; регрессионный тест — `tenant-database.int-spec.ts`), иначе на пуле соединений тенант «протечёт» или потеряется.
 
 ## 2. Отладка DI
 

@@ -45,13 +45,13 @@ app.getHttpAdapter().getInstance().disable('x-powered-by');
 выбран через ADR). Без аутентификации, без детальной информации об окружении.
 
 ```typescript
-// apps/api/src/core/health/health.controller.ts
+// apps/api/src/app/health/health.controller.ts (exists: liveness today; readiness to be added)
 import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
 import { HealthCheck, HealthCheckService, HealthIndicatorService } from '@nestjs/terminus';
 import { SkipThrottle } from '@nestjs/throttler';
-import { Public } from '../../auth/decorators/public.decorator';
-import { DatabaseService } from '../database/database.service';
-import { RedisService } from '../redis/redis.service';
+import { Public } from '../auth/decorators';
+import { TenantDatabase } from '../../core/database';
+import { RedisService } from '../../core/redis/redis.service';
 
 @Public()
 @SkipThrottle()
@@ -60,7 +60,7 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly indicators: HealthIndicatorService,
-    private readonly db: DatabaseService,
+    private readonly db: TenantDatabase, // ping(): `select 1` without a tenant context — add with /health/ready
     private readonly redis: RedisService,
   ) {}
 

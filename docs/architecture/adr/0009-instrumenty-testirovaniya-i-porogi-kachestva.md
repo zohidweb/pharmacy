@@ -72,7 +72,7 @@ API и PostgreSQL делят один ПК с 8 ГБ ОЗУ (c4/deployment.md). 
 
 ### Г. Моки провайдеров NestJS в unit-тестах
 
-1. **Ручные типизированные фабрики моков** (`createDatabaseServiceMock()`, `{ method: jest.fn() }`
+1. **Ручные типизированные фабрики моков** (`createTenantDatabaseMock()`, `{ method: jest.fn() }`
    с `jest.Mocked<T>`). Плюсы: зависимости теста видны явно, пакетов не добавляется. Минусы:
    бойлерплейт на больших интерфейсах; моки `ExecutionContext` для guards и interceptors пишутся
    вручную.

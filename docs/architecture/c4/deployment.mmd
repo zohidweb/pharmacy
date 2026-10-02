@@ -21,7 +21,7 @@ flowchart TB
 
   subgraph pointPc["ПК офлайн-точки (Docker, волна 3)"]
     lweb["web (локально)"]
-    lapi["API + очередь синхронизации"]
+    lapi["API + sync_outbox<br/>(ключ в env-файле)"]
     lpg[("PostgreSQL (локально)")]
   end
 
@@ -33,4 +33,4 @@ flowchart TB
   api --> rd
   pg -. ежедневно .-> backup
   lweb --> lapi --> lpg
-  lapi -- "HTTPS + лицензионный ключ<br/>(по расписанию / вручную)" --> proxy
+  lapi -- "HTTPS + лицензионный ключ<br/>/api/v1/sync/* (по расписанию / вручную)" --> proxy

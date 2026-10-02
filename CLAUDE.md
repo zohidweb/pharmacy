@@ -33,7 +33,7 @@ Project class: Full
 | Backend | NestJS (Express adapter), TypeScript strict | ADR-0003 |
 | Frontend (web, admin) | Next.js (React, TypeScript), **static export (SPA)** | ADR-0004 |
 | БД | PostgreSQL | ADR-0001 |
-| Кэш / сессии | Redis | ADR-0001 |
+| Кэш / сессии | Redis, клиент `redis` (node-redis); на офлайн-точке Redis нет — сессии в PostgreSQL | ADR-0001, ADR-0008 |
 | API-стиль | REST | ADR-0001 |
 | Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`, cookie-сессии (Redis; офлайн — PostgreSQL) | ADR-0001, ADR-0008 |
 | Авторизация | RBAC: динамические роли тенанта, каталог прав `модуль:действие` (`libs/shared/domain`), одна роль + охват точек, запрет эскалации, проверка только на сервере | ADR-0018 |
@@ -126,13 +126,20 @@ npm run dev                          # api + web + admin с hot reload
   класс каждой таблицы — в манифесте `table-classes.ts`.
 - Остатки не хранятся — выводятся из движений по партиям; складская операция/чек и её
   движения — в одной транзакции БД.
+- Офлайн-точка (ADR-0014): складские операции и чеки точки проводятся только на точке; операция
+  синхронизации пишется в `sync_outbox` в той же транзакции, что и факт, и досылается в облако
+  идемпотентно. Заказы, оплаты поставщикам и заявки на перемещение ведутся только в облаке; отмена
+  проведения на офлайн-точке запрещена.
 - Аудит и журнал ПКУ — append-only (без UPDATE/DELETE на уровне БД).
 - Миграции БД — версионированные (инструмент — ADR-0006); никакого schema-sync в проде.
 - NestJS: один модуль = один домен; DTO с class-validator в libs/shared/dto; без бизнес-логики
   в контроллерах.
-- Next.js: `output: 'export'` — без SSR/ISR, Server Actions, Route Handlers и middleware; данные
-  только через apps/api; касса офлайн-устойчива — буфер перебоев связи как очередь операций в
-  браузере с идемпотентной досылкой.
+- Next.js: `output: 'export'` — без SSR/ISR, Server Actions, Route Handlers и middleware; маршруты
+  статические, id и фильтры — в query-параметрах; данные только через apps/api — свой клиент на
+  `fetch` с типами `import type` из `@pharmacy/shared-dto` (ADR-0015).
+- Касса офлайн-устойчива (ADR-0015): outbox-first — операция с UUIDv7-ключом идемпотентности сначала
+  пишется в IndexedDB (`idb`), затем досылается; ни одна операция не удаляется молча (карантин).
+  Service Worker — свой минимальный, только в облачной сборке `apps/web`.
 - Commits: Conventional Commits.
 
 ## Claude Code: скилы, агенты, команды
@@ -210,7 +217,7 @@ npm run prod:build / prod:up / prod:down
 ```
 
 - Скрипт: `tools/scripts/stack.mjs`; compose: `docker/compose.yml` + `docker/compose.<env>.yml`.
-- `build` — ручной quality gate, пока CI не выбран через ADR: lint + test всех
+- `build` — ручной quality gate, пока workflow-файлы CI не созданы (ADR-0009): lint + test всех
   проектов, затем сборка. Для prod `--skip-checks` запрещён, а сборка — только из чистого дерева
   git (тег образа = короткий sha; у test с незакоммиченными изменениями — `<sha>-dirty`).
 - `up` для test/prod запускает ровно те образы, что собрал `build` (`--no-build`).
@@ -218,6 +225,8 @@ npm run prod:build / prod:up / prod:down
   в задачи (`.env.test` попал бы в `nx test`). В корневом `.env` не задавать `NODE_ENV`.
 - `APP_ENV` (dev|test|prod) — среда развёртывания; `NODE_ENV` в test/prod всегда `production`.
 - В env-файлах сред обязательны `PHARMACY_OWNER_PASSWORD`, `PHARMACY_APP_PASSWORD` и `PHARMACY_PLATFORM_PASSWORD`.
+  Пароли подставляются в URL подключения compose: символы `@ / : ? #` в пароле, заданном вручную,
+  ломают URL — `stack init` генерирует безопасные (base64url).
   Роли создаёт initdb только на пустом томе: существующие тома (`pharmacy-<env>_pg-data`) после появления
   новых ролей нужно пересоздать (`docker volume rm`, данные теряются — только для test/dev).
 - web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (ADR-0012, proposed).
@@ -235,7 +244,8 @@ npm run prod:build / prod:up / prod:down
   `pharmacy_owner` используется только сервисом `migrate`; `PHARMACY_OWNER_PASSWORD` не передаётся в `api`.
 - Миграции: одноразовый сервис `migrate` (тот же образ `pharmacy/api`, `node scripts/migrate.mjs`) применяет
   SQL-миграции ролью `pharmacy_owner` до старта API (`api` ждёт `service_completed_successfully`). Скрипт и
-  `migrations/` попадают в образ через assets webpack.
+  `migrations/` попадают в образ через assets webpack. Если API не стартует из-за миграции —
+  `npm run stack -- <env> logs migrate`.
 - web/admin контейнеризуются вместе с reverse proxy после принятия ADR-0012 (proposed); до этого — `npx nx dev`.
 - Порты в compose публикуются только на `127.0.0.1`.
 

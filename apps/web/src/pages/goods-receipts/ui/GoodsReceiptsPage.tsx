@@ -27,7 +27,7 @@ import { StockNotices, useStockAccess } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
-import { GoodsReceiptEditor } from './GoodsReceiptEditor';
+import { GoodsReceiptEditor } from '@/widgets/goods-receipt-editor';
 
 const PAGE = 10;
 

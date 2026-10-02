@@ -20,7 +20,13 @@ import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
 import type { MockReceipt } from './db-pos';
 import { stores } from './fixtures';
-import { categories, discountRules, storeSettings } from './fixtures-pos';
+import { categories, storeSettings } from './fixtures-pos';
+import {
+  activeDiscountThresholds,
+  discountThresholdById,
+  piecePrice,
+  storePrice,
+} from './pricing';
 import { authorize } from './session';
 import type { MockHandlers } from './types';
 
@@ -100,11 +106,17 @@ const today = () => toAppDate();
 
 const stockOf = (storeId: string) => (mockDb().stock.stock[storeId] ??= {});
 
-/** The product with the stock of one store (the mock keeps stock by store and batch). */
+/** The product with the stock and the price of one store (the mock keeps both by store). */
 export function productAt(item: PosProduct, storeId: string): PosProduct {
   const stock = stockOf(storeId);
+  const priceMinor = storePrice(storeId, item);
   return {
     ...item,
+    priceMinor,
+    piecePriceMinor:
+      priceMinor === item.priceMinor
+        ? item.piecePriceMinor
+        : piecePrice(item, priceMinor),
     batches: item.batches.map((b) => ({
       ...b,
       quantityPieces: stock[b.id] ?? 0,
@@ -164,7 +176,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
             .map((p) => (canSeeCost ? p : withoutCost(p))),
       removedProductIds: [],
       categories,
-      discountRules,
+      discountRules: activeDiscountThresholds(store.id),
       settings: storeSettings(store.name, store.address),
     };
     return snapshot;
@@ -242,7 +254,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       if (body.cashTenderedMinor < cashPart) {
         throw validation(correlationId, 'cashTenderedMinor', 'too_small');
       }
-      const rule = discountRules.find((r) => r.id === body.discountRuleId);
+      const rule = discountThresholdById(body.discountRuleId);
       const number = String(pos().nextReceipt++);
       const receipt: MockReceipt = {
         id: body.id,

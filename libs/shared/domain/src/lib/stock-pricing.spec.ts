@@ -2,6 +2,7 @@ import {
   markupOf,
   pieceCost,
   priceDeviation,
+  priceWarnings,
   stockState,
   suggestRetail,
 } from './stock-pricing';
@@ -41,5 +42,21 @@ describe('stockState', () => {
     expect(state(50)).toBe('low');
     expect(state(500)).toBe('ok');
     expect(state(500, 100, null)).toBe('ok');
+  });
+});
+
+describe('priceWarnings', () => {
+  it('warns above the regulated maximum and below the cost', () => {
+    expect(
+      priceWarnings({ priceMinor: 520, costMinor: 310, maxPriceMinor: 500 }),
+    ).toEqual(['above_max']);
+    expect(
+      priceWarnings({
+        priceMinor: 1_800,
+        costMinor: 1_940,
+        maxPriceMinor: null,
+      }),
+    ).toEqual(['below_cost']);
+    expect(priceWarnings({ priceMinor: 450, maxPriceMinor: 500 })).toEqual([]);
   });
 });

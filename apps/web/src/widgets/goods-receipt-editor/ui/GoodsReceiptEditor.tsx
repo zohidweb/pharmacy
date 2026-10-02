@@ -73,17 +73,26 @@ function lineProblems(line: Line, today: string) {
   };
 }
 
+/** A new receipt opened from a purchase order («Оформить приход»): its lines are filled once loaded. */
+export interface GoodsReceiptPrefill {
+  supplierId: string;
+  storeId: string;
+  orderId: string;
+}
+
 /**
  * Goods receipt (UI mockup «Приход»): one supplier and one invoice; lines with batch, expiry,
  * quantity, ordered vs actual price; the retail price is proposed by the markup as a draft.
  */
 export function GoodsReceiptEditor({
   document,
+  prefill,
   access,
   onClose,
 }: {
   /** null — a new document. */
   document: GoodsReceipt | null;
+  prefill?: GoodsReceiptPrefill;
   access: StockAccess;
   onClose: () => void;
 }) {
@@ -97,15 +106,16 @@ export function GoodsReceiptEditor({
       ? fromDocument(document)
       : {
           date: today,
-          supplierId: '',
-          storeId: access.writableStores[0]?.id ?? '',
-          orderId: null,
+          supplierId: prefill?.supplierId ?? '',
+          storeId: prefill?.storeId ?? access.writableStores[0]?.id ?? '',
+          orderId: prefill?.orderId ?? null,
           invoiceNumber: '',
           paymentDueOn: plusDays(30),
           lines: [],
         },
   );
   const [touched, setTouched] = useState(false);
+  const [prefilled, setPrefilled] = useState(!prefill);
   const [unposting, setUnposting] = useState(false);
   const editable = (!doc || doc.status === 'draft') && access.canUpdate;
 
@@ -142,6 +152,8 @@ export function GoodsReceiptEditor({
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ['goods-receipts'] }),
       queryClient.invalidateQueries({ queryKey: ['stock'] }),
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] }),
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] }),
     ]);
 
   const input = (): GoodsReceiptInput => ({
@@ -255,6 +267,12 @@ export function GoodsReceiptEditor({
         })),
     }));
   };
+
+  // opened from an order: its remaining lines once the order and the products are loaded
+  if (!prefilled && order && productList.data) {
+    setPrefilled(true);
+    fillFromOrder();
+  }
 
   const problems = draft.lines.map((line) => lineProblems(line, today));
   const headerInvalid = {

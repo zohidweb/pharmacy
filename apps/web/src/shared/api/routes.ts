@@ -3,6 +3,31 @@
  * to its method, path and DTO types from @pharmacy/shared-dto. Paths are relative to /api/v1.
  */
 import type {
+  CatalogDuplicate,
+  CatalogListQuery,
+  CatalogListResponse,
+  CatalogProduct,
+  CatalogProductCard,
+  CatalogProductInput,
+  CatalogReferences,
+  DeficitLine,
+  DiscountRuleDefinition,
+  DiscountRuleInput,
+  PriceConflict,
+  PriceListQuery,
+  PriceListResponse,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderListQuery,
+  PurchaseOrderListResponse,
+  ResolvePriceConflictRequest,
+  Supplier,
+  SupplierCard,
+  SupplierInput,
+  SupplierListResponse,
+  SupplierLedgerEntry,
+  SupplierPaymentRequest,
+  UpdatePricesRequest,
   AcceptTransferRequest,
   DiscrepancyResolution,
   DocumentListQuery,
@@ -214,6 +239,119 @@ export const apiRoutes = {
     undefined,
     { supplierId: string }
   >('GET', () => '/purchase-orders/open'),
+
+  'purchaseOrders.list': route<
+    PurchaseOrderListResponse,
+    undefined,
+    undefined,
+    PurchaseOrderListQuery
+  >('GET', () => '/purchase-orders'),
+  'purchaseOrders.get': route<PurchaseOrder, undefined, { id: string }>(
+    'GET',
+    (p) => `/purchase-orders/${id(p)}`,
+  ),
+  'purchaseOrders.create': route<PurchaseOrder, PurchaseOrderInput>(
+    'POST',
+    () => '/purchase-orders',
+  ),
+  'purchaseOrders.update': route<
+    PurchaseOrder,
+    PurchaseOrderInput,
+    { id: string }
+  >('PUT', (p) => `/purchase-orders/${id(p)}`),
+  'purchaseOrders.confirm': route<PurchaseOrder, undefined, { id: string }>(
+    'POST',
+    (p) => `/purchase-orders/${id(p)}/confirmation`,
+  ),
+  'purchaseOrders.deficit': route<
+    DeficitLine[],
+    undefined,
+    undefined,
+    { storeId: string; supplierId?: string }
+  >('GET', () => '/purchase-orders/deficit'),
+
+  'suppliers.list': route<
+    SupplierListResponse,
+    undefined,
+    undefined,
+    { limit?: number; offset?: number }
+  >('GET', () => '/suppliers'),
+  'suppliers.get': route<SupplierCard, undefined, { id: string }>(
+    'GET',
+    (p) => `/suppliers/${id(p)}`,
+  ),
+  'suppliers.create': route<Supplier, SupplierInput>(
+    'POST',
+    () => '/suppliers',
+  ),
+  'suppliers.update': route<Supplier, SupplierInput, { id: string }>(
+    'PUT',
+    (p) => `/suppliers/${id(p)}`,
+  ),
+  'suppliers.pay': route<
+    SupplierLedgerEntry,
+    SupplierPaymentRequest,
+    { id: string }
+  >('POST', (p) => `/suppliers/${id(p)}/payments`),
+
+  'catalog.list': route<
+    CatalogListResponse,
+    undefined,
+    undefined,
+    CatalogListQuery
+  >('GET', () => '/catalog/products'),
+  'catalog.get': route<CatalogProductCard, undefined, { id: string }>(
+    'GET',
+    (p) => `/catalog/products/${id(p)}`,
+  ),
+  'catalog.create': route<CatalogProduct, CatalogProductInput>(
+    'POST',
+    () => '/catalog/products',
+  ),
+  'catalog.update': route<CatalogProduct, CatalogProductInput, { id: string }>(
+    'PUT',
+    (p) => `/catalog/products/${id(p)}`,
+  ),
+  'catalog.references': route<CatalogReferences>(
+    'GET',
+    () => '/catalog/references',
+  ),
+  'catalog.duplicates': route<CatalogDuplicate[]>(
+    'GET',
+    () => '/catalog/duplicates',
+  ),
+
+  'prices.list': route<PriceListResponse, undefined, undefined, PriceListQuery>(
+    'GET',
+    () => '/prices',
+  ),
+  'prices.update': route<
+    PriceListResponse['items'][number],
+    UpdatePricesRequest,
+    { productId: string }
+  >('PUT', (p) => `/prices/${encodeURIComponent(p.productId)}`),
+  'priceConflicts.list': route<PriceConflict[]>(
+    'GET',
+    () => '/price-conflicts',
+  ),
+  'priceConflicts.resolve': route<
+    void,
+    ResolvePriceConflictRequest,
+    { id: string }
+  >('POST', (p) => `/price-conflicts/${id(p)}/resolve`),
+  'discountRules.list': route<DiscountRuleDefinition[]>(
+    'GET',
+    () => '/discount-rules',
+  ),
+  'discountRules.create': route<DiscountRuleDefinition, DiscountRuleInput>(
+    'POST',
+    () => '/discount-rules',
+  ),
+  'discountRules.update': route<
+    DiscountRuleDefinition,
+    DiscountRuleInput,
+    { id: string }
+  >('PUT', (p) => `/discount-rules/${id(p)}`),
 
   'documents.unpostCheck': route<
     UnpostCheck,

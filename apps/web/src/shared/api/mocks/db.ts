@@ -4,6 +4,7 @@ import type {
   MyTerminal,
   TenantNotification,
 } from '@pharmacy/shared-dto';
+import { createCatalogDb, type CatalogMockDb } from './db-catalog';
 import { createPosDb, type PosMockDb } from './db-pos';
 import { createStockDb, type StockMockDb } from './db-stock';
 import {
@@ -29,6 +30,7 @@ export interface MockDb {
   activity: ActivityEntry[];
   pos: PosMockDb;
   stock: StockMockDb;
+  catalog: CatalogMockDb;
 }
 
 const minutesAgo = (minutes: number) =>
@@ -166,6 +168,7 @@ function createDb(): MockDb {
     activity: initialActivity(),
     pos,
     stock: createStockDb(pos.products),
+    catalog: createCatalogDb(),
   };
 }
 

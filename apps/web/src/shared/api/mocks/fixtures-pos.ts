@@ -3,7 +3,6 @@
  * an open shift, receipts to return. Expiry dates are relative to today so batch states stay
  * meaningful; barcodes and the taxpayer number are invented.
  */
-import type { DiscountRule } from '@pharmacy/shared-domain';
 import type {
   PosBatch,
   PosCategory,
@@ -25,11 +24,6 @@ export const categories: PosCategory[] = [
   { id: 'cat-vitamins', name: 'Витамины' },
   { id: 'cat-children', name: 'Детское' },
   { id: 'cat-other', name: 'Прочее' },
-];
-
-export const discountRules: DiscountRule[] = [
-  { id: 'rule-3', minSubtotalMinor: 50_000, percent: 3 },
-  { id: 'rule-5', minSubtotalMinor: 100_000, percent: 5 },
 ];
 
 export const storeSettings = (
@@ -135,7 +129,7 @@ export function initialProducts(): PosProduct[] {
       name: 'Нурофен 200 мг, таб. №10',
       inn: 'Ibuprofen',
       manufacturer: 'Reckitt',
-      country: 'UK',
+      country: 'GB',
       form: 'таблетки 200 мг',
       categoryId: 'cat-analgesics',
       barcodes: ['4870001000055'],
@@ -215,7 +209,7 @@ export function initialProducts(): PosProduct[] {
       name: 'Нурофен для детей сусп. 100 мг/5 мл, 150 мл',
       inn: 'Ibuprofen',
       manufacturer: 'Reckitt',
-      country: 'UK',
+      country: 'GB',
       form: 'суспензия 100 мг/5 мл',
       categoryId: 'cat-children',
       barcodes: ['4870001000109'],

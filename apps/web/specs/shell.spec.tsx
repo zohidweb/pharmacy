@@ -43,9 +43,10 @@ describe('AppShell', () => {
     ).toBe('page');
     expect(within(menu).getByRole('link', { name: 'Остатки' })).toBeTruthy();
     expect(
-      within(menu).queryByRole('link', { name: /Заказы поставщикам/ }),
-    ).toBeNull();
-    expect(within(menu).getByText('Заказы поставщикам')).toBeTruthy();
+      within(menu).getByRole('link', { name: 'Заказы поставщикам' }),
+    ).toBeTruthy();
+    expect(within(menu).queryByRole('link', { name: /^Отчёты/ })).toBeNull();
+    expect(within(menu).getByText('Отчёты')).toBeTruthy();
   });
 
   it('shows a cashier only the cashier menu and a fixed terminal store', async () => {

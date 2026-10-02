@@ -1,4 +1,5 @@
 import {
+  discountRuleStatus,
   bestDiscount,
   discountAmount,
   nextDiscount,
@@ -102,5 +103,19 @@ describe('returnRefund', () => {
         minSubtotalMinor: 0,
       }).refundMinor,
     ).toBe(620);
+  });
+});
+
+describe('discountRuleStatus', () => {
+  it('follows the validity period, inclusive', () => {
+    const period = { from: '2026-10-01', to: '2026-10-31' };
+    expect(discountRuleStatus(null, '2026-09-21')).toBe('active');
+    expect(discountRuleStatus(period, '2026-09-30')).toBe('scheduled');
+    expect(discountRuleStatus(period, '2026-10-01')).toBe('active');
+    expect(discountRuleStatus(period, '2026-10-31')).toBe('active');
+    expect(discountRuleStatus(period, '2026-11-01')).toBe('expired');
+    expect(
+      discountRuleStatus({ from: '2026-01-01', to: null }, '2030-01-01'),
+    ).toBe('active');
   });
 });

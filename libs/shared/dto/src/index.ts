@@ -7,3 +7,5 @@ export type * from './lib/tenant-auth.js';
 export type * from './lib/tenant-home.js';
 export type * from './lib/tenant-pos.js';
 export type * from './lib/tenant-inventory.js';
+export type * from './lib/tenant-purchasing.js';
+export type * from './lib/tenant-catalog.js';

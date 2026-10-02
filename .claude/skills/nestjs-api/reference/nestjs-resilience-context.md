@@ -11,11 +11,15 @@ Circuit breaker, retry, timeout — `nestjs-resilience-circuit-breaker.md`. Те
 | Поле | Кто заполняет | Источник |
 |---|---|---|
 | `correlationId` | `CorrelationIdMiddleware` | заголовок `X-Correlation-Id` (если валиден) или новый UUID |
-| `tenantId`, `employeeId`, `storeScope`, `terminalId`, `actingOperatorId`, `permissions` | `SessionAuthGuard` | серверная сессия в Redis (`nestjs-security-auth.md`) |
-| `tenantId`, `storeId` для эндпоинтов sync | `LicenseKeyGuard` | лицензионный ключ офлайн-точки |
+| `tenantId`, `employeeId`, `storeScope`, `terminalId`, `actingOperatorId`, `impersonationId`, `permissions` | `SessionAuthGuard` | серверная cookie-сессия (облако — Redis, офлайн — PostgreSQL; `nestjs-security-auth.md`) |
+| `tenantId`, `storeId` для эндпоинтов sync | `LicenseKeyGuard` | лицензионный ключ точки, найденный резолвером `resolve_license_key` (SECURITY DEFINER, ADR-0013) |
+| `tenantId`, `jobId` для фоновой задачи | `TenantJobRunner` | строка очереди / список активных тенантов (ADR-0013 §4) |
 | `storeId` для PIN-сессии кассы | `SessionAuthGuard` | точка привязанного терминала |
 
 `tenantId`, `employeeId`, `storeId` **никогда не берутся из тела, query или заголовков клиента**. `employeeId` — «сотрудник» из глоссария (термин вместо общего `userId`); для оператора платформы в режиме «от имени» дополнительно `actingOperatorId`.
+
+Реальный файл — `apps/api/src/common/context/request-context.ts`; сейчас в нём `correlationId` и
+`tenantId`, остальные поля добавляет план аутентификации:
 
 ```typescript
 // apps/api/src/common/context/request-context.ts
@@ -24,59 +28,65 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 export interface RequestContext {
   correlationId: string;
   tenantId?: string;
+  // added with the auth module:
   employeeId?: string;
-  /** Current store: bound POS terminal (PIN session) or offline store (license key). */
-  storeId?: string;
-  /** Stores the employee may act on. */
+  storeId?: string;                 // bound terminal's store (PIN session) or offline store (license key)
   storeScope?: 'all' | string[];
   terminalId?: string;
   actingOperatorId?: string;
-  permissions?: ReadonlySet<string>;          // 'module:action'
+  impersonationId?: string;
+  permissions?: ReadonlySet<string>; // catalog strings 'module:action'
 }
 
 export const requestContextStorage = new AsyncLocalStorage<RequestContext>();
 
 export const getRequestContext = (): RequestContext | undefined => requestContextStorage.getStore();
-export const getCorrelationId = (): string | undefined => getRequestContext()?.correlationId;
-export const getTenantId = (): string | undefined => getRequestContext()?.tenantId;
-export const getEmployeeId = (): string | undefined => getRequestContext()?.employeeId;
-export const getStoreId = (): string | undefined => getRequestContext()?.storeId;
 
 export class TenantContextMissingError extends Error {
   constructor() {
-    super('Tenant context is missing');     // programming error → 500, never an unscoped query
+    super('Tenant context is missing'); // programming error -> 500, never an unscoped query
+    this.name = 'TenantContextMissingError';
   }
 }
 
 export function requireTenantId(): string {
-  const tenantId = getTenantId();
+  const tenantId = getRequestContext()?.tenantId;
   if (!tenantId) throw new TenantContextMissingError();
   return tenantId;
 }
 
-/** Runs fn in a fresh context — for background work (queue workers, cron) and tests. */
+/** Runs fn in a fresh copy of the context — for background work (queue workers, cron) and tests. */
 export function runWithContext<T>(context: RequestContext, fn: () => T): T {
   return requestContextStorage.run({ ...context }, fn);
 }
 ```
 
 - Создаёт контекст `CorrelationIdMiddleware` (`nestjs-templates-core.md`): валидирует входящий ID (`/^[A-Za-z0-9-]{8,64}$/` — защита от инъекций в логи), возвращает его в заголовке ответа, запускает `requestContextStorage.run({ correlationId }, next)`.
-- Guard-ы дополняют **тот же** объект (`Object.assign(store, {...})`) — Middleware выполняется раньше Guards, новый `run()` в guard-е не нужен.
-- Нет тенанта — нет запроса к прикладным данным (fail closed). Кросс-тенантные операции оператора платформы — отдельный явный путь с аудитом (механика — ADR, `nestjs-config-data-access.md`).
+- Guard дополняет **тот же** объект один раз (Middleware выполняется раньше Guards) и затем **замораживает** его: после guard контекст неизменяем, иначе любой код мог бы подменить `tenantId` посреди запроса. Сейчас `getRequestContext()` возвращает изменяемый объект — заморозку ввести **до** реализации guards (follow-up плана B).
+- Нет тенанта — нет запроса к прикладным данным (fail closed). Кросс-тенантный путь — `PlatformDatabase` в `app/platform/**` (ADR-0013, `nestjs-config-data-access.md`).
 - Готовые библиотеки контекста (nestjs-cls и т.п.) — только через ADR; `node:async_hooks` достаточно.
 
 ## Использование
 
 ```typescript
-// apps/api/src/modules/audit/audit.service.ts (fragment)
-async append(tx: Tx, entry: { action: string; entityId: string }): Promise<void> {
+// apps/api/src/app/audit/audit.service.ts (fragment) — audit_log arrives with the audit migration
+async append(trx: TenantTransaction, entry: { action: string; entityType: string; entityId: string }): Promise<void> {
   const ctx = getRequestContext();
-  await tx.query(
-    `INSERT INTO audit_log (tenant_id, employee_id, store_id, acting_operator_id, correlation_id, action, entity_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [tx.tenantId, ctx?.employeeId ?? null, ctx?.storeId ?? null, ctx?.actingOperatorId ?? null,
-     ctx?.correlationId ?? null, entry.action, entry.entityId],
-  );
+  await trx
+    .insertInto('auditLog')
+    .values({
+      id: newId(),
+      tenantId: requireTenantId(),
+      employeeId: ctx?.employeeId ?? null,
+      storeId: ctx?.storeId ?? null,
+      actingOperatorId: ctx?.actingOperatorId ?? null,
+      impersonationId: ctx?.impersonationId ?? null,
+      correlationId: ctx?.correlationId ?? null,
+      action: entry.action,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+    })
+    .execute();
 }
 ```
 
@@ -87,15 +97,26 @@ async append(tx: Tx, entry: { action: string; entityId: string }): Promise<void>
 HTTP-контекст не переживает постановку в очередь. Всё нужное сохраняется в строке задачи и восстанавливается воркером (`nestjs-messaging-basics.md`):
 
 ```typescript
-// queue worker
-runWithContext({ correlationId: job.correlationId, tenantId: job.tenantId }, () => handler.handle(job.payload, job));
+// tenant job (ADR-0013 §4): "per tenant in a loop" — TenantJobRunner opens the context and the transaction
+await this.jobs.forEachActiveTenant(async (tenantId) =>
+  runWithContext({ correlationId: newId(), tenantId }, () =>
+    this.db.withTenant(tenantId, (trx) => this.handlers.processPending(trx, tenantId)),
+  ),
+);
 
 // cron (@nestjs/schedule): no request — create a context, and only enqueue tenant work
 @Cron('0 2 * * *', { timeZone: 'Asia/Dushanbe' })
 nightly() {
-  return runWithContext({ correlationId: randomUUID() }, () => this.enqueueNightlyJobs());
+  return runWithContext({ correlationId: newId() }, () => this.enqueueNightlyJobs());
 }
 ```
+
+- `TenantJobRunner.forEachActiveTenant()` / `runAsTenant(tenantId)` — единственный способ коду
+  платформы открыть tenant-контекст; живёт в `app/platform/jobs/**` и **бросает исключение, если
+  вызван в контексте HTTP-запроса**: оператор не может «перепрыгнуть» в тенанта мимо входа «от
+  имени» (ADR-0013 §7).
+- Список активных тенантов воркер получает через `PlatformDatabase` (облако) или из локальной
+  активации (офлайн-точка, один тенант).
 
 Если сторонний колбэк-API теряет async-цепочку — `AsyncResource.bind(fn)` из `node:async_hooks`.
 

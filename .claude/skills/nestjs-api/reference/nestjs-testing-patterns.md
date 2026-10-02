@@ -106,19 +106,19 @@ describe('retry', () => {
 
 ```typescript
 // apps/api/src/common/context/request-context.spec.ts
-import { runWithContext, getCorrelationId, getRequestContext, requireTenantId } from './request-context';
+import { runWithContext, getRequestContext, requireTenantId } from './request-context';
 
 describe('request context', () => {
   it('exposes correlationId inside the scope and nothing outside', () => {
-    runWithContext({ correlationId: 'corr-1' }, () => expect(getCorrelationId()).toBe('corr-1'));
-    expect(getCorrelationId()).toBeUndefined();
+    runWithContext({ correlationId: 'corr-1' }, () => expect(getRequestContext()?.correlationId).toBe('corr-1'));
+    expect(getRequestContext()?.correlationId).toBeUndefined();
   });
 
   it('keeps contexts of concurrent requests separate', async () => {
     const read = (id: string, ms: number) =>
       runWithContext({ correlationId: id }, async () => {
         await new Promise((r) => setTimeout(r, ms));
-        return getCorrelationId();
+        return getRequestContext()?.correlationId;
       });
 
     await expect(Promise.all([read('r-1', 10), read('r-2', 1)])).resolves.toEqual(['r-1', 'r-2']);
@@ -138,7 +138,7 @@ describe('request context', () => {
 // apps/api/src/common/middleware/correlation-id.middleware.spec.ts
 import type { Request, Response } from 'express';
 import { CorrelationIdMiddleware } from './correlation-id.middleware';
-import { getCorrelationId } from '../context/request-context';
+import { getRequestContext } from '../context/request-context';
 
 describe('CorrelationIdMiddleware', () => {
   const middleware = new CorrelationIdMiddleware();
@@ -149,7 +149,7 @@ describe('CorrelationIdMiddleware', () => {
     const response = res();
     let seen: string | undefined;
 
-    middleware.use(req(undefined), response, () => { seen = getCorrelationId(); });
+    middleware.use(req(undefined), response, () => { seen = getRequestContext()?.correlationId; });
 
     expect(seen).toMatch(/^[0-9a-f-]{36}$/);
     expect(response.setHeader).toHaveBeenCalledWith('X-Correlation-Id', seen);
@@ -157,10 +157,10 @@ describe('CorrelationIdMiddleware', () => {
 
   it('accepts a well-formed incoming id and replaces a malformed one (log injection)', () => {
     let seen: string | undefined;
-    middleware.use(req('pos-7f3a9c21'), res(), () => { seen = getCorrelationId(); });
+    middleware.use(req('pos-7f3a9c21'), res(), () => { seen = getRequestContext()?.correlationId; });
     expect(seen).toBe('pos-7f3a9c21');
 
-    middleware.use(req('bad\nvalue'), res(), () => { seen = getCorrelationId(); });
+    middleware.use(req('bad\nvalue'), res(), () => { seen = getRequestContext()?.correlationId; });
     expect(seen).not.toContain('\n');
   });
 });
@@ -168,53 +168,56 @@ describe('CorrelationIdMiddleware', () => {
 
 ## Очередь-таблица в PostgreSQL (e2e/интеграционный уровень)
 
-Логику `SKIP LOCKED`, уникальность idempotency key и переход в dead-letter нельзя проверить моками — только на реальной PostgreSQL (`TestDb` из `nestjs-testing-integration-setup.md`).
+Логику `SKIP LOCKED`, уникальность `dedupe_key` среди незавершённых задач и переход в dead-letter нельзя проверить моками — только на реальной PostgreSQL (`TestDb` из `nestjs-testing-integration-setup.md`).
 
 ```typescript
 // apps/api-e2e/src/queue/job-queue.spec.ts
 // A single UPDATE ... WITH statement is atomic in autocommit mode; concurrent calls use separate pool connections.
-const claim = (workerId: string) => db.query<{ id: number }>(`
+// Columns per data model 06 («Очередь задач»); ids — newId() from the core/database index.
+const claim = () => db.query<{ id: string }>(`
   WITH next AS (
-    SELECT id FROM job_queue
-    WHERE queue = 'export-1c.build' AND status = 'pending' AND run_after <= now()
-    ORDER BY run_after, id
+    SELECT id FROM pharmacy.job_queue
+    WHERE type = 'export-1c.build' AND status = 'pending' AND run_at <= now()
+    ORDER BY run_at, id
     FOR UPDATE SKIP LOCKED
     LIMIT 5
   )
-  UPDATE job_queue j SET status = 'processing', locked_by = $1, locked_at = now(), attempts = attempts + 1
+  UPDATE pharmacy.job_queue j
+  SET status = 'processing', lease_until = now() + interval '5 minutes', attempts = attempts + 1
   FROM next WHERE j.id = next.id
-  RETURNING j.id`, [workerId]);
+  RETURNING j.id`);
 
 it('two concurrent workers never claim the same job', async () => {
   for (let i = 0; i < 10; i++) {
     await db.query(
-      `INSERT INTO job_queue (tenant_id, queue, payload, idempotency_key, correlation_id)
-       VALUES ($1, 'export-1c.build', '{}', $2, 'corr-test')`, [TENANT_A.id, `export:${i}`]);
+      `INSERT INTO pharmacy.job_queue (id, tenant_id, type, payload, dedupe_key, correlation_id)
+       VALUES ($1, $2, 'export-1c.build', '{}', $3, 'corr-test')`, [newId(), TENANT_A.id, `export:${i}`]);
   }
 
-  const [a, b] = await Promise.all([claim('w-1'), claim('w-2')]);
+  const [a, b] = await Promise.all([claim(), claim()]);
   const ids = [...a, ...b].map((r) => r.id);
 
   expect(new Set(ids).size).toBe(ids.length); // disjoint
 });
 
-it('duplicate enqueue with same idempotency key is ignored', async () => {
+it('duplicate enqueue of an unfinished job with the same dedupe_key is ignored', async () => {
   const insert = () => db.query(
-    `INSERT INTO job_queue (tenant_id, queue, payload, idempotency_key, correlation_id)
-     VALUES ($1, 'fiscal.send', '{}', 'receipt:42', 'corr-test')
-     ON CONFLICT (tenant_id, queue, idempotency_key) DO NOTHING`, [TENANT_A.id]);
+    `INSERT INTO pharmacy.job_queue (id, tenant_id, type, payload, dedupe_key, correlation_id)
+     VALUES ($1, $2, 'fiscal.send', '{}', 'receipt:42', 'corr-test')
+     ON CONFLICT (tenant_id, type, dedupe_key)
+       WHERE dedupe_key IS NOT NULL AND status IN ('pending', 'processing') DO NOTHING`,
+    [newId(), TENANT_A.id]);
 
   await insert();
   await insert();
 
-  expect(await db.query("SELECT 1 FROM job_queue WHERE idempotency_key = 'receipt:42'")).toHaveLength(1);
+  expect(await db.query("SELECT 1 FROM pharmacy.job_queue WHERE dedupe_key = 'receipt:42'")).toHaveLength(1);
 });
 
-it('job moves to dead status after max_attempts failures', async () => {
-  // enqueue with max_attempts = 2, run worker with a handler that always throws,
-  // advance run_after manually (UPDATE ... SET run_after = now()) between attempts,
-  // then assert status = 'dead' and last_error is filled (without PII)
+it('job moves to dead status after the handler maxAttempts failures', async () => {
+  // handler with maxAttempts = 2 that always throws; between attempts set run_at = now()
+  // (UPDATE ... SET run_at = now()), then assert status = 'dead' and last_error is filled (without PII)
 });
 ```
 
-Unit-уровень воркера (обработчик вызван с контекстом тенанта задачи, ошибка → `fail()` с `nextRunAfter`, исчерпание попыток → `dead`) тестируется с моком `JobQueueRepository`.
+Unit-уровень воркера (обработчик вызван с контекстом тенанта задачи, ошибка → `fail()` с `nextRunAt`, исчерпание попыток → `dead`) тестируется с моком `JobQueueRepository`.

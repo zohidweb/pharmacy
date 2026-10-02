@@ -44,42 +44,46 @@ select * from receipts;
 
 ```sql
 create table receipts (
-  id uuid primary key,
   tenant_id uuid not null references tenants (id),
+  id uuid not null,                                    -- UUIDv7 from the application, no default
   store_id uuid not null,
   total_dirams bigint not null check (total_dirams >= 0),
   created_at timestamptz not null default now(),
-  unique (tenant_id, id),                              -- target for composite FKs
+  primary key (tenant_id, id),                         -- also the target for composite FKs
   foreign key (tenant_id, store_id) references stores (tenant_id, id)
 );
 
 alter table receipts enable row level security;
 alter table receipts force row level security;        -- applies to the owner too
 
-create policy tenant_isolation on receipts
+create policy tenant_isolation on receipts for all to pharmacy_app   -- explicit role, never PUBLIC
   using      (tenant_id = (select current_setting('app.tenant_id')::uuid))
   with check (tenant_id = (select current_setting('app.tenant_id')::uuid));
+grant select, insert, update, delete on receipts to pharmacy_app;  -- explicit grant, no default privileges
 
 -- Child tables carry tenant_id too and reference the parent by (tenant_id, id):
 -- a line can never point to a receipt of another tenant
 create table receipt_lines (
-  id uuid primary key,
-  tenant_id uuid not null,
+  tenant_id uuid not null references tenants (id),
+  id uuid not null,
   receipt_id uuid not null,
   batch_id uuid not null,
   qty integer not null check (qty > 0),
   unit_price_dirams bigint not null check (unit_price_dirams >= 0),
+  primary key (tenant_id, id),
   foreign key (tenant_id, receipt_id) references receipts (tenant_id, id),
   foreign key (tenant_id, batch_id)   references batches  (tenant_id, id)
 );
 alter table receipt_lines enable row level security;
 alter table receipt_lines force row level security;
-create policy tenant_isolation on receipt_lines
+create policy tenant_isolation on receipt_lines for all to pharmacy_app
   using      (tenant_id = (select current_setting('app.tenant_id')::uuid))
   with check (tenant_id = (select current_setting('app.tenant_id')::uuid));
+grant select, insert, update, delete on receipt_lines to pharmacy_app;
 ```
 
-Запрос приложения — всегда в транзакции, контекст первым оператором:
+Запрос приложения — всегда в транзакции, контекст первым оператором (в коде это делает
+`TenantDatabase.withTenant` в `apps/api/src/core/database`):
 
 ```sql
 begin;
@@ -100,9 +104,13 @@ commit;  -- context disappears with the transaction
   один код для облака и точки).
 - **Синхронизация**: tenant определяется по лицензионному ключу точки на сервере, а не по полю из
   тела запроса.
-- **Админка оператора** («вход от имени») работает через тот же контекст тенанта. Кросс-тенантные
-  операции (биллинг по всем тенантам, реестр тенантов) — отдельная роль/путь доступа с узкими
-  правами; это решение **требует ADR через `/03-adr`**, `BYPASSRLS` роли API не выдаётся.
+- **Админка оператора** — ADR-0013: вход «от имени» — обычный tenant-контекст под `pharmacy_app`
+  (только просмотр); кросс-тенантные операции (реестр тенантов и точек, счета, ключи) — роль
+  `pharmacy_platform` **без `BYPASSRLS`** с политиками `TO pharmacy_platform` только на
+  платформенных таблицах, витринах и колонках реестра `stores`; узкие поиски до появления
+  контекста — SECURITY DEFINER-резолверы (`security-privileges.md`).
+- **Манифест и тест каталога**: класс каждой таблицы — в `table-classes.ts`; тест
+  `catalog.int-spec.ts` проверяет RLS, политики `TO <роль>` и точные наборы прав.
 - Проверяйте изоляцию тестом: под ролью приложения с контекстом тенанта A выборка/UPDATE строк
   тенанта B возвращает 0 строк, INSERT с чужим `tenant_id` падает на `WITH CHECK`.
 

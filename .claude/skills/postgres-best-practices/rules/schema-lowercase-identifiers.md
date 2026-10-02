@@ -42,8 +42,8 @@ create table receipts (
 select total_dirams from receipts where tenant_id = $1;
 ```
 
-ORM не выбран (**требует ADR через `/03-adr`**). При выборе — проверить, что он умеет маппить
-`snake_case` колонки на `camelCase` поля без кавычек в DDL; это критерий выбора, а не повод
-менять конвенцию БД.
+В коде `snake_case` колонки становятся `camelCase` полями через `CamelCasePlugin` Kysely, а
+`kysely-codegen --camel-case` генерирует типы в том же виде (ADR-0006 п. 4). Алиасы внутри сырого
+`sql\`…\`` пишутся в `snake_case`.
 
 Reference: [Identifiers and Key Words](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)

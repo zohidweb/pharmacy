@@ -84,23 +84,28 @@ this.logger.warn({ msg: 'controlled substance sale rejected', correlationId, rec
 ## 3. Безопасный SQL
 
 ```typescript
-// BAD: interpolation -> injection and tenant leak
-await tx.query(`SELECT * FROM receipts WHERE number = '${number}'`);
+// BAD: input inlined into SQL -> injection and tenant leak
+await sql`select * from receipts where number = ${sql.raw(`'${number}'`)}`.execute(trx);
 
-// GOOD: parameters + explicit tenant filter
-await tx.query('SELECT * FROM receipts WHERE tenant_id = $1 AND number = $2', [tx.tenantId, number]);
+// GOOD: Kysely builder (values are always parameters) + explicit tenant filter
+await trx.selectFrom('receipts').select(['id', 'number', 'totalDirams'])
+  .where('tenantId', '=', tenantId).where('number', '=', number).executeTakeFirst();
+
+// GOOD: raw SQL only through the sql tag — ${value} becomes a parameter
+await sql`select id from receipts where tenant_id = ${tenantId} and number = ${number}`.execute(trx);
 ```
 
-- Всё, что пришло от клиента, — только через параметры `$n`.
+- Всё, что пришло от клиента, — только параметрами (builder или `${…}` в теге `sql`);
+  `sql.raw`/`sql.lit` со входными данными запрещены (ADR-0006 п. 6).
 - Идентификаторы SQL (колонки сортировки, направления) — только из фиксированного словаря
   (`nestjs-rest-dto-pagination.md`).
 - `LIKE`-шаблоны — экранировать `%`, `_`, `\` во входе.
-- С ORM те же правила: raw-запросы только тегированными шаблонами/параметрами ORM.
 
 ## 4. Шифрование полей
 
-Прикладное шифрование отдельных полей БД — **не делаем без ADR** (криптобиблиотека пока
-не выбрана; самописная криптография запрещена — только проверенные библиотеки и алгоритмы). Защита
+Прикладное шифрование отдельных полей БД — **не делаем без ADR** (самописная криптография
+запрещена — только примитивы `node:crypto` и проверенные алгоритмы; хеш паролей и PIN — scrypt,
+ADR-0008). Защита
 данных на MVP — изоляция тенантов, права, TLS, доступ к БД только у api.
 
 ## 5. OWASP Top 10 — что это значит здесь
@@ -109,7 +114,7 @@ await tx.query('SELECT * FROM receipts WHERE tenant_id = $1 AND number = $2', [t
 - [ ] **A02 Cryptographic Failures** — только хеширование паролей/PIN из accepted ADR (ADR-0008), HTTPS везде, токены сессий хранятся хешем.
 - [ ] **A03 Injection** — параметризованный SQL, whitelist сортировок, DTO с whitelist.
 - [ ] **A04 Insecure Design** — инварианты: остатки из движений, append-only аудит, идемпотентность финопераций.
-- [ ] **A05 Misconfiguration** — helmet, явный CORS, Swagger выключен в проде, fail-fast конфиг.
+- [ ] **A05 Misconfiguration** — helmet, CORS выключен (ADR-0008), Swagger выключен в проде, fail-fast конфиг.
 - [ ] **A06 Vulnerable Components** — `npm audit` перед MR, только технологии из stack.md и accepted ADR.
 - [ ] **A07 Auth Failures** — блокировки после неудач (пароль и PIN), idle-таймаут сети тенанта, отзыв всех сессий при смене пароля.
 - [ ] **A08 Integrity Failures** — лицензионный ключ точки, идемпотентная очередь синхронизации, миграции только версионированные.

@@ -1,13 +1,14 @@
 # Маппинг токенов libs/ui в Tailwind v4 `@theme` (Pharmacy)
 
-Применяется **только после ADR** о выборе Tailwind для libs/ui. Файл-цель:
-`libs/ui/src/styles/tailwind-theme.css`. Источник значений — токены `--ph-*`
-(скил `ui-standards-tokens`, `reference/ui-design-tokens.md`); здесь только ссылки на них.
+Tailwind выбран ADR-0007. Рабочий файл — `libs/ui/src/styles/tailwind-theme.css`: он источник
+истины, этот справочник объясняет его устройство (при расхождении прав файл). Источник значений —
+токены `--ph-*` (скил `ui-standards-tokens`, `reference/ui-design-tokens.md`); здесь только ссылки
+на них.
 
 ## Полный маппинг
 
 ```css
-/* Only after the ADR. Values are references to libs/ui tokens, never literals. */
+/* ADR-0007. Values are references to libs/ui tokens, never literals. */
 @theme {
   --*: initial; /* drop Tailwind's default theme: no bg-blue-500, no p-13, no text-7xl */
 

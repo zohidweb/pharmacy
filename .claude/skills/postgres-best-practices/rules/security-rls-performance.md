@@ -15,7 +15,7 @@ RLS-политика добавляется к каждому запросу, п
 
 ```sql
 -- Per-row subquery: tenant resolved through employees on every row
-create policy tenant_isolation on stock_movements
+create policy tenant_isolation on stock_movements for all to pharmacy_app
   using (store_id in (
     select s.id from stores s
     join employees e on e.tenant_id = s.tenant_id
@@ -30,12 +30,12 @@ create index stock_movements_batch_idx on stock_movements (batch_id);
 
 ```sql
 -- (select ...) turns the setting into an InitPlan: evaluated once per query, not per row
-create policy tenant_isolation on stock_movements
+create policy tenant_isolation on stock_movements for all to pharmacy_app
   using      (tenant_id = (select current_setting('app.tenant_id')::uuid))
   with check (tenant_id = (select current_setting('app.tenant_id')::uuid));
 
 -- Every hot-path index starts with tenant_id
-create index stock_movements_batch_idx  on stock_movements (tenant_id, batch_id) include (qty);
+create index stock_movements_batch_idx  on stock_movements (tenant_id, store_id, batch_id) include (qty_delta_pieces);
 create index receipts_store_created_idx on receipts (tenant_id, store_id, created_at);
 
 -- Unique constraints are scoped to the tenant as well

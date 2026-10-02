@@ -1,8 +1,7 @@
 # UI Design Tokens — libs/ui (Pharmacy)
 
 Источник истины — CSS custom properties в `libs/ui`. Префикс `--ph-` (pharmacy) обязателен: он
-отделяет наши токены от переменных сторонних инструментов (в том числе Tailwind `@theme`, если ADR
-его выберет) и делает аудит однозначным.
+отделяет наши токены от переменных Tailwind `@theme` (ADR-0007) и делает аудит однозначным.
 
 > Значения цветов ниже — **стартовые примеры** (взяты из открытой палитры Tailwind v4, MIT, как числа
 > OKLCH). Финальную палитру утверждает дизайн; контраст каждой пары проверяется.
@@ -16,24 +15,24 @@ libs/ui/src/
 │   │   ├── primitives.css   # сырые значения: цвет (OKLCH), шкалы rem, длительности
 │   │   ├── semantic.css     # смысловые роли; темы и плотность переопределяют ЭТОТ слой
 │   │   ├── components.css   # токены компонентов и доменных статусов
-│   │   └── print.css        # токены печати (mm/pt допустимы только здесь)
-│   ├── reset.css            # минимальный reset (при Tailwind не подключается — его заменяет preflight)
+│   │   └── print.css        # токены печати, mm/pt только здесь (создаётся вместе с ReceiptPrint)
+│   ├── fonts.css            # self-hosted @font-face (без CDN)
 │   ├── base.css             # шрифт body, :focus-visible, печать, служебные классы
-│   └── index.css            # точка входа: tokens/* → base.css (reset.css подключается отдельно)
-└── lib/                     # компоненты UI-кита: Button/Button.tsx + Button.module.css …
+│   ├── controls.css         # нативные контролы: base-select, dialog, popover
+│   ├── tailwind-theme.css   # @theme / @theme inline — маппинг токенов в утилиты (ADR-0007)
+│   └── index.css            # точка входа: fonts → tokens/* → base → controls (reset не нужен — preflight)
+└── lib/                     # компоненты UI-кита по папкам kebab-case: button/Button.tsx, overlay/Dialog.tsx, cx.ts …
 ```
 
-Подключение в приложении — один раз в корневом layout (App Router) или `_app.tsx` (Pages Router):
+Подключение в приложении — один раз, в глобальных стилях слоя `app` (FSD, ADR-0017):
+`apps/web/src/app/styles/global.css` импортирует Tailwind, `libs/ui/src/styles/index.css` (в
+`layer(base)`) и `tailwind-theme.css`; его подключает `src/app/layouts/RootLayout.tsx`, а
+маршрут `apps/web/app/layout.tsx` только реэкспортирует RootLayout. Полный файл — скил
+`tailwind-patterns` §4; `apps/admin` устроен так же.
 
-```tsx
-// apps/web/src/app/layout.tsx — alias библиотеки сверить с tsconfig.base.json
-import '@pharmacy/ui/styles/reset.css';
-import '@pharmacy/ui/styles/index.css';
-```
-
-Компоненты используют токены только через `var(--ph-…)` в своих `*.module.css`. Если ADR выберет
-Tailwind — тот же набор токенов маппится в `@theme` (скил `tailwind-patterns`), сами файлы токенов
-не меняются.
+Компоненты используют токены через утилиты Tailwind, сгенерированные из `@theme inline`
+(`bg-primary`, `p-4`), или ссылкой `utility-(--ph-…)`; `var(--ph-…)` в CSS — только в
+`ReceiptPrint` и `PosLayout` (CSS Modules) и в файлах `libs/ui/src/styles`.
 
 ## 1. Цвет (3 уровня)
 
@@ -231,8 +230,10 @@ L. Часть значений палитры Tailwind v4 выходит за sR
 - Суммы, количества, штрих-коды — `font-variant-numeric: tabular-nums` (класс `.ph-numeric` в
   `base.css`); выбранный шрифт должен поддерживать `tnum`.
 - Шрифт выбирается с лицензией OFL/аналогичной и полным `cyrillic-ext` (кандидаты: Noto Sans /
-  Noto Sans Mono, Inter — проверить глифы ҳ ҷ ӣ қ ӯ ғ во всех начертаниях). Выбор шрифта и его
-  файлов — согласовать с командой; никаких CDN (офлайн-точки).
+  Noto Sans Mono, Inter — проверить глифы ҳ ҷ ӣ қ ӯ ғ во всех начертаниях). Сейчас подключён
+  TT Norms Pro (коммерческий; глифы TJ и `tnum` проверены, лицензию подтвердить до релиза —
+  `libs/ui/src/styles/fonts.css`); смена шрифта — только в `fonts.css` и `--ph-font-sans`.
+  Никаких CDN (офлайн-точки).
 
 ## 5. Радиусы, рамки, тени
 
@@ -291,7 +292,7 @@ L. Часть значений палитры Tailwind v4 выходит за sR
 ## 7. Экраны и container queries
 
 Custom properties нельзя использовать в `@media`/`@container`, поэтому точки перелома — это
-таблица-конвенция (и литералы в `@theme`, если будет Tailwind):
+таблица-конвенция (и литералы `--breakpoint-*` / `--container-*` в `@theme`, ADR-0007):
 
 | Имя | Min width | Назначение |
 |---|---|---|
@@ -359,78 +360,12 @@ html {
 Фокус — через `outline`, а не `box-shadow`: outline сохраняется в режиме высокой контрастности
 Windows (`forced-colors`).
 
-## 10. Пример компонента на CSS Modules
+## 10. Пример компонента
 
-```css
-/* libs/ui/src/lib/Button/Button.module.css */
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--ph-space-2);
-  min-block-size: var(--ph-button-height);
-  min-inline-size: var(--ph-size-touch-min);
-  padding-inline: var(--ph-button-padding-x);
-  border: var(--ph-border-width-1) solid transparent;
-  border-radius: var(--ph-button-radius);
-  font-size: var(--ph-font-size-md);
-  font-weight: var(--ph-font-weight-semibold);
-  transition: background-color var(--ph-duration-fast) var(--ph-ease-standard);
-}
-.primary {
-  background: var(--ph-button-bg-primary);
-  color: var(--ph-button-fg-primary);
-}
-.primary:hover {
-  background: var(--ph-button-bg-primary-hover);
-}
-.pos {
-  min-block-size: var(--ph-button-height-pos);
-  font-size: var(--ph-font-size-lg);
-}
-.secondary {
-  background: var(--ph-color-surface);
-  color: var(--ph-color-fg);
-  border-color: var(--ph-color-border-control);
-}
-.danger {
-  background: var(--ph-color-danger);
-  color: var(--ph-color-on-danger);
-}
-.primaryAction {
-  min-block-size: var(--ph-button-height-primary);
-  font-size: var(--ph-font-size-xl);
-}
-.button:disabled {
-  background: var(--ph-color-disabled);
-  color: var(--ph-color-on-disabled);
-}
-```
+Компоненты `libs/ui` пишутся на утилитах Tailwind из токенов: образец — `libs/ui/src/lib/button/Button.tsx`
+(разбор — скил `tailwind-patterns` §5). Варианты — карты `Record<Variant, string>`, склейка —
+`cx()` из `libs/ui/src/lib/cx.ts`; `clsx`/`classnames`/`tailwind-merge`/CVA не используются
+(ADR-0007). Внешний `className` компонента — только раскладка.
 
-```tsx
-// libs/ui/src/lib/Button/Button.tsx
-import type { ButtonHTMLAttributes } from 'react';
-import styles from './Button.module.css';
-
-type ButtonVariant = 'primary' | 'secondary' | 'danger';
-type ButtonSize = 'default' | 'pos' | 'primaryAction';
-
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-}
-
-const sizeClass: Record<ButtonSize, string | undefined> = {
-  default: undefined,
-  pos: styles.pos,
-  primaryAction: styles.primaryAction,
-};
-
-export function Button({ variant = 'primary', size = 'default', className, type = 'button', ...rest }: ButtonProps) {
-  const classes = [styles.button, styles[variant], sizeClass[size], className].filter(Boolean).join(' ');
-  return <button type={type} className={classes} {...rest} />;
-}
-```
-
-Склейка классов — через `filter(Boolean).join(' ')`; `clsx`/`classnames` — новая зависимость,
-только по согласованию.
+CSS Modules с `var(--ph-…)` — только `ReceiptPrint` (`reference/ui-print-receipts.md`) и
+`PosLayout` (сетка экрана кассы на компонентных токенах `--ph-pos-*`).

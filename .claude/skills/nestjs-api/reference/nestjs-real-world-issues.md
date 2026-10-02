@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — решения на Jest (стандарт Nx) вместо Vitest; Prisma- и JWT-специфика удалены (ORM не выбран, аутентификация — серверные сессии); добавлены типичные проблемы Jest + Nest в Nx. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — решения на Jest (стандарт Nx) вместо Vitest; Prisma- и JWT-специфика удалены (доступ к данным — Kysely, ADR-0006; аутентификация — серверные сессии, ADR-0008); добавлены типичные проблемы Jest + Nest в Nx. Ограничения: `CLAUDE.md`. <!-- docs-check: ok -->
 
 # NestJS Real-World Issues — GitHub & Stack Overflow Reference
 
@@ -17,7 +17,7 @@
 3. Опечатки в имени/токене провайдера (GitHub #598 — сообщение может вводить в заблуждение).
 4. **Порядок реэкспортов в barrel-файлах (`index.ts`)** — может давать циклическое разрешение и `undefined` вместо класса (GitHub #9095).
 
-Вариант проекта: не резолвится `DatabaseService` / `RedisService` — они в глобальном `CoreModule` (`nestjs-templates-core.md`); в unit-тесте их нужно подставить моками явно (глобальные модули в `Test.createTestingModule` не подтягиваются сами).
+Вариант проекта: не резолвится `TenantDatabase` / `RedisService` — они в глобальных `DatabaseModule` / `RedisModule` (`nestjs-templates-core.md`); в unit-тесте их нужно подставить моками явно (глобальные модули в `Test.createTestingModule` не подтягиваются сами). `PlatformDatabase` не глобальный: модуль платформы импортирует `PlatformDatabaseModule` явно.
 
 ---
 
@@ -81,14 +81,14 @@ export class InventoryModule {}
 1. Каждую зависимость сервиса — явно в `providers` через `{ provide: Token, useValue: mock }`.
 2. Не импортировать в unit-тест реальные модули с инфраструктурой (БД, Redis) — только моки.
 3. Если модуль импортирован целиком — `overrideProvider(Token).useValue(mock)`.
-4. Слой данных — мок `DatabaseService` + репозиториев (`nestjs-testing-unit-mocks.md`); реальная БД — только в e2e.
+4. Слой данных — мок `TenantDatabase` + репозиториев (`nestjs-testing-unit-mocks.md`); реальная БД — только в интеграционных тестах (`*.int-spec.ts`) и e2e.
 
 ```typescript
 beforeEach(async () => {
   const moduleRef = await Test.createTestingModule({
     providers: [
       ReceiptsService,
-      { provide: DatabaseService, useValue: db },
+      { provide: TenantDatabase, useValue: db },   // db.tenantTransaction = (work) => work(fakeTrx)
       { provide: ReceiptsRepository, useValue: { findByIdempotencyKey: jest.fn(), insert: jest.fn() } },
       { provide: FISCAL_REGISTRAR, useValue: { register: jest.fn() } },
     ],
@@ -98,7 +98,7 @@ beforeEach(async () => {
 ```
 
 ### Метаданные декораторов не генерируются
-Симптом: DI получает `undefined`, `design:paramtypes` отсутствует. Решение: `emitDecoratorMetadata` и `experimentalDecorators` в `tsconfig.spec.json`; transform `ts-jest` из Nx-пресета (не заменять на транспилятор без поддержки метаданных).
+Симптом: DI получает `undefined`, `design:paramtypes` отсутствует. Решение: transform `@swc/jest` с `jsc.transform.decoratorMetadata` и `legacyDecorator` в `apps/api/.spec.swcrc` (так настроено в `apps/api/jest.config.cts`; не заменять на транспилятор без поддержки метаданных).
 
 ### "Jest did not exit one second after the test run has completed"
 Открытые хэндлы: `app.close()`, пул БД, Redis-клиент, таймеры `@nestjs/schedule` в `afterAll`. Диагностика — `npx nx test api --detectOpenHandles`.
@@ -152,11 +152,8 @@ export class PriceEventsService implements OnModuleDestroy {
 
 ---
 
-## `createMock<T>()` из `@golevelup/ts-jest`
+## Автомоки (`@golevelup/ts-jest`) — не используем
 
-Автомок всех методов типа — удобно для сервисов с большим числом методов. Это новая dev-зависимость — **согласовать** перед добавлением; до этого — явные объекты `{ method: jest.fn() }` (`nestjs-testing-unit-mocks.md`).
-
-```typescript
-import { createMock } from '@golevelup/ts-jest';
-const repo = createMock<ReceiptsRepository>(); // every method is jest.fn()
-```
+ADR-0009 (ось Г): моки — явные типизированные объекты `{ method: jest.fn() }` и фабрики в
+`apps/api/test/mocks` / `libs/shared/testing` (`nestjs-testing-unit-mocks.md`). Автомок всех
+методов скрывает, какие зависимости сервис реально вызывает.

@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest, фабрики без Prisma/faker (детерминированные синтетические данные), сущности из глоссария. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Jest вместо Vitest, фабрики без faker (детерминированные синтетические данные, ADR-0009 ось В), сущности из глоссария. Ограничения: `CLAUDE.md`. <!-- docs-check: ok -->
 
 # NestJS Unit Testing — Controllers & Test Data Factories
 
@@ -7,9 +7,10 @@
 Контроллер тонкий (без бизнес-логики), поэтому его unit-тест проверяет только передачу параметров в сервис и проброс исключений. Валидация DTO, guards (сессия, права, охват точек), `IdempotencyKeyPipe` и фильтр RFC 7807 проверяются в e2e (`nestjs-testing-integration-patterns.md`).
 
 ```typescript
-// apps/api/src/modules/pos/receipts.controller.spec.ts
+// apps/api/src/app/pos/receipts.controller.spec.ts
 import { Test } from '@nestjs/testing';
 import { UnprocessableEntityException } from '@nestjs/common';
+import { IdempotencyKeyMismatchException } from '../../common/errors/idempotency-key-mismatch.exception';
 import { ReceiptsController } from './receipts.controller';
 import { ReceiptsService } from './receipts.service';
 
@@ -25,22 +26,30 @@ describe('ReceiptsController', () => {
     controller = moduleRef.get(ReceiptsController);
   });
 
+  const operationId = '01920000-0000-7000-8000-000000000001'; // UUIDv7 from the POS = Idempotency-Key
   const dto = {
+    operationId,
     lines: [{ batchId: '00000000-0000-4000-8000-000000000101', quantity: 2, unitPriceDirams: 1250 }],
     payments: [{ method: 'cash' as const, amountDirams: 2500 }],
   };
 
-  it('passes storeId, idempotency key and DTO to the service', async () => {
+  it('passes storeId and DTO to the service when the header equals dto.operationId', async () => {
     service.completeReceipt.mockResolvedValue({ id: 'r-1', totalDirams: 2500 });
 
-    await expect(controller.complete('store-1', 'idem-1', dto)).resolves.toEqual({ id: 'r-1', totalDirams: 2500 });
-    expect(service.completeReceipt).toHaveBeenCalledWith('store-1', dto, 'idem-1');
+    await expect(controller.complete('store-1', operationId, dto)).resolves.toEqual({ id: 'r-1', totalDirams: 2500 });
+    expect(service.completeReceipt).toHaveBeenCalledWith('store-1', dto);
+  });
+
+  it('rejects an Idempotency-Key that differs from dto.operationId (422) without calling the service', async () => {
+    await expect(controller.complete('store-1', '01920000-0000-7000-8000-0000000000ff', dto))
+      .rejects.toThrow(IdempotencyKeyMismatchException);
+    expect(service.completeReceipt).not.toHaveBeenCalled();
   });
 
   it('propagates domain exceptions unchanged (the global filter maps them to problem+json)', async () => {
     service.completeReceipt.mockRejectedValue(new UnprocessableEntityException());
 
-    await expect(controller.complete('store-1', 'idem-1', dto)).rejects.toThrow(UnprocessableEntityException);
+    await expect(controller.complete('store-1', operationId, dto)).rejects.toThrow(UnprocessableEntityException);
   });
 });
 ```
@@ -51,10 +60,10 @@ describe('ReceiptsController', () => {
 
 Правила проекта:
 - **Только синтетические данные** — никаких реальных ФИО, телефонов, рецептов, реквизитов поставщиков.
-- Детерминированные значения (счётчик), без генераторов случайных данных — тесты воспроизводимы. `@faker-js/faker` — новая dev-зависимость, **согласовать**.
+- Детерминированные значения (счётчик), без генераторов случайных данных — тесты воспроизводимы. faker не используем (ADR-0009).
 - Деньги — integer в дирамах; сроки годности — явные даты.
-- Фабрики строк БД (snake_case, как `ProductRow` в `nestjs-config-data-access.md`) — для моков репозиториев и сидера e2e.
-- Расположение: `apps/api/test/factories/` (unit) и `apps/api-e2e/src/support/factories.ts` (e2e — копия/своя версия: e2e не импортирует код `apps/api`). Если фабрики нужны обоим — вынести в тестовую lib (например, `libs/shared/testing`) — **согласовать** с командой.
+- Фабрики строк БД — в форме строк Kysely (camelCase, как возвращает `CamelCasePlugin`) — для моков репозиториев и сидера e2e.
+- Расположение: общие билдеры — Nx-библиотека `libs/shared/testing` (тег `type:testing`: импорт только из `*.spec.ts` и проектов `*-e2e`, ADR-0009 ось В; создаётся с первой потребностью двух проектов); до неё — `apps/api/test/factories/`.
 
 ```typescript
 // apps/api/test/factories/index.ts

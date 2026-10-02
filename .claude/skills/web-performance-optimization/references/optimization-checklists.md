@@ -23,7 +23,7 @@ CPU throttling: <4×/6×/нет>, режим: облачная точка / оф
 | INP (Lighthouse Timespan / Performance → Interactions) | | | ≤ 200 мс |
 | LCP страницы кассы | | | ≤ 2,5 с |
 | CLS | | | ≤ 0,1 |
-| First-load JS кассы (gzip) | | | бюджет проекта |
+| First-load JS кассы (gzip) | | | ≤ 250 КБ (цель ≤ 200), `tools/bundle-budget.json` |
 | Long tasks > 50 мс в сценарии | | | 0 на скан |
 
 Найденные проблемы: …
@@ -71,8 +71,18 @@ export function PosScreen() {
 'use client';
 import { useEffect, useRef } from 'react';
 
-const MAX_KEY_INTERVAL_MS = 50; // HID scanners type much faster than humans
+const MAX_KEY_INTERVAL_MS = 50; // HID scanners type much faster than humans (configurable per store)
 const MIN_BARCODE_LENGTH = 6;
+
+/**
+ * Maps a physical key to a barcode character. event.code, not event.key (ADR-0015): with the Tajik
+ * or Russian layout active, a scanner in keyboard mode produces Cyrillic in event.key.
+ */
+function codeToChar(code: string): string | null {
+  if (/^(Digit|Numpad)\d$/.test(code)) return code.slice(-1);
+  if (/^Key[A-Z]$/.test(code)) return code.slice(-1);
+  return code === 'Minus' || code === 'NumpadSubtract' ? '-' : null;
+}
 
 /** Collects scanner keystrokes in a ref; calls onScan only on Enter. Zero renders per character. */
 export function useBarcodeScanner(onScan: (barcode: string) => void): void {
@@ -91,7 +101,7 @@ export function useBarcodeScanner(onScan: (barcode: string) => void): void {
       }
       lastKeyAtRef.current = event.timeStamp;
 
-      if (event.key === 'Enter') {
+      if (event.code === 'Enter' || event.code === 'NumpadEnter') {
         const barcode = bufferRef.current;
         bufferRef.current = '';
         if (barcode.length >= MIN_BARCODE_LENGTH) {
@@ -101,8 +111,9 @@ export function useBarcodeScanner(onScan: (barcode: string) => void): void {
         }
         return;
       }
-      if (event.key.length === 1) {
-        bufferRef.current += event.key;
+      const char = codeToChar(event.code);
+      if (char !== null) {
+        bufferRef.current += char;
       }
     };
 
@@ -135,8 +146,8 @@ useBarcodeScanner((barcode) => {
 - Фокус-менеджмент (скан при фокусе в поле количества/поиска) — задача UX; для производительности
   важно одно: ни одного `setState` на символ.
 - Кэш каталога и цен держится в памяти и в IndexedDB (буфер перебоев связи); источник — REST API.
-  Нативный IndexedDB API без обёрток; `idb`/Dexie — только после ADR. Запись в IndexedDB — одной
-  транзакцией, не сериализовать весь каталог на каждом скане.
+  IndexedDB — через `idb` (ADR-0015, модуль `shared/lib/offline-queue` и снимок каталога); Dexie не
+  используется. Запись в IndexedDB — одной транзакцией, не сериализовать весь каталог на каждом скане.
 - Деньги в строке чека — integer дирамы; форматирование — только при выводе (`libs/shared/util`).
 
 **Замер операции без зависимостей:**
@@ -152,7 +163,8 @@ useEffect(() => {
   });
 }, [lines.length]);
 ```
-Метки видны в DevTools → Performance (дорожка Timings). Отправка таких метрик в проде —
+Метки видны в DevTools → Performance (дорожка Timings); `pos:scan-to-line` — гейт ADR-0009 для PR,
+затрагивающих кассу (Playwright-сценарий читает измерение). Отправка таких метрик в проде —
 мониторинг не выбран, вводится через ADR; до него не делать. Метрики — только на собственный
 `apps/api`, без ПДн и без внешних SaaS (правило проекта про данные).
 
@@ -189,7 +201,7 @@ useEffect(() => {
   const controller = new AbortController();
   const timer = window.setTimeout(() => {
     const params = new URLSearchParams({ search: term, limit: '20', offset: '0' });
-    apiFetch<ProductListResponse>(`/api/v1/products?${params}`, { signal: controller.signal })
+    apiRequest<ProductListResponse>(`/api/v1/products?${params}`, { signal: controller.signal })
       .then(setResults)
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === 'AbortError')) setSearchError(error);
@@ -202,8 +214,9 @@ useEffect(() => {
   };
 }, [query]);
 ```
-`apiFetch` — условное имя единого HTTP-слоя приложения поверх `fetch` с correlation ID (см. `react-dev`);
-HTTP-библиотеки (axios и т.п.) в stack.md не выбраны. Имя параметра поиска сверить с контрактом в
+`apiRequest` — свой клиент API на `fetch` в `shared/api` (ADR-0015, скил `react-dev`): correlation ID,
+таймаут, разбор problem+json; `axios` и другие HTTP-библиотеки не используются. Для списков на экране
+тот же запрос обычно оборачивается в TanStack Query (`signal` из `queryFn` отменяет устаревший запрос). Имя параметра поиска сверить с контрактом в
 `libs/shared/dto`. Ошибки не глотать — показывать пользователю.
 
 ---
@@ -220,39 +233,27 @@ Get-ChildItem apps/web/out/_next/static/chunks -Recurse -Filter *.js |
 Плюс DevTools → Coverage на странице кассы: какие модули загружены, но не выполняются.
 В зависимости от версии Next.js `next build` также печатает размеры по маршрутам.
 
-### Step 2: Визуальный анализ — `@next/bundle-analyzer` (dev-зависимость, **после согласования**)
-```js
-// apps/web/next.config.js
-const { composePlugins, withNx } = require('@nx/next');
-const withBundleAnalyzer = require('@next/bundle-analyzer')({
-  enabled: process.env.ANALYZE === 'true',
-});
+### Step 2: Граф модулей — `next experimental-analyze` (ADR-0009)
 
-/** @type {import('@nx/next/plugins/with-nx').WithNxOptions} */
-const nextConfig = {
-  output: 'export',
-  images: { unoptimized: true },
-  nx: {},
-};
-
-module.exports = composePlugins(withNx, withBundleAnalyzer)(nextConfig);
-```
+Next.js 16 собирает Turbopack, поэтому анализатор — встроенный, без зависимостей:
 ```powershell
-$env:ANALYZE = 'true'; npx nx build web --skip-nx-cache; Remove-Item Env:ANALYZE
+npx next experimental-analyze apps/web          # writes .next/diagnostics/analyze; --serve opens the UI on localhost
 ```
-`--skip-nx-cache` обязателен: переменная окружения не входит во входы кэша Nx. Анализатор опирается
-на webpack-сборку; если проект собирается Turbopack, свериться с документацией используемой версии
-Next.js (может потребоваться webpack-сборка для анализа или встроенный анализатор).
+Функция экспериментальная: совместимость с `output: 'export'` проверяется на первом замере; запасной
+путь — размеры чанков (Step 1) и скрипт бюджета (Step 4). Вывод анализатора прикладывается к PR,
+повышающему бюджет.
+
+`@next/bundle-analyzer` (dev-зависимость) допустим, только если проект переведён на сборку webpack: анализ отдельной сборки `--webpack` при боевой Turbopack-сборке показывает не тот бандл.
 
 ### Step 3: Типовые находки и исправления
 
 **Бэкенд-валидация в клиентском бандле:**
 ```ts
 // Before — value import pulls class-validator/class-transformer into the browser bundle
-import { CreateReceiptDto } from '@pharmacy/shared/dto';
+import { CreateReceiptDto } from '@pharmacy/shared-dto';
 
 // After — type-only import is erased at compile time
-import type { CreateReceiptDto } from '@pharmacy/shared/dto';
+import type { CreateReceiptDto } from '@pharmacy/shared-dto';
 ```
 Алиас — по `tsconfig.base.json`. Включить `@typescript-eslint/consistent-type-imports` в линтере — дёшево и страхует.
 
@@ -299,14 +300,15 @@ export async function loadMessages(locale: 'ru' | 'tg'): Promise<Messages> {
 ### Step 4: Бюджет размера (без зависимостей)
 
 У Next.js нет встроенных бюджетов, как в `angular.json`. Простой скрипт в `tools/`, запускать вручную
-перед MR (CI не настроен — до ADR о CI проверки запускаются вручную):
+перед PR; в CI (GitHub Actions, ADR-0009) он входит в job **checks**, пока workflow-файлов нет — вручную.
+ADR-0009 требует доработать его под учёт first-load маршрута кассы:
 ```js
 // tools/check-bundle-budget.mjs — usage: node tools/check-bundle-budget.mjs apps/web/out
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-const MAX_CHUNK_GZIP_KB = 150; // agree on real numbers with the team after a baseline measurement
+const MAX_CHUNK_GZIP_KB = 150; // ADR-0009 starting ceilings; real budgets live in tools/bundle-budget.json
 const MAX_TOTAL_GZIP_KB = 900;
 
 const root = join(process.argv[2] ?? 'apps/web/out', '_next', 'static', 'chunks');
@@ -334,7 +336,10 @@ if (violations.length > 0) {
   process.exit(1);
 }
 ```
-Пороги — не из ТЗ: зафиксировать после базового замера и согласовать с командой.
+Порядок бюджетов (ADR-0009): сейчас — стартовые потолки (first-load JS кассы ≤ 250 КБ gzip, чанк
+≤ 150 КБ, весь JS приложения ≤ 900 КБ); после walking skeleton кассы — базовый замер, бюджет = замер
++ 10 % (округлить до 10 КБ, не выше потолка) в `tools/bundle-budget.json` с датой и commit; дальше
+бюджеты только снижаются, повышение — с выводом анализатора в PR и одобрением фронтенд-лида.
 
 ---
 
@@ -354,8 +359,9 @@ if (violations.length > 0) {
    ```
    Применять к блокам (группы карточек/строк, секции отчёта), а не к `<tr>` внутри `<table>` —
    на табличной раскладке эффект ненадёжен.
-4. **Виртуализация** — только если 1–3 не хватает по замеру; библиотека (`@tanstack/react-virtual`,
-   `react-window` и т.п.) — **ADR через `/03-adr`**. Учесть сенсорную прокрутку и доступность.
+4. **Виртуализация** — в MVP нет. Только если 1–3 не хватает по замеру (профиль на CPU 4×, приложен
+   к PR): `@tanstack/react-virtual` с одобрения фронтенд-лида (ADR-0009), с обвязкой доступности и
+   печати; `react-window` отклонён. Учесть сенсорную прокрутку.
 
 Строки списка: стабильный `key` (`product.id`, `batch.id`), дорогая строка — `React.memo` при
 подтверждении профайлером, обработчики — через делегирование или `useCallback`, если строка мемоизирована.
@@ -409,24 +415,23 @@ export function ReceiptPrint({ receipt, onPrinted }: { receipt: ReceiptView; onP
 
 ### Шрифты — self-hosted, с таджикскими буквами
 
-```ts
-// apps/web/src/app/fonts.ts
-import localFont from 'next/font/local';
-
-export const appFont = localFont({
-  src: [
-    { path: './fonts/AppSans-Regular.subset.woff2', weight: '400', style: 'normal' },
-    { path: './fonts/AppSans-SemiBold.subset.woff2', weight: '600', style: 'normal' },
-  ],
-  display: 'swap',
-  variable: '--font-app',
-});
+Шрифт подключается не через `next/font`, а общим `@font-face` в `libs/ui/src/styles/fonts.css`
+(одинаково для web и admin, ADR-0007); компоненты читают только `--ph-font-sans`:
+```css
+@font-face {
+  font-family: 'TT Norms Pro';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../assets/fonts/TTNormsPro-Regular.otf') format('opentype');
+}
 ```
+Сейчас файлы — `.otf`; перевод в subset-`woff2` уменьшит вес на старте кассы — делать с замером
+«до/после».
 - Файл шрифта должен покрывать Latin + `cyrillic` (U+0400–045F, U+0490–0491, U+04B0–04B1, U+2116) +
   **`cyrillic-ext` (U+0460–052F)**: Ғғ U+0492/0493, Ққ U+049A/049B, Ҳҳ U+04B2/04B3, Ҷҷ U+04B6/04B7,
   Ӣӣ U+04E2/04E3, Ӯӯ U+04EE/04EF. Только `cyrillic` — недостаточно.
 - Не больше 2–3 начертаний; лишние веса = лишние килобайты на старте кассы.
-- Subsetting — заранее, инструментом подготовки (в рантайм не попадает; выбор инструмента согласовать),
+- Subsetting — заранее, инструментом подготовки (в рантайм не попадает; инструмент — dev-зависимость, через ADR),
   либо взять готовые woff2-разбиения шрифта. Проверить лицензию шрифта на self-hosting.
 - `next/font/google` не использовать: он скачивает шрифт с Google при сборке (внешний сервис).
 - Проверка: строка «Ҳисоб, ҷавоб, қонун, ғалла, Тоҷикистон, рӯз, ӣ» → DevTools → Elements →
@@ -464,19 +469,19 @@ const nextConfig = { output: 'export', images: { unoptimized: true } };
 - [ ] Тяжёлые/редкие экраны и виджеты — `next/dynamic` / `React.lazy` + `Suspense`
 - [ ] `import type` для `libs/shared/dto`; `class-validator`/`reflect-metadata` отсутствуют в бандле web/admin
 - [ ] Загружается только активная локаль
-- [ ] Бюджет размера проверен скриптом перед MR
+- [ ] Бюджет размера проверен скриптом перед PR (`tools/bundle-budget.json`, ADR-0009)
 - [ ] Новые зависимости согласованы (лицензия, размер, ADR при необходимости)
 
 ### Списки
 - [ ] Пагинация limit/offset на сервере; остатки считаются на сервере
 - [ ] `content-visibility: auto` для крупных блоков вне экрана
-- [ ] Виртуализация — только после ADR на библиотеку
+- [ ] Виртуализация — только по замеру, `@tanstack/react-virtual` с одобрения фронтенд-лида (ADR-0009)
 - [ ] Стабильные `key` по id сущности
 
 ### Images & Fonts
 - [ ] `images: { unoptimized: true }` (или ADR на свой сервер изображений)
 - [ ] У всех изображений `width`/`height` или `aspect-ratio`
-- [ ] `next/font/local`, файл содержит `cyrillic-ext`, `display: 'swap'`, ≤ 3 начертаний
+- [ ] `@font-face` в `libs/ui/src/styles/fonts.css`, файл содержит `cyrillic-ext`, `font-display: swap`, ≤ 3 начертаний
 - [ ] Ни одного ресурса с внешних доменов (шрифты, скрипты, изображения)
 
 ### CSS
@@ -509,8 +514,8 @@ const nextConfig = { output: 'export', images: { unoptimized: true } };
 
 ### Bundle Analysis
 - `npx nx build web` + размеры `out/_next/static/chunks` + `tools/check-bundle-budget.mjs`
-- `@next/bundle-analyzer` — dev-зависимость, **после согласования**
-- `web-vitals` (npm, `onINP`/`onLCP`/`onCLS`, сборка `attribution`) — **после согласования**; для локальных замеров
+- `next experimental-analyze` — встроенный граф модулей Turbopack (ADR-0009); `@next/bundle-analyzer` — только при сборке webpack
+- `web-vitals` (`onINP`/`onLCP`/`onCLS`, сборка `attribution`) — devDependency, только perf-сценарии Playwright и локальная отладка; в прод-бандл не попадает (ADR-0009)
 
 ### Не использовать
 - PageSpeed Insights / CrUX для закрытых экранов (недоступны снаружи, и данные о страницах уходят вовне)

@@ -14,37 +14,45 @@ docker logs pharmacy-api 2>&1 | grep '"correlationId":"7f3a9c21-...'
 ```
 
 ```sql
-SELECT id, queue, status, attempts, last_error, run_after
-FROM job_queue WHERE correlation_id = $1;
+SELECT id, type, status, attempts, last_error, run_at
+FROM pharmacy.job_queue WHERE correlation_id = $1;
 ```
 
 ## 2. Очереди-таблицы
 
 ```sql
--- Depth and age per queue/status
-SELECT queue, status, count(*) AS jobs, min(created_at) AS oldest
-FROM job_queue GROUP BY queue, status ORDER BY queue, status;
+-- Depth and age per type/status (columns per data model 06, «Очередь задач»)
+SELECT type, status, count(*) AS jobs, min(run_at) AS oldest
+FROM pharmacy.job_queue GROUP BY type, status ORDER BY type, status;
 
 -- Dead-letter
-SELECT id, tenant_id, queue, attempts, last_error, updated_at
-FROM job_queue WHERE status = 'dead' ORDER BY updated_at DESC LIMIT 50;
+SELECT id, tenant_id, type, attempts, last_error, run_at
+FROM pharmacy.job_queue WHERE status = 'dead' ORDER BY run_at DESC LIMIT 50;
 
--- Stuck in processing (worker died)
-SELECT id, queue, locked_by, locked_at FROM job_queue
-WHERE status = 'processing' AND locked_at < now() - interval '10 minutes';
+-- Stuck in processing (worker died): the lease has expired
+SELECT id, type, lease_until FROM pharmacy.job_queue
+WHERE status = 'processing' AND lease_until < now();
 ```
 
 Повторный запуск `dead`-задачи — действие оператора в админке с аудитом (`nestjs-messaging-basics.md`), не ручной `UPDATE` в проде.
 
 ## 3. Синхронизация офлайн-точек
 
+Операции точки применяются в самом запросе (ADR-0014), «ожидающих применения» в облаке нет.
+`sync_inbox` — тенантная таблица: запросы ниже выполняются в tenant-транзакции одного тенанта
+(`TenantDatabase.withTenant`), кросс-тенантная сводка для оператора — только через витрину
+`store_sync_status` (ADR-0013, класс `tenant-export`, когда появится).
+
 ```sql
--- Sync lag per store (cloud side): last accepted operation per offline store
-SELECT store_id, max(received_at) AS last_received, count(*) FILTER (WHERE applied_at IS NULL) AS pending_apply
-FROM sync_inbox GROUP BY store_id ORDER BY last_received NULLS FIRST;
+-- Per store of the current tenant: last accepted operation and quarantine size
+SELECT store_id, max(received_at) AS last_received,
+       count(*) FILTER (WHERE status = 'quarantined') AS quarantined
+FROM pharmacy.sync_inbox
+WHERE received_at > now() - interval '7 days'          -- prunes monthly partitions
+GROUP BY store_id ORDER BY last_received NULLS FIRST;
 ```
 
-На точке: глубина локального `sync_outbox`, состояние цепи `sync-upload` (OPEN = нет связи с облаком), срок лицензионного ключа. Названия таблиц — иллюстрация.
+На точке: глубина локального `sync_outbox`, состояние цепи `sync-upload` (OPEN = нет связи с облаком), срок лицензионного ключа.
 
 ## 4. База данных
 
@@ -63,15 +71,16 @@ JOIN pg_stat_activity blocking ON blocking.pid = ANY(pg_blocking_pids(blocked.pi
 
 ## 5. Внутренняя диагностика
 
-Публичные `/api/health/live|ready` — минимальные (`nestjs-enterprise-infrastructure.md`). Подробности — во внутреннем эндпоинте только для оператора платформы:
+Публичные `/api/v1/health` и `/api/v1/health/ready` — минимальные (`nestjs-enterprise-infrastructure.md`). Подробности — во внутреннем эндпоинте только для оператора платформы:
 
 ```typescript
-// apps/api/src/common/health/diagnostics.controller.ts
-@Controller({ path: 'internal/diagnostics', version: '1' })   // /api/v1/internal/diagnostics
-@RequirePermission('platform', 'diagnostics')
+// apps/api/src/app/platform/diagnostics/diagnostics.controller.ts
+@Controller({ path: 'operator/diagnostics', version: '1' })   // /api/v1/operator/diagnostics
+// Operator-only diagnostics live in app/platform/** (ADR-0013): operator session + PlatformDatabase
+@RequireOperatorPermission('platform:diagnostics')
 export class DiagnosticsController {
   constructor(
-    private readonly db: DatabaseService,
+    private readonly platform: PlatformDatabase,
     private readonly jobs: JobQueueStats,
     private readonly breakers: CircuitBreakerRegistry,
   ) {}
@@ -82,7 +91,8 @@ export class DiagnosticsController {
     return {
       uptimeSec: Math.round(process.uptime()),
       heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
-      dbLatencyMs: await timeMs(() => this.db.ping()),   // timeMs: small helper measuring a promise
+      dbLatencyMs: await timeMs(() =>                    // timeMs: small helper measuring a promise
+        this.platform.platformTransaction({ kind: 'system', job: 'diagnostics' }, async () => undefined)),
       queues: await this.jobs.summary(),            // counts by queue/status, dead count
       circuits: this.breakers.snapshots(),
     };

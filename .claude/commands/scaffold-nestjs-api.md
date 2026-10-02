@@ -32,16 +32,19 @@ source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
    Перед запуском посмотри доступные опции: `npx nx g @nx/nest:application --help`.
 4. HTTP-адаптер — стандартный NestJS (Express). Fastify — только после ADR.
 5. Каркас по шаблонам скила: `main.ts` (глобальный префикс `api`, версия `v1`, `ValidationPipe`
-   с whitelist/transform, exception filter RFC 7807 `application/problem+json`, Helmet, CORS только
-   для origin'ов web/admin), `AppModule` → `ConfigModule` (fail-fast валидация env) → `CoreModule`
-   (correlation ID через AsyncLocalStorage, контекст tenant/user/store) → доменные модули.
+   с whitelist/transform, exception filter RFC 7807 `application/problem+json`, Helmet, CORS выключен — один
+   origin, ADR-0008; correlation ID через AsyncLocalStorage, контекст tenant/user/store), `AppModule` →
+   `ConfigModule` (fail-fast валидация env) → `DatabaseModule` + `RedisModule` → доменные модули.
 6. Пустые доменные модули по ADR-0002: `catalog`, `inventory`, `pos`, `purchasing`, `pricing`,
    `returns`, `billing`, `sync`, `fiscal`, `export-1c`, `audit` — каждый через `npx nx g @nx/nest:module`
    (с `--help` для проверки опций), без бизнес-логики.
 7. Health-эндпоинт (`@nestjs/terminus`: PostgreSQL, Redis).
-8. Слой доступа к данным: ORM и инструмент миграций НЕ выбраны — ничего не устанавливать. Оставить
-   `DatabaseModule` с интерфейсом tenant-scoped доступа и TODO со ссылкой на будущий ADR
-   (зафиксировать тикет, иначе нарушится Definition of Done — сообщить пользователю).
+8. Слой доступа к данным — по ADR-0006/0013 и образцу `apps/api`: зависимости `kysely`, `pg`,
+   `node-pg-migrate`, `uuid` (точные версии, как в `apps/api/package.json`), dev — `kysely-codegen`,
+   `@types/pg`; `core/database` (`TenantDatabase`, `DatabaseModule`, `pool.ts`, `ids.ts`,
+   `table-classes.ts`, `platform/`), `scripts/migrate.mjs`, `migrations/`, таргеты `migrate`,
+   `integration`, `db-types`, `db-types-verify`. Лучше переиспользовать код `apps/api`, чем копировать:
+   второе приложение API — изменение границ, сначала ADR.
 9. `.env.example` с полным списком переменных (без реальных значений); локальный `.env` — через Bash,
    в `.gitignore`. Для локальной среды — PostgreSQL и Redis из `docker/` (ADR-0005).
 10. Проверка безопасности зависимостей: `npm audit --audit-level=high` — критичные/высокие CVE
@@ -50,13 +53,13 @@ source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
 
 ## Запрещено при скаффолде
 
-- Устанавливать Prisma/TypeORM/Drizzle, Fastify, BullMQ/RabbitMQ/Kafka, pino/winston, OpenTelemetry,
+- Устанавливать другой ORM или мигратор (Prisma, TypeORM, Drizzle — отклонены ADR-0006), Fastify, BullMQ/RabbitMQ/Kafka, pino/winston, OpenTelemetry, <!-- docs-check: ok -->
   Vault и любые технологии без accepted ADR (proposed ADR недостаточно; см. `docs/architecture/stack.md`
   и `docs/architecture/adr/`).
-- Настраивать CI-пайплайны (CI пока не выбран — вводится через ADR; до ADR проверки вручную, `npm run check`).
+- Настраивать CI-пайплайны в обход плана C: CI — GitHub Actions по ADR-0009; пока workflow-файлов нет, проверки вручную (`npm run check`).
 - Коммитить секреты и реальные данные.
 
 ## Итог
 
 Выведи: созданные проекты Nx, установленные зависимости (с версиями), результаты проверок из шага 11,
-и список отложенных решений, требующих ADR (ORM, миграции и т.д.).
+и список отложенных решений, требующих ADR (например, хранение файлов, мониторинг, reverse proxy — ADR-0012 proposed).

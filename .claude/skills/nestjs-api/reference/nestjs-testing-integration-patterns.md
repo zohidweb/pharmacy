@@ -6,7 +6,27 @@
 
 ## Обязательные кейсы проекта
 
-Каждый модуль, который пишет прикладные данные, покрывает релевантные кейсы из этого раздела. Без них MR не проходит Definition of Done.
+Каждый модуль, который пишет прикладные данные, покрывает релевантные кейсы из этого раздела. Без них PR не проходит Definition of Done.
+
+### 0. Каталог и изоляция на уровне БД (интеграционные тесты `apps/api`, ADR-0013 §8)
+
+Уже есть и обязаны оставаться зелёными при каждой миграции (`npx nx run api:integration`):
+
+- `catalog.int-spec.ts` — каждая таблица схемы `pharmacy` есть в `table-classes.ts` и наоборот
+  (включая представления); RLS `ENABLE` + `FORCE`; **точные наборы прав** по ролям и классам
+  (`pharmacy_app` на тенантных — ровно `SELECT/INSERT/UPDATE/DELETE`, никаких `TRUNCATE`,
+  `REFERENCES`, `TRIGGER`, `MAINTAIN`); `pharmacy_platform` видит только колонки реестра
+  `stores`; `BYPASSRLS` только у суперпользователя; SECURITY DEFINER-функции = список
+  резолверов; нет политик `TO public`; нет default privileges для `pharmacy_app`; ведущий
+  `tenant_id` в первичном ключе; нет `default` у `id`; нет ролевых настроек `app.*`.
+- `isolation.int-spec.ts` — тенанты A и B: чтение и изменение строк B из контекста A — 0 строк,
+  вставка с `tenant_id` B — `42501`, запрос без контекста — ошибка, составные ссылки не дают
+  сослаться на точку или юрлицо чужого тенанта (`23503`), платформа не читает тенантные таблицы.
+- `tenant-database.int-spec.ts` / `platform-database.int-spec.ts` — контекст и таймауты живут
+  только до конца транзакции (пул из одного соединения), откат и освобождение соединения.
+
+Новая таблица добавляется в манифест, получает гранты по классу — и эти тесты подтверждают это
+автоматически. Для append-only таблиц разрешённый набор прав в тесте каталога — `SELECT, INSERT`.
 
 ### 1. Изоляция тенантов
 
@@ -17,7 +37,8 @@
 // db, seeder, loginAs, baseUrl, TENANT_A/B, KEEP_SEED (seed tables kept by reset) — from ../support; randomUUID — node:crypto
 type Agent = ReturnType<typeof request.agent>;
 const productBody = (barcode: string) => ({
-  nameRu: 'Тестовый товар', nameTj: 'Тестовый товар', isPrescription: false, isControlledSubstance: false, barcodes: [barcode],
+  name: { ru: 'Тестовый товар', tj: 'Тестовый товар' }, piecesPerPack: 1,
+  isPrescription: false, isControlled: false, barcodes: [barcode],
 });
 
 describe('Tenant isolation', () => {
@@ -277,6 +298,7 @@ it('paginates with limit/offset', async () => {
 ## Запуск
 
 ```bash
+npx nx run api:integration                       # data layer + catalog + isolation (needs npm run dev:deps)
 npx nx e2e api-e2e                               # все e2e (поднимает api через dependsOn)
 npx nx e2e api-e2e --testFile=receipts-atomicity.spec.ts
 npx nx e2e api-e2e --testNamePattern="Tenant isolation"

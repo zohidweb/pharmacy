@@ -10,7 +10,7 @@ metadata:
   scope: design
   output-format: document
 source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
-last-reviewed: "2026-09-29"
+last-reviewed: "2026-10-02"
 ---
 
 ## Pharmacy: контекст и ограничения
@@ -21,12 +21,17 @@ last-reviewed: "2026-09-29"
   `docs/architecture/stack.md`): Nx-монорепо, `apps/web` (касса, склад, кабинет владельца) и `apps/admin`
   (админка оператора) — Next.js (React, TypeScript strict) в режиме SPA/static (`output: 'export'`, без SSR).
   Общий UI-кит — `libs/ui`; деньги, даты, i18n — `libs/shared/util`.
-- **Источник истины токенов — CSS custom properties в `libs/ui`** (префикс `--ph-`). Скил работает
-  без какого-либо CSS-фреймворка.
-- **Tailwind CSS применяется только после ADR о выборе CSS-подхода для libs/ui (через /03-adr).
-  До ADR — токены как CSS custom properties + CSS Modules.** Связка токенов с Tailwind v4 `@theme`
-  описана в скиле `tailwind-patterns` и действует только при положительном ADR.
-- **UI-библиотеки** (shadcn/ui, Radix, Headless UI, MUI, Mantine…), библиотеки иконок, i18n,
+- **Источник истины токенов — CSS custom properties в `libs/ui`** (префикс `--ph-`).
+- **ADR-0007:** утилиты Tailwind CSS v4 генерируются только из этих токенов (`@theme inline`,
+  скил `tailwind-patterns`); CSS Modules — только `ReceiptPrint` (печать чека) и `PosLayout` (сетка
+  кассы). UI-кит `libs/ui` — свой, на нативной платформе: `<dialog>`, Popover API + anchor
+  positioning, `<select>` с `appearance: base-select`, ARIA APG для Combobox и Tabs; иконки — свой
+  SVG-набор (`libs/ui/src/lib/icon`, исходники Lucide копией с лицензией в
+  `libs/ui/THIRD_PARTY_NOTICES.md`); склейка классов — `cx()`.
+- **Решённые библиотеки:** i18n — use-intl (ADR-0015, `reference/ui-localization-formatting.md`);
+  a11y-тесты — `jest-axe` для компонентов `libs/ui` и `@axe-core/playwright` для экранов, гейт —
+  0 нарушений serious/critical (ADR-0009).
+- **UI-библиотеки** (shadcn/ui, Radix, Base UI, Headless UI, MUI, Mantine…), пакеты иконок,
   stylelint-плагины и прочие новые зависимости — только через ADR команды (`/03-adr`).
   Не вводить молча.
 - **Устройства** (docs/architecture/c4/deployment.md): Chrome/Edge (последние 2 версии), сенсорный
@@ -35,8 +40,9 @@ last-reviewed: "2026-09-29"
 - Структура кода и нейминг — по скилу `react-dev` (TypeScript, PascalCase-компоненты, английские
   идентификаторы; доменные термины — из `docs/architecture/glossary.md`).
 - Аудит соответствия выполняет агент проекта `ui-standards-expert` с этим скилом.
-- **Открыто / согласовать** (не выдавать за решённое): финальная палитра и шрифт (кандидаты в
-  reference), обозначение валюты («смн»?) и формат для TJ, набор горячих клавиш кассы, тёмная тема и компактная плотность `apps/admin`.
+- **Открыто / согласовать** (не выдавать за решённое): финальная палитра, лицензия шрифта TT Norms
+  Pro (`libs/ui/src/styles/fonts.css` — подтвердить до релиза), обозначение валюты («смн»?) и формат
+  для TJ, набор горячих клавиш кассы, тёмная тема и компактная плотность `apps/admin`.
   Статусы партий — только из `glossary.md` (срок годности партии); новые статусы (например,
   блокировка партии) не вводить, пока их нет в ТЗ и глоссарии.
 
@@ -80,7 +86,8 @@ semantic.css     --ph-color-primary, --ph-color-fg, --ph-color-danger …  см�
       ↓
 components.css   --ph-button-bg-primary, --ph-batch-expired-bg …       конкретный компонент/доменный статус
       ↓
-компоненты       var(--ph-color-*) / var(--ph-<component>-*)  (CSS Modules)  |  утилиты Tailwind — после ADR
+компоненты       утилиты Tailwind из @theme inline (bg-primary, p-4, rounded-(--ph-button-radius))
+                 | var(--ph-…) в CSS Modules — только ReceiptPrint и PosLayout (ADR-0007)
 ```
 
 | Семейство | Шкала (канон) | Где подробно |
@@ -126,9 +133,9 @@ components.css   --ph-button-bg-primary, --ph-batch-expired-bg …       кон�
 
 ## Machine Enforcement
 
-Автоматических хуков и команды линта дизайн-системы в проекте нет. До появления линтеров
-(stylelint с правилом вроде `declaration-strict-value`, ESLint-правила — это новые зависимости,
-требуют согласования) аудит выполняется поиском. Команды — из корня `pharmacy`:
+Линтера дизайн-системы в проекте нет (stylelint с `declaration-strict-value` и подобные плагины —
+новые зависимости, только через ADR); автоматически проверяется доступность — axe-гейт ADR-0009.
+Токены и литералы проверяются поиском. Команды — из корня `pharmacy`:
 
 ```bash
 SCOPE="apps libs/ui/src/lib"
@@ -148,8 +155,8 @@ rg -n "${EXCL[@]}" -e 'outline:\s*(none|0)' $SCOPE
 rg -n "${EXCL[@]}" -e '\b\w*(amount|price|sum|total)\w*\s*/\s*100\b' -e 'toFixed\(2\)' -e 'parseFloat\(' $SCOPE
 ```
 
-Проверки Tailwind-классов (палитра по умолчанию, arbitrary values) — в скиле `tailwind-patterns`,
-только если ADR выбрал Tailwind.
+Проверки Tailwind-классов (палитра по умолчанию, arbitrary values, модификаторы прозрачности,
+`dark:`) — в скиле `tailwind-patterns` (§13).
 
 ## Scope and Exception Policy
 
@@ -183,10 +190,12 @@ rg -n "${EXCL[@]}" -e '\b\w*(amount|price|sum|total)\w*\s*/\s*100\b' -e 'toFixed
    только с клавиатуры (и сканером — Enter после кода).
 5. Строки проверены на TJ-локали (длина, глифы `Ғ ғ Қ қ Ҳ ҳ Ҷ ҷ Ӣ ӣ Ӯ ӯ` в обычном и жирном начертании).
 6. Для чеков — предпросмотр печати Chrome на 58 и 80 мм.
-7. `npx nx lint <proj>`, `npx nx test <proj>`, `npx nx build <proj>` (или `npx nx affected -t build test lint`) — зелёные.
+7. Новый интерактивный компонент `libs/ui`: чек-лист ARIA APG в шапке файла, тест клавиатурного
+   сценария и `jest-axe` без нарушений (ADR-0007 п. 7, ADR-0009).
+8. `npx nx lint <proj>`, `npx nx test <proj>`, `npx nx build <proj>` (или `npx nx affected -t build test lint`) — зелёные.
 
 ## Related Skills
 
-- `tailwind-patterns` — подключение этих токенов в Tailwind v4 `@theme` (только после ADR о CSS-подходе)
+- `tailwind-patterns` — подключение этих токенов в Tailwind v4 `@theme` (ADR-0007)
 - `react-dev` — структура React-кода, нейминг, тесты
 - `web-performance-optimization` — размер CSS/шрифтов, производительность экранов кассы

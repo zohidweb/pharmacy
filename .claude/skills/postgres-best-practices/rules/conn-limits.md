@@ -32,12 +32,16 @@ alter system set maintenance_work_mem = '256MB'; -- VACUUM, CREATE INDEX
 -- max_connections = 30, work_mem = 4MB, shared_buffers sized for a shared desktop PC
 ```
 
-Таймауты — на роль приложения, а не глобально (отчётам и миграциям нужны другие значения):
+Таймауты запроса и блокировки ставит **само приложение** первым оператором каждой транзакции
+(`TenantDatabase` / `PlatformDatabase`: `set_config('statement_timeout', …, true)`,
+`set_config('lock_timeout', …, true)` из `DB_STATEMENT_TIMEOUT_MS` = 5000 и
+`DB_LOCK_TIMEOUT_MS` = 2000) — они живут до конца транзакции и не зависят от настроек роли.
+Ролевые настройки `app.*` запрещены (тест каталога): они подменили бы fail-closed поведение.
+Защита от «забытых» транзакций — на роль, пока приложение её не ставит:
 
 ```sql
-alter role pharmacy_app set statement_timeout = '5s';                    -- POS ops must be ≤ 1 s
-alter role pharmacy_app set lock_timeout = '2s';                         -- fail fast, retry in app
 alter role pharmacy_app set idle_in_transaction_session_timeout = '15s'; -- leaked tx get killed
+alter role pharmacy_platform set idle_in_transaction_session_timeout = '15s';
 
 -- Heavy report inside a request: raise the limit for this transaction only
 begin;

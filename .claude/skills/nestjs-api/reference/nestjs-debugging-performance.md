@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — ориентир «операция кассы ≤ 1 сек»; Prisma-middleware заменён на средства PostgreSQL (ORM — после ADR); публичный memory-эндпоинт и сброс circuit breaker через API удалены. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — ориентир «операция кассы ≤ 1 сек»; Prisma-middleware заменён на средства PostgreSQL и Kysely (ADR-0006); публичный memory-эндпоинт и сброс circuit breaker через API удалены. Ограничения: `CLAUDE.md`. <!-- docs-check: ok -->
 
 # NestJS Debugging — Performance & Memory
 
@@ -6,11 +6,18 @@
 
 ТЗ: **операция кассы ≤ 1 сек** (скан → цена/остаток → проведение чека) при до 50 одновременных кассирах с запасом ×5 (≈ 250).
 
-| Участок | Ориентир (рекомендация, уточняется замерами) |
-|---|---|
-| API кассы: поиск по штрихкоду, цена | p95 ≤ 150 мс (кэш каталога/цен в Redis) |
-| API кассы: проведение чека (транзакция + движения + outbox) | p95 ≤ 300 мс |
-| Остальное (сеть, UI, печать) | остаток до 1 сек |
+Бюджеты API кассы — ADR-0009 (время серверное: от входа запроса до ответа, включая БД; проверка
+по p97.5 — autocannon не выводит p95):
+
+| Операция | p95 (проверяется по p97.5) | p99 |
+|---|---|---|
+| Товар и цена по штрихкоду (индекс / кэш Redis) | ≤ 100 мс | ≤ 250 мс |
+| Текстовый поиск по каталогу RU/TJ (`pg_trgm`) | ≤ 200 мс | ≤ 400 мс |
+| Проведение чека (транзакция, FEFO, движения, outbox) | ≤ 300 мс | ≤ 600 мс |
+| Ошибки / дубли | 0 ответов 5xx; 0 дублей при повторе `Idempotency-Key` | |
+
+Разложение «оплата → чек проведён ≤ 1 сек»: клиент ≤ 150 мс, сеть ≈ 200 мс (RTT ≤ 150 мс), API
+≤ 300 мс, резерв ≈ 350 мс.
 
 Всё внешнее (фискализация, синхронизация) — вне пути кассы, через очередь-таблицу (`nestjs-messaging-basics.md`). Сначала измеряйте, потом оптимизируйте.
 
@@ -24,7 +31,7 @@ async findProducts() {
   const pool = createPool(process.env.DATABASE_URL);   // never closed
   return pool.query('...');
 }
-// GOOD: one pool per process, provided by the data-access module (ORM per ADR), closed on shutdown.
+// GOOD: one pool per process, created by core/database (TenantDatabase, ADR-0006) and closed on shutdown.
 
 // BAD: listener added repeatedly
 onModuleInit() {
@@ -71,9 +78,9 @@ const picks = await timed(this.logger, 'fefo-pick', () => this.batches.pickFefo(
 
 ## 3. Производительность БД
 
-Логирование SQL со стороны приложения — средствами выбранного ORM после ADR. Средствами PostgreSQL — `log_min_duration_statement`, `pg_stat_statements`, `EXPLAIN (ANALYZE, BUFFERS)` (`nestjs-debugging-logging.md`).
+Логирование SQL со стороны приложения — опция `log` у `Kysely` (только длительность и текст запроса, без параметров: в них ПДн). Средствами PostgreSQL — `log_min_duration_statement`, `pg_stat_statements`, `EXPLAIN (ANALYZE, BUFFERS)` (`nestjs-debugging-logging.md`).
 
-Горячие пути кассы и индексы-кандидаты (схема — миграциями после ADR):
+Горячие пути кассы и индексы-кандидаты (схема — миграциями node-pg-migrate, ADR-0006; итоговые индексы — в модели данных):
 
 | Запрос | Индекс-кандидат |
 |---|---|
@@ -103,7 +110,7 @@ node --inspect-brk dist/apps/api/main.js        # chrome://inspect → Profiler
 node --prof dist/apps/api/main.js && node --prof-process isolate-*.log > profile.txt
 ```
 
-Нагрузочный прогон сценария кассы (250 параллельных «кассиров») — инструмент нагрузки пока не выбран — вводится через ADR, см. `nestjs-testing-ci-troubleshooting.md`.
+Нагрузочный прогон сценария кассы — autocannon по профилю ADR-0009 (скрипты в `tools/load/`), см. `nestjs-testing-ci-troubleshooting.md`.
 
 ## 5. Состояние circuit breaker-ов
 
@@ -113,7 +120,7 @@ node --prof dist/apps/api/main.js && node --prof-process isolate-*.log > profile
 ```typescript
 // apps/api/src/common/resilience/resilience-diagnostics.controller.ts
 @Controller({ path: 'internal/resilience', version: '1' })   // /api/v1/internal/resilience
-@RequirePermission('platform', 'diagnostics')          // permission decorator per nestjs-security-auth.md
+@RequireOperatorPermission('platform:diagnostics')     // operator contour (ADR-0013), see nestjs-debugging-production.md
 export class ResilienceDiagnosticsController {
   constructor(private readonly registry: CircuitBreakerRegistry) {}
 

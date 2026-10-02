@@ -44,7 +44,7 @@ create table batches (
   -- ...
   pack_cost_dirams bigint  not null check (pack_cost_dirams >= 0),
   units_per_pack   integer not null check (units_per_pack > 0)
-  -- TJS only (ADR-0016): no currency / exchange-rate columns
+  -- TJS only (ADR-0016): no currency / exchange-rate columns  -- docs-check: ok
 );
 
 -- Unit cost when splitting a pack: round UP in favour of the pharmacy (project rule)
@@ -54,7 +54,10 @@ from batches;
 
 Правила:
 
-- Суффикс колонки — `_dirams`; единственная валюта — TJS (ADR-0016), колонок `currency`/курса нет.
+- Суффикс колонки — `_dirams`; единственная валюта — TJS (ADR-0016), колонок `currency`/курса нет. <!-- docs-check: ok -->
+- Чтение: type parser пула (`apps/api/src/core/database/pool.ts`) отдаёт `int8` как JS `bigint`,
+  и `kysely-codegen` типизирует такие колонки как `bigint` (ADR-0006 п. 3) — без потери точности
+  и без `parseFloat`.
 - `bigint`, а не `integer`: строка чека влезает и в `integer`, но итоги смен, обороты тенанта и долги
   поставщикам за годы — нет (`integer` ≈ 21,4 млн сомони).
 - `CHECK (>= 0)` — для цен, сумм строк, оплат, скидок. **Не** ставьте его на сальдо/долг

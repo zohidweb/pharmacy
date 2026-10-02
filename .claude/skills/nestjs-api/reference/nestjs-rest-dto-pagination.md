@@ -6,26 +6,27 @@ DTO и контракты — в `libs/shared/dto` (без `@nestjs/*`). Мап�
 ## Маппинг: функция рядом с сервисом
 
 ```typescript
-// apps/api/src/modules/inventory/batches.mapper.ts
-import type { BatchResponseDto } from '@pharmacy/shared/dto';
-import { toDirams } from '@pharmacy/shared/util';
+// apps/api/src/app/inventory/batches.mapper.ts
+import type { BatchResponseDto } from '@pharmacy/shared-dto';
+import { toSafeInt } from '@pharmacy/shared-util'; // bigint -> number, throws outside Number.MAX_SAFE_INTEGER
 
+// A Kysely row (CamelCasePlugin): pool type parser gives int8 -> bigint, date -> 'YYYY-MM-DD' string (ADR-0006 p. 3)
 export interface BatchRow {
   id: string;
-  product_id: string;
-  expires_on: string;           // DATE -> 'YYYY-MM-DD', no timezone games
-  purchase_price_dirams: string; // int8 arrives from pg as string; TJS only, no currency column (ADR-0016)
-  supplier_id: string;
+  productId: string;
+  expiryDate: string;                  // DATE -> 'YYYY-MM-DD', no timezone games
+  purchasePricePerPackDirams: bigint;  // TJS only, no currency column (ADR-0016)
+  supplierId: string | null;
 }
 
-export function toBatchResponse(row: BatchRow, quantityOnHand: number): BatchResponseDto {
+export function toBatchResponse(row: BatchRow, onHandPieces: bigint): BatchResponseDto {
   return {
     id: row.id,
-    productId: row.product_id,
-    expiresOn: row.expires_on,
-    purchasePriceDirams: toDirams(row.purchase_price_dirams), // safe-integer check, never parseFloat
-    supplierId: row.supplier_id,
-    quantityOnHand,               // derived from stock_movements, not a stored column
+    productId: row.productId,
+    expiryDate: row.expiryDate,
+    purchasePricePerPackDirams: toSafeInt(row.purchasePricePerPackDirams),
+    supplierId: row.supplierId,
+    onHandPieces: toSafeInt(onHandPieces),            // stock is derived from movements, not a stored column
   };
 }
 ```
@@ -89,34 +90,48 @@ export class ProductListQueryDto extends PageQueryDto {
 ## Репозиторий: поиск + total
 
 ```typescript
-// apps/api/src/modules/catalog/products.repository.ts (fragment)
-const SORT_COLUMNS: Record<ProductListQueryDto['sortBy'], string> = {
-  nameRu: 'name_ru',
-  nameTj: 'name_tj',
-  createdAt: 'created_at',
-};
+// apps/api/src/app/catalog/products.repository.ts (fragment)
+import { sql } from 'kysely';
+import type { TenantTransaction } from '../../core/database';
 
-async search(tx: Tx, q: ProductListQueryDto): Promise<{ rows: ProductRow[]; total: number }> {
-  const params: unknown[] = [tx.tenantId];
-  const where = ['tenant_id = $1'];
-  if (!q.includeArchived) where.push('archived_at IS NULL');
+// ORDER BY cannot be parameterized: the expression comes from a fixed map, direction from a validated enum
+const SORT_COLUMNS = {
+  nameRu: sql<string>`name->>'ru'`,
+  nameTj: sql<string>`name->>'tj'`,
+  createdAt: sql<Date>`created_at`,
+} as const satisfies Record<ProductListQueryDto['sortBy'], unknown>;
+
+async search(trx: TenantTransaction, tenantId: string, q: ProductListQueryDto) {
+  let base = trx.selectFrom('products').where('tenantId', '=', tenantId);
+  if (!q.includeArchived) base = base.where('status', '=', 'active');
   if (q.search) {
-    params.push(`%${escapeLike(q.search)}%`, q.search); // escapeLike: escape %, _ and backslash in user input
-    where.push(`(name_ru ILIKE $2 OR name_tj ILIKE $2 OR inn ILIKE $2 OR $3 = ANY(barcodes))`);
+    const like = `%${escapeLike(q.search)}%`; // escapeLike: escape %, _ and backslash in user input
+    base = base.where((eb) =>
+      eb.or([
+        eb(sql`name->>'ru'`, 'ilike', like),
+        eb(sql`name->>'tj'`, 'ilike', like),
+        eb(sql`inn->>'ru'`, 'ilike', like),
+        eb.exists(
+          eb.selectFrom('productBarcodes')
+            .select('productBarcodes.productId')
+            .whereRef('productBarcodes.tenantId', '=', 'products.tenantId')
+            .whereRef('productBarcodes.productId', '=', 'products.id')
+            .where('productBarcodes.barcode', '=', q.search!),
+        ),
+      ]),
+    );
   }
-  // ORDER BY cannot be parameterized: column comes from a fixed map, direction from a validated enum
-  const orderBy = `${SORT_COLUMNS[q.sortBy]} ${q.sortOrder === 'desc' ? 'DESC' : 'ASC'}, id`;
-
-  const rows = await tx.query<ProductRow>(
-    `SELECT * FROM products WHERE ${where.join(' AND ')} ORDER BY ${orderBy}
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, q.limit, q.offset],
-  );
-  const [{ count }] = await tx.query<{ count: string }>(
-    `SELECT count(*) FROM products WHERE ${where.join(' AND ')}`,
-    params,
-  );
-  return { rows, total: Number(count) };
+  const [rows, { total }] = await Promise.all([
+    base
+      .selectAll()
+      .orderBy(SORT_COLUMNS[q.sortBy], q.sortOrder === 'desc' ? 'desc' : 'asc')
+      .orderBy('id')
+      .limit(q.limit)
+      .offset(q.offset)
+      .execute(),
+    base.select((eb) => eb.fn.countAll<bigint>().as('total')).executeTakeFirstOrThrow(),
+  ]);
+  return { rows, total: toSafeInt(total) };
 }
 ```
 

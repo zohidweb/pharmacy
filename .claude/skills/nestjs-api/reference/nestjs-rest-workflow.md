@@ -5,7 +5,7 @@
 
 ## 0. Нужен ли ADR?
 
-Сначала ADR в архитектурном репозитории (`/03-adr`), потом код, если изменение:
+Сначала ADR (`/03-adr`, `docs/architecture/adr/`), потом код, если изменение:
 - добавляет технологию/библиотеку, которой нет в стеке (ORM, адаптер, логгер, брокер…);
 - добавляет интеграцию (закрытый список: 1С файлы, фискализация, синхронизация точек);
 - добавляет модуль api или меняет границы между модулями;
@@ -14,8 +14,8 @@
 ## 1. Требования и термины
 
 - Сценарий — из ТЗ/бэклога; термины и имена сущностей — из `docs/architecture/glossary.md`.
-- Определить: какой модуль владеет ресурсом, какое право требуется
-  («модуль × действие × охват точек»), затрагиваются ли деньги, остатки, ПКУ, аудит,
+- Определить: какой модуль владеет ресурсом, какое право каталога ADR-0018 требуется
+  (`модуль:действие`, охват точек — у сотрудника; нового права в каталоге не придумывать), затрагиваются ли деньги, остатки, ПКУ, аудит,
   нужна ли идемпотентность (финансовая операция / синхронизация → да).
 
 ## 2. Контракт в libs/shared/dto
@@ -27,8 +27,9 @@
 
 ## 3. Схема БД (если нужна)
 
-- Версионированная миграция (инструмент — по ADR): `tenant_id NOT NULL`, индексы
-  `(tenant_id, …)`, RLS-политика, для журналов — append-only права/триггер.
+- Миграция node-pg-migrate (ADR-0006, только Up): ключ `(tenant_id, id)`, индексы
+  `(tenant_id, …)`, RLS-политика `TO pharmacy_app`, явные гранты, для журналов — append-only
+  права/триггер; класс таблицы — в `table-classes.ts`.
 - Ревью миграции — агент `postgresql-database-reviewer`; правила —
   скил `postgres-best-practices`.
 
@@ -36,13 +37,15 @@
 
 ```bash
 # check syntax for your Nx version: npx nx g @nx/nest:<generator> --help
-npx nx g @nx/nest:controller apps/api/src/modules/pos/receipts
-npx nx g @nx/nest:service    apps/api/src/modules/pos/receipts
+npx nx g @nx/nest:controller apps/api/src/app/pos/receipts
+npx nx g @nx/nest:service    apps/api/src/app/pos/receipts
 ```
 
-- Репозиторий: SQL с `tenant_id`, принимает `Tx`.
-- Сервис: бизнес-правила, транзакция `db.tenantTransaction()`, аудит в той же транзакции.
-- Контроллер: `@RequirePermission(...)`, DTO на входе/выходе, никакой логики.
+- Миграция (если меняется схема): `apps/api/migrations/*.sql` по модели данных, запись в
+  `table-classes.ts`, `npx nx run api:migrate`, `npx nx run api:db-types`.
+- Репозиторий: Kysely-запросы с `.where('tenantId', '=', tenantId)`, принимает `TenantTransaction`.
+- Сервис: бизнес-правила, `TenantDatabase.tenantTransaction()`, аудит в той же транзакции.
+- Контроллер: `@RequirePermission('<модуль>:<действие>'[, scope])`, DTO на входе/выходе, никакой логики.
 - Внешний вызов (фискализация, синхронизация) — только через клиент-адаптер модуля с таймаутом,
   никогда внутри транзакции кассы (`nestjs-rest-services.md`).
 
@@ -60,17 +63,18 @@ npx nx affected -t build test lint
 npx nx e2e api-e2e
 ```
 
-CI пока не выбран (вводится через ADR) — до ADR команды запускаются вручную; полный прогон — `npm run check`.
+Плюс `npx nx run api:integration` и `npx nx run api:db-types-verify`. CI — GitHub Actions (ADR-0009); пока workflow-файлов нет, перед PR — полный прогон `npm run check`.
 Затем — агенты ревью (SKILL.md, «Post-Code Review») и обязательное ревью человеком.
 
 ## Пример контроллера ресурса с идемпотентностью
 
 ```typescript
-// apps/api/src/modules/pos/receipts.controller.ts
+// apps/api/src/app/pos/receipts.controller.ts
 import { Body, Controller, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CompleteReceiptDto, ReceiptResponseDto } from '@pharmacy/shared/dto';
-import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { CompleteReceiptDto, ReceiptResponseDto } from '@pharmacy/shared-dto';
+import { RequirePermission } from '../auth/decorators';
+import { IdempotencyKeyMismatchException } from '../../common/errors/idempotency-key-mismatch.exception';
 import { IdempotencyKeyPipe } from '../../common/pipes/idempotency-key.pipe';
 import { ReceiptsService } from './receipts.service';
 
@@ -81,7 +85,7 @@ export class ReceiptsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermission('pos', 'sell', { storeParam: 'storeId' })
+  @RequirePermission('pos:create', { storeParam: 'storeId' }) // a sale creates a receipt (ADR-0018 catalog)
   @ApiOperation({ summary: 'Complete a receipt: sale lines, payments, FEFO batch write-off' })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   complete(
@@ -89,10 +93,16 @@ export class ReceiptsController {
     @Headers('idempotency-key', IdempotencyKeyPipe) idempotencyKey: string,
     @Body() dto: CompleteReceiptDto,
   ): Promise<ReceiptResponseDto> {
-    return this.receipts.completeReceipt(storeId, dto, idempotencyKey);
+    // Transport check, not business logic: the header and the body carry the same operation id
+    if (idempotencyKey !== dto.operationId) throw new IdempotencyKeyMismatchException(); // 422
+    return this.receipts.completeReceipt(storeId, dto);
   }
 }
 ```
 
-`IdempotencyKeyPipe` — требует заголовок и проверяет формат (UUID); ключ генерирует касса
-(apps/web) один раз на операцию и повторяет его при досылке из офлайн-буфера.
+**Контракт идемпотентности финансовой операции (один для всех скилов):** касса (apps/web)
+генерирует UUIDv7 `operationId` один раз на операцию и при каждой досылке из буфера отправляет
+его и в теле (`dto.operationId`), и в заголовке `Idempotency-Key`. `IdempotencyKeyPipe` требует
+заголовок и проверяет формат; контроллер сверяет заголовок с `dto.operationId` (422 при
+расхождении); сервис `completeReceipt(storeId, dto)` идемпотентен по `operationId` (уникальный
+ключ `(tenant_id, operation_id)`, `nestjs-config-data-access.md`).

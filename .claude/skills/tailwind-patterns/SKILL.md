@@ -1,11 +1,11 @@
 ---
 name: tailwind-patterns
-description: "Tailwind CSS v4 patterns for Pharmacy Next.js (React, TypeScript) apps in the Nx monorepo — ONLY after an ADR selects Tailwind as the CSS approach for libs/ui. CSS-first @theme mapped from libs/ui design tokens (--ph-* CSS custom properties), @source scanning of apps and libs, className composition, container queries, OKLCH tokens, token-driven theming (no dark: utilities), POS / касса patterns (large touch targets, cashier screen grid), dense warehouse/report tables, ban on arbitrary values, short v3→v4 reference. Use when an ADR on Tailwind exists and you write or review utility classes in apps/web, apps/admin or libs/ui, or when preparing that ADR (Tailwind, утилитарные классы, @theme)."
+description: "Tailwind CSS v4 patterns for Pharmacy Next.js (React, TypeScript) apps in the Nx monorepo, as decided by ADR-0007 (Tailwind on --ph-* tokens, own libs/ui kit, own cx(), no clsx/tailwind-merge/CVA, CSS Modules only for ReceiptPrint and PosLayout). CSS-first @theme mapped from libs/ui design tokens (--ph-* CSS custom properties), @source scanning of apps and libs, className composition, container queries, OKLCH tokens, token-driven theming (no dark: utilities), POS / касса patterns (large touch targets, cashier screen grid), dense warehouse/report tables, ban on arbitrary values, short v3→v4 reference. Use when you write or review utility classes in apps/web, apps/admin or libs/ui (Tailwind, утилитарные классы, @theme)."
 risk: low
 source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5"
 date_added: "2026-02-27"
-updated: "2026-09-29"
-last-reviewed: "2026-09-29"
+updated: "2026-10-02"
+last-reviewed: "2026-10-02"
 allowed-tools:
   - Read
   - Grep
@@ -26,14 +26,12 @@ metadata:
 Оригинал был написан под другой фронтенд-стек и готовую UI-библиотеку. Переписан под Next.js
 (React, TypeScript) в Nx-монорепо `pharmacy`; маркетинговые Bento-раскладки удалены.
 
-- **Tailwind CSS не зафиксирован в `docs/architecture/stack.md`. Tailwind CSS применяется только
-  после ADR о выборе CSS-подхода для libs/ui (через /03-adr). До ADR — токены как CSS custom
-  properties + CSS Modules** (скил `ui-standards-tokens`). Этот скил описывает связку на случай
-  положительного ADR и помогает подготовить сам ADR (§1).
+- **ADR-0007 (accepted): Tailwind CSS v4 поверх токенов `--ph-*` + собственный UI-кит `libs/ui`**
+  на нативной платформе Chrome/Edge. Решения — §1; подключение уже сделано (§4).
 - Новая технология или библиотека уровня фреймворка → ADR команды (`/03-adr`), не молча.
-- **Любые UI-библиотеки и плагины** (shadcn/ui, Radix, Headless UI, Flowbite, MUI…) —
-  тоже только через ADR. Хелперы `clsx`/`tailwind-merge` (`cn`) и `class-variance-authority`
-  (CVA) — **зависимости на согласование**; до согласования — примеры без них (§5).
+- **Любые UI-библиотеки и плагины** (shadcn/ui, Radix, Base UI, Headless UI, Flowbite, MUI…) —
+  только через новый ADR. `clsx`, `tailwind-merge` и CVA по ADR-0007 **не используются**: склейка —
+  свой `cx()` (`libs/ui/src/lib/cx.ts`), варианты — карты `Record<Variant, string>` (§5).
 - Источник истины дизайна — токены `--ph-*` в `libs/ui` (скил `ui-standards-tokens`). Tailwind
   только **отображает** их в утилиты через `@theme inline`; своих значений в `@theme` не заводим
   (кроме breakpoints/containers — их нельзя задать через `var()`).
@@ -45,26 +43,27 @@ metadata:
 
 ---
 
-**Triggers:** ADR на Tailwind принят (подключение в Nx/Next.js, `className` в apps/web, apps/admin,
-libs/ui); подготовка ADR о CSS-подходе; приведение примера Tailwind v3 к v4 и нашим токенам.
+**Triggers:** `className` в apps/web, apps/admin, libs/ui; правка темы `tailwind-theme.css`;
+приведение примера Tailwind v3 к v4 и нашим токенам.
 
 ## Iron Law
 
-**NO TAILWIND WITHOUT AN ACCEPTED ADR. WITH THE ADR — NO UTILITY CLASS BEFORE READING `libs/ui/src/styles/tailwind-theme.css`: only utilities generated from `--ph-*` tokens exist; arbitrary values (`p-[13px]`, `bg-[#fff]`) are forbidden.**
+**NO UTILITY CLASS BEFORE READING `libs/ui/src/styles/tailwind-theme.css`: only utilities generated from `--ph-*` tokens exist; arbitrary values (`p-[13px]`, `bg-[#fff]`) are forbidden.**
 
 # Tailwind CSS v4 Patterns — Pharmacy (Next.js + Nx)
 
-## 1. Что должен решить ADR (чек-лист для /03-adr)
+## 1. Решения ADR-0007
 
-| Вопрос | Предлагаемый ответ (для обсуждения) |
+| Вопрос | Решение |
 |---|---|
-| Подход | Tailwind v4 для раскладки и простых компонентов + CSS Modules для сложных (печать чека, POS-сетка) — или «только CSS Modules» (альтернатива, отказ от Tailwind) |
-| Версия | Tailwind CSS 4.x, `@tailwindcss/postcss`; фиксированная версия в корневом `package.json` (single-version policy Nx) |
+| Подход | Tailwind v4 для раскладки и компонентов `libs/ui`; **CSS Modules — только** печать чека 58/80 мм (`ReceiptPrint`, `@media print`) и сетка экрана кассы (`PosLayout`). Одно свойство элемента — одним средством |
+| Версия | `tailwindcss` и `@tailwindcss/postcss` 4.x — точные версии в корневом `package.json` (single-version policy Nx); только сборка, рантайма нет |
 | Токены | Источник — `--ph-*` в `libs/ui`; `@theme` только маппит (§3); дефолтная тема сброшена |
-| Хелперы | `clsx` + `tailwind-merge` (`cn`) — да/нет; CVA — да/нет (лицензии MIT, проверить) |
-| UI-библиотеки | Отдельное решение (shadcn/ui/Radix и т.п. — не входят автоматически) |
-| Контроль | Как ловим arbitrary values и дефолтную палитру: grep в Verify (§13) до появления линтера; `eslint-plugin-tailwindcss` / аналог — отдельное согласование (поддержка v4 проверяется) |
-| Preflight | Tailwind preflight заменяет reset из `libs/ui/base.css`; токены и `:focus-visible` остаются |
+| Склейка и варианты | Свой `cx()` (`libs/ui/src/lib/cx.ts`); варианты — `Record<Variant, string>`; без `clsx`/`tailwind-merge`/CVA. Конфликты исключены API: внешний `className` — только раскладка (отступы, позиция в сетке), не цвет, типографика и размеры |
+| Запреты | Arbitrary values, дефолтная палитра, модификаторы прозрачности (`/90`), `dark:` |
+| Компоненты | Свой кит на нативной платформе (`<dialog>`, Popover API + anchor positioning, `<select>` с `appearance: base-select`, ARIA APG для Combobox/Tabs); иконки — свой SVG-набор; UI-библиотеки — только новым ADR |
+| Контроль | grep из Verify (§13); axe-гейт — ADR-0009 (скил `ui-standards-tokens`) |
+| Preflight | Tailwind preflight вместо отдельного reset; токены, `base.css` и `:focus-visible` из `libs/ui` остаются |
 
 ## 2. Архитектура
 
@@ -123,24 +122,24 @@ export default { plugins: { '@tailwindcss/postcss': {} } };
 ```
 
 ```css
-/* apps/web/src/app/globals.css — imported once in the root layout.
-   Paths are relative to this file: check against the real tree. */
-@import 'tailwindcss' source(none);               /* no implicit scanning: explicit @source below */
-@import '../../../../libs/ui/src/styles/index.css' layer(base); /* --ph-* tokens + base (focus, print) */
-@import '../../../../libs/ui/src/styles/tailwind-theme.css';
+/* apps/web/src/app/styles/global.css (FSD layer app, ADR-0017) — imported once by
+   src/app/layouts/RootLayout.tsx, which apps/web/app/layout.tsx re-exports. */
+@import 'tailwindcss' source(none);                          /* no implicit scanning */
+@import '../../../../../libs/ui/src/styles/index.css' layer(base); /* fonts, --ph-* tokens, base, controls */
+@import '../../../../../libs/ui/src/styles/tailwind-theme.css';
 
-@source '../';                                    /* apps/web/src */
-@source '../../../../libs/ui/src/lib';            /* UI-kit components with className */
+@source '../../';                                            /* apps/web/src */
+@source '../../../../../libs/ui/src/lib';                    /* UI-kit components with className */
 ```
 
 - `source(none)` + явные `@source`: автоопределение в монорепо зависит от рабочего каталога
   сборки (Nx/Next) и может не увидеть `libs/ui`. Явный список детерминирован.
-- `apps/admin` — такой же вход со своим `@source '../'`; libs/ui подключается одинаково.
+- `apps/admin` — такой же `src/app/styles/global.css`; libs/ui подключается одинаково.
 - Токены импортируются в `layer(base)`, утилиты Tailwind — в `utilities`, поэтому утилиты
   побеждают базовые стили. **CSS Modules — вне слоёв и побеждают любые утилиты** независимо от
   специфичности: на одном элементе не смешивать Tailwind и правила CSS Modules для одного свойства.
-- Reset при Tailwind не нужен (его заменяет preflight): `libs/ui/src/styles/reset.css` подключается
-  только в варианте без Tailwind, `index.css` его не импортирует.
+- Отдельного reset нет — его заменяет preflight; `libs/ui/src/styles/index.css` подключает
+  `fonts.css`, токены, `base.css` и `controls.css`.
 - Jest: CSS не компилируется (моки CSS из конфигурации Nx), Tailwind в тестах не нужен.
 - `output: 'export'`: CSS извлекается при сборке, в `out/` — обычные файлы; ничего серверного.
 
@@ -152,44 +151,43 @@ export default { plugins: { '@tailwindcss/postcss': {} } };
   вариантами (тогда `tailwind-merge` не нужен).
 
 ```tsx
-// libs/ui/src/lib/Button/Button.tsx — without clsx/CVA (until approved)
+// Pattern of libs/ui/src/lib/button/Button.tsx (the real file is the reference: read it first)
 import type { ButtonHTMLAttributes } from 'react';
+import { cx } from '../cx';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger';
-type ButtonSize = 'default' | 'pos' | 'primaryAction';
+type ButtonVariant = 'primary' | 'secondary' | 'destructive';
+type ButtonSize = 'md' | 'lg';
 
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-md border border-transparent px-4 ' +
-  'font-semibold transition-colors disabled:bg-disabled disabled:text-on-disabled';
+  'inline-flex items-center justify-center gap-2 rounded-(--ph-button-radius) border ' +
+  'border-transparent px-(--ph-button-padding-x) font-medium transition-colors ' +
+  'disabled:bg-disabled disabled:text-on-disabled';
 
 const variants: Record<ButtonVariant, string> = {
   primary: 'bg-primary text-on-primary hover:bg-primary-hover',
-  secondary: 'bg-surface text-fg border-control hover:bg-surface-sunken',
-  danger: 'bg-danger text-on-danger hover:bg-danger-hover',
+  secondary: 'bg-primary-subtle text-primary hover:bg-primary-subtle-hover',
+  destructive: 'bg-danger text-on-danger hover:bg-danger-hover',
 };
 
 const sizes: Record<ButtonSize, string> = {
-  default: 'min-h-touch min-w-touch text-md',
-  pos: 'min-h-touch-pos min-w-touch-pos text-lg',
-  primaryAction: 'min-h-touch-primary text-xl',
+  md: 'min-h-(--ph-button-height)',                 // component token, not an arbitrary value
+  lg: 'min-h-(--ph-button-height-lg) text-md',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** Layout only (margins, grid placement) — never colour, typography or size. */
+  className?: string;
 }
 
-export function Button({ variant = 'primary', size = 'default', className, type = 'button', ...rest }: ButtonProps) {
-  const classes = [base, variants[variant], sizes[size], className].filter(Boolean).join(' ');
-  return <button type={type} className={classes} {...rest} />;
+export function Button({ variant = 'primary', size = 'md', className, type = 'button', ...rest }: ButtonProps) {
+  return <button type={type} className={cx(base, variants[variant], sizes[size], className)} {...rest} />;
 }
 ```
 
-Если согласованы `clsx` + `tailwind-merge`: `cn(...inputs) = twMerge(clsx(inputs))` в
-`libs/ui/src/lib/cn.ts`; `tailwind-merge` нужно настроить под нашу тему (`extendTailwindMerge`:
-кастомные `text-md`, `min-h-touch-pos`, цвета `text-fg`) — иначе он может принять `text-fg` и
-`text-lg` за конфликт или не распознать их. Если согласован CVA — словари выше переносятся в
-`cva(base, { variants })` без изменения самих классов.
+`cx()` только склеивает и отбрасывает пустые значения — конфликтов не разрешает. Поэтому внешний
+`className` не задаёт свойства, которые уже задают варианты (ADR-0007 п. 3).
 
 Фокус: глобальный `:focus-visible` из `libs/ui/base.css` — в компонентах `focus:`/`outline-*` не
 переопределять, `outline-hidden` без замены запрещён.
@@ -211,7 +209,7 @@ export function Button({ variant = 'primary', size = 'default', className, type 
 ## 7. Экран кассы (POS)
 
 ```tsx
-// apps/web/src/features/pos/PosScreen.tsx — layout only; data/logic live in the feature
+// apps/web/src/pages/pos/ui/PosPage.tsx (FSD, "pages first") — layout only; logic in model/ and features
 <div className="grid h-dvh grid-rows-(--ph-pos-rows) bg-bg text-fg">
   <header className="flex items-center gap-4 border-b border-border bg-surface px-4 py-2">
     {/* store, shift, cashier, connection status: icon + text ("Нет связи — в буфере: 3") */}
@@ -234,7 +232,8 @@ export function Button({ variant = 'primary', size = 'default', className, type 
 
 `--ph-pos-rows` (`auto minmax(0, 1fr) auto`) и `--ph-pos-columns` (`minmax(0, 1fr)
 var(--ph-pos-side-width)`) — компонентные токены libs/ui; шаблоны сетки не пишутся в `[…]`.
-Если раскладка разрастается — вынести её в CSS Module компонента `PosLayout`.
+Когда сетка кассы нужна нескольким экранам, она переезжает в `PosLayout` с CSS Module (одно из двух
+мест, где ADR-0007 разрешает CSS Modules); утилиты для тех же свойств тогда не добавляются.
 
 Правила кассы: цели ≥ `touch-pos` (48), главные действия `touch-primary` (64), зазор ≥ `gap-2`;
 экранная цифровая клавиатура — `grid grid-cols-3 gap-2` из `Button size="pos"`; ничего по hover;
@@ -264,8 +263,9 @@ var(--ph-pos-side-width)`) — компонентные токены libs/ui; ш
 - Строка на сенсорном экране — `h-row-dense` (44); в `apps/admin` с `data-density="compact"` высота
   меняется через токен, классы те же.
 - Статус партии — компонент `BatchStatusBadge` (иконка + текст), не цвет строки.
-- Большие объёмы — пагинация API (limit/offset); виртуализация — только после ADR (скил
-  `web-performance-optimization`).
+- Большие объёмы — пагинация API (limit/offset), «показать ещё», `content-visibility`; виртуализации
+  в MVP нет. Если профиль (CPU 4×, приложен к PR) покажет, что этого мало, — `@tanstack/react-virtual`
+  с одобрения фронтенд-лида (ADR-0009, скил `web-performance-optimization`).
 - `sr-only`, `wrap-anywhere` (v4.1+), `line-clamp-2` — статичные утилиты, сброс темы их не трогает;
   если утилиты нет в выбранной версии — класс из `libs/ui/base.css` (`ph-visually-hidden`).
 
@@ -317,7 +317,8 @@ Viewport-префиксы (`lg:`, `xl:`) — только для расклад�
 
 | Don't | Do |
 |---|---|
-| Tailwind без ADR | CSS Modules + токены `--ph-*` |
+| CSS Modules вне `ReceiptPrint` / `PosLayout` | Утилиты Tailwind на токенах |
+| `clsx` / `tailwind-merge` / CVA | `cx()` и карты вариантов (ADR-0007) |
 | Значения в `@theme` литералами (кроме breakpoints/containers) | `var(--ph-…)` из libs/ui |
 | Дефолтная палитра (`bg-blue-500`, `text-gray-700`) | Семантика (`bg-primary`, `text-fg-muted`) |
 | Arbitrary values | Шкала или `utility-(--ph-…)` |
@@ -326,13 +327,14 @@ Viewport-префиксы (`lg:`, `xl:`) — только для расклад�
 | Tailwind и CSS Module на одном свойстве одного элемента | Одно средство на свойство |
 | `dark:` в компонентах | Темы через токены |
 | Длинные повторяющиеся списки классов в apps/* | Компонент в libs/ui |
-| shadcn/Flowbite и т.п. «чтобы быстрее» | ADR на UI-библиотеку |
+| shadcn/Radix/Flowbite и т.п. «чтобы быстрее» | Компонент `libs/ui` на нативной платформе; иначе — новый ADR |
 
 ## 13. Verify
 
 Перед сдачей изменений с Tailwind (из корня `pharmacy`):
 
-1. ADR на Tailwind существует и принят; новые зависимости (`cn`, CVA) — согласованы.
+1. Соответствие ADR-0007: нет `clsx`/`tailwind-merge`/CVA и UI-библиотек в `package.json`; CSS
+   Modules — только `ReceiptPrint` и `PosLayout`; внешний `className` компонентов — только раскладка.
 2. Нет `tailwind.config.*` (v4 — только CSS); в `@theme inline` только `var(--ph-…)`.
 3. Arbitrary values и дефолтная палитра:
    ```bash

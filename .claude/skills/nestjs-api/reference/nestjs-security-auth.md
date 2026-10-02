@@ -1,258 +1,269 @@
 # NestJS Security — аутентификация и авторизация Pharmacy
 
-Аутентификация **самописная** (зафиксировано в `docs/architecture/stack.md`; детали реализации — ADR-0008): логин + пароль (хеш), PIN
-≥ 4 цифр для переключения кассира на привязанном терминале, **серверные сессии в Redis**,
-таймаут сессии — настройка сети тенанта. Права — «модуль × действие × охват точек»
-(базовые и кастомные роли). JWT, OAuth/SSO-провайдеры, Passport-стратегии — не стандарт
-проекта; вводятся только через ADR.
+Аутентификация **самописная** (ADR-0008, accepted): логин + пароль, PIN на привязанном
+терминале, **cookie-сессии** (облако — Redis, офлайн-точка — PostgreSQL). Авторизация — RBAC с
+динамическими ролями тенанта и закрытым каталогом прав `модуль:действие` (ADR-0018).
+Кросс-тенантный доступ оператора — отдельный путь (ADR-0013). JWT, OAuth/SSO, Passport — не
+стандарт проекта.
 
-> **Требует accepted ADR до реализации** (ADR-0008, сейчас proposed — решает архитектор проекта):
-> - библиотека/алгоритм хеширования паролей и PIN (кандидаты — Argon2id, scrypt из
->   `node:crypto`, bcrypt);
-> - транспорт идентификатора сессии (HttpOnly-cookie или заголовок) и защита от CSRF;
-> - протокол привязки терминала к точке;
-> - механика входа оператора платформы «от имени» тенанта.
->
-> Самописная криптография запрещена: только стандартные примитивы рантайма
-> (`crypto.randomBytes`, `createHash('sha256')`) и библиотека хеширования из accepted ADR.
+Самописной криптографии нет: только примитивы `node:crypto` (`scrypt`, `randomBytes`,
+`createHash('sha256')`, `createHmac`, `timingSafeEqual`). Пароль, PIN, токены сессий и терминала,
+handoff-код, pepper, лицензионный ключ — никогда в логах, аудите, ответах об ошибках, URL.
 
-## Модель
+## Модель (миграция `org-foundation`, модель данных `01-platform-org.md`)
 
-| Сущность | Ключевые поля |
+| Таблица | Ключевые поля |
 |---|---|
-| `employees` | `tenant_id`, `login` (уникален в тенанте), `password_hash`, `pin_hash`, `status`, `role_id` |
-| `roles` | `tenant_id` (NULL — базовая роль платформы), `name`, `version` |
-| `role_permissions` | `role_id`, `module` (`pos`, `inventory`…), `action` (`read`, `sell`, `post`…) |
-| `employee_store_scopes` | `employee_id`, `store_id` или признак «все точки сети» |
-| `terminals` | `tenant_id`, `store_id`, `credential_hash`, `revoked_at` |
+| `employees` | `(tenant_id, id)`, `login` (уникален в тенанте без учёта регистра), `employee_code`, `role_id`, `store_scope` `all`/`list`, `status` `active`/`blocked`/`archived`, `permissions_version` |
+| `employee_credentials` | `password_hash` (PHC), `password_pepper_version`, `pin_hash`, `pin_failed_attempts`, `pin_locked_at`, одноразовый код первого входа. **Не синхронизируется**: на офлайн-точке учётные данные свои |
+| `roles`, `role_permissions` | роль тенанта (`name jsonb`, `is_owner` — системная роль «Владелец», одна на тенанта), права — строки каталога |
+| `employee_stores` | охват при `store_scope = 'list'` |
+| `terminals` | `store_id`, `credential_hash`, `bound_by`, `bound_at`, `last_seen_at`, `revoked_at` |
+| `operators`, `impersonations`, `license_keys` | платформа (ADR-0013) — в миграции модуля платформы |
 
-## Хеширование — порт, реализация по ADR
+## Пароли и PIN
 
 ```typescript
-// apps/api/src/auth/password-hasher.port.ts
+// apps/api/src/app/auth/password-hasher.port.ts
 export interface PasswordHasher {
-  hash(secret: string): Promise<string>;                          // self-describing format (alg + params + salt)
-  verify(secret: string, storedHash: string): Promise<boolean>;   // constant-time inside the library
-  needsRehash(storedHash: string): boolean;                       // parameter upgrades on next login
+  hash(secret: string): Promise<string>;                        // PHC string + pepper version
+  verify(secret: string, stored: StoredHash): Promise<boolean>; // timingSafeEqual inside
+  needsRehash(stored: StoredHash): boolean;                     // params, algorithm or pepper changed
 }
+export interface StoredHash { phc: string; pepperVersion: number }
 export const PASSWORD_HASHER = Symbol('PASSWORD_HASHER');
 ```
 
-Реализацию (`Argon2PasswordHasher`, `ScryptPasswordHasher`…) добавлять только после ADR.
-PIN хешируется тем же хешером; из-за малой энтропии PIN главная защита — блокировка после
-`PIN_MAX_ATTEMPTS` неудач.
+Реализация `NodeScryptPasswordHasher` (ADR-0008):
+- `crypto.scrypt`, параметры **`N=2^15, r=8, p=3`**, `keylen = 32`, соль — 16 случайных байт,
+  `maxmem` задан явно (≥ `128·N·r·2`);
+- pepper: перед scrypt — `HMAC-SHA-256(pepper, secret)`; pepper 256 бит, свой на облако и на
+  каждую офлайн-точку, с версией для ротации; бэкап — отдельно от бэкапов БД;
+- формат: `$scrypt$ln=15,r=8,p=3$<salt>$<hash>` + `password_pepper_version`;
+- `needsRehash` → перехеширование при следующем успешном входе (так же — будущий переход на
+  Argon2id после отказа от Node 22, без массового сброса);
+- самопроверка на старте API: тест-вектор scrypt из RFC 7914 и наличие `crypto.scrypt` /
+  `timingSafeEqual`, иначе процесс не стартует.
 
-## Сессии в Redis
+Правила:
+- неизвестный логин и неверный пароль неразличимы — ни по ответу, ни по времени (при
+  отсутствии логина — проверка фиктивного хеша);
+- верхний предел длины пароля — в DTO (защита от DoS дорогим хешем);
+- PIN — ≥ 4 цифр (по умолчанию 4, сеть может повысить — `tenant_settings.pin_min_length`);
+  тривиальные PIN (`1111`, `1234`, `0000`…) запрещены; PIN — не идентификатор: сначала выбор
+  кассира, потом PIN.
+
+## Сессии
 
 ```typescript
-// apps/api/src/auth/session.store.ts
-import { Injectable } from '@nestjs/common';
-import { createHash, randomBytes } from 'node:crypto';
-import { RedisService } from '../core/redis/redis.service';
-
+// apps/api/src/app/auth/session.store.ts — port; RedisSessionStore (cloud) and PgSessionStore (offline store)
 export interface SessionData {
   tenantId: string;
   employeeId: string;
-  roleId: string;
-  roleVersion: number;          // permissions are reloaded when the role changes
-  storeScope: 'all' | string[]; // store ids the employee may act on
-  terminalId?: string;          // PIN session on a bound terminal: scope = the terminal's store
-  actingOperatorId?: string;    // platform operator "on behalf of" (ADR)
-  createdAt: number;
+  storeId?: string;                       // working store chosen at login; must be in the scope
+  storeScope: 'all' | string[];
+  terminalId?: string;                    // PIN session: scope = the terminal's store only
+  authMethod: 'password' | 'pin' | 'impersonation';
+  authenticatedAt: number;                // step-up: sensitive actions need a fresh password session
+  impersonationId?: string;
+  actingOperatorId?: string;
+  permissions: string[];                  // snapshot of the role's permissions
+  permissionsVersion: number;             // compared with Redis on every request (ADR-0018 p. 7)
   absoluteExpiresAt: number;
 }
 
-const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
-const sessionKey = (token: string) => `sess:${sha256(token)}`; // raw token is never stored
-const indexKey = (tenantId: string, employeeId: string) => `sess-idx:${tenantId}:${employeeId}`;
-
-@Injectable()
-export class SessionStore {
-  constructor(private readonly redis: RedisService) {}
-
-  async create(data: SessionData, idleTtlSeconds: number): Promise<string> {
-    const token = randomBytes(32).toString('base64url');
-    await this.redis.multi()
-      .set(sessionKey(token), JSON.stringify(data), 'EX', idleTtlSeconds)
-      .sadd(indexKey(data.tenantId, data.employeeId), sha256(token))
-      .exec();
-    return token; // returned to the client once
-  }
-
-  /** Sliding idle timeout + hard absolute expiry */
-  async touch(token: string, idleTtlSeconds: number): Promise<SessionData | null> {
-    const raw = await this.redis.get(sessionKey(token));
-    if (!raw) return null;
-    const data = JSON.parse(raw) as SessionData;
-    if (Date.now() > data.absoluteExpiresAt) {
-      await this.destroy(token, data);
-      return null;
-    }
-    await this.redis.expire(sessionKey(token), idleTtlSeconds);
-    return data;
-  }
-
-  async destroy(token: string, data: SessionData): Promise<void> {
-    await this.redis.multi()
-      .del(sessionKey(token))
-      .srem(indexKey(data.tenantId, data.employeeId), sha256(token))
-      .exec();
-  }
-
-  /** Password change, deactivation, suspected compromise: kill every session of the employee */
-  async destroyAllFor(tenantId: string, employeeId: string): Promise<void> {
-    const hashes = await this.redis.smembers(indexKey(tenantId, employeeId));
-    if (hashes.length) await this.redis.del(...hashes.map((h) => `sess:${h}`));
-    await this.redis.del(indexKey(tenantId, employeeId));
-  }
+export interface SessionStore {
+  create(data: SessionData, idleTtlSeconds: number): Promise<string>; // returns the raw token once
+  touch(token: string, idleTtlSeconds: number): Promise<SessionData | null>;
+  destroy(token: string): Promise<void>;
+  destroyAllFor(tenantId: string, employeeId: string): Promise<void>;
 }
 ```
 
-(Пример на API `ioredis`; с клиентом `redis` вызовы отличаются — клиент выбирается один раз.)
+```typescript
+// RedisSessionStore (fragment) — node-redis 6, the project's only Redis client
+const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+const sessionKey = (token: string) => `sess:${sha256(token)}`;        // the raw token is never stored
+const indexKey = (tenantId: string, employeeId: string) => `sess-idx:${tenantId}:${employeeId}`;
 
-- Idle TTL = таймаут сети тенанта (из БД, кэш), зажатый в `[SESSION_IDLE_TIMEOUT_MIN, MAX]`.
-- В сессии нет пароля, PIN, ПДн — только идентификаторы.
-- Сессии stateless-инстансов api общие через Redis (горизонтальное масштабирование, ADR-0002).
+async create(data: SessionData, idleTtlSeconds: number): Promise<string> {
+  const token = randomBytes(32).toString('base64url');
+  await this.redis
+    .multi()
+    .set(sessionKey(token), JSON.stringify(data), { EX: idleTtlSeconds })
+    .sAdd(indexKey(data.tenantId, data.employeeId), sha256(token))
+    .exec();
+  return token;
+}
+```
+
+- **Транспорт (облако):** cookie `__Host-sid` (`Secure; HttpOnly; SameSite=Strict; Path=/`) на
+  origin `apps/web`; оператор — `__Host-op_sid` на origin `apps/admin`. Tenant-cookie принимается
+  только с origin web, operator-cookie — только с origin admin. CORS выключен. Токен только из
+  cookie, не из заголовков и тела.
+- **Транспорт (офлайн-точка):** `http://localhost`, cookie `sid` / `term` с `Secure; HttpOnly;
+  SameSite=Strict` без префикса `__Host-`.
+- **Жизнь:** idle-TTL = таймаут сети тенанта, зажатый в `[SESSION_IDLE_TIMEOUT_MIN, MAX]`;
+  абсолютный срок; новый токен при входе, PIN-переключении и смене привилегий; смена пароля
+  или блокировка сотрудника — `destroyAllFor`.
+- **Офлайн-точка:** `PgSessionStore` — таблица `sessions` (ключ — SHA-256 токена), читается
+  резолвером `resolve_session` (ADR-0013); throttler — in-memory.
+- В сессии нет пароля, PIN и ПДн — только идентификаторы и снимок прав.
+
+## CSRF
+
+Для небезопасных методов (`POST/PUT/PATCH/DELETE`) глобальный guard проверяет:
+1. `Sec-Fetch-Site`, если заголовок есть, — только `same-origin`;
+2. иначе `Origin` обязан совпасть с разрешённым origin продукта (web для `__Host-sid`, admin для
+   `__Host-op_sid`);
+3. тело — только `application/json` (формы и «простые» запросы отклоняются).
+
+`GET` — без побочных эффектов.
 
 ## Вход по логину и паролю
 
 ```typescript
-// apps/api/src/auth/sessions.controller.ts (fragment)
+// apps/api/src/app/auth/sessions.controller.ts (fragment)
 @Public()
 @Throttle({ default: { limit: 10, ttl: 60_000 } })
 @Post('sessions')                                   // POST /api/v1/sessions
 async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response): Promise<SessionResponseDto> {
   const { token, session } = await this.auth.loginWithPassword(dto); // tenantCode + login + password
-  res.cookie('sid', token, { httpOnly: true, secure: true, sameSite: 'strict', path: '/api' }); // transport per ADR
-  return toSessionResponse(session); // employee name, permissions for UI — no token in body when using cookie
+  res.cookie(this.cookies.sessionName, token, this.cookies.sessionOptions); // __Host-sid, Path=/
+  return toSessionResponse(session); // profile + permissions for the UI; no token in the body
 }
 ```
 
+- Тенант по коду сети определяет резолвер `resolve_tenant_by_code` (SECURITY DEFINER, ADR-0013):
+  до входа контекста тенанта ещё нет.
+- Лимиты: `@nestjs/throttler` по IP и маршруту (своё `ThrottlerStorage` на node-redis) + счётчик
+  по `(tenantCode, login)` с прогрессивной блокировкой. Все входы, неудачи, блокировки — в аудит
+  без секретов.
+
+## Терминал и PIN
+
+1. **Привязка.** Сотрудник с правом `terminals:create` входит паролем на этом ПК →
+   `POST /api/v1/terminals` (точка из его охвата, имя) → `terminals` с `credential_hash`
+   (SHA-256 от `randomBytes(32)`), device-cookie `__Host-term`, аудит. Отзыв — `revoked_at`,
+   действует немедленно (статус кэшируется в Redis с инвалидацией).
+2. **PIN-переключение.** `POST /api/v1/terminal-sessions` `{ employeeId | employeeCode, pin }` +
+   device-cookie. Проверки: терминал не отозван (резолвер `resolve_terminal`), сотрудник активен
+   и имеет доступ к точке терминала, PIN не заблокирован, PIN верен. Предыдущая PIN-сессия
+   терминала уничтожается; новая — с `terminalId`, охват = только точка терминала.
+3. **Лимиты.** По `(tenant, employee, terminal)`: **после 3 неудач** PIN сотрудника блокируется
+   (вход только паролем, разблокировка — заведующим или успешным входом с заменой PIN) + аудит.
+   По терминалу: `TERMINAL_PIN_MAX_FAILURES` (10) неудач по разным кассирам за 15 мин — PIN-вход
+   на терминале закрыт на 15 мин + уведомление заведующему.
+4. **Step-up.** Привязка и отвязка терминала, управление сотрудниками и ролями, смена своего
+   пароля — только в сессии, открытой паролем, не старше `STEP_UP_MAX_AGE`.
+
+## От имени
+
+Оператор с правом `platform:impersonate` и свежим step-up в админке →
+`POST /api/v1/operator/impersonations` `{ tenantId, reason }` → запись `impersonations` +
+одноразовый handoff-код (TTL ≤ 60 с, однократный, в Redis только хеш) → админка делает
+top-level `POST` формы на origin web (код — в теле, **не в URL**) → tenant-сессия с
+`authMethod: 'impersonation'`, `actingOperatorId`, `impersonationId`:
+- абсолютный TTL 60 мин без продления;
+- **только просмотр**: guard на уровне сессии отклоняет `POST/PUT/PATCH/DELETE` к прикладным
+  ресурсам независимо от набора прав;
+- постоянный баннер в UI; начало, конец и просмотры чувствительных разделов — в `audit_log`
+  тенанта с `acting_operator_id` и `impersonation_id`;
+- отзыв сессии оператора каскадно гасит его impersonation-сессии.
+
+Иначе данные тенанта оператору недоступны: `PlatformDatabase` не имеет прав на тенантные таблицы.
+
+## Авторизация
+
+**Каталог прав** — закрытый список строк `<модуль>:<действие>` в `libs/shared/domain`
+(общий для api, web, admin; ADR-0018):
+- модули: `pos`, `shifts`, `returns`, `inventory`, `purchasing`, `catalog`, `pricing`,
+  `discounts`, `reports`, `export-1c`, `employees`, `roles`, `terminals`, `stores`, `services`,
+  `billing`, `audit`, `settings`, `sync`;
+- действия: `view`, `create`, `update`, `post`, `unpost`, `delete`, `receive`, `export`;
+- спецправа: `pos:sell-controlled`, `returns:without-receipt`, `pos:choose-batch`,
+  `pricing:update-store`, `pricing:update-network`, `discounts:manage-store`,
+  `discounts:manage-network`, `finance:view-cost`, `roles:manage`, `employees:assign-role`,
+  `sync:run`.
+
+Новое право — изменение каталога в коде и миграция шаблонов ролей; права на новые
+возможности у существующих ролей сами не появляются (кроме роли «Владелец» — у неё всегда все).
+
 ```typescript
-// apps/api/src/auth/auth.service.ts (fragment)
-async loginWithPassword(dto: LoginDto) {
-  const employee = await this.employees.findActiveByLogin(dto.tenantCode, dto.login);
-  // Same error and comparable timing for "no such login" and "wrong password"
-  const ok = employee !== undefined && (await this.hasher.verify(dto.password, employee.passwordHash));
-  if (!employee || !ok) {
-    await this.attempts.registerFailure(dto.tenantCode, dto.login); // lockout after N failures
-    await this.auditFailedLogin(dto);                                // no password in audit
-    throw new UnauthorizedException('Invalid credentials');
-  }
-  await this.attempts.reset(dto.tenantCode, dto.login);
-  // ... build SessionData, create session, append 'auth.login' audit record
-}
-```
-
-- Неизвестный логин и неверный пароль неразличимы для клиента.
-- Все входы, неудачи, блокировки, выходы, переключения по PIN — в аудит (без секретов).
-- Политика паролей (длина, смена, история) — по ADR-0008 (решает архитектор проекта); проверяется в DTO и сервисе.
-
-## PIN на привязанном терминале
-
-1. Терминал однократно привязывается к точке сотрудником с правом `pos:terminal-bind`
-   (протокол — ADR). Терминал получает credential; в БД — только его хеш.
-2. Кассир переключается: `POST /api/v1/terminal-sessions` c `{ employeeCode, pin }` +
-   credential терминала. Проверяется: терминал не отозван, сотрудник активен и имеет
-   доступ к точке терминала, PIN верен.
-3. Сессия PIN — с `terminalId`, охват = **только** точка терминала, idle-таймаут сети тенанта.
-4. Счётчик неудач — по `(tenantId, employeeId, terminalId)` в Redis; после
-   `PIN_MAX_ATTEMPTS` — блокировка PIN на `PIN_LOCKOUT_SECONDS` (вход только паролем) + аудит.
-
-## Guards
-
-```typescript
-// apps/api/src/auth/decorators/public.decorator.ts
+// apps/api/src/app/auth/decorators.ts
 export const IS_PUBLIC = 'isPublic';
 export const Public = () => SetMetadata(IS_PUBLIC, true);
 
-// apps/api/src/auth/decorators/require-permission.decorator.ts
-export interface StoreScopeOptions { storeParam?: string; storeQuery?: string }
-export interface PermissionRequirement { module: string; action: string; scope?: StoreScopeOptions }
+export interface StoreScopeOptions { storeParam?: string; storeQuery?: string; storeBody?: string }
 export const PERMISSION = 'permission';
-export const RequirePermission = (module: string, action: string, scope?: StoreScopeOptions) =>
-  SetMetadata(PERMISSION, { module, action, scope } satisfies PermissionRequirement);
+export const RequirePermission = (permission: Permission, scope?: StoreScopeOptions) =>
+  SetMetadata(PERMISSION, { permission, scope }); // Permission — union type from @pharmacy/shared-domain
 ```
 
 ```typescript
-// apps/api/src/auth/guards/session-auth.guard.ts
-@Injectable()
-export class SessionAuthGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector, private readonly auth: AuthService) {}
-
-  async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [ctx.getHandler(), ctx.getClass()])) return true;
-
-    const req = ctx.switchToHttp().getRequest<Request>();
-    const token = extractSessionToken(req);            // cookie or header — per ADR
-    const session = token ? await this.auth.resumeSession(token) : null; // touch + idle TTL
-    if (!session) throw new UnauthorizedException();
-
-    const store = requestContextStorage.getStore();     // created by CorrelationIdMiddleware
-    if (!store) throw new Error('Request context is not initialized');
-    Object.assign(store, {
-      tenantId: session.tenantId,
-      employeeId: session.employeeId,
-      storeScope: session.storeScope,
-      terminalId: session.terminalId,
-      actingOperatorId: session.actingOperatorId,
-      permissions: await this.auth.permissionsFor(session), // cached by roleId + roleVersion
-    });
-    return true;
+// apps/api/src/app/auth/guards/permissions.guard.ts (fragment)
+canActivate(ctx: ExecutionContext): boolean {
+  if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [ctx.getHandler(), ctx.getClass()])) return true;
+  const req = this.reflector.getAllAndOverride<{ permission: Permission; scope?: StoreScopeOptions }>(
+    PERMISSION, [ctx.getHandler(), ctx.getClass()]);
+  if (!req) throw new ForbiddenException();             // deny by default: no declared permission
+  const session = this.sessions.current();               // permissions snapshot, version checked
+  if (!session.permissions.includes(req.permission)) throw this.denied(req.permission);
+  const storeId = storeIdFrom(ctx, req.scope);
+  if (req.scope && !storeId) throw this.denied(req.permission);
+  if (storeId && session.storeScope !== 'all' && !session.storeScope.includes(storeId)) {
+    throw this.denied(req.permission, storeId);          // 403 + audit event "access.denied"
   }
+  return true;
 }
 ```
 
-```typescript
-// apps/api/src/auth/guards/permissions.guard.ts
-@Injectable()
-export class PermissionsGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+- **Сервер — источник истины;** права в профиле сессии (`GET /api/v1/sessions/current`) фронтенд
+  использует только чтобы скрывать и отключать элементы UI.
+- **Охват точек:** точка запроса (путь, тело, сессия) должна входить в охват сотрудника. Точка
+  чужого тенанта — «не найдено» (404, tenant-scoped запрос и RLS), а не 403.
+- **Запрет эскалации** (для `roles:manage` и `employees:assign-role`): права создаваемой или
+  изменяемой роли ⊆ прав того, кто меняет; охват назначения ⊆ его охвата; менять собственные
+  роль и охват нельзя; роль «Владелец» назначает только владелец; в сети всегда ≥ 1 активный
+  владелец.
+- **`permissions_version`:** растёт при изменении роли, её прав, охвата или блокировке
+  сотрудника. Каждый запрос сверяет версию в сессии с Redis (на офлайн-точке — с PostgreSQL) и
+  при расхождении перечитывает права; блокировка уничтожает сессии. На офлайн-точке изменения
+  вступают в силу после синхронизации (ADR-0014).
+- **Видимость полей:** без `finance:view-cost` сервер не отдаёт закупочную цену, себестоимость
+  и маржу — поля отсутствуют в response-DTO (отдельный DTO или маппинг по правам), а не
+  скрываются на клиенте.
+- **Правила режима поверх ролей** (роль не может их переопределить): склад офлайн-точки из
+  облака — только чтение; сессия «от имени» — только просмотр; права оператора — отдельный
+  контур.
+- Аудит: изменения ролей, прав, назначений и охвата, отказы `403` (право и точка) — отдельные
+  события `audit_log` без секретов.
 
-  canActivate(ctx: ExecutionContext): boolean {
-    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [ctx.getHandler(), ctx.getClass()])) return true;
+## Синхронизация офлайн-точек — лицензионный ключ (ADR-0014 §6–7)
 
-    const req = this.reflector.getAllAndOverride<PermissionRequirement>(PERMISSION, [ctx.getHandler(), ctx.getClass()]);
-    // Fail closed: an authenticated route without @RequirePermission is a programming error
-    if (!req) throw new ForbiddenException();
-
-    const rc = getRequestContext();
-    if (!rc?.permissions?.has(`${req.module}:${req.action}`)) throw new ForbiddenException();
-
-    const http = ctx.switchToHttp().getRequest<Request>();
-    const storeId = req.scope?.storeParam
-      ? http.params[req.scope.storeParam]
-      : req.scope?.storeQuery ? String(http.query[req.scope.storeQuery] ?? '') : undefined;
-    if (req.scope && !storeId) throw new ForbiddenException();
-    if (storeId && rc.storeScope !== 'all' && !rc.storeScope.includes(storeId)) throw new ForbiddenException();
-    return true;
-  }
-}
-```
-
-Guard проверяет охват по идентификатору точки из запроса; принадлежность точки **тенанту**
-гарантирует tenant-scoped запрос (`WHERE tenant_id = $1 AND store_id = $2`) и RLS. Чужая точка
-= «не найдено» (404), не 403 — не раскрываем существование.
-
-## Синхронизация офлайн-точек — лицензионный ключ
-
-- Эндпоинты `sync` не используют сессии сотрудников: `@Public()` для `SessionAuthGuard` +
-  собственный `LicenseKeyGuard`.
-- Ключ уникален для точки, в БД — хеш; проверяется на каждом запросе; отзыв вступает в силу
-  при следующей синхронизации (глоссарий). Guard устанавливает `tenantId`/`storeId` точки в контекст.
-- Только HTTPS; каждый пакет — idempotency key операции + correlation ID
-  (`nestjs-messaging-basics.md`).
+- `Authorization: Bearer phk_<keyId>_<secret>`; ключ — `randomBytes(32)` base64url. В облаке —
+  `key_id` + SHA-256 секрета (`license_keys`), сравнение `timingSafeEqual`.
+- `LicenseKeyGuard` (сессионный guard для маршрутов sync — `@Public()`) находит ключ резолвером
+  `resolve_license_key(key_hash)` (SECURITY DEFINER, ADR-0013) и кладёт `tenantId`/`storeId`
+  точки в контекст; `storeId` в теле, если есть, обязан совпасть.
+- Статусы лицензии: `active`, `expiring` (≤ N дней до срока), `expired`, `revoked`,
+  `revoked-hard`, «точка закрыта», «тенант заблокирован» — в каждом ответе sync
+  (`Pharmacy-License-Status`). При `revoked`/`expired` облако ещё льготный период (30 дней)
+  принимает операции точки; `revoked-hard` — `401` `code: license-revoked`.
+- Ключ на точке — в env-файле развёртывания; в логах, аудите и ошибках — никогда. Лимиты — по
+  `keyId` и по IP для неудачных попыток.
 
 ## Оператор платформы (apps/admin)
 
-Отдельное пространство сессий (`op-sess:`), отдельный guard и набор прав оператора.
-Вход «от имени» тенанта — ограниченная по времени tenant-сессия с `actingOperatorId`, который
-попадает в каждую запись аудита. Механика — ADR до реализации.
+Сессии `__Host-op_sid` с отдельным префиксом ключей, `OperatorSessionGuard` и
+`@RequireOperatorPermission`; контроллеры — только `/api/v1/operator/*` в `app/platform/**`, доступ
+к данным — `PlatformDatabase.platformTransaction({ kind: 'operator', operatorId }, …)`
+(`nestjs-config-data-access.md`). Tenant-сессия там не принимается.
 
 ## Запрещено
 
 - JWT/OAuth/SSO-провайдеры как замена серверным сессиям без ADR.
-- Хранение пароля/PIN/токена в открытом виде, в логах, в аудите, в кэше.
-- `tenantId`, `storeId`-охват или права, пришедшие от клиента, как источник истины.
-- Маршрут без `@RequirePermission` и без `@Public()`.
-- Собственные реализации хеширования/шифрования.
+- Хранение пароля, PIN или токена в открытом виде, в логах, аудите, кэше.
+- `tenantId`, охват точек или права, пришедшие от клиента, как источник истины.
+- Маршрут без `@RequirePermission` и без `@Public()`; право не из каталога.
+- Собственные реализации хеширования или шифрования; хеш паролей — только scrypt из `node:crypto`.

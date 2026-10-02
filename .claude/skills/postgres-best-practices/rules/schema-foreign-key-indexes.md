@@ -16,9 +16,10 @@ CASCADE/`ON DELETE` checks. В Pharmacy FK — составные `(tenant_id, p
 
 ```sql
 create table receipt_lines (
-  id uuid primary key,
   tenant_id uuid not null,
+  id uuid not null,
   receipt_id uuid not null,
+  primary key (tenant_id, id),
   foreign key (tenant_id, receipt_id) references receipts (tenant_id, id)
 );
 

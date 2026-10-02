@@ -22,13 +22,18 @@ last-reviewed: "2026-09-29"
 2. **Load checklist** — прочитать [reference/nestjs-review-checklist.md](../skills/nestjs-api/reference/nestjs-review-checklist.md)
    (зоны проверки, уровни серьёзности, формат вывода).
 3. **Review** — каждое изменение по чек-листу. Обязательные проверки проекта:
-   - `tenant_id` в каждом пути доступа к данным (CRITICAL, если отсутствует);
+   - `tenant_id` в каждом пути доступа к данным; доступ только через `TenantDatabase` и
+     `trx`; `PlatformDatabase` только в `app/platform/**`, `app/sync/**`; нет `sql.raw`/`sql.lit`
+     со входными данными (CRITICAL, если отсутствует);
+   - каждый маршрут — `@RequirePermission` с правом из каталога ADR-0018 или `@Public()`; охват
+     точек; запрет эскалации; поля себестоимости без `finance:view-cost` не отдаются (CRITICAL);
    - деньги — integer в дирамах, без float (CRITICAL);
    - остатки выводятся из движений; документ и движения — в одной транзакции (CRITICAL);
    - аудит / журнал ПКУ без UPDATE/DELETE (CRITICAL);
    - идемпотентность и correlation ID для финансовых операций и синхронизации (HIGH);
-   - стек соответствует stack.md и accepted ADR; технологии из proposed ADR не используются —
-     ORM, Fastify, брокеры, логгеры, мониторинг, новые интеграции без accepted ADR (HIGH);
+   - стек соответствует stack.md и accepted ADR (Kysely + node-pg-migrate, scrypt, node-redis);
+     технологии из proposed ADR и без ADR не используются — другой ORM, Fastify, брокеры, логгеры,
+     мониторинг, новые интеграции (HIGH);
    - границы модулей: нет импорта внутренностей чужих модулей, apps не импортируют друг друга (HIGH);
    - нет секретов и реальных данных клиентов в diff (CRITICAL).
 4. **Report** — находки в формате чек-листа: `file:line`, серьёзность, суть, как исправить.

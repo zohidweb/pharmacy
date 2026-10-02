@@ -15,26 +15,35 @@
 
 ## 1. Инварианты Pharmacy (CRITICAL)
 
-- [ ] **tenant_id в каждом пути доступа**: каждый SQL/ORM-запрос к прикладной таблице
-      фильтрует по `tenant_id`; выполняется внутри `db.tenantTransaction()`; `tenantId` — из
-      контекста сессии, не из body/query/params; ключи кэша Redis содержат `tenantId`.
-- [ ] Новая таблица: `tenant_id NOT NULL`, RLS-политика (`ENABLE` + `FORCE`), индексы `(tenant_id, …)`.
+- [ ] **tenant_id в каждом пути доступа**: каждый запрос к прикладной таблице фильтрует по
+      `tenant_id`; выполняется внутри `TenantDatabase.tenantTransaction()` (или `withTenant` —
+      только guards и job runner); `tenantId` — из контекста сессии, не из body/query/params;
+      ключи кэша Redis содержат `tenantId`.
+- [ ] **Только `trx` внутри транзакции**: нет обращения к корневому `Kysely`/пулу при наличии
+      `trx`; нет импорта `pg` и внутренних файлов `core/database/*` вне `core/database/**`;
+      `PlatformDatabase` — только в `app/platform/**`, `app/sync/**` (ADR-0006, ADR-0013).
+- [ ] **Raw SQL**: только тег `sql` с параметрами; `sql.raw`/`sql.lit` со входными данными —
+      CRITICAL; тип `sql<T>` покрыт тестом.
+- [ ] Новая таблица (по модели данных): ключ `(tenant_id, id)`, `id` без `default` (`newId()`),
+      составные ссылки, RLS `ENABLE` + `FORCE`, политика `TO pharmacy_app` без `missing_ok`,
+      явные гранты по классу, запись в `table-classes.ts`, регенерированный `db.generated.ts`.
 - [ ] **Деньги — integer дирамы**: нет `float`/`numeric`-арифметики, `parseFloat`, `toFixed`,
-      `Decimal`; в DTO `@IsInt()`; `int8` из драйвера конвертируется с проверкой safe integer;
-      округление себестоимости штуки — вверх.
+      `Decimal`; в DTO `@IsInt()`; `int8` приходит как `bigint` (type parser пула) и
+      преобразуется в DTO явно; округление себестоимости штуки — вверх.
 - [ ] **Остатки из движений**: нет таблиц/колонок с хранимым остатком; остаток =
-      `SUM(stock_movements.quantity)`; документ/чек и его движения — одна транзакция;
-      партии блокируются (`FOR UPDATE`) перед проверкой остатка.
-- [ ] **Append-only аудит и журнал ПКУ**: нет UPDATE/DELETE по `audit_log`,
-      `controlled_substance_journal`, `stock_movements` ни в коде, ни в миграциях (кроме
-      REVOKE/триггера запрета); исправления — сторно новым документом.
+      `SUM(stock_movements.qty_delta_pieces)`; документ/чек и его движения — одна транзакция;
+      партии блокируются `FOR UPDATE` **отдельным оператором до** подсчёта (ADR-0006 п. 2).
+- [ ] **Append-only аудит, ПКУ, движения**: нет UPDATE/DELETE по `audit_log`,
+      `controlled_sale_records` (кроме очистки данных рецепта по сроку), `stock_movements`,
+      `supplier_ledger_entries` ни в коде, ни в миграциях (кроме REVOKE/триггера запрета);
+      исправления — сторно новой записью.
 - [ ] **Идемпотентность + correlation ID**: финансовые операции (чек, возврат, оплата,
       смена, проведение документа) и синхронизация принимают idempotency key
       (`UNIQUE (tenant_id, key)`), повтор возвращает исходный результат; correlation ID
       проходит в логи, аудит, problem+json.
 - [ ] **Стек соответствует stack.md и accepted ADR; технологии из proposed ADR не используются**:
       нет брокеров (BullMQ/RabbitMQ/Kafka/NATS — до ADR очереди-таблицы по ADR-0002),
-      Fastify, ORM/мигратора без accepted ADR, pino/winston/OpenTelemetry/Sentry, Vault,
+      Fastify, другого ORM или мигратора (выбраны Kysely + node-pg-migrate, ADR-0006), pino/winston/OpenTelemetry/Sentry, Vault,
       JWT/OAuth/Passport как стандарта, Vitest; нет внешних SaaS-БД для данных тенантов и
       отправки ПДн/клиентских данных во внешние LLM/SaaS; внешние вызовы — только закрытый
       список (1С файлы, фискализация-адаптер, синхронизация точек); валюта — только TJS,
@@ -42,15 +51,25 @@
 
 ## 2. Безопасность (CRITICAL/HIGH)
 
-- [ ] Каждый маршрут: либо `@RequirePermission(module, action[, scope])`, либо осознанный `@Public()`.
-- [ ] Точечные ресурсы проверяют охват точек; чужой ресурс → 404.
-- [ ] Пароли/PIN — только через `PasswordHasher` (реализация по ADR); нет самописной криптографии.
-- [ ] Токены сессий не хранятся в открытом виде; сессии отзываются при смене пароля/деактивации.
+- [ ] Каждый маршрут: либо `@RequirePermission('<module>:<action>'[, scope])` с правом **из
+      каталога** `libs/shared/domain` (ADR-0018), либо осознанный `@Public()`. Эндпоинт без права — CRITICAL.
+- [ ] Точечные ресурсы проверяют охват точек (точка из пути/тела/сессии ∈ охвата); чужой ресурс → 404.
+- [ ] Управление ролями и назначениями соблюдает **запрет эскалации**: права ⊆ прав автора,
+      охват ⊆ его охвата, свои роль и охват не меняются, «Владельца» назначает только владелец.
+- [ ] Изменение роли, прав, охвата или блокировка увеличивает `permissions_version`.
+- [ ] **Себестоимость**: закупочная цена, себестоимость и маржа не попадают в ответ без
+      `finance:view-cost` (поля отсутствуют в DTO, а не скрываются на клиенте).
+- [ ] Сессия «от имени» — только просмотр; изменяющие запросы отклоняются на уровне сессии.
+- [ ] Пароли/PIN — только через `PasswordHasher` = scrypt из `node:crypto` + pepper (ADR-0008);
+      нет самописной криптографии.
+- [ ] Токены сессий и терминала не хранятся в открытом виде (только SHA-256); cookie
+      `__Host-sid` / `__Host-op_sid` / `__Host-term`; CSRF-guard на небезопасных методах;
+      сессии отзываются при смене пароля/блокировке.
 - [ ] Все DTO с `class-validator`, строки с `@MaxLength`, массивы с `@ArrayMaxSize`;
       глобальный `ValidationPipe` с `whitelist` + `forbidNonWhitelisted`.
 - [ ] SQL только с параметрами; сортировка — по whitelist.
 - [ ] Нет секретов, строк подключения, реальных клиентских данных (в т.ч. в фикстурах).
-- [ ] CORS — явный список origin; helmet подключён; Swagger не публичен в проде.
+- [ ] CORS выключен (ADR-0008, один origin); helmet подключён; Swagger не публичен в проде.
 - [ ] ПДн (сотрудники, поставщики, поля рецептов ПКУ), пароли, PIN, токены, лицензионные
       ключи — замаскированы в логах и не попадают в `detail` ошибок.
 
@@ -75,7 +94,8 @@
 ## 5. Тесты (HIGH/MEDIUM)
 
 - [ ] Jest-тесты рядом с кодом; новая логика покрыта.
-- [ ] Есть тест «тенант A не видит данные тенанта B» для новых путей доступа.
+- [ ] Есть тест «тенант A не видит данные тенанта B» для новых путей доступа
+      (`*.int-spec.ts`, `npx nx run api:integration`); тест каталога зелёный.
 - [ ] Есть тест повтора с тем же idempotency key для финансовых операций.
 - [ ] Денежные расчёты и округления покрыты граничными случаями.
 
@@ -91,15 +111,17 @@
 - [ ] Термины — из глоссария (employee, store, batch, receipt, stock movement…).
 - [ ] Логи — встроенный `Logger`, с correlation ID; нет `console.*`.
 - [ ] Конфиг — fail-fast; новая переменная есть в `.env.example`.
-- [ ] Миграции — версионированные, без schema-sync.
+- [ ] Миграции — node-pg-migrate, `.sql` только Up (вне транзакции — `.mjs` + `noTransaction`),
+      без schema-sync; `npx nx run api:db-types-verify` зелёный.
 
 ## Формат замечания
 
 ```
 [CRITICAL] Query without tenant filter
-File: apps/api/src/modules/inventory/batches.repository.ts:42
-Problem: SELECT by batch id only — a batch of another tenant can be read if RLS is misconfigured.
-Fix: add `tenant_id = $1` and run inside db.tenantTransaction(); pass tx.tenantId.
+File: apps/api/src/app/inventory/batches.repository.ts:42
+Problem: select by batch id only — a batch of another tenant can be read if RLS is misconfigured.
+Fix: add `.where('tenantId', '=', tenantId)` and run inside TenantDatabase.tenantTransaction();
+     take tenantId from requireTenantId().
 ```
 
 ## Итог ревью

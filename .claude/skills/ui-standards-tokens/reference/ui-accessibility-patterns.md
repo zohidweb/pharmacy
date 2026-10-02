@@ -47,9 +47,10 @@
 
 ## 3. Клавиатура и сканер штрих-кода
 
-Сканер USB HID — это клавиатура: серия символов за десятки миллисекунд + Enter. Логика
-распознавания скана — в фиче (`apps/web/src/features/pos`), не в UI-ките; UI-кит обеспечивает
-предсказуемый фокус.
+Сканер USB HID — это клавиатура: серия символов за десятки миллисекунд + Enter. Распознавание —
+собственный обработчик по `event.code` с настраиваемыми порогами (ADR-0015 п. 7: `libs/ui` или
+`apps/web/src/shared/lib`); что делать со сканом, решает срез экрана кассы (`apps/web/src/pages/pos`
+и его features, FSD). UI-кит обеспечивает предсказуемый фокус.
 
 Правила экрана кассы:
 - Поле скана/поиска — фокус по умолчанию при открытии экрана. После закрытия любого диалога,
@@ -126,53 +127,29 @@ export function Modal({ open, onClose, labelledBy, returnFocusTo, children }: Mo
 | Истекает срок (`expiring-soon`) | `--ph-batch-expiring-*` | часы / предупреждение | «Истекает 12.11.2026» |
 | Просрочено (`expired`) | `--ph-batch-expired-*` | запрет / крест | «Просрочено» |
 
+Общий примитив — `StatusPill` (`libs/ui/src/lib/display/StatusPill.tsx`): тон → классы токенов,
+иконка из своего SVG-набора (`Icon`, `aria-hidden`) и видимый текст. Доменный бейдж только
+сопоставляет статус тону и подписи:
+
 ```tsx
-// libs/ui/src/lib/BatchStatusBadge/BatchStatusBadge.tsx
-// The status union should come from libs/shared/domain if defined there; shown inline for the example.
-import type { ComponentType, SVGProps } from 'react';
-import styles from './BatchStatusBadge.module.css';
-import { ClockIcon, BanIcon } from '../icons'; // inline SVG in libs/ui; icon packages need approval
+// BatchStatusBadge — domain mapping onto the kit primitive (the status union comes from
+// @pharmacy/shared-domain when defined there; shown inline for the example)
+import { StatusPill, type StatusTone } from '@pharmacy/ui';
 
 export type BatchStatus = 'expiring-soon' | 'expired';
 
-const icons: Record<BatchStatus, ComponentType<SVGProps<SVGSVGElement>>> = {
-  'expiring-soon': ClockIcon,
-  expired: BanIcon,
+const tone: Record<BatchStatus, StatusTone> = {
+  'expiring-soon': 'warning',
+  expired: 'danger',
 };
 
 export function BatchStatusBadge({ status, label }: { status: BatchStatus; label: string }) {
-  const Icon = icons[status];
-  return (
-    <span className={styles.badge} data-status={status}>
-      <Icon aria-hidden="true" className={styles.icon} />
-      <span>{label /* localized by the caller */}</span>
-    </span>
-  );
+  return <StatusPill tone={tone[status]}>{label /* localized by the caller */}</StatusPill>;
 }
 ```
 
-```css
-/* BatchStatusBadge.module.css */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ph-space-1);
-  padding-block: var(--ph-space-1);
-  padding-inline: var(--ph-space-2);
-  border: var(--ph-border-width-1) solid var(--badge-border);
-  border-radius: var(--ph-radius-sm);
-  background: var(--badge-bg);
-  color: var(--badge-fg);
-  font-size: var(--ph-font-size-sm);
-  font-weight: var(--ph-font-weight-semibold);
-}
-.badge[data-status='expiring-soon'] { --badge-fg: var(--ph-batch-expiring-fg); --badge-bg: var(--ph-batch-expiring-bg); --badge-border: var(--ph-batch-expiring-border); }
-.badge[data-status='expired']       { --badge-fg: var(--ph-batch-expired-fg);  --badge-bg: var(--ph-batch-expired-bg);  --badge-border: var(--ph-batch-expired-border); }
-.icon { inline-size: var(--ph-size-icon-sm); block-size: var(--ph-size-icon-sm); flex: none; }
-```
-
-Локальные переменные компонента (`--badge-*`) без префикса `--ph-` допустимы внутри одного
-`*.module.css` — они не часть системы токенов.
+Иконки — только из набора `libs/ui/src/lib/icon` (`IconName`); пакеты иконок не подключаются
+(ADR-0007 п. 6), недостающая иконка добавляется в `icons.ts` с указанием источника и лицензии.
 
 То же правило — для строк таблицы остатков: просроченная партия в списке помечается бейджем, а не
 только красным фоном строки; строка чека с ПКУ-препаратом — иконкой + текстом «ПКУ».
@@ -208,4 +185,6 @@ export function BatchStatusBadge({ status, label }: { status: BatchStatus; label
 - Масштаб браузера 200 % и масштаб Windows 125 % на 1280×800.
 - Chrome DevTools: Lighthouse Accessibility, панель Accessibility (имя/роль), эмуляция
   `prefers-reduced-motion` и `forced-colors`.
-- Автоматические a11y-проверки в Jest (`jest-axe` и т.п.) — новая зависимость, по согласованию.
+- Автоматически (ADR-0009): `jest-axe` в тестах компонентов `libs/ui`, `@axe-core/playwright` в e2e
+  на ключевых экранах (вход, касса скан → оплата, приёмка, возврат); гейт — 0 нарушений
+  serious/critical. Автоматика не заменяет ручной проход выше.

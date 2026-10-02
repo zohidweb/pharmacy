@@ -1,4 +1,4 @@
-> **Pharmacy:** адаптировано под стек Pharmacy — Fastify-хуки и Prisma query logging удалены; жизненный цикл запроса — адаптер-независимо (стандартный NestJS/Express); логирование SQL — средствами выбранного ORM после ADR или `log_min_duration_statement` в PostgreSQL. Ограничения: `CLAUDE.md`.
+> **Pharmacy:** адаптировано под стек Pharmacy — Fastify-хуки и Prisma query logging удалены; жизненный цикл запроса — адаптер-независимо (стандартный NestJS/Express); логирование SQL — опция `log` у Kysely (ADR-0006) или `log_min_duration_statement` в PostgreSQL. Ограничения: `CLAUDE.md`. <!-- docs-check: ok -->
 
 # NestJS Debugging — Logging & Request Lifecycle
 
@@ -33,16 +33,16 @@ bootstrap();
 ## 2. Логгер на модуль
 
 ```typescript
-// apps/api/src/modules/inventory/batches.service.ts
+// apps/api/src/app/inventory/batches.service.ts
 @Injectable()
 export class BatchesService {
   private readonly logger = new Logger(BatchesService.name);
 
-  async pickFefo(tx: Tx, storeId: string, productId: string, quantity: number): Promise<BatchPick[]> {
-    this.logger.debug({ msg: 'FEFO pick', storeId, productId, quantity });   // ids only, no PII
-    const picks = await this.batches.pickByExpiry(tx, storeId, productId, quantity);
-    if (sumQuantity(picks) < quantity) {
-      this.logger.warn({ msg: 'insufficient stock', storeId, productId, requested: quantity });
+  async pickFefo(trx: TenantTransaction, storeId: string, productId: string, qtyPieces: number): Promise<BatchPick[]> {
+    this.logger.debug({ msg: 'FEFO pick', storeId, productId, qtyPieces });  // ids only, no PII
+    const picks = await this.batches.pickByExpiry(trx, storeId, productId, qtyPieces);
+    if (sumQuantity(picks) < qtyPieces) {
+      this.logger.warn({ msg: 'insufficient stock', storeId, productId, requested: qtyPieces });
       throw new InsufficientStockException(productId);
     }
     return picks;
@@ -55,10 +55,10 @@ export class BatchesService {
 
 ## 3. Логирование SQL
 
-Слой доступа к данным (ORM) ещё не выбран — логирование запросов на стороне приложения настраивается средствами выбранного ORM **после ADR**. До этого и независимо от него — средствами PostgreSQL:
+Логирование запросов в приложении — опция `log` при создании `Kysely` в `core/database` (только уровень `error` и длительность; параметры не логируются целиком: в них `tenant_id` и ПДн — маскирование, ADR-0006 «Отрицательные»). Пока это не сделано, и для глубокой отладки — средствами PostgreSQL:
 
 ```yaml
-# docker/compose.local.yml (fragment) — local environment only
+# docker/compose.dev.yml (fragment) — local environment only
 services:
   postgres:
     command:

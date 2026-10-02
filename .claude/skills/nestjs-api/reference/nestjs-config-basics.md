@@ -67,22 +67,24 @@ export const getOptionalInt = (key: string): number | undefined => {
 
 ## Configuration Module
 
-**File:** `apps/api/src/config/config.module.ts`
+**File:** `apps/api/src/app/config/config.module.ts` (when the registerAs() configs appear;
+today `AppModule` calls `ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv })`)
 
 ```typescript
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 
+import { validateEnv } from './env.validation';
 import applicationConfig from './application.config';
-import databaseConfig from './database.config';
 import redisConfig from './redis.config';
 import securityConfig from './security.config';
 import sessionConfig from './session.config';
 import fiscalConfig from './fiscal.config';
 
+// Database settings are not a registerAs() config: env.validation.ts validates them and
+// core/database builds DatabaseSettings for TenantDatabase / PlatformDatabase.
 export const ALL_CONFIGS = [
   applicationConfig,
-  databaseConfig,
   redisConfig,
   securityConfig,
   sessionConfig,
@@ -94,6 +96,7 @@ export const ALL_CONFIGS = [
     NestConfigModule.forRoot({
       isGlobal: true,
       cache: true,
+      validate: validateEnv,
       load: ALL_CONFIGS,
       // Nx serve reads .env from the workspace root by default; set envFilePath explicitly if needed
     }),
@@ -154,8 +157,11 @@ export default registerAs('fiscal', () => {
 });
 ```
 
-Аналогично: `database.config.ts` (`DATABASE_URL`, размер пула), `redis.config.ts`
-(`REDIS_URL`), `security.config.ts` (`SECURITY_CORS_ORIGINS` — список, без `*`).
+Аналогично: `redis.config.ts` (`REDIS_URL`), `security.config.ts` (сессии, PIN, pepper — ADR-0008;
+CORS-настроек нет: CORS выключен, один origin). Настройки БД уже валидируются в `apps/api/src/app/config/env.validation.ts`
+и собираются в `DatabaseSettings` модулями `core/database` (`DATABASE_URL` — роль
+`pharmacy_app`, `PLATFORM_DATABASE_URL` — роль `pharmacy_platform`, пулы и таймауты).
+`MIGRATION_DATABASE_URL` (роль `pharmacy_owner`) читает только мигратор — API его не получает.
 
 ## .env.example (коммитится; реальных значений нет)
 
@@ -165,16 +171,21 @@ PORT=3000
 DEPLOYMENT_MODE=cloud
 ENABLE_SWAGGER=true
 
-DATABASE_URL=postgresql://pharmacy:<password>@localhost:5432/pharmacy
-DATABASE_POOL_MAX=10
-REDIS_URL=redis://localhost:6379
-
-SECURITY_CORS_ORIGINS=http://localhost:4200,http://localhost:4300
+# roles per ADR-0013; the real list is the root .env.example
+DATABASE_URL=postgres://pharmacy_app:change-me-local-only@127.0.0.1:5432/pharmacy
+PLATFORM_DATABASE_URL=postgres://pharmacy_platform:change-me-local-only@127.0.0.1:5432/pharmacy
+MIGRATION_DATABASE_URL=postgres://pharmacy_owner:change-me-local-only@127.0.0.1:5432/pharmacy
+DB_POOL_MAX=10
+PLATFORM_DB_POOL_MAX=3
+DB_STATEMENT_TIMEOUT_MS=5000
+DB_LOCK_TIMEOUT_MS=2000
+DB_CONNECTION_TIMEOUT_MS=5000
+REDIS_URL=redis://:change-me-local-only@127.0.0.1:6379
 
 SESSION_IDLE_TIMEOUT_MIN_SECONDS=300
 SESSION_IDLE_TIMEOUT_MAX_SECONDS=43200
 SESSION_ABSOLUTE_TTL_SECONDS=86400
-PIN_MAX_ATTEMPTS=5
+PIN_MAX_ATTEMPTS=3
 PIN_LOCKOUT_SECONDS=900
 
 FISCAL_ADAPTER=stub

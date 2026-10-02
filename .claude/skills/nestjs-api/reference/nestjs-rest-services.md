@@ -10,11 +10,12 @@
 ```typescript
 @Injectable()
 export class SuppliersService {
-  constructor(private readonly db: DatabaseService, private readonly repo: SuppliersRepository) {}
+  constructor(private readonly db: TenantDatabase, private readonly repo: SuppliersRepository) {}
 
   list(q: SupplierListQueryDto): Promise<Page<SupplierResponseDto>> {
-    return this.db.tenantTransaction(async (tx) => {
-      const { rows, total } = await this.repo.search(tx, q);
+    const tenantId = requireTenantId();
+    return this.db.tenantTransaction(async (trx) => {
+      const { rows, total } = await this.repo.search(trx, tenantId, q);
       return { items: rows.map(toSupplierResponse), total, limit: q.limit, offset: q.offset };
     });
   }
@@ -27,7 +28,7 @@ export class SuppliersService {
 заглушки на реального вендора не меняет модуль `pos`.
 
 ```typescript
-// apps/api/src/modules/fiscal/fiscal-registrar.port.ts
+// apps/api/src/app/fiscal/fiscal-registrar.port.ts
 export interface FiscalReceipt {
   receiptId: string;
   storeId: string;
@@ -49,7 +50,7 @@ export const FISCAL_REGISTRAR = Symbol('FISCAL_REGISTRAR');
 ```
 
 ```typescript
-// apps/api/src/modules/fiscal/stub-fiscal-registrar.ts — MVP: logs and returns success
+// apps/api/src/app/fiscal/stub-fiscal-registrar.ts — MVP: logs and returns success
 @Injectable()
 export class StubFiscalRegistrar implements FiscalRegistrar {
   private readonly logger = new Logger(StubFiscalRegistrar.name);
@@ -79,11 +80,11 @@ PostgreSQL (`nestjs-messaging-basics.md`): недоступность ККМ н�
 идемпотентности — по его спецификации; до выбора работает `StubFiscalRegistrar`.
 
 ```typescript
-// apps/api/src/modules/fiscal/http-fiscal-registrar.ts — skeleton until the KKM vendor is chosen
+// apps/api/src/app/fiscal/http-fiscal-registrar.ts — skeleton until the KKM vendor is chosen
 import { BadGatewayException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import fiscalConfig from '../../config/fiscal.config';
-import { getCorrelationId } from '../../common/context/request-context';
+import { getRequestContext } from '../../common/context/request-context';
 import { FiscalReceipt, FiscalRegistrar, FiscalResult } from './fiscal-registrar.port';
 
 @Injectable()
@@ -101,14 +102,14 @@ export class HttpFiscalRegistrar implements FiscalRegistrar {
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKey,          // header name — per vendor spec
-          'X-Correlation-Id': getCorrelationId() ?? idempotencyKey,
+          'X-Correlation-Id': getRequestContext()?.correlationId ?? idempotencyKey,
         },
         body: JSON.stringify(this.toVendorPayload(receipt)), // amounts stay integer dirams (TJS only)
       });
       if (!res.ok) throw new Error(`KKM vendor responded ${res.status}`);
       return this.parse(await res.text()); // strict parsing, reject unknown shapes
     } catch (error) {
-      this.logger.warn(`fiscal registration failed receipt=${receipt.receiptId} [cid=${getCorrelationId()}]: ${(error as Error).message}`);
+      this.logger.warn(`fiscal registration failed receipt=${receipt.receiptId} [cid=${getRequestContext()?.correlationId}]: ${(error as Error).message}`);
       throw new BadGatewayException('Fiscal registrar is unavailable');
     }
   }
@@ -147,11 +148,11 @@ export class HttpFiscalRegistrar implements FiscalRegistrar {
 ```typescript
 // pricing: bulk retail price update for a set of stores — one transaction, one audit record per change
 async bulkUpdatePrices(dto: BulkPriceUpdateDto): Promise<{ updated: number }> {
-  return this.db.tenantTransaction(async (tx) => {
+  return this.db.tenantTransaction(async (trx) => {
     let updated = 0;
     for (const item of dto.items) {                       // dto: @ArrayMaxSize(...) bounded
-      updated += await this.prices.upsert(tx, item);      // WHERE tenant_id = $1 inside
-      await this.audit.append(tx, { action: 'price.changed', entityType: 'product', entityId: item.productId });
+      updated += await this.prices.upsert(trx, tenantId, item); // filters by tenant_id inside
+      await this.audit.append(trx, { action: 'price.changed', entityType: 'product', entityId: item.productId });
     }
     return { updated };
   });

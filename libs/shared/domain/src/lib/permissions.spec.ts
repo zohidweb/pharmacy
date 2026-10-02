@@ -1,4 +1,5 @@
 import {
+  scopeWithin,
   actionsOf,
   exceedingPermissions,
   hasPermissions,
@@ -96,5 +97,16 @@ describe('role templates', () => {
     expect(roleTemplates.accountant.permissions).not.toContain(
       'inventory:post',
     );
+  });
+});
+
+describe('scopeWithin', () => {
+  it('keeps an assignment within the editor scope', () => {
+    expect(scopeWithin(null, null)).toBe(true);
+    expect(scopeWithin(null, ['store-2'])).toBe(true);
+    expect(scopeWithin(['store-1', 'store-3'], ['store-3'])).toBe(true);
+    expect(scopeWithin(['store-1', 'store-3'], ['store-2'])).toBe(false);
+    // a manager of some stores never gives the whole network
+    expect(scopeWithin(['store-1'], null)).toBe(false);
   });
 });

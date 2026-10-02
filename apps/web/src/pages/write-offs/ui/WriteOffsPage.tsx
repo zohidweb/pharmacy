@@ -28,11 +28,12 @@ import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { WRITE_OFF_REASONS, WriteOffEditor } from './WriteOffEditor';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 10;
 
 /** Journal of write-offs (UI mockup «Списание»). */
-export function WriteOffsPage() {
+function WriteOffsPageView() {
   const t = useTranslations('writeOffs');
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
@@ -245,5 +246,13 @@ export function WriteOffsPage() {
         />
       )}
     </>
+  );
+}
+
+export function WriteOffsPage() {
+  return (
+    <WithMessages groups={['stock']}>
+      <WriteOffsPageView />
+    </WithMessages>
   );
 }

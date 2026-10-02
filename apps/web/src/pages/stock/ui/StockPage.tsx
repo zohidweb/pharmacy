@@ -34,6 +34,7 @@ import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 20;
 const STATES: StockStateFilter[] = [
@@ -56,7 +57,7 @@ function quantityText(
 }
 
 /** Stock by batch (UI mockup «Остатки»): the whole network or one store of the scope. */
-export function StockPage() {
+function StockPageView() {
   const t = useTranslations('stock');
   const tCommon = useTranslations('stockDocs');
   const { data: session } = useSession();
@@ -388,5 +389,13 @@ export function StockPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+export function StockPage() {
+  return (
+    <WithMessages groups={['stock']}>
+      <StockPageView />
+    </WithMessages>
   );
 }

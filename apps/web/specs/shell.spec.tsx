@@ -25,7 +25,7 @@ const nav = () =>
   screen.findByRole('navigation', { name: 'Основная навигация' });
 
 describe('AppShell', () => {
-  it('shows the owner every section, with screens of the next stages not linked yet', async () => {
+  it('shows the owner every section with every screen linked', async () => {
     await signInAs('firuz');
     renderWithProviders(
       <AppShell>
@@ -45,8 +45,10 @@ describe('AppShell', () => {
     expect(
       within(menu).getByRole('link', { name: 'Заказы поставщикам' }),
     ).toBeTruthy();
-    expect(within(menu).queryByRole('link', { name: /^Отчёты/ })).toBeNull();
-    expect(within(menu).getByText('Отчёты')).toBeTruthy();
+    // every screen of the mockups is in place: no «появится позже» items left
+    for (const item of ['Отчёты', 'Журнал действий', 'Настройки']) {
+      expect(within(menu).getByRole('link', { name: item })).toBeTruthy();
+    }
   });
 
   it('shows a cashier only the cashier menu and a fixed terminal store', async () => {

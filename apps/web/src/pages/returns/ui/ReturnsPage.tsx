@@ -46,6 +46,7 @@ import {
   returnedSubtotal,
   type ReturnQuantities,
 } from '../lib/refund';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 10;
 const RETURN_WINDOW_DAYS = 14;
@@ -255,7 +256,7 @@ function Journal() {
 }
 
 /** Customer return (UI mockup «Возврат покупателя»); online only (ADR-0015). */
-export function ReturnsPage() {
+function ReturnsPageView() {
   const t = useTranslations('returns');
   const tPos = useTranslations('pos');
   const toast = useToast();
@@ -627,5 +628,13 @@ export function ReturnsPage() {
         {online && <Journal />}
       </div>
     </>
+  );
+}
+
+export function ReturnsPage() {
+  return (
+    <WithMessages groups={['pos']}>
+      <ReturnsPageView />
+    </WithMessages>
   );
 }

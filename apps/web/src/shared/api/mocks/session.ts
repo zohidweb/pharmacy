@@ -1,13 +1,9 @@
 /* Mock session (sessionStorage) and the server-side guard rules the handlers share. */
-import {
-  hasPermissions,
-  roleTemplates,
-  type Permission,
-} from '@pharmacy/shared-domain';
+import { hasPermissions, type Permission } from '@pharmacy/shared-domain';
 import type { EmployeeSession } from '@pharmacy/shared-dto';
 import { ApiError } from '../client';
 import { mockDb, type MockEmployeeState } from './db';
-import { roleNames, stores, tenant } from './fixtures';
+import { stores, tenant } from './fixtures';
 
 const SESSION_KEY = 'pharmacy-web-mock-session';
 
@@ -46,8 +42,12 @@ export function employeeStores(employee: MockEmployeeState) {
 
 export function toSession(stored: StoredSession, correlationId: string) {
   const employee = mockDb().employees.find((e) => e.id === stored.employeeId);
-  if (!employee) throw new ApiError(401, 'unauthenticated', correlationId);
-  const template = roleTemplates[employee.role];
+  // a blocked employee loses the sessions at once (ADR-0018, п. 7)
+  if (!employee || employee.status === 'blocked') {
+    throw new ApiError(401, 'unauthenticated', correlationId);
+  }
+  const role = mockDb().owner.roles.find((r) => r.id === employee.roleId);
+  if (!role) throw new ApiError(401, 'unauthenticated', correlationId);
   const scoped = employeeStores(employee);
   const session: EmployeeSession = {
     employee: {
@@ -58,12 +58,12 @@ export function toSession(stored: StoredSession, correlationId: string) {
     },
     tenant,
     role: {
-      id: `role-${employee.role}`,
-      name: roleNames[employee.role],
-      system: template.system,
-      templateKey: employee.role,
+      id: role.id,
+      name: role.name,
+      system: role.system,
+      templateKey: role.templateKey,
     },
-    permissions: [...template.permissions],
+    permissions: [...role.permissions],
     scope: employee.storeIds === null ? 'network' : 'stores',
     stores:
       stored.auth === 'pin'

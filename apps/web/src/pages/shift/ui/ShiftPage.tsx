@@ -43,6 +43,7 @@ import {
   CloseShiftDialog,
   OpenShiftDialog,
 } from './ShiftDialogs';
+import { WithMessages } from '@/shared/i18n';
 
 function useZLabels(): ZReportLabels {
   const t = useTranslations('shift.z');
@@ -280,7 +281,7 @@ function Quarantine({
 }
 
 /** Shift of the working store (UI mockup «Смена / Z-отчёт»). */
-export function ShiftPage() {
+function ShiftPageView() {
   const t = useTranslations('shift');
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -583,5 +584,13 @@ export function ShiftPage() {
         </div>
       </Dialog>
     </>
+  );
+}
+
+export function ShiftPage() {
+  return (
+    <WithMessages groups={['pos']}>
+      <ShiftPageView />
+    </WithMessages>
   );
 }

@@ -35,6 +35,7 @@ import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { PriceDialog, RuleDialog } from './PricingDialogs';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 20;
 type Tab = 'prices' | 'rules' | 'conflicts';
@@ -46,7 +47,7 @@ const ruleTone: Record<DiscountRuleStatus, StatusTone> = {
 };
 
 /** Prices and discounts (UI mockup «Цены и скидки»). */
-export function PricingPage() {
+function PricingPageView() {
   const t = useTranslations('pricing');
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
@@ -521,5 +522,13 @@ function ConflictsTab({ rows }: { rows: PriceConflict[] }) {
         empty={<EmptyState icon="circle-check" title={t('empty')} />}
       />
     </Card>
+  );
+}
+
+export function PricingPage() {
+  return (
+    <WithMessages groups={['stock', 'purchasing']}>
+      <PricingPageView />
+    </WithMessages>
   );
 }

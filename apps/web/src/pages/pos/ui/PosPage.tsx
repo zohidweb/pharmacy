@@ -63,6 +63,7 @@ import { useBarcodeScanner } from '@/shared/lib/scanner';
 import { useShellChrome } from '@/shared/lib/shell-chrome';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { WithMessages } from '@/shared/i18n';
 
 interface PendingAdd {
   product: PosProduct;
@@ -75,7 +76,7 @@ function useOnlineState(): boolean {
 }
 
 /** POS (UI mockups «Касса» and «Касса · полный экран»). */
-export function PosPage() {
+function PosPageView() {
   const t = useTranslations('pos');
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -544,5 +545,13 @@ export function PosPage() {
         }}
       />
     </div>
+  );
+}
+
+export function PosPage() {
+  return (
+    <WithMessages groups={['pos']}>
+      <PosPageView />
+    </WithMessages>
   );
 }

@@ -155,9 +155,27 @@ function move(
   });
 }
 
+/** Receipt settings of the store: the network settings and the store's receipt texts. */
+function networkSettingsOf(storeName: string, storeAddress: string) {
+  const base = storeSettings(storeName, storeAddress);
+  const network = mockDb().owner.settings;
+  const store = Object.entries(mockDb().owner.storeDetails).find(
+    ([id]) => stores.find((s) => s.id === id)?.name === storeName,
+  )?.[1];
+  return {
+    ...base,
+    networkName: network.networkName,
+    returnWindowDays: network.returnWindowDays,
+    ...(store && {
+      taxId: store.receipt.taxId || base.taxId,
+      receiptFooter: store.receipt.footer || base.receiptFooter,
+    }),
+  };
+}
+
 export const posHandlers: Pick<MockHandlers, PosRoute> = {
   'health.get': () => ({ status: 'ok' }),
-  'deployment.get': () => ({ kind: 'cloud' }),
+  'deployment.get': () => ({ kind: mockDb().owner.deployment }),
 
   'catalog.snapshot': ({ params, query, correlationId }) => {
     const { session } = authorize(correlationId, 'pos:view');
@@ -177,7 +195,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       removedProductIds: [],
       categories,
       discountRules: activeDiscountThresholds(store.id),
-      settings: storeSettings(store.name, store.address),
+      settings: networkSettingsOf(store.name, store.address),
     };
     return snapshot;
   },
@@ -436,7 +454,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
     );
     if (!receipt) throw new ApiError(404, 'not_found', correlationId);
     const store = stores.find((s) => s.id === receipt.storeId);
-    const window = storeSettings('', '').returnWindowDays;
+    const window = mockDb().owner.settings.returnWindowDays;
     const age = daysBetween(toAppDate(new Date(receipt.soldAt)), today());
     if (age > window) {
       throw new ApiError(422, 'return_window_expired', correlationId);

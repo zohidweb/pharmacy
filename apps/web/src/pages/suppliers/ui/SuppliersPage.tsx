@@ -26,13 +26,14 @@ import {
   SupplierCardDialog,
   SupplierFormDialog,
 } from './SupplierDialogs';
+import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 10;
 
 type Paying = { id: string; name: string; debtMinor?: number };
 
 /** Suppliers and debts (UI mockup «Поставщики и долги»): TJS only, no exchange differences. */
-export function SuppliersPage() {
+function SuppliersPageView() {
   const t = useTranslations('suppliers');
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
@@ -220,5 +221,13 @@ export function SuppliersPage() {
         <PaymentDialog supplier={paying} onClose={() => setPaying(null)} />
       )}
     </>
+  );
+}
+
+export function SuppliersPage() {
+  return (
+    <WithMessages groups={['stock', 'purchasing']}>
+      <SuppliersPageView />
+    </WithMessages>
   );
 }

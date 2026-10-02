@@ -1,5 +1,20 @@
-import ru from './messages/ru.json';
-import tg from './messages/tg.json';
+import ruCore from './messages/ru/core.json';
+import ruHome from './messages/ru/home.json';
+import ruOwner from './messages/ru/owner.json';
+import ruPos from './messages/ru/pos.json';
+import ruPurchasing from './messages/ru/purchasing.json';
+import ruStock from './messages/ru/stock.json';
+import tgCore from './messages/tg/core.json';
+import tgHome from './messages/tg/home.json';
+import tgOwner from './messages/tg/owner.json';
+import tgPos from './messages/tg/pos.json';
+import tgPurchasing from './messages/tg/purchasing.json';
+import tgStock from './messages/tg/stock.json';
+
+const ruGroups = [ruCore, ruPos, ruHome, ruStock, ruPurchasing, ruOwner];
+const tgGroups = [tgCore, tgPos, tgHome, tgStock, tgPurchasing, tgOwner];
+const ru = Object.assign({}, ...ruGroups);
+const tg = Object.assign({}, ...tgGroups);
 
 function keyPaths(value: unknown, prefix = ''): string[] {
   if (typeof value !== 'object' || value === null) return [prefix];
@@ -9,6 +24,16 @@ function keyPaths(value: unknown, prefix = ''): string[] {
 }
 
 describe('web dictionaries', () => {
+  it('keep every namespace in exactly one group', () => {
+    const namespaces = ruGroups.flatMap((group) => Object.keys(group));
+    expect(new Set(namespaces).size).toBe(namespaces.length);
+    tgGroups.forEach((group, index) =>
+      expect(Object.keys(group).sort()).toEqual(
+        Object.keys(ruGroups[index]).sort(),
+      ),
+    );
+  });
+
   it('have the same keys in RU and TJ', () => {
     expect(keyPaths(tg).sort()).toEqual(keyPaths(ru).sort());
   });

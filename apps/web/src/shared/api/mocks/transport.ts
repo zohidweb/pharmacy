@@ -5,7 +5,7 @@
  * failures (ADR-0008), view-only impersonation. The mock session lives in sessionStorage to survive
  * a reload in development. Enabled only by NEXT_PUBLIC_API_MOCKS=true.
  */
-import { isTrivialPin } from '@pharmacy/shared-domain';
+import { checkPin, isTrivialPin } from '@pharmacy/shared-domain';
 import type {
   DashboardPeriod,
   EmployeeMe,
@@ -14,7 +14,7 @@ import type {
 import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { mockDb, type MockEmployeeState } from './db';
-import { roleNames, storeDay, stores } from './fixtures';
+import { storeDay, stores } from './fixtures';
 import {
   authorize,
   current,
@@ -24,8 +24,10 @@ import {
   writeSession,
 } from './session';
 import { catalogHandlers } from './handlers-catalog';
+import { ownerHandlers } from './handlers-owner';
 import { posHandlers } from './handlers-pos';
 import { purchasingHandlers } from './handlers-purchasing';
+import { staffHandlers } from './handlers-staff';
 import { stockHandlers } from './handlers-stock';
 import type { MockHandlers, MockRequest } from './types';
 
@@ -95,7 +97,8 @@ function toMe(employee: MockEmployeeState): EmployeeMe {
     fullName: employee.fullName,
     login: employee.login,
     phone: employee.phone,
-    roleName: roleNames[employee.role],
+    roleName:
+      mockDb().owner.roles.find((r) => r.id === employee.roleId)?.name ?? '—',
     scope: employee.storeIds === null ? 'network' : 'stores',
     storeNames: employeeStores(employee).map((store) => store.name),
     lastLoginAt: employee.lastLoginAt,
@@ -109,6 +112,8 @@ const handlers: MockHandlers = {
   ...stockHandlers,
   ...purchasingHandlers,
   ...catalogHandlers,
+  ...staffHandlers,
+  ...ownerHandlers,
   'sessions.create': ({ body, correlationId }) => {
     const employee = mockDb().employees.find(
       (e) => e.login === body.login.trim().toLowerCase(),
@@ -116,6 +121,9 @@ const handlers: MockHandlers = {
     // unknown login and wrong password are indistinguishable (ADR-0008)
     if (!employee || employee.password !== body.password) {
       throw new ApiError(401, 'invalid_credentials', correlationId);
+    }
+    if (employee.status === 'blocked') {
+      throw new ApiError(403, 'employee_blocked', correlationId);
     }
     return toSession(
       startSession(employee, 'password', null, null),
@@ -150,7 +158,12 @@ const handlers: MockHandlers = {
       name: terminal.name,
       store,
       cashiers: db.employees
-        .filter((e) => e.pin !== null && e.storeIds?.includes(store.id))
+        .filter(
+          (e) =>
+            e.pin !== null &&
+            e.status === 'active' &&
+            e.storeIds?.includes(store.id),
+        )
         .map((e) => ({ employeeId: e.id, shortName: e.shortName })),
       pinLength: 4,
     };
@@ -163,9 +176,19 @@ const handlers: MockHandlers = {
       throw new ApiError(403, 'step_up_required', correlationId);
     }
     const db = mockDb();
-    db.terminals[session.employee.id] = (
-      db.terminals[session.employee.id] ?? []
-    ).filter((terminal) => terminal.id !== params.id);
+    const tenantTerminal = db.owner.terminals.find((t) => t.id === params.id);
+    if (
+      tenantTerminal &&
+      !session.stores.some((s) => s.id === tenantTerminal.storeId)
+    ) {
+      throw new ApiError(403, 'store_not_in_scope', correlationId);
+    }
+    db.owner.terminals = db.owner.terminals.filter((t) => t.id !== params.id);
+    for (const employeeId of Object.keys(db.terminals)) {
+      db.terminals[employeeId] = db.terminals[employeeId].filter(
+        (terminal) => terminal.id !== params.id,
+      );
+    }
     if (db.terminal?.id === params.id) db.terminal = null;
   },
   'terminalSessions.create': ({ body, correlationId }) => {
@@ -174,6 +197,9 @@ const handlers: MockHandlers = {
     const employee = db.employees.find((e) => e.id === body.employeeId);
     if (!employee || !employee.storeIds?.includes(db.terminal.storeId)) {
       throw new ApiError(401, 'invalid_pin', correlationId);
+    }
+    if (employee.status === 'blocked') {
+      throw new ApiError(403, 'employee_blocked', correlationId);
     }
     if (employee.pinLocked) {
       throw new ApiError(423, 'pin_locked', correlationId);
@@ -266,6 +292,13 @@ const handlers: MockHandlers = {
         { field: 'currentPin', code: 'wrong' },
       ]);
     }
+    if (
+      checkPin(body.newPin, mockDb().owner.settings.minPinLength) === 'length'
+    ) {
+      throw new ApiError(422, 'validation_failed', correlationId, [
+        { field: 'newPin', code: 'length' },
+      ]);
+    }
     if (isTrivialPin(body.newPin)) {
       throw new ApiError(422, 'pin_trivial', correlationId, [
         { field: 'newPin', code: 'trivial' },
@@ -326,9 +359,17 @@ export function unbindMockTerminal(): void {
 /** Dev and tests: put the mocks into a state that is hard to reach by clicking. */
 export function applyScenario(
   scenario:
-    'impersonation' | 'unbound-terminal' | 'offline' | 'online' | 'no-shift',
+    | 'impersonation'
+    | 'unbound-terminal'
+    | 'offline'
+    | 'online'
+    | 'no-shift'
+    | 'offline-store',
 ): void {
   switch (scenario) {
+    case 'offline-store':
+      mockDb().owner.deployment = 'offline-store';
+      break;
     case 'impersonation':
       startMockImpersonation('Оператор платформы');
       break;

@@ -39,6 +39,7 @@ test('reports a relative link to a missing file and accepts an existing one', ()
 
 test('ignores http links and pure anchors', () => {
   assert.deepEqual(rulesOf('[a](https://example.com/x.md) [b](#section) [c](mailto:x@y.z)'), []);
+  assert.deepEqual(rulesOf(String.raw`date pattern [0-9](\d{1,2}) in prose`), []);
 });
 
 test('reports 1-based line numbers', () => {

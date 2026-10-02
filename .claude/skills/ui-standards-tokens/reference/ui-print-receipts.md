@@ -41,7 +41,7 @@ stack.md) — UI-кит отвечает только за вёрстку. Пе�
 ## 3. Разметка и стили
 
 ```tsx
-// libs/ui/src/lib/ReceiptPrint/ReceiptPrint.tsx
+// libs/ui/src/lib/receipt-print/ReceiptPrint.tsx — one of the two CSS Modules allowed by ADR-0007
 import { createPortal } from 'react-dom';
 import styles from './ReceiptPrint.module.css';
 
@@ -104,15 +104,15 @@ export function ReceiptPrint({ paperWidth, lines }: ReceiptPrintProps) {
 ```
 
 ```ts
-// Feature code (apps/web/src/features/pos): print after fonts are ready
+// apps/web, POS page slice or its feature (FSD): print after fonts are ready
 export async function printReceipt(): Promise<void> {
   await document.fonts.ready;
   window.print();
 }
 ```
 
-`print:`-варианты Tailwind (если ADR его выберет) — только для скрытия элементов экрана;
-вёрстка чека остаётся в этом CSS.
+`print:`-варианты Tailwind (ADR-0007) — только для скрытия элементов экрана; вёрстка чека
+остаётся в этом CSS Module.
 
 ## 4. Моноширинная сетка строк
 

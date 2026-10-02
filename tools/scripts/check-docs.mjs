@@ -55,6 +55,7 @@ export function checkText(path, text, exists) {
     for (const match of lineText.matchAll(LINK)) {
       const target = match[1];
       if (/^(https?:|mailto:|#)/i.test(target)) continue;
+      if (target.includes('\\')) continue; // regex text like `(\d{1,2})`, not a link
       const file = target.split('#')[0];
       if (!file) continue;
       const repoPath = join(dirname(path), decodeURIComponent(file)).replaceAll('\\', '/');

@@ -1,11 +1,11 @@
 ---
 name: web-performance-optimization
-description: "Optimize performance of the Pharmacy Next.js (React, TypeScript) static-export SPA apps in the Nx monorepo (apps/web, apps/admin): cashier (POS) responsiveness and INP on barcode scanning, catalog search, receipt printing, Core Web Vitals (LCP, INP, CLS), client bundle size and code splitting (next/dynamic, React.lazy, Suspense), memoization driven by React Profiler data, long lists (catalog, stock, reports), self-hosted next/font with Cyrillic/Tajik glyphs, next/image in output: 'export'. Use when the касса/склад/отчёты UI feels slow, a bundle grew, before a Lighthouse audit, or when tuning for weak POS hardware — always measure with profiling tools before making changes. Ключевые слова: производительность, тормозит касса, сканер штрих-кода, размер бандла."
+description: "Optimize performance of the Pharmacy Next.js (React, TypeScript) static-export SPA apps in the Nx monorepo (apps/web, apps/admin): cashier (POS) responsiveness and INP on barcode scanning, catalog search, receipt printing, Core Web Vitals (LCP, INP, CLS), client bundle size and code splitting (next/dynamic, React.lazy, Suspense), memoization driven by React Profiler data, long lists (catalog, stock, reports), self-hosted @font-face from libs/ui with Cyrillic/Tajik glyphs, next/image in output: 'export'. Use when the касса/склад/отчёты UI feels slow, a bundle grew, before a Lighthouse audit, or when tuning for weak POS hardware — always measure with profiling tools before making changes. Ключевые слова: производительность, тормозит касса, сканер штрих-кода, размер бандла."
 risk: low
 source: "adapted from kumaran-is/claude-code-onboarding (MIT), develop@a7f2fc5 — original: Angular 21.x; rewritten for Next.js/React (Pharmacy)"
 date_added: "2026-02-27"
-updated: "2026-09-29"
-last-reviewed: "2026-09-29"
+updated: "2026-10-02"
+last-reviewed: "2026-10-02"
 allowed-tools: "Read, Grep, Glob, Bash, Edit, Write"
 metadata:
   related-skills: [react-dev, tailwind-patterns, ui-standards-tokens]
@@ -32,21 +32,31 @@ metadata:
   от 10″, часто слабое железо и нестабильная связь (буфер перебоев — очередь операций в браузере,
   IndexedDB). Офлайн-точка: браузер → `localhost` на том же ПК, где крутятся Docker, API и PostgreSQL —
   там узкое место CPU/RAM, а не сеть.
-- Шрифты — только self-hosted (`next/font/local`), нужны кириллица **и** таджикские буквы
-  (ҳ ҷ ӣ қ ӯ ғ — они в диапазоне `cyrillic-ext`, а не в базовом `cyrillic`).
+- Шрифты — только self-hosted: `@font-face` в `libs/ui/src/styles/fonts.css` (ADR-0007), файлы в
+  `libs/ui/src/assets/fonts`; нужны кириллица **и** таджикские буквы (ҳ ҷ ӣ қ ӯ ғ — они в диапазоне
+  `cyrillic-ext`, а не в базовом `cyrillic`).
 - Команды — через Nx: `npx nx build web|admin`, `npx nx serve web|admin`, `npx nx affected -t build test lint`.
 
-**Требует согласования / ADR через `/03-adr` до использования** (новые зависимости = решение команды,
-лицензия проверяется, см. «AI usage rules» в CLAUDE.md монорепо):
-- `@next/bundle-analyzer` (dev-зависимость) — согласовать; до этого — Coverage в DevTools и размеры чанков.
-- `web-vitals` (npm) — согласовать. Сбор RUM-метрик в проде — мониторинг **не выбран**,
-  вводится через ADR; до него — только разовые замеры на test/локально. Метрики отправляются
-  **только на собственный `apps/api`**, без ПДн и без внешних SaaS (правило проекта про данные).
-- Библиотека виртуализации списков (`@tanstack/react-virtual`, `react-window` и т.п.) — ADR.
-- Обёртки IndexedDB (`idb`, Dexie), библиотеки состояния/кэша данных (TanStack Query, Zustand…),
-  библиотеки графиков для отчётов, React Compiler (`babel-plugin-react-compiler`) — ADR.
-- Service Worker / PWA-кэширование оболочки приложения — архитектурное решение, ADR.
-- Tailwind CSS — не в stack.md (см. `tailwind-patterns`, там же пометка про ADR).
+**Решено принятыми ADR (использовать, не выбирать заново):**
+- ADR-0015: TanStack Query 5, Zustand 5 (селекторы), React Hook Form + zod, use-intl (словари по
+  требованию), `idb` для буфера перебоев и снимка каталога, `uuid` (v7); свой клиент API на `fetch`,
+  свой минимальный Service Worker (только облачная сборка `apps/web`), свой обработчик сканера.
+- ADR-0007: Tailwind v4 на токенах (только сборка), свой UI-кит `libs/ui`, UI-зависимостей рантайма нет.
+- ADR-0009 — инструменты и бюджеты (полностью — `references/optimization-checklists.md`):
+  - анализ бандла — встроенный `next experimental-analyze` (Turbopack); `@next/bundle-analyzer`
+    только при сборке webpack; гейт — скрипт бюджета без зависимостей;
+  - `web-vitals` — только devDependency: perf-сценарии Playwright (`addInitScript`) и локальная
+    отладочная сборка под флагом; в прод-бандл не попадает и ничего не отправляет;
+  - бюджеты клиента: скан → строка ≤ 100 мс, INP ≤ 200 мс, оплата → чек 19 из 20 ≤ 1 с, LCP ≤ 2,5 с,
+    CLS ≤ 0,1 (CPU 4×); first-load JS кассы ≤ 250 КБ gzip (цель ≤ 200), чанк ≤ 150 КБ, весь JS
+    приложения ≤ 900 КБ;
+  - длинные списки — без виртуализации в MVP; `@tanstack/react-virtual` — только если профиль (CPU 4×,
+    приложен к PR) покажет нехватку, с одобрения фронтенд-лида.
+
+**Требует ADR через `/03-adr` до использования:** RUM и сбор метрик в проде (мониторинг не выбран;
+если появится — только на собственный `apps/api`, без ПДн и внешних SaaS), библиотеки графиков для
+отчётов, React Compiler (`babel-plugin-react-compiler`), `react-window` и другие библиотеки
+виртуализации, любые новые зависимости уровня фреймворка.
 
 **Запрещено:** CDN и внешние сервисы (Google Fonts в рантайме, image-CDN, внешняя аналитика, Sentry,
 Datadog RUM, PageSpeed-мониторинг с отправкой данных), Vercel-специфика (Vercel Analytics, Speed
@@ -121,9 +131,9 @@ JS, поведение длинных списков и печати на сла
 
 1. **Отзывчивость кассы (INP)** — скан и поиск без лишних рендеров, локальный индекс каталога
 2. **First-load JS кассы** — лёгкий общий layout, `next/dynamic` для тяжёлого и редкого
-3. **Длинные списки** — пагинация limit/offset (API) → `content-visibility` → виртуализация (ADR)
+3. **Длинные списки** — пагинация limit/offset (API) → `content-visibility` → виртуализация (только по замеру, ADR-0009)
 4. **Печать чека** — отдельный минимальный print-контейнер
-5. **Шрифты и изображения** — `next/font/local` с нужным subset, размеры у `<img>`/`next/image`
+5. **Шрифты и изображения** — `@font-face` из `libs/ui` с нужным subset (woff2), размеры у `<img>`/`next/image`
 
 ### Step 4: Implement Optimizations
 
@@ -146,7 +156,7 @@ JS, поведение длинных списков и печати на сла
 - **Example 1:** INP кассы при сканировании штрих-кода — буфер сканера без рендеров, индекс каталога, замер `performance.measure`
 - **Example 2:** Поиск по каталогу — `useDeferredValue`, debounce + `AbortController`
 - **Example 3:** Сокращение бандла — `next/dynamic`, `import type` из `libs/shared/dto`, локали по требованию, бюджет размера
-- **Example 4:** Длинные списки — пагинация, `content-visibility`, виртуализация (только после ADR)
+- **Example 4:** Длинные списки — пагинация, `content-visibility`, виртуализация (только по замеру, ADR-0009)
 - **Example 5:** Печать чека и шрифты/изображения в static export
 
 ---
@@ -177,7 +187,7 @@ JS, поведение длинных списков и печати на сла
 - **Не дробить слишком мелко** — чанки в единицы КБ дают больше запросов, чем экономии
 - **Не блокировать главный поток** — синхронная обработка всего каталога, большие `JSON.parse`/сериализация в IndexedDB на каждом скане
 - **Не подключать внешние скрипты** — аналитика, шрифты с CDN, виджеты: запрещено правилом проекта про данные и вредит старту
-- **Не добавлять зависимость «для скорости»** без согласования/ADR (виртуализация, state-менеджеры, IndexedDB-обёртки)
+- **Не добавлять зависимость «для скорости»** сверх решённых ADR-0015/0009 — новая зависимость только через ADR
 
 ---
 
@@ -207,7 +217,7 @@ JS, поведение длинных списков и печати на сла
 ### Problem: Таблица остатков/отчёта на тысячи строк лагает
 **Symptoms:** долгий первый рендер, рывки при прокрутке и фильтрации
 **Solution:** серверная пагинация limit/offset (стандарт API) → `content-visibility: auto` для блоков →
-виртуализация только после ADR на библиотеку (Example 4)
+`@tanstack/react-virtual` — только если профиль на CPU 4× это доказал, с одобрения фронтенд-лида (ADR-0009, Example 4)
 
 ### Problem: Печать чека подвешивает интерфейс
 **Symptoms:** между «Оплатить» и диалогом печати — заметная пауза, в Performance — долгий Layout/Paint
@@ -216,8 +226,9 @@ JS, поведение длинных списков и печати на сла
 
 ### Problem: Таджикские буквы другим шрифтом, скачок вёрстки
 **Symptoms:** «ҳ, ҷ, ӣ, қ, ӯ, ғ» выглядят иначе, чем остальной текст; CLS после загрузки шрифта
-**Solution:** шрифтовой файл должен содержать `cyrillic-ext` (U+0460–052F); `next/font/local` с
-`display: 'swap'` и fallback-метриками; проверить DevTools → Elements → Computed → Rendered Fonts
+**Solution:** шрифтовой файл должен содержать `cyrillic-ext` (U+0460–052F); `@font-face` в
+`libs/ui/src/styles/fonts.css` с `font-display: swap` и fallback-метриками; проверить DevTools →
+Elements → Computed → Rendered Fonts
 
 ### Problem: `next/image` ломает `next build` в static export
 **Symptoms:** ошибка сборки о несовместимости Image Optimization с `output: 'export'`
@@ -235,20 +246,22 @@ JS, поведение длинных списков и печати на сла
 - [ ] Операция кассы (скан → строка; оплата → чек) укладывается в ≤ 1 сек end-to-end на целевом железе
 - [ ] Корневой layout и провайдеры не тянут тяжёлые/редкие модули; они за `next/dynamic`/`React.lazy`
 - [ ] Типы из `libs/shared/dto` импортируются через `import type`; в бандле web нет `class-validator`
-- [ ] Длинные списки — пагинация или `content-visibility`; виртуализация — только после ADR
-- [ ] Шрифты self-hosted через `next/font/local`, в файле есть `cyrillic-ext`
+- [ ] Длинные списки — пагинация или `content-visibility`; виртуализация — только по замеру (ADR-0009)
+- [ ] Бюджет бандла (`tools/check-bundle-budget.mjs`, `tools/bundle-budget.json`) не превышен
+- [ ] Шрифты self-hosted (`libs/ui/src/styles/fonts.css`), в файле есть `cyrillic-ext`
 - [ ] Никаких внешних скриптов, CDN и сторонней аналитики
 
 ---
 
 ## Performance Tools
 
-> Полный перечень с пометками о согласовании — в [references/optimization-checklists.md](references/optimization-checklists.md).
+> Полный перечень — в [references/optimization-checklists.md](references/optimization-checklists.md).
 
 - **Chrome/Edge DevTools** — Performance (long tasks, Interactions, CPU throttling), Lighthouse (Navigation/Timespan), Coverage, Rendering → Layout Shift Regions
 - **React DevTools Profiler** — причины рендеров; `next build --profile` для профиля production-сборки
 - **`performance.mark/measure`, `PerformanceObserver`** (`event`, `long-animation-frame`) — встроены в Chrome/Edge, без зависимостей
-- `npx nx build web` + размеры чанков статического экспорта; `@next/bundle-analyzer` — **после согласования**
+- `npx nx build web` + размеры чанков статического экспорта и скрипт бюджета; граф модулей — `next experimental-analyze` (ADR-0009)
+- `web-vitals` — devDependency, только в perf-сценариях Playwright и локально (ADR-0009)
 
 ---
 
@@ -256,7 +269,7 @@ JS, поведение длинных списков и печати на сла
 
 - `react-dev` — конвенции React проекта: структура `features/`/`shared/`, нейминг, тесты, correlation ID, обработка ошибок
 - `ui-standards-tokens` — дизайн-токены и UI-стандарты общего кита `libs/ui` (сенсорные экраны от 10″)
-- `tailwind-patterns` — паттерны Tailwind CSS; **Tailwind не выбран в stack.md → только после ADR**
+- `tailwind-patterns` — паттерны Tailwind CSS v4 на токенах (ADR-0007)
 - `nestjs-api`, `postgres-best-practices` — если узкое место во времени ответа `apps/api`/БД
 
 ---
@@ -265,7 +278,7 @@ JS, поведение длинных списков и печати на сла
 
 - [Next.js Static Exports](https://nextjs.org/docs/app/guides/static-exports) — что поддерживается в `output: 'export'`
 - [next/dynamic и lazy loading](https://nextjs.org/docs/app/guides/lazy-loading)
-- [next/font](https://nextjs.org/docs/app/api-reference/components/font) — `next/font/local`
+- [@font-face и font-display (MDN)](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face)
 - [React: useDeferredValue, startTransition, memo](https://react.dev/reference/react)
 - [React Profiler](https://react.dev/reference/react/Profiler)
 - [Core Web Vitals](https://web.dev/articles/vitals) и [Optimize INP](https://web.dev/articles/optimize-inp)

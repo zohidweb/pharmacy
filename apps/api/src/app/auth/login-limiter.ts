@@ -3,9 +3,9 @@ import type { LoginKind } from '../../core/database';
 import type { RedisClient } from '../../core/redis/redis.tokens';
 
 export interface LoginLimiterOptions {
-  /** Failures within the window that lock the identifier (LOGIN_MAX_FAILURES). */
+  /** Attempts within the window; the last one locks the identifier (LOGIN_MAX_FAILURES). */
   maxFailures: number;
-  /** Failures older than this are forgotten. */
+  /** Attempts older than this are forgotten. */
   windowSeconds: number;
   /** First lock (LOGIN_LOCK_SECONDS). */
   lockSeconds: number;
@@ -23,6 +23,9 @@ export const LOGIN_LIMITER_DEFAULTS: Readonly<LoginLimiterOptions> = {
   repeatWindowSeconds: 86400,
 };
 
+export type LoginAttempt =
+  { allowed: true } | { allowed: false; retryAfterSeconds: number };
+
 /** Limiter key of a normalized identifier: the kind and a SHA-256 of the value, never the value. */
 export function loginLimiterKey(kind: LoginKind, value: string): string {
   return `${kind}:${sha256Hex(value)}`;
@@ -30,20 +33,26 @@ export function loginLimiterKey(kind: LoginKind, value: string): string {
 
 const PREFIX = 'login-limit';
 
-// One atomic failure step (KEYS: failures, lock, lock history; ARGV: max failures, window ms,
-// lock ms, repeat lock ms, history ms):
-// - while locked, a failure is not counted (the lock is neither extended nor repeated);
-// - INCR the failures; the first one (or a key that lost its expiry) opens the window;
-// - on reaching the maximum: lock for the repeat duration if an earlier lock is remembered,
-//   otherwise for the first duration; remember the lock; drop the failures (a fresh count after).
-const RECORD_FAILURE_SCRIPT = `
-local failures, lock, history = KEYS[1], KEYS[2], KEYS[3]
-if redis.call('PTTL', lock) > 0 then
-  return 0
+// One atomic reservation of a sign-in attempt, made before the password is hashed (KEYS: attempts,
+// lock, lock history; ARGV: max attempts, window ms, lock ms, repeat lock ms, history ms). Returns
+// 0 when the attempt may proceed, otherwise the milliseconds left of the lock:
+// - while locked, the attempt is refused and not counted (the lock is neither extended nor
+//   repeated);
+// - INCR the attempts; the first one (or a key that lost its expiry) opens the window;
+// - the attempt that reaches the maximum still proceeds, and locks: for the repeat duration if an
+//   earlier lock is remembered, otherwise for the first duration; the lock is remembered and the
+//   count dropped (a fresh count after the lock).
+// Concurrent requests cannot pass a check together and act later: at most maxFailures attempts
+// per window are ever allowed.
+const TRY_ACQUIRE_SCRIPT = `
+local attempts, lock, history = KEYS[1], KEYS[2], KEYS[3]
+local lockLeft = redis.call('PTTL', lock)
+if lockLeft > 0 then
+  return lockLeft
 end
-local count = redis.call('INCR', failures)
-if count == 1 or redis.call('PTTL', failures) < 0 then
-  redis.call('PEXPIRE', failures, ARGV[2])
+local count = redis.call('INCR', attempts)
+if count == 1 or redis.call('PTTL', attempts) < 0 then
+  redis.call('PEXPIRE', attempts, ARGV[2])
 end
 if count >= tonumber(ARGV[1]) then
   local lockMs = ARGV[3]
@@ -52,15 +61,14 @@ if count >= tonumber(ARGV[1]) then
   end
   redis.call('SET', lock, '1', 'PX', lockMs)
   redis.call('SET', history, '1', 'PX', ARGV[5])
-  redis.call('DEL', failures)
-  return 1
+  redis.call('DEL', attempts)
 end
 return 0
 `;
 
 const ms = (seconds: number): string => String(seconds * 1000);
 
-// Failed sign-ins per identifier in Redis, shared by all API instances (cloud; the offline store
+// Sign-in attempts per identifier in Redis, shared by all API instances (cloud; the offline store
 // gets its own implementation with part 4 of the auth design). Keys carry a hash of the
 // identifier only, so Redis holds no personal data.
 export class LoginLimiter {
@@ -69,16 +77,11 @@ export class LoginLimiter {
     private readonly options: LoginLimiterOptions,
   ) {}
 
-  /** Seconds until the identifier is unlocked, or null when it is not locked. */
-  async isLocked(key: string): Promise<number | null> {
-    const left = await this.redis.pTTL(this.keys(key).lock);
-    return left > 0 ? Math.ceil(left / 1000) : null;
-  }
-
-  async recordFailure(key: string): Promise<void> {
-    const { failures, lock, history } = this.keys(key);
-    await this.redis.eval(RECORD_FAILURE_SCRIPT, {
-      keys: [failures, lock, history],
+  /** Reserves one attempt, or refuses it with the seconds until the identifier is unlocked. */
+  async tryAcquire(key: string): Promise<LoginAttempt> {
+    const { attempts, lock, history } = this.keys(key);
+    const reply = await this.redis.eval(TRY_ACQUIRE_SCRIPT, {
+      keys: [attempts, lock, history],
       arguments: [
         String(this.options.maxFailures),
         ms(this.options.windowSeconds),
@@ -87,20 +90,26 @@ export class LoginLimiter {
         ms(this.options.repeatWindowSeconds),
       ],
     });
+    if (typeof reply !== 'number') {
+      throw new Error('Unexpected login limiter script reply');
+    }
+    return reply > 0
+      ? { allowed: false, retryAfterSeconds: Math.ceil(reply / 1000) }
+      : { allowed: true };
   }
 
   /**
-   * After a successful sign-in: clears the failures and any lock. The lock history stays until it
+   * After a successful sign-in: clears the attempts and any lock. The lock history stays until it
    * expires, so a new series of failures within a day still gets the longer lock.
    */
   async reset(key: string): Promise<void> {
-    const { failures, lock } = this.keys(key);
-    await this.redis.del([failures, lock]);
+    const { attempts, lock } = this.keys(key);
+    await this.redis.del([attempts, lock]);
   }
 
   private keys(key: string) {
     return {
-      failures: `${PREFIX}:${key}:failures`,
+      attempts: `${PREFIX}:${key}:attempts`,
       lock: `${PREFIX}:${key}:lock`,
       history: `${PREFIX}:${key}:history`,
     };

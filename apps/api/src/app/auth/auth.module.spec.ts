@@ -5,6 +5,7 @@ import { CryptoModule, parseKeyRing } from '../../core/crypto';
 import { ContextResolvers, DatabaseModule } from '../../core/database';
 import { RedisModule } from '../../core/redis/redis.module';
 import { AuthModule } from './auth.module';
+import { LoginClock, SystemLoginClock } from './login-clock';
 import { LoginLimiter } from './login-limiter';
 import { PrincipalLoader } from './principal-loader';
 import { SessionsController } from './sessions.controller';
@@ -28,6 +29,7 @@ const env = {
   SESSION_ABSOLUTE_TTL_SECONDS: 43200,
   LOGIN_MAX_FAILURES: 5,
   LOGIN_LOCK_SECONDS: 900,
+  LOGIN_FAILURE_FLOOR_MS: 400,
   AUTH_TEST_COOKIES: false,
   jwtKeyRing: parseKeyRing(`k1:${key()}`, 'k1', 'SESSION_JWT_KEYS'),
   pepperRing: parseKeyRing(`1:${key()}`, '1', 'PASSWORD_PEPPERS'),
@@ -54,6 +56,7 @@ describe('AuthModule', () => {
     );
     expect(moduleRef.get(SessionsService)).toBeInstanceOf(SessionsService);
     expect(moduleRef.get(LoginLimiter)).toBeInstanceOf(LoginLimiter);
+    expect(moduleRef.get(LoginClock)).toBeInstanceOf(SystemLoginClock);
     expect(moduleRef.get(PrincipalLoader)).toBeInstanceOf(PrincipalLoader);
     expect(moduleRef.get(ContextResolvers)).toBeInstanceOf(ContextResolvers);
     await moduleRef.close();

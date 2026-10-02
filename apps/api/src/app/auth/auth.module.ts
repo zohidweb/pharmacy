@@ -4,6 +4,7 @@ import { REDIS_CLIENT, type RedisClient } from '../../core/redis/redis.tokens';
 import { SessionsModule } from '../../core/sessions';
 import { AuditModule } from '../audit/audit.module';
 import { EmployeeAuthRepository } from './employee-auth.repository';
+import { LoginClock, SystemLoginClock } from './login-clock';
 import { LOGIN_LIMITER_DEFAULTS, LoginLimiter } from './login-limiter';
 import { PrincipalLoader } from './principal-loader';
 import { SessionsController } from './sessions.controller';
@@ -20,6 +21,7 @@ import { SessionsService } from './sessions.service';
     EmployeeAuthRepository,
     PrincipalLoader,
     SessionsService,
+    { provide: LoginClock, useClass: SystemLoginClock },
     {
       provide: LoginLimiter,
       inject: [REDIS_CLIENT, ConfigService],

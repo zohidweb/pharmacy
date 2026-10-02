@@ -45,6 +45,7 @@ describe('validateEnv', () => {
       STEP_UP_MAX_AGE_SECONDS: 900,
       LOGIN_MAX_FAILURES: 5,
       LOGIN_LOCK_SECONDS: 900,
+      LOGIN_FAILURE_FLOOR_MS: 400,
       ACTIVATION_CODE_TTL_HOURS: 72,
       AUTH_TEST_COOKIES: false,
     });
@@ -207,6 +208,16 @@ describe('validateEnv', () => {
         LOGIN_MAX_FAILURES: 3,
         LOGIN_LOCK_SECONDS: 60,
       });
+    });
+
+    it('accepts a login failure floor of 0 and rejects a negative one', () => {
+      expect(
+        validateEnv({ ...base, LOGIN_FAILURE_FLOOR_MS: '0' })
+          .LOGIN_FAILURE_FLOOR_MS,
+      ).toBe(0);
+      expect(() =>
+        validateEnv({ ...base, LOGIN_FAILURE_FLOOR_MS: '-1' }),
+      ).toThrow(/LOGIN_FAILURE_FLOOR_MS/);
     });
 
     it('requires WEB_ORIGIN and ADMIN_ORIGIN as origins without a path', () => {

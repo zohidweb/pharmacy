@@ -22,6 +22,7 @@ import {
   type LoginCredentials,
 } from './employee-auth.repository';
 import { normalizeIdentifier } from './identifier';
+import { LoginClock } from './login-clock';
 import { LoginLimiter, loginLimiterKey } from './login-limiter';
 import { PrincipalLoader } from './principal-loader';
 import {
@@ -54,6 +55,9 @@ type PasswordCheck =
 const invalidCredentials = () =>
   new ProblemException(401, 'invalid_credentials');
 
+// Upper bound of the random part added to LOGIN_FAILURE_FLOOR_MS.
+const FAILURE_JITTER_MAX_MS = 50;
+
 // Sign-in by password, the session profile, the working store and sign-out (auth design
 // 2026-10-02, section 6). Passwords, hashes, tokens and identifier values are never logged or
 // audited.
@@ -63,6 +67,7 @@ export class SessionsService {
   private readonly idleMinSeconds: number;
   private readonly idleMaxSeconds: number;
   private readonly absoluteTtlSeconds: number;
+  private readonly failureFloorMs: number;
 
   constructor(
     private readonly resolvers: ContextResolvers,
@@ -74,6 +79,7 @@ export class SessionsService {
     private readonly sessions: SessionStore,
     private readonly limiter: LoginLimiter,
     private readonly audit: AuditService,
+    private readonly clock: LoginClock,
     config: ConfigService,
   ) {
     this.idleMinSeconds = config.getOrThrow<number>(
@@ -85,9 +91,39 @@ export class SessionsService {
     this.absoluteTtlSeconds = config.getOrThrow<number>(
       'SESSION_ABSOLUTE_TTL_SECONDS',
     );
+    this.failureFloorMs = config.getOrThrow<number>('LOGIN_FAILURE_FLOOR_MS');
   }
 
   async login(raw: string, password: string, ip: string): Promise<LoginResult> {
+    const started = this.clock.now();
+    try {
+      return await this.attemptLogin(raw, password, ip);
+    } catch (error) {
+      // Every 401 invalid_credentials takes at least the floor (plus jitter) from the start, so
+      // the timing does not tell an unknown identifier, a wrong password, a blocked employee or
+      // network apart: their paths differ in database work. Successes and 429 are not padded.
+      if (
+        error instanceof ProblemException &&
+        error.code === 'invalid_credentials'
+      ) {
+        await this.padFailure(started);
+      }
+      throw error;
+    }
+  }
+
+  private async padFailure(started: number): Promise<void> {
+    const floor =
+      this.failureFloorMs + this.clock.jitterMs(FAILURE_JITTER_MAX_MS);
+    const wait = floor - (this.clock.now() - started);
+    if (wait > 0) await this.clock.sleep(wait);
+  }
+
+  private async attemptLogin(
+    raw: string,
+    password: string,
+    ip: string,
+  ): Promise<LoginResult> {
     const correlationId = getRequestContext()?.correlationId ?? randomUUID();
 
     // Step 2. Nothing can match an identifier that does not normalize, so there is nothing to
@@ -99,9 +135,11 @@ export class SessionsService {
       throw invalidCredentials();
     }
 
-    // Step 3: a locked identifier is refused before any hashing or database call.
+    // Step 3: the attempt is reserved atomically before any hashing or database call, so a
+    // burst of concurrent requests gets no more guesses than LOGIN_MAX_FAILURES per window.
     const key = loginLimiterKey(identifier.kind, identifier.value);
-    if ((await this.limiter.isLocked(key)) !== null) {
+    const attempt = await this.limiter.tryAcquire(key);
+    if (!attempt.allowed) {
       throw new ProblemException(429, 'login_locked');
     }
 
@@ -112,7 +150,6 @@ export class SessionsService {
     );
     if (resolved === null) {
       await this.hasher.verifyDummy(password);
-      await this.limiter.recordFailure(key);
       // No tenant, so no audit_log: the application log only, without the identifier.
       this.logger.warn(
         `Sign-in failed: unknown ${identifier.kind} [correlationId=${correlationId}]`,
@@ -178,16 +215,16 @@ export class SessionsService {
     // timing does not tell a blocked network or employee apart. No transaction is held open
     // during scrypt.
     const verified = await this.checkPassword(credentials, password);
-    if (!verified.ok) return this.fail(key, employeeId, verified.reason, ip);
+    if (!verified.ok) return this.fail(employeeId, verified.reason, ip);
     if (resolved.tenantStatus !== 'active')
-      return this.fail(key, employeeId, 'tenant_blocked', ip);
+      return this.fail(employeeId, 'tenant_blocked', ip);
     if (verified.status !== 'active')
-      return this.fail(key, employeeId, 'employee_inactive', ip);
+      return this.fail(employeeId, 'employee_inactive', ip);
 
     // Snapshot of the role's permissions (the owner role: the whole catalog), scope and version.
     const snapshot = await this.loader.reload(tenantId, employeeId);
     if (snapshot === null || snapshot.status !== 'active') {
-      return this.fail(key, employeeId, 'employee_inactive', ip);
+      return this.fail(employeeId, 'employee_inactive', ip);
     }
 
     const rehash = this.hasher.needsRehash(verified.phc, verified.pepperVersion)
@@ -285,14 +322,13 @@ export class SessionsService {
       : { ok: false, reason: 'invalid_password' };
   }
 
-  // A failed sign-in of a known identifier: counted, audited in the tenant, answered as 401.
+  // A failed sign-in of a known identifier (already counted by tryAcquire): audited in the tenant,
+  // answered as 401.
   private async fail(
-    key: string,
     employeeId: string,
     reason: FailureReason,
     ip: string,
   ): Promise<never> {
-    await this.limiter.recordFailure(key);
     try {
       await this.db.tenantTransaction((trx) =>
         this.audit.append(trx, {

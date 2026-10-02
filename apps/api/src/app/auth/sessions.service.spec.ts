@@ -27,6 +27,7 @@ import type {
   LoginCredentials,
   ProfileStore,
 } from './employee-auth.repository';
+import { LoginClock } from './login-clock';
 import { type LoginLimiter, loginLimiterKey } from './login-limiter';
 import type { PrincipalLoader, PrincipalSnapshot } from './principal-loader';
 import { SessionsService } from './sessions.service';
@@ -49,7 +50,31 @@ const config = new ConfigService({
   SESSION_IDLE_TIMEOUT_MIN_SECONDS: 300,
   SESSION_IDLE_TIMEOUT_MAX_SECONDS: 43200,
   SESSION_ABSOLUTE_TTL_SECONDS: 43200,
+  LOGIN_FAILURE_FLOOR_MS: 400,
 });
+
+const JITTER_MS = 7;
+const FLOOR_MS = 400 + JITTER_MS;
+
+// A manual clock: sleep() records the wait and moves the time forward instantly.
+class FakeClock extends LoginClock {
+  time = 1_000;
+  readonly sleeps: number[] = [];
+
+  now(): number {
+    return this.time;
+  }
+  async sleep(ms: number): Promise<void> {
+    this.sleeps.push(ms);
+    this.time += ms;
+  }
+  jitterMs(): number {
+    return JITTER_MS;
+  }
+  advance(ms: number): void {
+    this.time += ms;
+  }
+}
 
 function store(id: string, name: string): ProfileStore {
   return { id, name, address: `${name} address`, mode: 'online' };
@@ -184,10 +209,14 @@ function setup() {
   const tokens = { sign: jest.fn(async () => 'signed.jwt.token') };
   const sessions = new FakeSessionStore(db);
   const limiter = {
-    isLocked: jest.fn(async () => null as number | null),
-    recordFailure: jest.fn(async () => undefined),
+    tryAcquire: jest.fn(
+      async () =>
+        ({ allowed: true }) as
+          { allowed: true } | { allowed: false; retryAfterSeconds: number },
+    ),
     reset: jest.fn(async () => undefined),
   };
+  const clock = new FakeClock();
   const audits: RecordedAudit[] = [];
   const audit = {
     append: jest.fn(async (trx: TenantTransaction, event: AuditEvent) => {
@@ -212,6 +241,7 @@ function setup() {
     sessions,
     limiter as unknown as LoginLimiter,
     audit as unknown as AuditService,
+    clock,
     config,
   );
 
@@ -227,6 +257,7 @@ function setup() {
     tokens,
     sessions,
     limiter,
+    clock,
     audit,
     audits,
     setStores: (next: ProfileStore[]) => {
@@ -267,8 +298,7 @@ describe('SessionsService.login — failures', () => {
     expect(problem.getStatus()).toBe(401);
     expect(problem.code).toBe('invalid_credentials');
     expect(t.hasher.verifyDummy).toHaveBeenCalledWith(PASSWORD);
-    expect(t.limiter.isLocked).not.toHaveBeenCalled();
-    expect(t.limiter.recordFailure).not.toHaveBeenCalled();
+    expect(t.limiter.tryAcquire).not.toHaveBeenCalled();
     expect(t.resolvers.resolveLogin).not.toHaveBeenCalled();
   });
 
@@ -288,7 +318,10 @@ describe('SessionsService.login — failures', () => {
     expect(t.resolvers.resolveLogin).toHaveBeenCalledWith('login', 'farida.r');
     expect(t.hasher.verifyDummy).toHaveBeenCalledWith(PASSWORD);
     expect(t.hasher.verify).not.toHaveBeenCalled();
-    expect(t.limiter.recordFailure).toHaveBeenCalledWith(KEY);
+    expect(t.limiter.tryAcquire).toHaveBeenCalledWith(KEY);
+    expect(t.limiter.tryAcquire.mock.invocationCallOrder[0]).toBeLessThan(
+      t.hasher.verifyDummy.mock.invocationCallOrder[0],
+    );
     expect(t.audit.append).not.toHaveBeenCalled();
     expect(t.db.tenants).toEqual([]);
     expect(warn).toHaveBeenCalled();
@@ -308,7 +341,11 @@ describe('SessionsService.login — failures', () => {
     expect(problem.getStatus()).toBe(401);
     expect(problem.code).toBe('invalid_credentials');
     expect(t.hasher.verify).toHaveBeenCalledWith('wrong', '$scrypt$stored', 1);
-    expect(t.limiter.recordFailure).toHaveBeenCalledWith(KEY);
+    // The attempt is reserved before the password is hashed.
+    expect(t.limiter.tryAcquire).toHaveBeenCalledWith(KEY);
+    expect(t.limiter.tryAcquire.mock.invocationCallOrder[0]).toBeLessThan(
+      t.hasher.verify.mock.invocationCallOrder[0],
+    );
     expect(t.limiter.reset).not.toHaveBeenCalled();
     expect(t.sessions.created).toEqual([]);
     expect(t.tokens.sign).not.toHaveBeenCalled();
@@ -357,7 +394,8 @@ describe('SessionsService.login — failures', () => {
     expect(problem.getStatus()).toBe(401);
     expect(problem.code).toBe('invalid_credentials');
     expect(t.hasher.verify).toHaveBeenCalled();
-    expect(t.limiter.recordFailure).toHaveBeenCalledWith(KEY);
+    expect(t.limiter.tryAcquire).toHaveBeenCalledWith(KEY);
+    expect(t.limiter.reset).not.toHaveBeenCalled();
     expect(t.sessions.created).toEqual([]);
     expect(t.audits[0].event).toMatchObject({
       action: 'auth.login-failed',
@@ -396,9 +434,12 @@ describe('SessionsService.login — failures', () => {
     expect(t.sessions.created).toEqual([]);
   });
 
-  it('answers 429 login_locked for a locked identifier before any hashing', async () => {
+  it('answers 429 login_locked for a refused attempt before any hashing, without the floor', async () => {
     const t = setup();
-    t.limiter.isLocked.mockResolvedValue(840);
+    t.limiter.tryAcquire.mockResolvedValue({
+      allowed: false,
+      retryAfterSeconds: 840,
+    });
 
     const problem = await problemOf(
       inRequest(() => t.service.login('Farida.R', PASSWORD, IP)),
@@ -406,10 +447,11 @@ describe('SessionsService.login — failures', () => {
 
     expect(problem.getStatus()).toBe(429);
     expect(problem.code).toBe('login_locked');
-    expect(t.limiter.isLocked).toHaveBeenCalledWith(KEY);
+    expect(t.limiter.tryAcquire).toHaveBeenCalledWith(KEY);
     expect(t.hasher.verify).not.toHaveBeenCalled();
     expect(t.hasher.verifyDummy).not.toHaveBeenCalled();
     expect(t.resolvers.resolveLogin).not.toHaveBeenCalled();
+    expect(t.clock.sleeps).toEqual([]);
   });
 
   it('still answers 401 when writing the failure audit fails', async () => {
@@ -422,7 +464,74 @@ describe('SessionsService.login — failures', () => {
     );
 
     expect(problem.code).toBe('invalid_credentials');
-    expect(t.limiter.recordFailure).toHaveBeenCalledWith(KEY);
+  });
+});
+
+describe('SessionsService.login — failure floor', () => {
+  const elapsed = (t: ReturnType<typeof setup>, start: number) =>
+    t.clock.now() - start;
+
+  it.each([
+    ['an unnormalizable identifier', 'two words', PASSWORD],
+    ['an unknown identifier', 'farida.r', PASSWORD],
+    ['a wrong password', 'farida.r', 'wrong'],
+  ])(
+    'pads %s to the floor plus jitter from the start of login()',
+    async (name, login, password) => {
+      const t = setup();
+      if (name === 'an unknown identifier') {
+        t.resolvers.resolveLogin.mockResolvedValue(null);
+      }
+      jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      // The work before the answer takes 120 ms of the clock.
+      t.hasher.verify.mockImplementation(async (secret: string) => {
+        t.clock.advance(120);
+        return secret === PASSWORD;
+      });
+      t.hasher.verifyDummy.mockImplementation(async () => {
+        t.clock.advance(120);
+        return false;
+      });
+      const start = t.clock.now();
+
+      const problem = await problemOf(
+        inRequest(() => t.service.login(login, password, IP)),
+      );
+
+      expect(problem.code).toBe('invalid_credentials');
+      expect(t.clock.sleeps).toEqual([FLOOR_MS - 120]);
+      expect(elapsed(t, start)).toBe(FLOOR_MS);
+    },
+  );
+
+  it('pads a blocked employee the same way', async () => {
+    const t = setup();
+    t.credentials.status = 'blocked';
+    const start = t.clock.now();
+
+    await problemOf(inRequest(() => t.service.login('farida.r', PASSWORD, IP)));
+
+    expect(elapsed(t, start)).toBeGreaterThanOrEqual(FLOOR_MS);
+  });
+
+  it('does not add the floor on top when the work already took longer', async () => {
+    const t = setup();
+    t.hasher.verify.mockImplementation(async () => {
+      t.clock.advance(FLOOR_MS + 200);
+      return false;
+    });
+
+    await problemOf(inRequest(() => t.service.login('farida.r', 'wrong', IP)));
+
+    expect(t.clock.sleeps).toEqual([]);
+  });
+
+  it('does not pad a successful login', async () => {
+    const t = setup();
+
+    await inRequest(() => t.service.login('farida.r', PASSWORD, IP));
+
+    expect(t.clock.sleeps).toEqual([]);
   });
 });
 
@@ -495,8 +604,9 @@ describe('SessionsService.login — success', () => {
       TENANT,
       [STORE_1],
     );
+    expect(t.limiter.tryAcquire).toHaveBeenCalledTimes(1);
+    expect(t.limiter.tryAcquire).toHaveBeenCalledWith(KEY);
     expect(t.limiter.reset).toHaveBeenCalledWith(KEY);
-    expect(t.limiter.recordFailure).not.toHaveBeenCalled();
   });
 
   it('gives the owner the whole catalog from the snapshot and the network scope', async () => {

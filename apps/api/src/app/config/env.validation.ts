@@ -160,6 +160,14 @@ class EnvironmentVariables {
   @IsOptional()
   LOGIN_LOCK_SECONDS = 900;
 
+  // Every 401 invalid_credentials answer is padded to this time (plus 0-50 ms of jitter) from the
+  // start of the sign-in, so its timing does not tell a known identifier from an unknown one.
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  LOGIN_FAILURE_FLOOR_MS = 400;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)

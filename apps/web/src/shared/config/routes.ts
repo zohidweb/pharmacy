@@ -22,6 +22,7 @@ export const routes = {
   suppliers: () => '/suppliers',
 
   catalog: () => '/catalog',
+  product: (id: string) => `/catalog/view?id=${encodeURIComponent(id)}`,
   pricing: () => '/pricing',
 
   reports: () => '/reports',

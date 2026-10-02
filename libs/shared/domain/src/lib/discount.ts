@@ -104,3 +104,16 @@ export function returnRefund(input: ReturnRefundInput): ReturnRefund {
     keptDiscountMinor,
   };
 }
+
+export type DiscountRuleStatus = 'active' | 'scheduled' | 'expired';
+
+/** Status of a rule by its validity period (dates YYYY-MM-DD, inclusive; null — indefinite). */
+export function discountRuleStatus(
+  period: { from: string; to: string | null } | null,
+  today: string,
+): DiscountRuleStatus {
+  if (!period) return 'active';
+  if (today < period.from) return 'scheduled';
+  if (period.to !== null && today > period.to) return 'expired';
+  return 'active';
+}

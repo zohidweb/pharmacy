@@ -65,3 +65,29 @@ export function stockState(input: {
   if (input.quantityPieces < input.minPieces) return 'low';
   return 'ok';
 }
+
+export type PriceWarning = 'above_max' | 'below_cost';
+
+/**
+ * Warnings of a retail price (UI mockup «Цены и скидки»): above the regulated maximum — a soft
+ * warning the manager confirms (ТЗ: no ban); below the last purchase price of a pack.
+ */
+export function priceWarnings(input: {
+  priceMinor: number;
+  /** Last purchase price of a pack; undefined without `finance:view-cost`. */
+  costMinor?: number | null;
+  maxPriceMinor: number | null;
+}): PriceWarning[] {
+  const warnings: PriceWarning[] = [];
+  if (input.maxPriceMinor !== null && input.priceMinor > input.maxPriceMinor) {
+    warnings.push('above_max');
+  }
+  if (
+    input.costMinor !== undefined &&
+    input.costMinor !== null &&
+    input.priceMinor < input.costMinor
+  ) {
+    warnings.push('below_cost');
+  }
+  return warnings;
+}

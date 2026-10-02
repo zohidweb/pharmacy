@@ -7,9 +7,10 @@ import type {
   DocumentAuthor,
   GoodsReceipt,
   PosProduct,
-  PurchaseOrderOption,
+  PurchaseOrder,
   StockCount,
-  SupplierOption,
+  Supplier,
+  SupplierPaymentMethod,
   SupplierReturn,
   Transfer,
   TransferRequest,
@@ -32,16 +33,35 @@ export interface StockMockDb {
   movements: Movement[];
   minPacks: Record<string, number>;
   markup: Record<string, number>;
-  suppliers: SupplierOption[];
-  supplierDebtMinor: Record<string, number>;
-  orders: PurchaseOrderOption[];
+  suppliers: Supplier[];
+  /** Debt from before the system (ввод начального долга): invoices with a due date. */
+  openingDebts: Array<{
+    supplierId: string;
+    date: string;
+    dueOn: string;
+    amountMinor: number;
+  }>;
+  payments: SupplierPaymentRecord[];
+  /** Consumption of the last 30 days by product, packs (the deficit of purchase orders). */
+  sales30Packs: Record<string, number>;
+  orders: PurchaseOrder[];
   goodsReceipts: GoodsReceipt[];
   writeOffs: WriteOff[];
   supplierReturns: SupplierReturn[];
   stockCounts: StockCount[];
   transferRequests: TransferRequest[];
   transfers: Transfer[];
-  counters: Record<'pr' | 'sp' | 'vp' | 'in' | 'zp' | 'pm', number>;
+  counters: Record<'pr' | 'sp' | 'vp' | 'in' | 'zp' | 'pm' | 'zk', number>;
+}
+
+export interface SupplierPaymentRecord {
+  /** Idempotency key of the payment (UUIDv7 of the client). */
+  id: string;
+  supplierId: string;
+  date: string;
+  method: SupplierPaymentMethod;
+  comment: string;
+  amountMinor: number;
 }
 
 const daysAgo = (days: number) =>
@@ -104,6 +124,44 @@ function receipt(
   };
 }
 
+const line = (
+  productId: string,
+  productName: string,
+  quantity: number,
+  receivedQuantity: number,
+  priceMinor: number,
+): PurchaseOrder['lines'][number] => ({
+  productId,
+  productName,
+  quantity,
+  receivedQuantity,
+  priceMinor,
+});
+
+function order(
+  overrides: Partial<PurchaseOrder> &
+    Pick<PurchaseOrder, 'id' | 'number' | 'status' | 'date' | 'lines'>,
+): PurchaseOrder {
+  const ordered = overrides.lines.reduce((s, l) => s + l.quantity, 0);
+  const received = overrides.lines.reduce((s, l) => s + l.receivedQuantity, 0);
+  return {
+    supplierId: 'sup-pharm-import',
+    supplierName: 'ООО «Фарм-Импорт»',
+    storeId: 'store-1',
+    storeName: 'Аптека №1 · Центр',
+    expectedOn: null,
+    comment: '',
+    totalMinor: overrides.lines.reduce(
+      (s, l) => s + l.quantity * l.priceMinor,
+      0,
+    ),
+    receivedPercent: ordered ? Math.floor((received * 100) / ordered) : 0,
+    createdBy: author('Фируз А.', 12),
+    confirmedBy: author('Фируз А.', 12),
+    ...overrides,
+  };
+}
+
 export function createStockDb(products: PosProduct[]): StockMockDb {
   return {
     stock: initialStock(products),
@@ -151,60 +209,147 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
       'cat-other': 60,
     },
     suppliers: [
-      { id: 'sup-pharm-import', name: 'ООО «Фарм-Импорт»' },
-      { id: 'sup-sino', name: 'Сино-Фарм' },
-      { id: 'sup-dori', name: 'Дори-Дармон' },
+      {
+        id: 'sup-pharm-import',
+        name: 'ООО «Фарм-Импорт»',
+        taxId: '020012345',
+        phone: '+992 37 227-00-11',
+        address: 'г. Душанбе, ул. Айни, 24',
+        paymentDelayDays: 30,
+      },
+      {
+        id: 'sup-sino',
+        name: 'Сино-Фарм',
+        taxId: '030045678',
+        phone: '+992 90 500-12-12',
+        address: 'г. Душанбе, пр. Сино, 61',
+        paymentDelayDays: 14,
+      },
+      {
+        id: 'sup-dori',
+        name: 'Дори-Дармон',
+        taxId: '010098765',
+        phone: '+992 44 600-77-00',
+        address: 'г. Худжанд, ул. Ленина, 5',
+        paymentDelayDays: 45,
+      },
     ],
-    supplierDebtMinor: {
-      'sup-pharm-import': 1_240_000,
-      'sup-sino': 380_000,
-      'sup-dori': 0,
+    openingDebts: [
+      {
+        supplierId: 'sup-pharm-import',
+        date: dateAgo(50),
+        dueOn: dateAgo(20),
+        amountMinor: 820_000,
+      },
+      {
+        supplierId: 'sup-pharm-import',
+        date: dateAgo(26),
+        dueOn: dateIn(4),
+        amountMinor: 1_192_000,
+      },
+      {
+        supplierId: 'sup-sino',
+        date: dateAgo(25),
+        dueOn: dateAgo(11),
+        amountMinor: 612_500,
+      },
+      {
+        supplierId: 'sup-dori',
+        date: dateAgo(21),
+        dueOn: dateIn(24),
+        amountMinor: 1_966_000,
+      },
+    ],
+    payments: [
+      {
+        id: 'pay-1',
+        supplierId: 'sup-pharm-import',
+        date: dateAgo(34),
+        method: 'bank',
+        comment: '',
+        amountMinor: 140_000,
+      },
+      {
+        id: 'pay-2',
+        supplierId: 'sup-pharm-import',
+        date: dateAgo(18),
+        method: 'cash',
+        comment: '',
+        amountMinor: 680_000,
+      },
+    ],
+    sales30Packs: {
+      'p-paracetamol': 48,
+      'p-amoxicillin': 22,
+      'p-ibuprofen-400': 48,
+      'p-ibuprofen-200': 30,
+      'p-nurofen': 26,
+      'p-ibufen': 6,
+      'p-vitamin-d3': 22,
+      'p-tramadol': 4,
+      'p-saline': 64,
+      'p-nurofen-kids': 5,
     },
     orders: [
-      {
+      order({
+        id: 'po-88',
+        number: 'ЗК-000088',
+        status: 'draft',
+        date: dateAgo(0),
+        expectedOn: dateIn(7),
+        createdBy: author('Фируз А.', 0),
+        confirmedBy: null,
+        lines: [
+          line('p-amoxicillin', 'Амоксициллин 500 мг, капс. №16', 40, 0, 1_915),
+          line('p-ibuprofen-400', 'Ибупрофен 400 мг, таб. №20', 60, 0, 760),
+          line('p-vitamin-d3', 'Витамин D3 2000 МЕ, капс. №60', 24, 0, 4_362),
+        ],
+      }),
+      order({
         id: 'po-87',
         number: 'ЗК-000087',
-        supplierId: 'sup-pharm-import',
         status: 'partially_received',
+        date: dateAgo(6),
         lines: [
-          {
-            productId: 'p-amoxicillin',
-            productName: 'Амоксициллин 500 мг, капс. №16',
-            quantity: 60,
-            receivedQuantity: 20,
-            priceMinor: 1_915,
-          },
-          {
-            productId: 'p-vitamin-d3',
-            productName: 'Витамин D3 2000 МЕ, капс. №60',
-            quantity: 24,
-            receivedQuantity: 0,
-            priceMinor: 4_362,
-          },
-          {
-            productId: 'p-saline',
-            productName: 'Физраствор 0,9% 200 мл',
-            quantity: 100,
-            receivedQuantity: 0,
-            priceMinor: 426,
-          },
+          line(
+            'p-amoxicillin',
+            'Амоксициллин 500 мг, капс. №16',
+            60,
+            20,
+            1_915,
+          ),
+          line('p-vitamin-d3', 'Витамин D3 2000 МЕ, капс. №60', 24, 0, 4_362),
+          line('p-saline', 'Физраствор 0,9% 200 мл', 100, 0, 426),
         ],
-      },
-      {
+      }),
+      order({
+        id: 'po-86',
+        number: 'ЗК-000086',
+        status: 'closed',
+        date: dateAgo(9),
+        supplierId: 'sup-dori',
+        supplierName: 'Дори-Дармон',
+        lines: [
+          line(
+            'p-amoxicillin',
+            'Амоксициллин 500 мг, капс. №16',
+            40,
+            40,
+            1_900,
+          ),
+        ],
+      }),
+      order({
         id: 'po-85',
         number: 'ЗК-000085',
-        supplierId: 'sup-sino',
         status: 'confirmed',
-        lines: [
-          {
-            productId: 'p-nurofen',
-            productName: 'Нурофен 200 мг, таб. №10',
-            quantity: 30,
-            receivedQuantity: 0,
-            priceMinor: 1_250,
-          },
-        ],
-      },
+        date: dateAgo(11),
+        supplierId: 'sup-sino',
+        supplierName: 'Сино-Фарм',
+        storeId: 'store-3',
+        storeName: 'Аптека №3 · Рудаки',
+        lines: [line('p-nurofen', 'Нурофен 200 мг, таб. №10', 30, 0, 1_250)],
+      }),
     ],
     goodsReceipts: [
       receipt({
@@ -706,6 +851,6 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         discrepancy: null,
       },
     ],
-    counters: { pr: 125, sp: 21, vp: 13, in: 8, zp: 10, pm: 16 },
+    counters: { pr: 125, sp: 21, vp: 13, in: 8, zp: 10, pm: 16, zk: 89 },
   };
 }

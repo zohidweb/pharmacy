@@ -23,7 +23,9 @@ import {
   toSession,
   writeSession,
 } from './session';
+import { catalogHandlers } from './handlers-catalog';
 import { posHandlers } from './handlers-pos';
+import { purchasingHandlers } from './handlers-purchasing';
 import { stockHandlers } from './handlers-stock';
 import type { MockHandlers, MockRequest } from './types';
 
@@ -105,6 +107,8 @@ function toMe(employee: MockEmployeeState): EmployeeMe {
 const handlers: MockHandlers = {
   ...posHandlers,
   ...stockHandlers,
+  ...purchasingHandlers,
+  ...catalogHandlers,
   'sessions.create': ({ body, correlationId }) => {
     const employee = mockDb().employees.find(
       (e) => e.login === body.login.trim().toLowerCase(),

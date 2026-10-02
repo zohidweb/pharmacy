@@ -7,7 +7,9 @@
  */
 import {
   hasPermissions,
+  orderStatusAfterReceipt,
   pieceCost,
+  receivedPercent,
   stockState,
   type Permission,
 } from '@pharmacy/shared-domain';
@@ -18,6 +20,7 @@ import type {
   GoodsReceiptInput,
   PosBatch,
   PosProduct,
+  PurchaseOrderOption,
   SaleUnit,
   StockCount,
   StockLine,
@@ -37,6 +40,7 @@ import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
 import { stores } from './fixtures';
 import { categories } from './fixtures-pos';
+import { setStorePrice, storePrice } from './pricing';
 import { authorize } from './session';
 import type { MockHandlers } from './types';
 
@@ -62,9 +66,10 @@ const now = () => new Date().toISOString();
 const number = (prefix: string, key: keyof ReturnType<typeof db>['counters']) =>
   `${prefix}-${String(db().counters[key]++).padStart(6, '0')}`;
 
-const storeName = (id: string) => stores.find((s) => s.id === id)?.name ?? '—';
+export const storeName = (id: string) =>
+  stores.find((s) => s.id === id)?.name ?? '—';
 
-function context(
+export function context(
   correlationId: string,
   permission: Permission,
   { write = false } = {},
@@ -82,7 +87,7 @@ function context(
   };
 }
 
-function inScope(
+export function inScope(
   session: EmployeeSession,
   storeId: string,
   correlationId: string,
@@ -104,7 +109,7 @@ function writable(
   }
 }
 
-function productOf(id: string, correlationId: string): PosProduct {
+export function productOf(id: string, correlationId: string): PosProduct {
   const found = products().find((p) => p.id === id);
   if (!found) {
     throw new ApiError(422, 'validation_failed', correlationId, [
@@ -130,7 +135,7 @@ function batchOf(
   return batch;
 }
 
-const stockAt = (storeId: string) => (db().stock[storeId] ??= {});
+export const stockAt = (storeId: string) => (db().stock[storeId] ??= {});
 
 function move(
   storeId: string,
@@ -184,7 +189,7 @@ function stockLines(
 const linesTotal = (lines: Array<{ quantity: number; costMinor?: number }>) =>
   lines.reduce((sum, l) => sum + l.quantity * (l.costMinor ?? 0), 0);
 
-function visible<T extends { storeId: string }>(
+export function visible<T extends { storeId: string }>(
   session: EmployeeSession,
   items: T[],
 ) {
@@ -193,7 +198,10 @@ function visible<T extends { storeId: string }>(
   );
 }
 
-function page<T>(items: T[], query?: { limit?: number; offset?: number }) {
+export function page<T>(
+  items: T[],
+  query?: { limit?: number; offset?: number },
+) {
   const limit = query?.limit ?? 10;
   const offset = query?.offset ?? 0;
   return {
@@ -282,7 +290,24 @@ function buildReceipt(
   };
 }
 
-function findDoc<T extends { id: string }>(
+/** Received packs of the order of a goods receipt: +1 on posting, −1 on unposting. */
+function receiveOnOrder(doc: GoodsReceipt, sign: 1 | -1) {
+  const order = db().orders.find((o) => o.id === doc.orderId);
+  if (!order) return;
+  for (const line of doc.lines) {
+    const orderLine = order.lines.find((l) => l.productId === line.productId);
+    if (orderLine) {
+      orderLine.receivedQuantity = Math.max(
+        0,
+        orderLine.receivedQuantity + sign * line.quantity,
+      );
+    }
+  }
+  order.status = orderStatusAfterReceipt(order.lines);
+  order.receivedPercent = receivedPercent(order.lines);
+}
+
+export function findDoc<T extends { id: string }>(
   list: T[],
   id: string,
   correlationId: string,
@@ -344,7 +369,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
           storeMode: store?.mode ?? 'cloud',
           piecesPerPack: product.piecesPerPack,
           minPieces,
-          retailPriceMinor: product.priceMinor,
+          retailPriceMinor: storePrice(storeId, product),
         } as const;
         const held = product.batches.filter(
           (b) => (stockAt(storeId)[b.id] ?? 0) !== 0,
@@ -435,8 +460,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         piecesPerPack: p.piecesPerPack,
         divisible: p.divisible,
         prescription: p.prescription,
-        retailPriceMinor: p.priceMinor,
-        markupPercent: db().markup[p.categoryId] ?? 40,
+        retailPriceMinor: storePrice(params.storeId, p),
+        markupPercent:
+          mockDb().catalog.extras[p.id]?.markupPercent ??
+          db().markup[p.categoryId] ??
+          40,
         minStockPacks: db().minPacks[p.id] ?? 0,
         batches: p.batches.map((b) => {
           const batch = {
@@ -450,11 +478,25 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
 
   'suppliers.options': ({ correlationId }) => {
     context(correlationId, 'inventory:view');
-    return db().suppliers;
+    return db().suppliers.map(({ id, name }) => ({ id, name }));
   },
   'purchaseOrders.open': ({ query, correlationId }) => {
     context(correlationId, 'inventory:view');
-    return db().orders.filter((o) => o.supplierId === query.supplierId);
+    return db()
+      .orders.filter((o) => o.supplierId === query.supplierId)
+      .flatMap((o): PurchaseOrderOption[] =>
+        o.status === 'confirmed' || o.status === 'partially_received'
+          ? [
+              {
+                id: o.id,
+                number: o.number,
+                supplierId: o.supplierId,
+                status: o.status,
+                lines: o.lines,
+              },
+            ]
+          : [],
+      );
   },
 
   'documents.unpostCheck': ({ params, correlationId }) => {
@@ -608,14 +650,10 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         line.quantity * product.piecesPerPack,
       );
       // the retail price of the draft becomes the price of the store (ТЗ)
-      product.priceMinor = line.retailPriceMinor;
-      const orderLine = db()
-        .orders.find((o) => o.id === doc.orderId)
-        ?.lines.find((l) => l.productId === line.productId);
-      if (orderLine) orderLine.receivedQuantity += line.quantity;
+      setStorePrice(doc.storeId, product.id, line.retailPriceMinor);
     }
-    db().supplierDebtMinor[doc.supplierId] =
-      (db().supplierDebtMinor[doc.supplierId] ?? 0) + doc.totalMinor;
+    // the debt to the supplier is derived from posted receipts («Поставщики и долги»)
+    receiveOnOrder(doc, 1);
     doc.status = 'posted';
     doc.postedBy = author();
     mockDb().pos.catalogVersion += 1;
@@ -646,7 +684,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
           -line.quantity * product.piecesPerPack,
         );
     }
-    db().supplierDebtMinor[doc.supplierId] -= doc.totalMinor;
+    receiveOnOrder(doc, -1);
     doc.status = 'draft';
     doc.postedBy = null;
     mockDb().pos.catalogVersion += 1;
@@ -914,9 +952,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         -piecesOf(product, line.unit, line.quantity),
       );
     }
-    // the debt to the supplier goes down by the amount of the return (ТЗ)
-    db().supplierDebtMinor[doc.supplierId] =
-      (db().supplierDebtMinor[doc.supplierId] ?? 0) - (doc.totalMinor ?? 0);
+    // the debt to the supplier goes down by the posted return (derived, «Поставщики и долги»)
     if (doc.claim === 'draft') doc.claim = 'sent';
     doc.status = 'posted';
     doc.postedBy = author();
@@ -941,7 +977,6 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         piecesOf(product, line.unit, line.quantity),
       );
     }
-    db().supplierDebtMinor[doc.supplierId] += doc.totalMinor ?? 0;
     doc.status = 'draft';
     doc.postedBy = null;
     mockDb().pos.catalogVersion += 1;

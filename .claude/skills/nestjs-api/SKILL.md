@@ -10,7 +10,7 @@ metadata:
   role: specialist
   scope: implementation
   output-format: code
-last-reviewed: "2026-09-29"
+last-reviewed: "2026-10-02"
 ---
 
 ## Pharmacy: контекст и ограничения
@@ -22,25 +22,29 @@ last-reviewed: "2026-09-29"
 `docs/architecture/stack.md`, `docs/architecture/adr/0002-stil-arhitektury.md`,
 `docs/architecture/glossary.md`. При расхождении с этим скилом прав CLAUDE.md/ADR.
 
-**Что адаптировано относительно оригинала (NestJS + Fastify + Prisma 7 + Vitest):**
+**Что адаптировано относительно оригинала (NestJS + Fastify + Prisma 7 + Vitest):** <!-- docs-check: ok -->
+
 - HTTP-адаптер — стандартный Express; структура — Nx (`apps/api`, `libs/shared/*`), генераторы `@nx/nest`, тесты — Jest;
-- слой данных ORM-независимый: tenant-транзакции, RLS, атомарность «чек + движения + аудит»;
-- аутентификация — самописная (логин+пароль, PIN терминала, сессии в Redis), не JWT;
+- слой данных — Kysely поверх `pg`, миграции node-pg-migrate (ADR-0006): tenant-транзакции, RLS, атомарность «чек + движения + аудит»; кросс-тенантный путь — `PlatformDatabase` без `BYPASSRLS` (ADR-0013);
+- аутентификация — самописная (логин+пароль, PIN терминала, cookie-сессии в Redis, scrypt из `node:crypto`, ADR-0008), не JWT; авторизация — RBAC с каталогом прав `модуль:действие` (ADR-0018);
 - брокеры (BullMQ/RabbitMQ/Kafka) заменены очередями-таблицами PostgreSQL; OpenTelemetry/облачное логирование — встроенным `Logger`;
 - удалено нерелевантное: GDPR, транзакционный email, feature flags, Stripe/webhooks, CI-пайплайны, GCP/Kubernetes.
 
-**Требует ADR через `/03-adr` до использования** (примеры в reference помечены):
-ORM/слой доступа к данным и инструмент миграций · Fastify-адаптер · библиотека хеширования
-паролей/PIN (ADR-0008, proposed — решает архитектор проекта) ·
-транспорт идентификатора сессии и защита от CSRF · протокол привязки терминала · вход
-оператора «от имени» · раздача статики web на офлайн-точке · любая новая интеграция,
-модуль или технология.
+**Решено принятыми ADR** (используем как есть): Kysely + `pg`, node-pg-migrate (ADR-0006) ·
+scrypt из `node:crypto`, cookie-сессии `__Host-sid`, CSRF через Fetch Metadata / `Origin`,
+device-cookie терминала, вход оператора «от имени» только на просмотр, node-redis (ADR-0008) ·
+роли БД и `PlatformDatabase` (ADR-0013) · протокол синхронизации офлайн-точек (ADR-0014) ·
+RBAC и каталог прав (ADR-0018) · тесты и CI на GitHub Actions (ADR-0009).
+
+**Требует ADR через `/03-adr` до использования:** Fastify-адаптер · раздача статики web
+(ADR-0012, proposed) · хранение файлов (фото рецептов ПКУ) · любая новая интеграция, модуль или
+технология.
 
 **Пока не выбрано — вводится только через ADR; до ADR действует текущее решение:**
 брокеры сообщений → очереди-таблицы PostgreSQL (ADR-0002); хранилище секретов (Vault и т.п.) →
 env-файлы; библиотека логирования (pino/winston/ELK) → встроенный Nest `Logger`;
-мониторинг (OpenTelemetry, Prometheus, Sentry…) → не выбран; CI/CD → ручной прогон
-`npm run check`; API gateway / ESB, push → не используются.
+мониторинг (OpenTelemetry, Prometheus, Sentry…) → не выбран; CD → после выбора хостинга;
+API gateway / ESB, push → не используются.
 
 **Правила проекта (без исключений):** никакой самописной криптографии — только проверенные
 библиотеки и алгоритмы; персональные и клиентские данные не отправляются во внешние LLM и SaaS;
@@ -65,41 +69,47 @@ env-файлы; библиотека логирования (pino/winston/ELK) �
    сначала `/03-adr` в архитектурном репозитории (`reference/nestjs-rest-workflow.md`, шаг 0).
 2. **Контракт** — DTO, query-DTO, коды ошибок в `libs/shared/dto` (без `@nestjs/*`);
    термины — из глоссария.
-3. **Схема** — версионированная миграция: `tenant_id NOT NULL`, RLS, индексы `(tenant_id, …)`,
-   append-only для журналов (`reference/nestjs-config-data-access.md`).
+3. **Схема** — миграция node-pg-migrate (`apps/api/migrations/*.sql`, только Up) по модели
+   данных `docs/architecture/data-model/`: ключ `(tenant_id, id)`, составные ссылки, RLS
+   `TO pharmacy_app`, явные гранты, запись в `table-classes.ts`; затем `npx nx run api:migrate`
+   и `npx nx run api:db-types` (`reference/nestjs-config-data-access.md`).
 4. **Генерация** — генераторы Nx (в Nx ≥ 20 принимают путь; сверяйтесь с `--help`):
    ```bash
-   npx nx g @nx/nest:module     apps/api/src/modules/<module>/<module>
-   npx nx g @nx/nest:controller apps/api/src/modules/<module>/<resource>
-   npx nx g @nx/nest:service    apps/api/src/modules/<module>/<resource>
+   npx nx g @nx/nest:module     apps/api/src/app/<module>/<module>
+   npx nx g @nx/nest:controller apps/api/src/app/<module>/<resource>
+   npx nx g @nx/nest:service    apps/api/src/app/<module>/<resource>
    npx nx g @nx/nest:<generator> --help   # guard, interceptor, filter, pipe, resource…
    ```
-5. **Код** — репозиторий (SQL с `tenant_id`, принимает `Tx`) → сервис (правила, одна
-   транзакция с движениями и аудитом) → контроллер (`@RequirePermission`, DTO) —
-   `reference/nestjs-templates-features.md`.
-6. **Тесты (Jest)** — unit для правил; интеграционные с реальной PostgreSQL для изоляции
-   тенантов и идемпотентности (`reference/nestjs-testing-*.md`).
-7. **Проверка** — `npx nx affected -t build test lint`, `npx nx e2e api-e2e` (вручную или `npm run check`: CI пока не выбран — до ADR о CI).
+5. **Код** — репозиторий (Kysely-запросы с `tenant_id`, принимает `TenantTransaction`) →
+   сервис (правила, одна `tenantTransaction` с движениями и аудитом) → контроллер
+   (`@RequirePermission`, DTO) — `reference/nestjs-templates-features.md`.
+6. **Тесты (Jest)** — unit для правил; интеграционные `*.int-spec.ts` на реальной PostgreSQL
+   (`npx nx run api:integration`) для изоляции тенантов и идемпотентности
+   (`reference/nestjs-testing-*.md`).
+7. **Проверка** — `npx nx affected -t build test lint`, `npx nx run api:integration`,
+   `npx nx run api:db-types-verify`, `npx nx e2e api-e2e`; перед PR — `npm run check` (CI — GitHub
+   Actions по ADR-0009; пока workflow-файлов нет, прогон ручной).
 8. **Ревью** — агенты из «Post-Code Review», затем обязательное ревью человеком.
 
 ## Key Patterns
 
 | Pattern | Implementation |
 |---------|---------------|
-| **Modules** | 11 доменных модулей в `apps/api/src/modules/*`; взаимодействие только через экспортированные сервисы |
+| **Modules** | 11 доменных модулей в `apps/api/src/app/*`; взаимодействие только через экспортированные сервисы; платформенный код — `app/platform/**` |
 | **Controllers** | `@Controller({ path: '<plural-kebab>', version: '1' })` → `/api/v1/...`; без бизнес-логики |
 | **DTOs** | `libs/shared/dto`, `class-validator`/`class-transformer`; деньги `*Dirams` с `@IsInt()`; нет `tenantId` |
-| **Data access** | `DatabaseService.tenantTransaction(tx => …)`: `set_config('app.tenant_id', …, true)` + `WHERE tenant_id = $1`; RLS — второй рубеж |
+| **Data access** | `TenantDatabase.tenantTransaction(trx => …)` (Kysely; `set_config('app.tenant_id', …, true)` первым оператором) + `.where('tenantId', '=', tenantId)`; RLS — второй рубеж; кросс-тенантное — `PlatformDatabase.platformTransaction(actor, …)` только в `app/platform/**` |
 | **Transactions** | Документ/чек + `stock_movements` + `audit_log` атомарно; `FOR UPDATE` на партиях; остаток = сумма движений |
 | **Idempotency** | Заголовок `Idempotency-Key`, `UNIQUE (tenant_id, key)`, повтор возвращает исходный результат |
 | **Errors** | Доменные исключения → `ProblemDetailsFilter` → `application/problem+json` (RFC 7807) с `code`, `correlationId` |
-| **Auth** | Сессии в Redis (логин+пароль, PIN терминала); глобальные `SessionAuthGuard` + `PermissionsGuard` «модуль × действие × охват точек» |
+| **Auth** | Cookie-сессии в Redis (логин+пароль, PIN терминала; scrypt, ADR-0008); глобальные `SessionAuthGuard` + `PermissionsGuard`: `@RequirePermission('inventory:post')` по каталогу прав ADR-0018, охват точек, запрет по умолчанию |
 | **Pagination** | `limit`/`offset` → `{ items, total, limit, offset }`, сортировка по whitelist |
 | **Background work** | Очереди-таблицы PostgreSQL (`FOR UPDATE SKIP LOCKED`), outbox в транзакции операции |
 | **Integrations** | Только закрытый список: фискализация (порт + заглушка MVP; HTTP-клиент вендора ККМ — `fetch` с таймаутом), 1С (файлы XML), синхронизация точек (лицензионный ключ) |
 | **Config** | `@nestjs/config` + `registerAs()`, fail-fast; секреты — env; в git только `.env.example` |
 | **Logging** | Встроенный `Logger`, correlation ID, маскирование ПДн/секретов |
-| **Migrations** | Версионированные, инструмент по ADR; никакого schema-sync в проде |
+| **Migrations** | node-pg-migrate, `.sql` только Up, роль `pharmacy_owner`; `CONCURRENTLY` — `.mjs` + `pgm.noTransaction()`; schema-sync запрещён |
+| **IDs** | `newId()` — UUIDv7 из приложения (`core/database/ids.ts`), у `id` нет `default` в БД |
 
 ## Reference Files
 
@@ -108,7 +118,7 @@ env-файлы; библиотека логирования (pino/winston/ELK) �
 | `reference/nestjs-conventions.md` | Стек, раскладка, модули, инварианты, REST, именование | **Всегда первым** |
 | `reference/nestjs-config-basics.md` | Fail-fast env reader, `registerAs()`, `.env.example` | Конфигурация |
 | `reference/nestjs-config-npm-ts.md` | Зависимости (разрешённые/запрещённые), tsconfig, Nx targets | Зависимости, сборка |
-| `reference/nestjs-config-data-access.md` | Tenant-транзакции, RLS, чек + движения, 23505 → 409, append-only, миграции; Prisma — вариант А | Любой доступ к БД |
+| `reference/nestjs-config-data-access.md` | `TenantDatabase`/`PlatformDatabase` на Kysely, RLS, чек + движения, коды ошибок, `bigint`, kysely-codegen, node-pg-migrate, интеграционные тесты | Любой доступ к БД |
 | `reference/nestjs-templates-core.md` | `main.ts`, `AppModule`, `CoreModule`, correlation ID | Bootstrap |
 | `reference/nestjs-templates-features.md` | Модуль catalog: DTO, контроллер, сервис, аудит | Новый модуль/ресурс |
 | `reference/nestjs-templates-infrastructure.md` | Dockerfile, compose dev/offline, Jest-конфиг Nx | Docker, тест-раннер |
@@ -152,12 +162,14 @@ npx nx e2e api-e2e                       # e2e API
 npx nx lint api                          # ESLint (incl. module boundaries, security)
 npx nx build api --configuration=production
 npx nx affected -t build test lint       # only what the change touches — run before every MR
-npm run check                            # lint + test + build of all projects (manual, until an ADR on CI)
-npm audit --omit=dev --audit-level=high  # dependency check (locally, no CI)
-docker compose -f docker/compose.dev.yml up -d   # local PostgreSQL + Redis (ADR-0005)
+npm run check                            # lint + fsd + test + build of all projects (before every PR)
+npm audit --omit=dev --audit-level=high  # dependency check
+npm run dev:deps                         # local PostgreSQL + Redis in Docker (ADR-0005)
+npx nx run api:migrate                   # apply migrations to the dev DB (role pharmacy_owner)
+npx nx run api:integration               # integration tests on pharmacy_test (needs dev:deps)
+npx nx run api:db-types                  # regenerate DB types from the migrated schema
+npx nx run api:db-types-verify           # fail if types drifted from the schema
 ```
-
-Команды миграций появятся после ADR об инструменте миграций.
 
 ## Documentation Sources
 
@@ -166,14 +178,15 @@ docker compose -f docker/compose.dev.yml up -d   # local PostgreSQL + Redis (ADR
 | NestJS | `https://docs.nestjs.com` | Декораторы, модули, guards, pipes, filters, Terminus, throttler |
 | NestJS / Nx / TypeScript | `Context7` MCP | Актуальный синтаксис API и генераторов `@nx/nest` |
 | PostgreSQL | скил `postgres-best-practices` | RLS, индексы, блокировки, очереди-таблицы |
-| Prisma (только при ADR, выбравшем Prisma) | `https://www.prisma.io/docs/llms.txt` | Схема, миграции, клиент |
+| Kysely | `https://kysely.dev/docs` | Query builder, транзакции, `forUpdate`, `onConflict` |
+| node-pg-migrate | `https://salsita.github.io/node-pg-migrate/` | Миграции, `noTransaction` |
 
 ## Error Handling
 
 - **Валидация** — `class-validator` в DTO; глобальный `ValidationPipe` → 400 problem+json с `errors[]`.
 - **Не найдено** (в т.ч. ресурс другого тенанта/точки) — `ResourceNotFoundException` → 404.
 - **Бизнес-правило** (нет остатка, смена закрыта, ПКУ без рецепта) — `BusinessRuleException` → 422 с `code`.
-- **Дубликат** — unique violation PostgreSQL `23505` (у ORM — его обёртка) → 409; повтор
+- **Дубликат** — unique violation PostgreSQL `23505` → 409; повтор
   idempotency key с тем же телом — исходный результат, с другим — 409.
 - **Интеграция недоступна** (фискализация, синхронизация) — 502/503; касса не блокируется.
 - Везде `correlationId` в ответе; никаких стеков, SQL, значений полей и ПДн в `detail`.
@@ -189,17 +202,20 @@ docker compose -f docker/compose.dev.yml up -d   # local PostgreSQL + Redis (ADR
 - No financial operation or sync endpoint without an idempotency key and correlation ID.
 - No message brokers (BullMQ, RabbitMQ, Kafka, NATS…) — PostgreSQL queue tables (ADR-0002) until an ADR revises it.
 - No technology outside `stack.md` and accepted ADRs (technologies from proposed ADRs are not used either):
-  Fastify, an ORM/migration tool without ADR, pino/winston/OpenTelemetry/Sentry, Vault,
-  JWT/OAuth/Passport as the auth standard, Vitest — each only via an accepted ADR.
+  Fastify, another ORM or migration tool (ADR-0006 chose Kysely + node-pg-migrate),
+  pino/winston/OpenTelemetry/Sentry, Vault, JWT/OAuth/Passport as the auth standard, Vitest —
+  each only via an accepted ADR.
+- No direct `pg` pool or root `Kysely` outside `core/database/**`; no `PlatformDatabase` outside
+  `app/platform/**` and `app/sync/**`; inside a transaction only `trx` is used (ADR-0006, ADR-0013).
 - No external SaaS databases for tenant data; no PII or client data sent to external LLMs/SaaS;
   no integrations outside the closed list (1С, fiscalization, offline-store sync); TJS is the only currency (ADR-0016).
-- No self-made cryptography; password/PIN hashing only via the library chosen by an accepted ADR (ADR-0008).
-- No route without `@RequirePermission(...)` or an explicit `@Public()`.
-- No schema auto-sync (`synchronize: true`, `prisma db push`) outside a throwaway local DB.
+- No self-made cryptography; password/PIN hashing only with scrypt from `node:crypto` behind `PasswordHasher` (ADR-0008).
+- No route without `@RequirePermission('<module>:<action>')` from the permission catalog (ADR-0018) or an explicit `@Public()`.
+- No schema auto-sync and no Down migrations; schema changes only via node-pg-migrate files.
 - No PII, passwords, PINs, session tokens or license keys in logs or error bodies; no `console.*`.
 - No secrets or real client data in code, fixtures or `.env.example`.
-- No SQL built from input by string interpolation — raw SQL or ORM raw queries only with parameters
-  (`$n` / tagged templates); dynamic identifiers (sort columns) only from a fixed whitelist.
+- No SQL built from input by string interpolation — raw SQL only via the Kysely `sql` tag with
+  parameters; `sql.raw`/`sql.lit` never with input; dynamic identifiers (sort columns) only from a fixed whitelist.
 
 ## Post-Code Review
 

@@ -29,17 +29,25 @@ npx nx g @nx/nest:application apps/api    # Nx >= 20: path-based; e2e project ap
 | `@nestjs/schedule` | плановые задачи (счета тенантам, очистка очередей), воркеры очередей-таблиц | библиотека экосистемы NestJS |
 | `@nestjs/swagger` | OpenAPI-документация (опционально, не в проде публично) | библиотека экосистемы NestJS |
 | `helmet` | заголовки безопасности (Express) | библиотека |
-| Redis-клиент (`ioredis` **или** `redis`) | сессии, кэш | Redis в стеке (stack.md); выбрать **один** клиент и зафиксировать |
-| `pg` / ORM | доступ к PostgreSQL | **требует ADR** (ORM не выбран) |
-| библиотека хеширования паролей/PIN | аутентификация | **требует accepted ADR** (ADR-0008, proposed — решает архитектор проекта); самописная криптография запрещена |
+| `redis` (node-redis 6.x) | сессии, кэш, хранилище throttler | единственный Redis-клиент проекта (ADR-0008) |
+| `kysely`, `pg` | доступ к PostgreSQL | ADR-0006; версии закреплены точно |
+| `node-pg-migrate` | миграции (`apps/api/scripts/migrate.mjs`) | ADR-0006; runtime-зависимость — мигратор входит в образ API |
+| `uuid` | `newId()` — UUIDv7 | ADR-0014 §2, ADR-0015 |
+| хеширование паролей/PIN | аутентификация | **без зависимостей**: `crypto.scrypt` из `node:crypto` (ADR-0008); самописная криптография запрещена |
 
-Dev: `@nx/nest`, `@nx/jest`, `jest`, `ts-jest`, `@types/jest`, `@nestjs/testing`, `supertest`,
-`@types/supertest`, `eslint-plugin-security`.
+Dev: `@nx/nest`, `@nx/jest`, `jest`, `@swc/jest`, `@types/jest`, `@nestjs/testing`, `supertest`,
+`@types/supertest`, `kysely-codegen`, `@types/pg`, `eslint-plugin-security`.
+
+Версии `kysely`, `pg`, `node-pg-migrate`, `kysely-codegen`, `uuid` закрепляются точно (без `^`);
+обновление Kysely (линия 0.x) — отдельным PR с прогоном интеграционных тестов (ADR-0006 п. 9).
+ESM-only пакеты (`uuid`, `kysely`, `@nestjs/config`) перечислены в `apps/api/jest.esm-packages.cjs`
+— общем списке `transformIgnorePatterns` обоих Jest-конфигов.
 
 **Не добавлять:** `bullmq`, `amqplib`, `kafkajs` и любые брокеры; `@opentelemetry/*`, `pino`,
-`winston`, SDK облачного логирования; `axios` (для HTTP-клиента фискализации и синхронизации хватает встроенного `fetch` Node LTS);
-`decimal.js` и прочие десятичные типы для денег (деньги — integer дирамы); `uuid`
-(есть `crypto.randomUUID()`); `@nestjs/platform-fastify`, `@fastify/*`; `vitest`.
+`winston`, SDK облачного логирования; `axios` в runtime API (HTTP-клиент фискализации и
+синхронизации — встроенный `fetch`; `axios` допустим только в `api-e2e`, ADR-0015);
+`decimal.js` и прочие десятичные типы для денег (деньги — integer дирамы); другой Redis-клиент;
+`@nestjs/platform-fastify`, `@fastify/*`; `vitest`.
 
 ## Nx targets apps/api (project.json)
 
@@ -84,16 +92,15 @@ npx nx affected -t build test lint
 ```
 
 ```jsonc
-// tsconfig.base.json (фрагмент) — имена алиасов задаются генератором libs, пример:
+// Libraries are npm workspaces: the import name is the package name (libs/**/package.json),
+// resolved to source through the custom condition in tsconfig.base.json — no "paths".
+// tsconfig.base.json (fragment)
 {
   "compilerOptions": {
-    "paths": {
-      "@pharmacy/shared/dto": ["libs/shared/dto/src/index.ts"],
-      "@pharmacy/shared/domain": ["libs/shared/domain/src/index.ts"],
-      "@pharmacy/shared/util": ["libs/shared/util/src/index.ts"]
-    }
+    "customConditions": ["@pharmacy/source"]
   }
 }
+// imports: '@pharmacy/shared-dto', '@pharmacy/shared-domain', '@pharmacy/shared-util', '@pharmacy/ui'
 ```
 
 Грабли:

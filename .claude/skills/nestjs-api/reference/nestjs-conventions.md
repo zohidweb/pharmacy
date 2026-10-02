@@ -11,29 +11,40 @@
 - REST (`/api/v1/…`), JSON camelCase, ошибки RFC 7807 (`application/problem+json`).
 - Тесты — Jest (стандарт Nx). Vitest не используем.
 - Монорепо Nx: `apps/api` — модульный монолит (ADR-0002).
-- **Не выбрано (требует ADR до использования):** ORM/слой доступа к данным, инструмент миграций,
-  Fastify, библиотека хеширования паролей, OpenTelemetry/pino/winston, брокеры сообщений.
+- Доступ к данным — Kysely + `pg`, миграции — node-pg-migrate (ADR-0006); хеш паролей/PIN —
+  scrypt из `node:crypto` (ADR-0008); Redis-клиент — node-redis (ADR-0008); авторизация — RBAC
+  с каталогом прав (ADR-0018).
+- **Не выбрано (требует ADR до использования):** Fastify, OpenTelemetry/pino/winston, брокеры
+  сообщений, хранение файлов.
 
 ## Раскладка apps/api
 
 ```
-apps/api/src/
-├── main.ts
-├── app/app.module.ts        # корневой модуль: Config → Core → Auth → доменные модули
-├── config/                  # registerAs()-конфиги, fail-fast чтение env
-├── common/                  # filters (ProblemDetails), exceptions, interceptors,
-│                            #   middleware (correlation ID), context (AsyncLocalStorage), logging
-├── core/                    # database (DatabaseService, tenant-транзакции), redis, health
-├── auth/                    # сессии Redis, PIN терминала, guards «модуль × действие × охват точек»
-└── modules/
-    ├── catalog/  inventory/  pos/  purchasing/  pricing/  returns/
-    └── billing/  sync/  fiscal/  export-1c/  audit/
-        └── <module>.module.ts, *.controller.ts, *.service.ts, *.repository.ts
+apps/api/
+├── migrations/              # node-pg-migrate: <timestamp>_<name>.sql (only Up), .mjs for noTransaction
+├── scripts/migrate.mjs      # the migrator (dev: nx run api:migrate; docker: service `migrate`)
+├── test/                    # integration stand (database-urls, global-setup, connections, seed), architecture scanner
+└── src/
+    ├── main.ts
+    ├── app/
+    │   ├── app.module.ts    # root module: Config → DatabaseModule → auth → domain modules
+    │   ├── config/          # env validation (fail-fast), registerAs() configs
+    │   ├── health/
+    │   ├── catalog/  inventory/  pos/  purchasing/  pricing/  returns/
+    │   ├── billing/  sync/  fiscal/  export-1c/  audit/
+    │   │   └── <module>.module.ts, *.controller.ts, *.service.ts, *.repository.ts
+    │   └── platform/        # operator path (/api/v1/operator/*), the only importer of PlatformDatabaseModule
+    ├── common/              # context (AsyncLocalStorage), filters (ProblemDetails), exceptions,
+    │                        #   interceptors, middleware (correlation ID), logging
+    └── core/
+        └── database/        # TenantDatabase, DatabaseModule, pool, ids (newId), table-classes,
+                             #   db.generated.ts (kysely-codegen), platform/ (PlatformDatabase)
 ```
 
 DTO и контракты REST — **только в `libs/shared/dto`** (единственный источник типов API для
-api, web, admin). Доменные типы — `libs/shared/domain`, деньги/даты/i18n — `libs/shared/util`.
-Алиасы импорта — как заданы в `tsconfig.base.json` (в примерах: `@pharmacy/shared/dto`).
+api, web, admin). Доменные типы и каталог прав — `libs/shared/domain`, деньги/даты/i18n —
+`libs/shared/util`. Импорт — по имени пакета: `@pharmacy/shared-dto`, `@pharmacy/shared-domain`,
+`@pharmacy/shared-util`.
 
 ## Правила модулей
 
@@ -49,8 +60,11 @@ api, web, admin). Доменные типы — `libs/shared/domain`, деньг
 
 - **tenant_id** — в каждой прикладной таблице и каждом запросе. `tenantId` берётся из
   серверной сессии (контекст запроса), **никогда** из body/query/params. Доступ к данным —
-  только через `DatabaseService.tenantTransaction()` / tenant-scoped репозитории
-  (см. `nestjs-config-data-access.md`); RLS в PostgreSQL — второй рубеж.
+  только через `TenantDatabase.tenantTransaction()` и tenant-scoped репозитории, принимающие
+  `TenantTransaction` (см. `nestjs-config-data-access.md`); RLS в PostgreSQL — второй рубеж.
+  Кросс-тенантное — только `PlatformDatabase` в `app/platform/**` (ADR-0013).
+- **Идентификаторы** — `newId()` (UUIDv7, `core/database/ids.ts`); ключ тенантной таблицы —
+  `(tenant_id, id)` (модель данных `docs/architecture/data-model/`).
 - **Деньги** — integer в дирамах (minor units TJS). Никаких `float`, `toFixed`, `parseFloat`,
   `decimal.js` для сумм. Округление себестоимости штуки при делении упаковки — вверх
   (в пользу аптеки); утилита — в `libs/shared/util`.
@@ -58,7 +72,8 @@ api, web, admin). Доменные типы — `libs/shared/domain`, деньг
   Документ/чек и его движения пишутся в одной транзакции.
 - **Аудит и журнал ПКУ** — append-only: без UPDATE/DELETE (права БД + триггер).
 - **Финансовые операции и синхронизация** — idempotency key + correlation ID.
-- Миграции — версионированные (инструмент — первым ADR разработки); schema-sync в проде запрещён.
+- Миграции — node-pg-migrate, `.sql` только Up, применяет роль `pharmacy_owner` (ADR-0006);
+  schema-sync запрещён.
 
 ## REST
 

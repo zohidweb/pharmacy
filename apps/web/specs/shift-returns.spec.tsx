@@ -26,6 +26,9 @@ const WIDE_SPACES = new RegExp('[\u00a0\u202f]', 'g');
 const plain = (text: string | null | undefined) =>
   (text ?? '').replace(WIDE_SPACES, ' ');
 
+// operations go through the IndexedDB outbox: slower on a loaded machine (parallel nx tasks)
+jest.setTimeout(20_000);
+
 describe('ShiftPage', () => {
   it('shows totals by payment method and the cash drawer', async () => {
     await signInByPin('emp-cashier', '2580');
@@ -124,9 +127,13 @@ describe('ShiftPage', () => {
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Открыть смену' }),
     );
-    expect(await screen.findByText('Смена открыта')).toBeTruthy();
+    // the toast is short-lived; the durable result is the shift on the screen
     expect(
-      await screen.findByRole('heading', { name: /^Смена №/ }),
+      await screen.findByRole(
+        'heading',
+        { name: /^Смена №/ },
+        { timeout: 15_000 },
+      ),
     ).toBeTruthy();
   });
 

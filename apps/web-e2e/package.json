@@ -1,0 +1,22 @@
+{
+  "name": "@pharmacy/web-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "web-e2e",
+    "implicitDependencies": [
+      "web"
+    ],
+    "tags": [
+      "scope:web",
+      "type:e2e"
+    ],
+    "targets": {
+      "e2e": {
+        "dependsOn": [
+          "web:build"
+        ]
+      }
+    }
+  }
+}

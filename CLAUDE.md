@@ -72,7 +72,7 @@ pharmacy/
 │   ├── web/          # Next.js: клиентский продукт (касса, склад, кабинет владельца)
 │   │                 #   app/ — маршруты (реэкспорты), pages/ — пустая; src/{app,pages,widgets,features,entities,shared} — FSD (ADR-0017)
 │   └── admin/        # Next.js: админка оператора платформы — та же структура FSD
-│                     # web-e2e / admin-e2e — после ADR-0009
+│   ├── web-e2e/      # e2e web (Playwright + axe): сборка out/ + фейковый /api/v1; admin-e2e — позже
 ├── libs/
 │   ├── shared/dto/     # @pharmacy/shared-dto — DTO и контракты REST API (единственный источник типов API)
 │   ├── shared/domain/  # @pharmacy/shared-domain — Tenant, Store, Batch, Receipt, StockMovement…
@@ -99,6 +99,7 @@ npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
 npx nx dev admin                     # http://localhost:4300
 npx nx e2e api-e2e                   # e2e API (поднимает api сам)
+npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
 npx nx run api:integration           # интеграционные тесты на БД pharmacy_test (нужен npm run dev:deps)
 npx nx run api:db-types              # перегенерация типов Kysely из мигрированной БД; db-types-verify — проверка актуальности

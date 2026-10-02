@@ -127,7 +127,8 @@ export function setApiTransport(next: ApiTransport): void {
   transport = next;
 }
 
-const unreachable = (error: unknown) =>
+/** The request did not reach the server (outage or timeout), as opposed to an answer of it. */
+export const isUnreachable = (error: unknown) =>
   error instanceof ApiError &&
   (error.code === 'network' || error.code === 'timeout');
 
@@ -142,7 +143,7 @@ export async function apiRequest<K extends ApiRouteKey>(
   } catch (error) {
     // any answer of the server, even an error, means it is reachable; a cancelled request says nothing
     if (!(error instanceof ApiError && error.code === 'aborted')) {
-      reportRequest(!unreachable(error));
+      reportRequest(!isUnreachable(error));
     }
     throw error;
   }

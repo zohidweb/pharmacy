@@ -394,17 +394,24 @@ revoked_at)`; нет или отозван → `404 not_bound`. В `withTenant`:
   памяти (один процесс, ADR-0008); маршруты `/operator/*` не регистрируются.
 - Таблица `sessions` (класс `tenant`): ключ `(tenant_id, jti)`, `employee_id`, `terminal_id`,
   `auth_method`, `authenticated_at`, `idle_expires_at`, `absolute_expires_at`, снимок прав и версия.
-  Поиск — в `withTenant(tid из JWT)` под RLS; в том же запросе — `employees.permissions_version`.
-  Плановая задача удаляет просроченные. Резолвер `resolve_session` не нужен.
+  Поиск — в `withTenant(tid из JWT)` под RLS; в том же запросе — `employees.permissions_version` и
+  `terminals.revoked_at` (флаг отзыва в Redis не нужен). Просроченные строки не принимаются и
+  удаляются при каждом создании сессии (поправка 2026-10-05, план части 4, P2: планировщика нет).
+  Резолвер `resolve_session` не нужен.
+- Точка обслуживает одну сеть: `OFFLINE_TENANT_ID` (обязателен при `STORE_MODE=offline`); токен с
+  другим `tid` — гость (поправка 2026-10-05, план части 4, P1).
 - Cookie `sid` и `term` (`Secure; HttpOnly; SameSite=Strict`; без `__Host-` — Chrome не принимает
   его на `http://localhost`).
-- Ключ JWT и pepper точки (по 256 бит) генерируются при установке, хранятся в env-файле ПК точки, в
-  облако не передаются; бэкап pepper — отдельно от БД.
+- Ключ JWT и pepper точки (по 256 бит) генерируются при установке
+  (`scripts/generate-store-secrets.mjs --env-file <путь>`, значения не печатаются, существующие не
+  перезаписываются), хранятся в env-файле ПК точки, в облако не передаются; бэкап pepper — отдельно
+  от БД.
 - Учётные данные свои: `employee_credentials` не синхронизируется. Первый вход — код через
   `POST /api/v1/activations`; первый код при установке — `scripts/create-activation-code.mjs
   --login <логин>` (оператор); остальным — заведующий через модуль сотрудников (вне спецификации).
 - Вход и PIN — те же потоки; `resolve_login` и `resolve_terminal` работают с локальной БД (одна
-  сеть); счётчик неудач по идентификатору — в памяти, блокировка PIN — в `employee_credentials`.
+  сеть); счётчики неудач (вход, активация, смена пароля и PIN, терминал) — в памяти процесса
+  (`MemoryLoginLimiter`, обнуляются при перезапуске), блокировка PIN — в `employee_credentials`.
 - Изменения ролей и статуса приходят синхронизацией и меняют `permissions_version` — сессия
   обновится на следующем запросе; до синхронизации действуют прежние права (ADR-0018 п. 7).
 
@@ -441,6 +448,7 @@ pepper и ключи JWT — никогда в логах, аудите, URL и 
 | `TERMINAL_PIN_MAX_FAILURES`, `TERMINAL_PIN_WINDOW_SECONDS` | 10, 900 | |
 | `ACTIVATION_CODE_TTL_HOURS` | 72 | |
 | `WEB_ORIGIN`, `ADMIN_ORIGIN` | — | для CSRF |
+| `OFFLINE_TENANT_ID` | — | сеть офлайн-точки; обязателен при `offline`, в облаке запрещён |
 | `TRUST_PROXY` | 0 | число reverse proxy перед API (`trust proxy`, 0–5; 0 — выключено); см. ниже |
 
 **`TRUST_PROXY`** нужен всем ключам по IP (throttler гостя и входа, активация, `ip` в аудите входа): за

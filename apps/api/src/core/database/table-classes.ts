@@ -41,6 +41,13 @@ export const RESOLVER_FUNCTIONS: readonly string[] = Object.freeze([
   'resolve_terminal',
 ]);
 
+// SECURITY DEFINER tenant provisioning functions owned by pharmacy_provisioner (ADR-0013, amendment
+// 2026-10-05): the only way from the platform path into tenant tables. EXECUTE for pharmacy_platform.
+export const PROVISIONING_FUNCTIONS: readonly string[] = Object.freeze([
+  'issue_owner_code',
+  'provision_tenant',
+]);
+
 // Columns of stores visible to pharmacy_platform (the store registry without the address).
 export const STORE_PLATFORM_COLUMNS: readonly string[] = Object.freeze([
   'id',

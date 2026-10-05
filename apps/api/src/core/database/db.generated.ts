@@ -197,10 +197,18 @@ export interface Tenants {
   billingName: string | null;
   billingPhone: string | null;
   billingTaxId: string | null;
+  blockedAt: Timestamp | null;
+  blockedBy: string | null;
+  blockReason: string | null;
+  city: Generated<string>;
   code: string;
   createdAt: Generated<Timestamp>;
   id: string;
   name: string;
+  ownerEmail: string | null;
+  ownerFullName: string | null;
+  ownerLogin: string | null;
+  ownerPhone: string | null;
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
 }

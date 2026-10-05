@@ -12,6 +12,10 @@ const employeeSessionsKey = (tenantId: string, employeeId: string): string =>
   `emp-sess:${tenantId}:${employeeId}`;
 const versionKey = (tenantId: string, employeeId: string): string =>
   `pv:${tenantId}:${employeeId}`;
+const terminalSessionKey = (tenantId: string, terminalId: string): string =>
+  `term-sess:${tenantId}:${terminalId}`;
+const terminalRevokedKey = (tenantId: string, terminalId: string): string =>
+  `term-rev:${tenantId}:${terminalId}`;
 
 const PATCHABLE_FIELDS = [
   'permissions',
@@ -71,7 +75,8 @@ function parseVersion(raw: string | null): number | null {
 }
 
 // Cloud implementation of SessionStore (node-redis). Keys: sess:<id> (JSON, PX = idle lifetime
-// capped by the absolute expiry), emp-sess:<tid>:<eid> (set of the employee's session ids).
+// capped by the absolute expiry), emp-sess:<tid>:<eid> (set of the employee's session ids),
+// term-sess:<tid>:<terminal> (the terminal's PIN session id), term-rev:<tid>:<terminal> (revoked).
 export class RedisSessionStore extends SessionStore {
   constructor(private readonly redis: RedisClient) {
     super();
@@ -82,8 +87,13 @@ export class RedisSessionStore extends SessionStore {
     if (ttl === null) return;
     const setKey = employeeSessionsKey(record.tenantId, record.employeeId);
     const absoluteMs = Math.ceil(Date.parse(record.absoluteExpiresAt) - Date.now());
-    await this.redis
-      .multi()
+    const multi = this.redis.multi();
+    if (record.terminalId !== null) {
+      multi.set(terminalSessionKey(record.tenantId, record.terminalId), record.sessionId, {
+        expiration: { type: 'PX', value: absoluteMs },
+      });
+    }
+    await multi
       .set(sessionKey(record.sessionId), JSON.stringify(record), {
         expiration: { type: 'PX', value: ttl },
       })
@@ -107,9 +117,17 @@ export class RedisSessionStore extends SessionStore {
       session.tenantId !== tenantId ||
       session.employeeId !== employeeId
     ) {
-      return { session: null, permissionsVersion: null };
+      return { session: null, permissionsVersion: null, terminalRevoked: false };
     }
-    return { session, permissionsVersion: parseVersion(rawVersion as string | null) };
+    // A second round trip only for PIN sessions: the terminal is known after the record is read.
+    const terminalRevoked =
+      typeof session.terminalId === 'string' &&
+      (await this.redis.exists(terminalRevokedKey(tenantId, session.terminalId))) === 1;
+    return {
+      session,
+      permissionsVersion: parseVersion(rawVersion as string | null),
+      terminalRevoked,
+    };
   }
 
   async update(sessionId: string, patch: SessionPatch): Promise<void> {
@@ -163,6 +181,23 @@ export class RedisSessionStore extends SessionStore {
     if (ids.length === 0) return;
     // Removing only the listed ids keeps the excepted session and any session created meanwhile.
     await this.redis.multi().del(ids.map(sessionKey)).sRem(setKey, ids).exec();
+  }
+
+  async destroyForTerminal(tenantId: string, terminalId: string): Promise<void> {
+    const linkKey = terminalSessionKey(tenantId, terminalId);
+    const sessionId = await this.redis.get(linkKey);
+    if (sessionId !== null) await this.destroy(sessionId);
+    await this.redis.del(linkKey);
+  }
+
+  async markTerminalRevoked(
+    tenantId: string,
+    terminalId: string,
+    ttlSeconds: number,
+  ): Promise<void> {
+    await this.redis.set(terminalRevokedKey(tenantId, terminalId), '1', {
+      expiration: { type: 'EX', value: ttlSeconds },
+    });
   }
 }
 

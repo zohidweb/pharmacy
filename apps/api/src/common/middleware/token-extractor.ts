@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
+import { readDeviceSecret } from '../../app/auth/device-cookie';
 import {
   sessionCookieName,
+  type SessionCookieEnv,
   type SessionCookieName,
 } from '../../app/auth/session-cookie';
 
@@ -10,18 +12,27 @@ import {
 // admin — the cookie only; a Bearer header for aud=mobile needs its own ADR. DI token.
 export abstract class TokenExtractor {
   abstract extract(req: Request): string | null;
+
+  // The device secret of a bound terminal (device-cookie), checked against a PIN session.
+  abstract extractDeviceSecret(req: Request): string | null;
 }
 
 // Reads the web session cookie from req.cookies (filled by cookie-parser, wired in main.ts).
 @Injectable()
 export class CookieTokenExtractor extends TokenExtractor {
+  private readonly cookieEnv: SessionCookieEnv;
   private readonly cookieName: SessionCookieName;
 
   constructor(config: ConfigService) {
     super();
-    this.cookieName = sessionCookieName({
+    this.cookieEnv = {
       AUTH_TEST_COOKIES: config.get<boolean>('AUTH_TEST_COOKIES') === true,
-    });
+    };
+    this.cookieName = sessionCookieName(this.cookieEnv);
+  }
+
+  extractDeviceSecret(req: Request): string | null {
+    return readDeviceSecret(req, this.cookieEnv);
   }
 
   extract(req: Request): string | null {

@@ -94,6 +94,12 @@ class FakeSessionStore extends SessionStore {
     this.openAtDestroy.push(this.db.open);
     this.destroyedAll.push([tenantId, employeeId]);
   }
+  async destroyForTerminal(): Promise<void> {
+    throw new Error('not used');
+  }
+  async markTerminalRevoked(): Promise<void> {
+    throw new Error('not used');
+  }
 }
 
 function setup() {

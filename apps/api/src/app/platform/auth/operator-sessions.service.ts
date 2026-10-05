@@ -196,13 +196,21 @@ export class OperatorSessionsService {
     reason: FailureReason,
     ip: string,
   ): Promise<never> {
+    // An unknown login goes to the application log only, without the value: platform_audit_log is
+    // append-only, and rotating unknown e-mails would otherwise fill it without bound. Failures of
+    // a known operator are bounded by the per-login limiter.
+    if (operatorId === null) {
+      this.logger.warn(
+        `Operator sign-in failed: unknown login [correlationId=${getRequestContext()?.correlationId}]`,
+      );
+      throw invalidCredentials();
+    }
     try {
       await this.db.platformTransaction(SIGN_IN_JOB, (trx) =>
         this.audit.append(trx, {
           action: 'auth.operator-login-failed',
-          ...(operatorId !== null
-            ? { entityType: 'operator', entityId: operatorId }
-            : {}),
+          entityType: 'operator',
+          entityId: operatorId,
           details: { reason, ip },
         }),
       );

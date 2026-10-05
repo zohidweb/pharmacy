@@ -166,8 +166,8 @@ await this.platform.platformTransaction({ kind: 'operator', operatorId }, (trx) 
   `actor` обязателен (`{ kind: 'operator', operatorId }` или `{ kind: 'system', job }`),
   попадает в `app.actor`; без него — исключение.
 - Платформа видит только платформенные таблицы, витрины и колонки реестра `stores`; тенантные
-  таблицы — `42501`. Данные тенанта оператор видит только через вход «от имени» — это обычная
-  tenant-сессия (`nestjs-security-auth.md`).
+  таблицы — `42501`. Доступ оператора к данным тенанта (вход «от имени») не реализуется — решение
+  пересматривается (`nestjs-security-auth.md`).
 - `PlatformDatabaseModule` не `@Global` и импортируется только модулями платформы.
 
 ## RLS, роли и гранты (в миграции)

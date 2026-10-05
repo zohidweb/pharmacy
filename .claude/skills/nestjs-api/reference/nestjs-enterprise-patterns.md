@@ -147,7 +147,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 | Ситуация | Статус | Источник |
 |---|---|---|
 | DTO не прошёл валидацию | 400 | `ValidationPipe` |
-| Нет/истекла сессия | 401 | `SessionAuthGuard` |
+| Нет/истекла сессия | 401 | `AuthGuard` |
 | Нет права «модуль × действие» или точки вне охвата | 403 | `PermissionsGuard` |
 | Ресурс не найден **в тенанте** (чужой тенант — тоже 404, не 403) | 404 | `ResourceNotFoundException` |
 | Дубликат / unique violation / повтор idempotency key с другим телом | 409 | pg `23505`, `IdempotencyConflictException` |

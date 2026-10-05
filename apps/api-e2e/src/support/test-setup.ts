@@ -1,9 +1,6 @@
-/* eslint-disable */
 import axios from 'axios';
+import { API_BASE_URL } from './env';
 
-module.exports = async function () {
-  // Configure axios for tests to use.
-  const host = process.env.HOST ?? 'localhost';
-  const port = process.env.PORT ?? '3000';
-  axios.defaults.baseURL = `http://${host}:${port}`;
-};
+// Runs in every test file (Jest `setupFiles`): axios talks to the API started by the global setup.
+// The statements run on load; a setupFiles module is not called as a function.
+axios.defaults.baseURL = API_BASE_URL;

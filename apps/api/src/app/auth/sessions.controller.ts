@@ -11,6 +11,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { EmployeeSession } from '@pharmacy/shared-dto';
 import type { Request, Response } from 'express';
 import { Authenticated, Public } from '../../common/guards/decorators';
@@ -22,6 +23,9 @@ import {
   setSessionCookie,
 } from './session-cookie';
 import { SessionsService } from './sessions.service';
+
+// Per IP and minute; the per-identifier lockout (LoginLimiter) is the main brute-force guard.
+const AUTH_ROUTE_LIMIT = { limit: 60, ttl: 60_000 };
 
 // Employee sessions of the web contour (auth design 2026-10-02, section 6): sign-in by password,
 // the session profile, the working store and sign-out. The JWT travels only in the session cookie.
@@ -40,6 +44,7 @@ export class SessionsController {
 
   /** 201 EmployeeSession + Set-Cookie; 401 invalid_credentials, 429 login_locked. */
   @Public()
+  @Throttle({ default: AUTH_ROUTE_LIMIT })
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async login(

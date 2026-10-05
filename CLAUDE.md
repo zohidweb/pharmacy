@@ -33,9 +33,9 @@ Project class: Full
 | Backend | NestJS (Express adapter), TypeScript strict | ADR-0003 |
 | Frontend (web, admin) | Next.js (React, TypeScript), **static export (SPA)** | ADR-0004 |
 | БД | PostgreSQL | ADR-0001 |
-| Кэш / сессии | Redis, клиент `redis` (node-redis); на офлайн-точке Redis нет — сессии в PostgreSQL | ADR-0001, ADR-0008 |
+| Кэш / сессии | Redis, клиент `redis` (node-redis): серверные сессии (запись по `jti`), версия прав, лимиты входа и throttler; на офлайн-точке Redis нет — сессии в PostgreSQL | ADR-0001, ADR-0008 |
 | API-стиль | REST | ADR-0001 |
-| Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`, cookie-сессии (Redis; офлайн — PostgreSQL) | ADR-0001, ADR-0008 |
+| Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`; токен — JWT (`@nestjs/jwt`, HS256) в HttpOnly-cookie `__Host-sid` **с проверкой серверной сессии** (Redis; офлайн — PostgreSQL); контекст запроса строит `SessionMiddleware`, guard'ы только решают; вход «от имени» не реализуется (решение пересматривается) | ADR-0001, ADR-0008 |
 | Авторизация | RBAC: динамические роли тенанта, каталог прав `модуль:действие` (`libs/shared/domain`), одна роль + охват точек, запрет эскалации, проверка только на сервере | ADR-0018 |
 | Архитектура фронтенда | Feature-Sliced Design в `apps/web` и `apps/admin` («pages first», Steiger) | ADR-0017 |
 | Фронтенд-библиотеки | TanStack Query, Zustand, React Hook Form + zod, use-intl, idb, uuid; свои: API-клиент, Service Worker, сканер | ADR-0015 |
@@ -253,6 +253,18 @@ npm run prod:build / prod:up / prod:down
 ## Local development secrets
 
 - Never commit secrets (passwords, keys, connection strings, tokens) to git, in any form.
+- Переменные аутентификации `SESSION_JWT_KEYS`, `SESSION_JWT_ACTIVE_KID`, `PASSWORD_PEPPERS`,
+  `PASSWORD_PEPPER_ACTIVE` (а также `WEB_ORIGIN`, `ADMIN_ORIGIN`) обязательны: без них API не стартует, а
+  `docker/compose.yml` не поднимает даже `npm run dev:deps`. Перенесите их из `.env.example` в `.env`;
+  свои ключи — случайные 32 байта base64url. Команда заменяет в `.env` четыре строки ключей и ничего не
+  печатает:
+
+  ```
+  node -e "const c=require('crypto'),f=require('fs'),k=()=>c.randomBytes(32).toString('base64url'),n=['SESSION_JWT_KEYS','SESSION_JWT_ACTIVE_KID','PASSWORD_PEPPERS','PASSWORD_PEPPER_ACTIVE'];const o=f.existsSync('.env')?f.readFileSync('.env','utf8').split(/\r?\n/).filter(l=>!n.some(x=>l.startsWith(x+'='))):[];f.writeFileSync('.env',o.join('\n').replace(/\n+$/,'')+'\nSESSION_JWT_KEYS=k1:'+k()+'\nSESSION_JWT_ACTIVE_KID=k1\nPASSWORD_PEPPERS=1:'+k()+'\nPASSWORD_PEPPER_ACTIVE=1\n')"
+  ```
+
+  Для e2e (`npx nx e2e api-e2e`) в `.env` нужны ещё `DATABASE_URL`, `PLATFORM_DATABASE_URL`, `REDIS_URL`;
+  `APP_ENV=test` и `AUTH_TEST_COOKIES=true` тест задаёт сам для запускаемого процесса API.
 - `.env` (API, docker compose) и `.env.local` (frontend) — в `.gitignore`; в git только `.env.example`
   без реальных значений.
 - Production secrets: хранилище секретов пока не выбрано — через ADR (вопрос № 8 в stack.md);
@@ -274,6 +286,9 @@ npm run prod:build / prod:up / prod:down
   no client data to external LLMs/SaaS, no external SaaS DBs for tenant data, closed list of integrations.
 - Пароли — только хеши; PIN ≥ 4 цифр; HTTPS на всех соединениях; таймаут сессии кассира —
   настройка на уровне сети тенанта.
+- JWT — только носитель идентификаторов (`jti`, `sub`, `tid`, `aud`): права и ПДн в токен не кладутся, без
+  записи сессии на сервере токен недействителен. `AUTH_TEST_COOKIES=true` (cookie `sid` без `Secure`, для
+  e2e) допустим только при `APP_ENV=test`.
 
 ## AI usage rules (vibe-coding)
 

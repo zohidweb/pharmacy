@@ -60,7 +60,7 @@ import { TenantAwareThrottlerGuard } from '../common/throttling/tenant-aware-thr
 import { validateEnv } from './config/env.validation';
 import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';                                   // to be added
-import { SessionAuthGuard } from './auth/guards/session-auth.guard';              // to be added
+import { AuthGuard } from '../common/guards/auth.guard';              // to be added
 import { PermissionsGuard } from './auth/guards/permissions.guard';               // to be added
 import { CatalogModule } from './catalog/catalog.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -98,7 +98,7 @@ import { AuditModule } from './audit/audit.module';
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },
     // Order matters: authenticate (fills tenant/employee context) -> throttle per employee -> authorize
-    { provide: APP_GUARD, useClass: SessionAuthGuard },
+    { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: TenantAwareThrottlerGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
@@ -115,7 +115,7 @@ export class AppModule implements NestModule {
   доступа к данным — `apps/api/src/core/database` (импорт только через его `index`).
 - `ValidationPipe` остаётся в `main.ts` (как сейчас в коде); `validationError: { target: false,
   value: false }` добавить при первом DTO с персональными данными — ввод не эхом в ошибке.
-- `SessionAuthGuard` глобальный: маршрут без сессии возможен только с явным `@Public()`
+- `AuthGuard` глобальный: маршрут без сессии возможен только с явным `@Public()`
   (логин, health). Детали — `nestjs-security-auth.md`; лимиты — `nestjs-rate-limiting.md`.
 - `enableImplicitConversion` не включаем: неявное приведение строк к числам в query маскирует
   ошибки; числа в query-DTO — через `@Type(() => Number)` явно.
@@ -139,7 +139,7 @@ export class CorrelationIdMiddleware implements NestMiddleware {
     const incoming = req.header(HEADER);
     const correlationId = incoming && VALID.test(incoming) ? incoming : randomUUID();
     res.setHeader('X-Correlation-Id', correlationId);
-    // tenant/employee are added later by SessionAuthGuard
+    // tenant/employee are added by SessionMiddleware (it replaces this context with the frozen one)
     requestContextStorage.run({ correlationId }, () => next());
   }
 }

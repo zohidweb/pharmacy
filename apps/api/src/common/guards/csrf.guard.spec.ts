@@ -211,6 +211,13 @@ describe('CsrfGuard', () => {
   });
 
   it('fails to construct without WEB_ORIGIN', () => {
-    expect(() => new CsrfGuard(new ConfigService({}))).toThrow();
+    // ConfigService falls back to process.env, where Nx loads the developer's .env: clear it here.
+    const saved = process.env['WEB_ORIGIN'];
+    delete process.env['WEB_ORIGIN'];
+    try {
+      expect(() => new CsrfGuard(new ConfigService({}))).toThrow();
+    } finally {
+      if (saved !== undefined) process.env['WEB_ORIGIN'] = saved;
+    }
   });
 });

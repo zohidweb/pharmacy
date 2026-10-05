@@ -43,7 +43,7 @@ last-reviewed: "2026-09-29"
 ## Решено принятыми ADR (используй, не выбирай заново)
 Доступ к данным — `TenantDatabase` / `PlatformDatabase` на Kysely + `pg`, миграции node-pg-migrate
 (ADR-0006, ADR-0013; `reference/nestjs-config-data-access.md`); аутентификация — scrypt из
-`node:crypto`, cookie-сессии, node-redis (ADR-0008); авторизация — каталог прав `модуль:действие`,
+`node:crypto`, JWT в cookie с проверкой серверной сессии (Redis), node-redis (ADR-0008); авторизация — каталог прав `модуль:действие`,
 `@RequirePermission`, охват точек, запрет эскалации (ADR-0018; `reference/nestjs-security-auth.md`);
 схема — модель данных `docs/architecture/data-model/`; тесты и CI — ADR-0009.
 

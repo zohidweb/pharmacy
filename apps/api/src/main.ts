@@ -1,16 +1,29 @@
 import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // `trust proxy` is deliberately not set: req.ip (the guest throttling key and the login
+  // limiter) is the socket address until the reverse proxy is chosen (ADR-0012, proposed), which
+  // decides how many hops to trust. Setting it blindly would let a client spoof X-Forwarded-For.
+  app.use(helmet());
+  // Fills req.cookies for the session middleware (the session JWT travels in a cookie, ADR-0008).
+  app.use(cookieParser());
+
   // REST: /api/v1/... (CLAUDE.md, "Conventions").
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
   );
   app.enableShutdownHooks();
 

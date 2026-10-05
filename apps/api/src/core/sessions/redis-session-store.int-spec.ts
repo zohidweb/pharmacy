@@ -1,6 +1,10 @@
 import { createTestRedis, flushTestRedis } from '../../../test/integration/redis';
 import type { RedisClient } from '../redis/redis.tokens';
-import { RedisPermissionsVersionCache, RedisSessionStore } from './redis-session-store';
+import {
+  PERMISSIONS_VERSION_TTL_SECONDS,
+  RedisPermissionsVersionCache,
+  RedisSessionStore,
+} from './redis-session-store';
 import type { SessionRecord } from './session-store';
 
 const TENANT = '0197a1b2-0000-7000-8000-000000000001';
@@ -51,7 +55,7 @@ describe('RedisSessionStore (integration)', () => {
   it('create then lookup returns the record and the permissions version in one call', async () => {
     const created = record();
     await store.create(created);
-    await versions.set(TENANT, EMPLOYEE, 7);
+    await versions.setIfGreater(TENANT, EMPLOYEE, 7);
 
     const spy = jest.spyOn(redis, 'mGet');
     const found = await store.lookup('sid-1', TENANT, EMPLOYEE);
@@ -219,31 +223,67 @@ describe('RedisPermissionsVersionCache (integration)', () => {
     await redis.close();
   });
 
-  it('returns null for an unknown employee and the stored version after set', async () => {
+  it('returns null for an unknown employee and the stored version after a write', async () => {
     expect(await versions.get(TENANT, EMPLOYEE)).toBeNull();
-    await versions.set(TENANT, EMPLOYEE, 12);
+    await versions.setIfGreater(TENANT, EMPLOYEE, 12);
     expect(await versions.get(TENANT, EMPLOYEE)).toBe(12);
-    await versions.set(TENANT, EMPLOYEE, 13);
+    await versions.setIfGreater(TENANT, EMPLOYEE, 13);
     expect(await versions.get(TENANT, EMPLOYEE)).toBe(13);
   });
 
-  it('setIfAbsent writes a missing version with the bounded lifetime', async () => {
-    await versions.setIfAbsent(TENANT, EMPLOYEE, 5);
+  it('a cache miss is filled with the written version and a 300 s lifetime', async () => {
+    await versions.setIfGreater(TENANT, EMPLOYEE, 5);
     expect(await versions.get(TENANT, EMPLOYEE)).toBe(5);
     const ttl = await redis.ttl(`pv:${TENANT}:${EMPLOYEE}`);
-    expect(ttl).toBeGreaterThan(7 * 24 * 60 * 60 - 60);
-    expect(ttl).toBeLessThanOrEqual(7 * 24 * 60 * 60);
+    expect(PERMISSIONS_VERSION_TTL_SECONDS).toBe(300);
+    expect(ttl).toBeGreaterThan(PERMISSIONS_VERSION_TTL_SECONDS - 30);
+    expect(ttl).toBeLessThanOrEqual(PERMISSIONS_VERSION_TTL_SECONDS);
   });
 
-  it('setIfAbsent never overwrites an existing version', async () => {
-    await versions.set(TENANT, EMPLOYEE, 6);
-    await versions.setIfAbsent(TENANT, EMPLOYEE, 5);
+  it('out-of-order writes keep the greatest version (5 then 4 leaves 5)', async () => {
+    await versions.setIfGreater(TENANT, EMPLOYEE, 5);
+    await versions.setIfGreater(TENANT, EMPLOYEE, 4);
+    expect(await versions.get(TENANT, EMPLOYEE)).toBe(5);
+    await versions.setIfGreater(TENANT, EMPLOYEE, 5);
+    expect(await versions.get(TENANT, EMPLOYEE)).toBe(5);
+  });
+
+  it('concurrent writes of different versions end at the greatest one', async () => {
+    await Promise.all(
+      [3, 9, 1, 7, 8, 2].map((version) => versions.setIfGreater(TENANT, EMPLOYEE, version)),
+    );
+    expect(await versions.get(TENANT, EMPLOYEE)).toBe(9);
+  });
+
+  it('a write that changes the version refreshes the lifetime; a rejected one does not', async () => {
+    const key = `pv:${TENANT}:${EMPLOYEE}`;
+    await versions.setIfGreater(TENANT, EMPLOYEE, 5);
+    await redis.expire(key, 20);
+
+    await versions.setIfGreater(TENANT, EMPLOYEE, 4);
+    expect(await redis.ttl(key)).toBeLessThanOrEqual(20);
+
+    await versions.setIfGreater(TENANT, EMPLOYEE, 6);
+    expect(await redis.ttl(key)).toBeGreaterThan(PERMISSIONS_VERSION_TTL_SECONDS - 30);
+  });
+
+  it('a lost write self-heals: after the lifetime expires the next fill restores the database version', async () => {
+    const key = `pv:${TENANT}:${EMPLOYEE}`;
+    // The cache holds 6 while the database holds 7: the post-commit write of 7 was lost.
+    await versions.setIfGreater(TENANT, EMPLOYEE, 6);
     expect(await versions.get(TENANT, EMPLOYEE)).toBe(6);
+    // Fast-forward the lifetime: the key expires on its own, as it would after 300 s.
+    await redis.pExpire(key, 50);
+    await sleep(120);
+    expect(await versions.get(TENANT, EMPLOYEE)).toBeNull();
+    // The middleware sees a miss, reloads 7 from the database and fills it.
+    await versions.setIfGreater(TENANT, EMPLOYEE, 7);
+    expect(await versions.get(TENANT, EMPLOYEE)).toBe(7);
   });
 
   it('keeps versions of different employees apart and gives them a bounded lifetime', async () => {
-    await versions.set(TENANT, EMPLOYEE, 1);
-    await versions.set(TENANT, OTHER_EMPLOYEE, 2);
+    await versions.setIfGreater(TENANT, EMPLOYEE, 1);
+    await versions.setIfGreater(TENANT, OTHER_EMPLOYEE, 2);
     expect(await versions.get(TENANT, EMPLOYEE)).toBe(1);
     expect(await versions.get(TENANT, OTHER_EMPLOYEE)).toBe(2);
     expect(await redis.ttl(`pv:${TENANT}:${EMPLOYEE}`)).toBeGreaterThan(0);

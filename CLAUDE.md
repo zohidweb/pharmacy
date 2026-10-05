@@ -98,7 +98,7 @@ npx nx fsd web / admin               # Steiger — слои FSD (ADR-0017)
 npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
 npx nx dev admin                     # http://localhost:4300
-npx nx e2e api-e2e                   # e2e API (поднимает api сам)
+npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
 npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
 npx nx run api:integration           # интеграционные тесты на БД pharmacy_test (нужен npm run dev:deps)
@@ -248,6 +248,23 @@ npm run prod:build / prod:up / prod:down
   `migrations/` попадают в образ через assets webpack. Если API не стартует из-за миграции —
   `npm run stack -- <env> logs migrate`.
 - web/admin контейнеризуются вместе с reverse proxy после принятия ADR-0012 (proposed); до этого — `npx nx dev`.
+- `TRUST_PROXY` (число reverse proxy перед API, 0–5, по умолчанию 0 = выключено; в `docker/env/*.env`
+  закомментирован) — обязательная часть выкладки за reverse proxy ADR-0012: без него `req.ip` — адрес
+  прокси, и лимиты по IP (гостевой, входа, активации) становятся одним общим лимитом платформы, а адрес в
+  аудите входа — адресом прокси. Значение должно равняться реальному числу прокси: завышенное позволяет
+  клиенту подделать `X-Forwarded-For`. Не новая технология, ADR не нужен (stack.md, вопрос № 13).
+- Первый код активации владельца (часть 1 аутентификации; выдаёт оператор, печатается один раз). В test/prod
+  PostgreSQL доступен только в сети compose, поэтому скрипт запускается из образа `api`
+  (`scripts/create-activation-code.mjs`, `DATABASE_URL` уже задан в сервисе `api`, срок —
+  `ACTIVATION_CODE_TTL_HOURS`, по умолчанию 72 ч). Стек должен быть поднят (`npm run stack -- <env> up`):
+
+  ```
+  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose --project-name pharmacy-<test|prod>     --env-file docker/env/<test|prod>.env -f docker/compose.yml -f docker/compose.<test|prod>.yml     run --rm --no-deps api node scripts/create-activation-code.mjs --login <логин|телефон|e-mail>
+  ```
+
+  `IMAGE_TAG` — тег образа, собранного `build` (короткий sha; у test с незакоммиченными изменениями —
+  `<sha>-dirty`). В dev: `node --env-file=.env apps/api/scripts/create-activation-code.mjs --login …`
+  (нужен `npm run dev:deps`). Скрипт печатает код и срок и больше ничего; ни код, ни хеш не логируются.
 - Порты в compose публикуются только на `127.0.0.1`.
 
 ## Local development secrets

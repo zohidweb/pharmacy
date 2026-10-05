@@ -56,10 +56,9 @@ export abstract class SessionStore {
 // Port: the current permissions_version of an employee. DI token.
 export abstract class PermissionsVersionCache {
   abstract get(tenantId: string, employeeId: string): Promise<number | null>;
-  // Post-commit writer of a new version: overwrites whatever is cached.
-  abstract set(tenantId: string, employeeId: string, version: number): Promise<void>;
 
-  // Cache-miss fill from a database read: writes only when no version is cached, so a newer
-  // version written meanwhile by the post-commit writer is never overwritten with an older one.
-  abstract setIfAbsent(tenantId: string, employeeId: string, version: number): Promise<void>;
+  // The only writer: stores the version when none is cached or the cached one is lower, and then
+  // refreshes the lifetime. Monotonic, so writers racing in any order (the post-commit write of a
+  // bump, a cache-miss fill from a database read, the login seed) never move the cache backwards.
+  abstract setIfGreater(tenantId: string, employeeId: string, version: number): Promise<void>;
 }

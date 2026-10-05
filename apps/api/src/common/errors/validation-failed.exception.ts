@@ -8,13 +8,22 @@ export interface FieldError {
   code: string;
 }
 
-// 400 validation_failed with errors[]; built by the global ValidationPipe, rendered by the filter.
-export class ValidationFailedException extends ProblemException {
+// A problem that names the rejected fields in errors[] (ADR-0015): the filter renders them for
+// every status. A business rule on one field (a wrong current password) is a 422 of this kind.
+export class FieldProblemException extends ProblemException {
   readonly errors: readonly FieldError[];
 
-  constructor(errors: readonly FieldError[]) {
-    super(400, 'validation_failed');
-    this.name = 'ValidationFailedException';
+  constructor(status: number, code: string, errors: readonly FieldError[]) {
+    super(status, code);
+    this.name = 'FieldProblemException';
     this.errors = errors;
+  }
+}
+
+// 400 validation_failed with errors[]; built by the global ValidationPipe, rendered by the filter.
+export class ValidationFailedException extends FieldProblemException {
+  constructor(errors: readonly FieldError[]) {
+    super(400, 'validation_failed', errors);
+    this.name = 'ValidationFailedException';
   }
 }

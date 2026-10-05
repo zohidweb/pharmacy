@@ -16,6 +16,7 @@ import type {
   TenantTransaction,
 } from '../../core/database';
 import {
+  type PermissionsVersionCache,
   SessionStore,
   type SessionPatch,
   type SessionRecord,
@@ -208,6 +209,9 @@ function setup() {
   };
   const tokens = { sign: jest.fn(async () => 'signed.jwt.token') };
   const sessions = new FakeSessionStore(db);
+  const versions = {
+    setIfGreater: jest.fn(async () => undefined),
+  };
   const limiter = {
     tryAcquire: jest.fn(
       async () =>
@@ -239,6 +243,7 @@ function setup() {
     hasher as unknown as PasswordHasher,
     tokens as unknown as SessionTokenService,
     sessions,
+    versions as unknown as PermissionsVersionCache,
     limiter as unknown as LoginLimiter,
     audit as unknown as AuditService,
     clock,
@@ -256,6 +261,7 @@ function setup() {
     hasher,
     tokens,
     sessions,
+    versions,
     limiter,
     clock,
     audit,
@@ -667,6 +673,38 @@ describe('SessionsService.login — success', () => {
     expect(t.db.tenants.every((tenant) => tenant === TENANT)).toBe(true);
     // Stored last inside that transaction: a store failure rolls the audit back.
     expect(t.sessions.createdInTransaction).toEqual([true]);
+  });
+
+  it('seeds the permissions-version cache with the loaded version (set if greater)', async () => {
+    const t = setup();
+
+    await inRequest(() => t.service.login('farida.r', PASSWORD, IP));
+
+    expect(t.versions.setIfGreater).toHaveBeenCalledTimes(1);
+    expect(t.versions.setIfGreater).toHaveBeenCalledWith(TENANT, EMPLOYEE, 4);
+  });
+
+  it('does not seed the version cache when the session cannot be stored', async () => {
+    const t = setup();
+    t.sessions.failCreate = true;
+
+    await expect(
+      inRequest(() => t.service.login('farida.r', PASSWORD, IP)),
+    ).rejects.toThrow('redis down');
+
+    expect(t.versions.setIfGreater).not.toHaveBeenCalled();
+  });
+
+  it('still signs in when the version seed fails: the cache is only a hint', async () => {
+    const t = setup();
+    t.versions.setIfGreater.mockRejectedValue(new Error('redis blip'));
+
+    const result = await inRequest(() =>
+      t.service.login('farida.r', PASSWORD, IP),
+    );
+
+    expect(result.token).toBe('signed.jwt.token');
+    expect(t.limiter.reset).toHaveBeenCalledWith(KEY);
   });
 
   // The session is stored inside the transaction, so the real one rolls the audit back.

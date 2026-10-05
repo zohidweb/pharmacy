@@ -48,7 +48,34 @@ describe('validateEnv', () => {
       LOGIN_FAILURE_FLOOR_MS: 400,
       ACTIVATION_CODE_TTL_HOURS: 72,
       AUTH_TEST_COOKIES: false,
+      TRUST_PROXY: 0,
     });
+  });
+
+  describe('TRUST_PROXY (hop count of the reverse proxy)', () => {
+    it('defaults to 0 (off)', () => {
+      expect(validateEnv(base).TRUST_PROXY).toBe(0);
+    });
+
+    it.each([
+      ['0', 0],
+      ['1', 1],
+      ['2', 2],
+      ['5', 5],
+    ])('accepts %s', (raw, expected) => {
+      expect(validateEnv({ ...base, TRUST_PROXY: raw }).TRUST_PROXY).toBe(
+        expected,
+      );
+    });
+
+    it.each(['1.5', 'abc', 'true', '-1', '6', '100', '1e1'])(
+      'rejects %s',
+      (raw) => {
+        expect(() => validateEnv({ ...base, TRUST_PROXY: raw })).toThrow(
+          /Invalid environment configuration/,
+        );
+      },
+    );
   });
 
   it('converts PORT from a string', () => {

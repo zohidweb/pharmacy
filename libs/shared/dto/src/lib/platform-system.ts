@@ -231,7 +231,13 @@ export interface UpdateMeRequest {
   impersonationReminder: boolean;
 }
 
-/** POST /operator/me/password — ends all other sessions (ADR-0008). */
+/**
+ * POST /operator/me/password and POST /me/password — ends all other sessions (ADR-0008). Errors of
+ * POST /me/password: 422 `invalid_current_password` with `errors: [{ field: 'currentPassword',
+ * code: 'invalid_current_password' }]` (not 401: ADR-0015 reserves 401 for a lost session), 422
+ * `password_policy`, 403 `fresh_auth_required`, 429 `login_locked` (5 wrong current passwords per
+ * 15 minutes per employee).
+ */
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;

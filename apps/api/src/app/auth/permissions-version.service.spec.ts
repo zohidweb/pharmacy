@@ -20,8 +20,7 @@ function setup() {
     ),
   };
   const cache = {
-    set: jest.fn(async () => undefined),
-    setIfAbsent: jest.fn(async () => undefined),
+    setIfGreater: jest.fn(async () => undefined),
   };
   const service = new PermissionsVersionService(
     repository as unknown as PermissionsVersionRepository,
@@ -53,14 +52,12 @@ describe('PermissionsVersionService.bump', () => {
 
     const afterCommit = await inTenant(() => t.service.bump(trx, [EMPLOYEE_1]));
 
-    expect(t.cache.set).not.toHaveBeenCalled();
-    expect(t.cache.setIfAbsent).not.toHaveBeenCalled();
+    expect(t.cache.setIfGreater).not.toHaveBeenCalled();
 
     await afterCommit();
 
-    expect(t.cache.set).toHaveBeenCalledTimes(1);
-    expect(t.cache.set).toHaveBeenCalledWith(TENANT, EMPLOYEE_1, 5);
-    expect(t.cache.setIfAbsent).not.toHaveBeenCalled();
+    expect(t.cache.setIfGreater).toHaveBeenCalledTimes(1);
+    expect(t.cache.setIfGreater).toHaveBeenCalledWith(TENANT, EMPLOYEE_1, 5);
   });
 
   it('writes the new version of every employee after the commit', async () => {
@@ -71,8 +68,8 @@ describe('PermissionsVersionService.bump', () => {
     );
     await afterCommit();
 
-    expect(t.cache.set).toHaveBeenCalledWith(TENANT, EMPLOYEE_1, 5);
-    expect(t.cache.set).toHaveBeenCalledWith(TENANT, EMPLOYEE_2, 6);
+    expect(t.cache.setIfGreater).toHaveBeenCalledWith(TENANT, EMPLOYEE_1, 5);
+    expect(t.cache.setIfGreater).toHaveBeenCalledWith(TENANT, EMPLOYEE_2, 6);
   });
 
   it('bumps each employee once even when listed twice', async () => {
@@ -90,7 +87,7 @@ describe('PermissionsVersionService.bump', () => {
     await afterCommit();
 
     expect(t.repository.bump).not.toHaveBeenCalled();
-    expect(t.cache.set).not.toHaveBeenCalled();
+    expect(t.cache.setIfGreater).not.toHaveBeenCalled();
   });
 
   it('never writes the cache when the bump itself fails (the transaction rolls back)', async () => {
@@ -101,7 +98,7 @@ describe('PermissionsVersionService.bump', () => {
       inTenant(() => t.service.bump(trx, [EMPLOYEE_1])),
     ).rejects.toThrow('db down');
 
-    expect(t.cache.set).not.toHaveBeenCalled();
+    expect(t.cache.setIfGreater).not.toHaveBeenCalled();
   });
 
   it('refuses to run without a tenant context', async () => {

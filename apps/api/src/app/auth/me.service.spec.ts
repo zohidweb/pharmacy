@@ -7,6 +7,7 @@ import {
   runWithContext,
 } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
+import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import type { PasswordHasher, SessionTokenService } from '../../core/crypto';
 import type { TenantDatabase, TenantTransaction } from '../../core/database';
 import {
@@ -21,6 +22,7 @@ import type {
   LoginCredentials,
   ProfileStore,
 } from './employee-auth.repository';
+import type { LoginLimiter } from './login-limiter';
 import { MeService } from './me.service';
 
 // MeService (auth design 2026-10-02, section 6): the own profile, the interface language and the
@@ -218,12 +220,22 @@ function setup() {
       audits.push({ trx, event, tenantId: getRequestContext()?.tenantId });
     }),
   };
+  const limiter = {
+    tryAcquire: jest.fn(
+      async () =>
+        ({ allowed: true }) as
+          | { allowed: true }
+          | { allowed: false; retryAfterSeconds: number },
+    ),
+    reset: jest.fn(async () => undefined),
+  };
   const service = new MeService(
     db as unknown as TenantDatabase,
     repository as unknown as EmployeeAuthRepository,
     hasher as unknown as PasswordHasher,
     tokens as unknown as SessionTokenService,
     sessions,
+    limiter as unknown as LoginLimiter,
     audit as unknown as AuditService,
     config,
   );
@@ -234,6 +246,7 @@ function setup() {
     hasher,
     tokens,
     sessions,
+    limiter,
     audit,
     audits,
     setStores: (next: ProfileStore[]) => {
@@ -389,15 +402,19 @@ describe('MeService.updateLocale', () => {
 });
 
 describe('MeService.changePassword — rejections', () => {
-  it('answers 401 invalid_credentials for a wrong current password and changes nothing', async () => {
+  it('answers 422 invalid_current_password on the field currentPassword for a wrong current password and changes nothing', async () => {
     const t = setup();
 
     const problem = await problemOf(
       asEmployee(() => t.service.changePassword('not the password', NEXT)),
     );
 
-    expect(problem.getStatus()).toBe(401);
-    expect(problem.code).toBe('invalid_credentials');
+    expect(problem.getStatus()).toBe(422);
+    expect(problem.code).toBe('invalid_current_password');
+    expect(problem).toBeInstanceOf(FieldProblemException);
+    expect((problem as FieldProblemException).errors).toEqual([
+      { field: 'currentPassword', code: 'invalid_current_password' },
+    ]);
     expect(t.hasher.verify).toHaveBeenCalledWith(
       'not the password',
       '$scrypt$stored',
@@ -412,7 +429,7 @@ describe('MeService.changePassword — rejections', () => {
     expect(t.tokens.sign).not.toHaveBeenCalled();
   });
 
-  it('answers 401 invalid_credentials when the employee has no password', async () => {
+  it('answers 422 invalid_current_password when the employee has no password', async () => {
     const t = setup();
     t.repository.findCredentials.mockResolvedValue({
       status: 'active',
@@ -424,7 +441,8 @@ describe('MeService.changePassword — rejections', () => {
       asEmployee(() => t.service.changePassword(CURRENT, NEXT)),
     );
 
-    expect(problem.code).toBe('invalid_credentials');
+    expect(problem.getStatus()).toBe(422);
+    expect(problem.code).toBe('invalid_current_password');
     expect(t.hasher.verify).not.toHaveBeenCalled();
   });
 
@@ -463,7 +481,7 @@ describe('MeService.changePassword — rejections', () => {
       asEmployee(() => t.service.changePassword('wrong', 'short')),
     );
 
-    expect(problem.code).toBe('invalid_credentials');
+    expect(problem.code).toBe('invalid_current_password');
   });
 
   it('answers 401 unauthenticated when the session record is already gone', async () => {
@@ -492,6 +510,94 @@ describe('MeService.changePassword — rejections', () => {
     expect(t.sessions.created).toEqual([]);
     expect(t.sessions.destroyed).toEqual([]);
     expect(t.sessions.destroyedAll).toEqual([]);
+  });
+});
+
+describe('MeService.changePassword — attempt limit', () => {
+  const LIMIT_KEY = `password-change:${TENANT}:${EMPLOYEE}`;
+
+  it('reserves an attempt under password-change:<tenant>:<employee> before anything else', async () => {
+    const t = setup();
+
+    await asEmployee(() => t.service.changePassword(CURRENT, NEXT));
+
+    expect(t.limiter.tryAcquire).toHaveBeenCalledTimes(1);
+    expect(t.limiter.tryAcquire).toHaveBeenCalledWith(LIMIT_KEY);
+    expect(t.limiter.tryAcquire.mock.invocationCallOrder[0]).toBeLessThan(
+      t.repository.findCredentials.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('answers 429 login_locked while locked, without any hashing or database work', async () => {
+    const t = setup();
+    t.limiter.tryAcquire.mockResolvedValue({
+      allowed: false,
+      retryAfterSeconds: 600,
+    });
+
+    const problem = await problemOf(
+      asEmployee(() => t.service.changePassword(CURRENT, NEXT)),
+    );
+
+    expect(problem.getStatus()).toBe(429);
+    expect(problem.code).toBe('login_locked');
+    expect(t.repository.findCredentials).not.toHaveBeenCalled();
+    expect(t.hasher.verify).not.toHaveBeenCalled();
+    expect(t.hasher.hash).not.toHaveBeenCalled();
+    expect(t.limiter.reset).not.toHaveBeenCalled();
+  });
+
+  it('locks after 5 wrong current passwords, even for the correct one afterwards', async () => {
+    const t = setup();
+    // The real policy: the 5th attempt still proceeds and sets the lock; the 6th is refused.
+    let attempts = 0;
+    t.limiter.tryAcquire.mockImplementation(async () => {
+      attempts += 1;
+      return attempts <= 5
+        ? { allowed: true }
+        : { allowed: false, retryAfterSeconds: 900 };
+    });
+
+    for (let i = 0; i < 5; i += 1) {
+      const problem = await problemOf(
+        asEmployee(() => t.service.changePassword('wrong', NEXT)),
+      );
+      expect(problem.getStatus()).toBe(422);
+    }
+    const locked = await problemOf(
+      asEmployee(() => t.service.changePassword(CURRENT, NEXT)),
+    );
+
+    expect(locked.getStatus()).toBe(429);
+    expect(locked.code).toBe('login_locked');
+    expect(t.hasher.verify).toHaveBeenCalledTimes(5);
+    expect(t.repository.changePassword).not.toHaveBeenCalled();
+    expect(t.limiter.reset).not.toHaveBeenCalled();
+  });
+
+  it('does not reset the limiter after a wrong current password', async () => {
+    const t = setup();
+
+    await problemOf(asEmployee(() => t.service.changePassword('wrong', NEXT)));
+
+    expect(t.limiter.reset).not.toHaveBeenCalled();
+  });
+
+  it('resets the limiter once the current password is verified, even when the new one is rejected', async () => {
+    const t = setup();
+
+    await problemOf(asEmployee(() => t.service.changePassword(CURRENT, 'short')));
+
+    expect(t.limiter.reset).toHaveBeenCalledWith(LIMIT_KEY);
+  });
+
+  it('resets the limiter after a successful change', async () => {
+    const t = setup();
+
+    await asEmployee(() => t.service.changePassword(CURRENT, NEXT));
+
+    expect(t.limiter.reset).toHaveBeenCalledTimes(1);
+    expect(t.limiter.reset).toHaveBeenCalledWith(LIMIT_KEY);
   });
 });
 

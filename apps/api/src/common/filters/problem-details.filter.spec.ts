@@ -9,6 +9,7 @@ import {
 import { IsString, MaxLength } from 'class-validator';
 import { UnauthenticatedError } from '../context/request-context';
 import { ProblemException } from '../errors/problem.exception';
+import { FieldProblemException } from '../errors/validation-failed.exception';
 import { ProblemDetailsFilter } from './problem-details.filter';
 
 // The filter is exercised with plain request/response doubles: it only reads the correlation id and
@@ -111,6 +112,25 @@ describe('ProblemDetailsFilter', () => {
       correlationId: 'corr-1234-abcd',
     });
     expect(typeof out.body['title']).toBe('string');
+  });
+
+  it('renders the errors[] of a field-level 422 and keeps its status, code and title', () => {
+    const out = run(
+      new FieldProblemException(422, 'invalid_current_password', [
+        { field: 'currentPassword', code: 'invalid_current_password' },
+      ]),
+    );
+
+    expect(out.status).toBe(422);
+    expect(out.headers['content-type']).toBe('application/problem+json');
+    expect(out.body).toMatchObject({
+      type: 'about:blank',
+      title: 'Unprocessable Entity',
+      status: 422,
+      code: 'invalid_current_password',
+      errors: [{ field: 'currentPassword', code: 'invalid_current_password' }],
+      correlationId: 'corr-1234-abcd',
+    });
   });
 
   it('carries the fixed detail of a ProblemException', () => {

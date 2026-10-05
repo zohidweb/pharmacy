@@ -49,8 +49,9 @@ export class MeController {
 
   /**
    * 204 + the rotated session cookie; every other session of the employee ends. 401
-   * `invalid_credentials` for a wrong current password, 403 `fresh_auth_required`, 422
-   * `password_policy`.
+   * 422 `invalid_current_password` (errors[{ field: 'currentPassword' }]) for a wrong current
+   * password, 403 `fresh_auth_required`, 422 `password_policy`, 429 `login_locked` after 5 wrong
+   * current passwords in 15 minutes.
    */
   @Authenticated()
   @RequireFreshAuth()

@@ -1,17 +1,22 @@
 import { Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app/app.module';
 import { createValidationPipe } from './common/validation/validation-pipe';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // `trust proxy` is deliberately not set: req.ip (the guest throttling key and the login
-  // limiter) is the socket address until the reverse proxy is chosen (ADR-0012, proposed), which
-  // decides how many hops to trust. Setting it blindly would let a client spoof X-Forwarded-For.
+  // req.ip (the guest/login/activation throttling keys, the audit `ip`) is the socket address
+  // unless TRUST_PROXY (hop count of the reverse proxy, default 0 = off) says how many proxies to
+  // trust. It is a deploy prerequisite behind the reverse proxy of ADR-0012: a wrong hop count lets
+  // a client spoof X-Forwarded-For (too high) or merges all clients into one bucket (too low).
+  const trustProxy = app.get(ConfigService).get<number>('TRUST_PROXY', 0);
+  if (trustProxy > 0) app.set('trust proxy', trustProxy);
+
   app.use(helmet());
   // Fills req.cookies for the session middleware (the session JWT travels in a cookie, ADR-0008).
   app.use(cookieParser());

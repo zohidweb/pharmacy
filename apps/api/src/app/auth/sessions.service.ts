@@ -15,7 +15,11 @@ import {
   TenantDatabase,
   type TenantTransaction,
 } from '../../core/database';
-import { type SessionRecord, SessionStore } from '../../core/sessions';
+import {
+  PermissionsVersionCache,
+  type SessionRecord,
+  SessionStore,
+} from '../../core/sessions';
 import { AuditService } from '../audit/audit.service';
 import {
   EmployeeAuthRepository,
@@ -74,6 +78,7 @@ export class SessionsService {
     private readonly hasher: PasswordHasher,
     private readonly tokens: SessionTokenService,
     private readonly sessions: SessionStore,
+    private readonly versions: PermissionsVersionCache,
     private readonly limiter: LoginLimiter,
     private readonly audit: AuditService,
     private readonly clock: LoginClock,
@@ -283,6 +288,20 @@ export class SessionsService {
       await this.sessions.create(record);
       return buildEmployeeSession(profile, stores, record);
     });
+
+    // Seed the cache with the version the snapshot was built from, so the first request of the
+    // session does not take the cache-miss path. Only a hint: a failure must not undo the login.
+    try {
+      await this.versions.setIfGreater(
+        tenantId,
+        employeeId,
+        snapshot.permissionsVersion,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Permissions version seed failed (${error instanceof Error ? error.name : typeof error}) [correlationId=${getRequestContext()?.correlationId}]`,
+      );
+    }
 
     await this.limiter.reset(key);
     return { token, maxAgeSeconds: this.absoluteTtlSeconds, session };

@@ -106,29 +106,19 @@ class FakeSessionStore extends SessionStore {
 
 class FakeVersionCache extends PermissionsVersionCache {
   value: number | null = null;
-  readonly setCalls = jest.fn();
-  readonly setIfAbsentCalls = jest.fn();
+  readonly setIfGreaterCalls = jest.fn();
 
   async get(): Promise<number | null> {
     throw new Error('not used: the version comes with the session lookup');
   }
 
-  async set(
+  async setIfGreater(
     tenantId: string,
     employeeId: string,
     version: number,
   ): Promise<void> {
-    this.setCalls(tenantId, employeeId, version);
-    this.value = version;
-  }
-
-  async setIfAbsent(
-    tenantId: string,
-    employeeId: string,
-    version: number,
-  ): Promise<void> {
-    this.setIfAbsentCalls(tenantId, employeeId, version);
-    this.value ??= version;
+    this.setIfGreaterCalls(tenantId, employeeId, version);
+    if (this.value === null || this.value < version) this.value = version;
   }
 }
 
@@ -252,8 +242,7 @@ describe('SessionMiddleware', () => {
     expect(Object.isFrozen(context?.principal?.permissions)).toBe(true);
     expect(reload).not.toHaveBeenCalled();
     expect(store.updateCalls).not.toHaveBeenCalled();
-    expect(versions.setCalls).not.toHaveBeenCalled();
-    expect(versions.setIfAbsentCalls).not.toHaveBeenCalled();
+    expect(versions.setIfGreaterCalls).not.toHaveBeenCalled();
   });
 
   it('grown version: reloads, updates the snapshot and uses the fresh values', async () => {
@@ -273,8 +262,7 @@ describe('SessionMiddleware', () => {
       storeScope: [STORE_1],
       currentStoreId: STORE_1,
     });
-    expect(versions.setCalls).not.toHaveBeenCalled();
-    expect(versions.setIfAbsentCalls).not.toHaveBeenCalled();
+    expect(versions.setIfGreaterCalls).not.toHaveBeenCalled();
   });
 
   it('a narrowed scope drops a current store that left it', async () => {
@@ -302,8 +290,7 @@ describe('SessionMiddleware', () => {
     const context = await handle();
 
     expect(reload).toHaveBeenCalledWith(TENANT, EMPLOYEE);
-    expect(versions.setIfAbsentCalls).toHaveBeenCalledWith(TENANT, EMPLOYEE, 3);
-    expect(versions.setCalls).not.toHaveBeenCalled();
+    expect(versions.setIfGreaterCalls).toHaveBeenCalledWith(TENANT, EMPLOYEE, 3);
     // Same version as the record: the snapshot is still current, nothing to rewrite.
     expect(store.updateCalls).not.toHaveBeenCalled();
     expect(context?.principal?.permissions).toEqual([
@@ -318,8 +305,7 @@ describe('SessionMiddleware', () => {
 
     const context = await handle();
 
-    expect(versions.setIfAbsentCalls).toHaveBeenCalledWith(TENANT, EMPLOYEE, 5);
-    expect(versions.setCalls).not.toHaveBeenCalled();
+    expect(versions.setIfGreaterCalls).toHaveBeenCalledWith(TENANT, EMPLOYEE, 5);
     expect(store.updateCalls).toHaveBeenCalledWith(
       SESSION,
       expect.objectContaining({ permissionsVersion: 5 }),
@@ -336,15 +322,13 @@ describe('SessionMiddleware', () => {
     // An admin commits version 6 and its post-commit write lands while the middleware is
     // still reloading version 5 from the database.
     reload.mockImplementation(async () => {
-      await versions.set(TENANT, EMPLOYEE, 6);
-      versions.setCalls.mockClear();
+      await versions.setIfGreater(TENANT, EMPLOYEE, 6);
       return snapshot({ permissionsVersion: 5 });
     });
 
     await handle();
 
-    expect(versions.setIfAbsentCalls).toHaveBeenCalledWith(TENANT, EMPLOYEE, 5);
-    expect(versions.setCalls).not.toHaveBeenCalled();
+    expect(versions.setIfGreaterCalls).toHaveBeenCalledWith(TENANT, EMPLOYEE, 5);
     expect(versions.value).toBe(6);
 
     // The next request sees 6 against the stored snapshot 5 and reloads again.

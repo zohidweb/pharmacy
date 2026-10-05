@@ -162,10 +162,11 @@ export class SessionMiddleware implements NestMiddleware {
         await this.sessions.destroyAllFor(tenantId, employeeId);
         return null;
       }
-      // Cache miss: the database version becomes the cached one — only if nobody cached a newer
-      // version meanwhile (the post-commit writer); then the next request reloads against it.
+      // Cache miss: the database version is cached with set-if-greater, so a newer version written
+      // meanwhile by the post-commit writer is never overwritten; then the next request reloads
+      // against it.
       if (permissionsVersion === null) {
-        await this.versions.setIfAbsent(
+        await this.versions.setIfGreater(
           tenantId,
           employeeId,
           fresh.permissionsVersion,

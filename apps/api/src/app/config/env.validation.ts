@@ -174,6 +174,17 @@ class EnvironmentVariables {
   @IsOptional()
   ACTIVATION_CODE_TTL_HOURS = 72;
 
+  // Number of reverse proxies in front of the API (Express `trust proxy` hop count); 0 = no proxy,
+  // req.ip is the socket address. Behind a proxy it must equal the real hop count: too low makes
+  // every client share the proxy's address (one platform-wide rate-limit bucket), too high lets a
+  // client spoof X-Forwarded-For. Set together with the reverse proxy of ADR-0012.
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  @IsOptional()
+  TRUST_PROXY = 0;
+
   // Allowed origins of the two web apps (CSRF Origin check).
   @Matches(ORIGIN)
   WEB_ORIGIN!: string;

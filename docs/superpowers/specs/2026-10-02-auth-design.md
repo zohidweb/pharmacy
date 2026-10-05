@@ -175,7 +175,12 @@ sequenceDiagram
   `currentStoreId` в записи сессии;
 - `DELETE /sessions/current` — уничтожает сессию, очищает cookie;
 - `GET /me`, `PATCH /me { locale }`, `POST /me/password` (step-up; после смены — `destroyAllFor`,
-  кроме текущей, и новая cookie).
+  кроме текущей, и новая cookie). Неверный текущий пароль — `422 invalid_current_password` с
+  `errors: [{ field: 'currentPassword', code: 'invalid_current_password' }]` (не 401: ADR-0015 отдаёт 401
+  потере сессии, а клиент по нему уходит на вход). Попытки считает тот же `LoginLimiter`, ключ
+  `password-change:<tid>:<eid>`, политика 5 попыток / 900 с, как у входа; пока блокировка — `429 login_locked`;
+  счётчик сбрасывается, когда текущий пароль подтверждён (в том числе при успешной смене). Без этого
+  лимита украденная свежая сессия подбирала бы пароль со скоростью throttler'а (300 в минуту).
 
 **Активация и сброс пароля владельца:** `POST /api/v1/activations { login, code, newPassword }`
 (`@Public`). Код — 128 бит из `randomBytes`, показывается оператору один раз, в
@@ -251,6 +256,15 @@ PostgreSQL в `withTenant(tid из токена)` (раздел 10).
 **Версия прав.** Сервисы, меняющие роль, её права, охват или статус сотрудника, в той же транзакции
 увеличивают `employees.permissions_version` (для роли — у всех её сотрудников), а после коммита
 пишут новую версию в Redis. Нет ключа в Redis → версия читается из БД и кладётся в кэш.
+
+Запись версии в Redis везде одна и та же — Lua «записать, если больше» (`PermissionsVersionCache.
+setIfGreater`): ключ пишется, только если его нет или хранится меньшая версия, и при каждой записи
+срок жизни обновляется. Порядок писателей не важен: пост-коммитная запись `bump`, заполнение при
+промахе кэша и посев при входе (вход кладёт версию, из которой построен снимок) никогда не откатывают
+кэш назад. Срок жизни ключа `pv:<tid>:<eid>` — 300 с: потерянная пост-коммитная запись (сбой Redis)
+стоит не больше пяти минут устаревшего кэша — ключ истекает, следующий запрос читает версию из БД и
+заполняет его. Тем же сроком ограничено окно, в которое смена роли или блокировка не доходит до
+живой сессии.
 
 ## 8. Терминал и PIN (часть 2)
 
@@ -397,7 +411,8 @@ revoked_at)`; нет или отозван → `404 not_bound`. В `withTenant`:
 | 401 | `unauthenticated`, `session_expired`, `invalid_credentials`, `invalid_pin`, `invalid_code` |
 | 403 | `forbidden`, `fresh_auth_required`, `csrf_rejected` |
 | 404 | `not_bound` |
-| 422 | `password_policy`, `pin_trivial`, `pin_length` |
+| 409 | `conflict` (пароль изменился параллельно при смене) |
+| 422 | `password_policy`, `invalid_current_password`, `pin_trivial`, `pin_length` |
 | 423 | `pin_locked`, `terminal_locked` |
 | 429 | `login_locked`, `too_many_requests` |
 
@@ -420,6 +435,12 @@ pepper и ключи JWT — никогда в логах, аудите, URL и 
 | `TERMINAL_PIN_MAX_FAILURES`, `TERMINAL_PIN_WINDOW_SECONDS` | 10, 900 | |
 | `ACTIVATION_CODE_TTL_HOURS` | 72 | |
 | `WEB_ORIGIN`, `ADMIN_ORIGIN` | — | для CSRF |
+| `TRUST_PROXY` | 0 | число reverse proxy перед API (`trust proxy`, 0–5; 0 — выключено); см. ниже |
+
+**`TRUST_PROXY`** нужен всем ключам по IP (throttler гостя и входа, активация, `ip` в аудите входа): за
+reverse proxy (ADR-0012) без него `req.ip` — адрес прокси, и все клиенты платформы делят один лимит.
+Значение — реальное число прокси-узлов; больше — клиент подделывает `X-Forwarded-For`. Это
+обязательная часть выкладки за reverse proxy.
 
 Послабление cookie без `__Host-` и `Secure` для e2e — только при `APP_ENV=test`; в любой другой
 среде процесс с ним не стартует.

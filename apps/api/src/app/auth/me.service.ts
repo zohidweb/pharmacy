@@ -9,11 +9,13 @@ import {
   requirePrincipal,
 } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
+import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { PasswordHasher, SessionTokenService } from '../../core/crypto';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
 import { type SessionRecord, SessionStore } from '../../core/sessions';
 import { AuditService } from '../audit/audit.service';
 import { EmployeeAuthRepository } from './employee-auth.repository';
+import { LoginLimiter } from './login-limiter';
 import { dbLanguage, roleDisplayName } from './session-profile';
 
 /** The rotated session of a password change: the JWT for the cookie, never in a body or a log. */
@@ -22,8 +24,12 @@ export interface PasswordChangeResult {
   maxAgeSeconds: number;
 }
 
-const invalidCredentials = () =>
-  new ProblemException(401, 'invalid_credentials');
+// A wrong current password is a field error of a signed-in employee (422): ADR-0015 reserves 401
+// for a lost session, which the client answers by going to the sign-in page.
+const invalidCurrentPassword = () =>
+  new FieldProblemException(422, 'invalid_current_password', [
+    { field: 'currentPassword', code: 'invalid_current_password' },
+  ]);
 // The employee of a live session is gone: no profile to show.
 const unauthenticated = () => new ProblemException(401, 'unauthenticated');
 
@@ -41,6 +47,7 @@ export class MeService {
     private readonly hasher: PasswordHasher,
     private readonly tokens: SessionTokenService,
     private readonly sessions: SessionStore,
+    private readonly limiter: LoginLimiter,
     private readonly audit: AuditService,
     config: ConfigService,
   ) {
@@ -73,11 +80,15 @@ export class MeService {
   }
 
   /**
-   * Order: the current password is verified (401 `invalid_credentials`; no padding - the employee
-   * is known and signed in, guessing is limited by the principal throttler), then the policy of
-   * the new one (422), then the hash, the audit and the new session commit together. After the
-   * commit the old session and every other session of the employee are destroyed; a failure there
-   * is logged, not returned: the password has already changed.
+   * Order: an attempt is reserved with the limiter (429 `login_locked` while locked: the same
+   * 5 attempts / 900 s policy as the sign-in, keyed by the employee, so a hijacked fresh session
+   * cannot guess the current password), the current password is verified (422
+   * `invalid_current_password` on the field `currentPassword`; no padding - the employee is known
+   * and signed in), then the policy of the new one (422), then the hash, the audit and the new
+   * session commit together. After the commit the old session and every other session of the
+   * employee are destroyed; a failure there is logged, not returned: the password has already
+   * changed. The limiter is reset as soon as the current password is verified, so a rejected new
+   * password does not eat attempts.
    */
   async changePassword(
     currentPassword: string,
@@ -86,16 +97,22 @@ export class MeService {
     const principal = requirePrincipal();
     const { tenantId, employeeId } = principal;
 
+    // The attempt is reserved atomically before any hashing or database call (see LoginLimiter).
+    const limiterKey = `password-change:${tenantId}:${employeeId}`;
+    const attempt = await this.limiter.tryAcquire(limiterKey);
+    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
     );
     if (credentials === null) throw unauthenticated();
     const { passwordHash: phc, passwordPepperVersion: pepperVersion } =
       credentials;
-    if (phc === null || pepperVersion === null) throw invalidCredentials();
+    if (phc === null || pepperVersion === null) throw invalidCurrentPassword();
     if (!(await this.hasher.verify(currentPassword, phc, pepperVersion))) {
-      throw invalidCredentials();
+      throw invalidCurrentPassword();
     }
+    await this.limiter.reset(limiterKey);
 
     if (passwordProblems(newPassword).length > 0) {
       throw new ProblemException(422, 'password_policy');

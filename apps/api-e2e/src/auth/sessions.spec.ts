@@ -258,6 +258,66 @@ describe('session lifetime', () => {
   });
 });
 
+describe('password change', () => {
+  const NEW_PASSWORD = 'Fresh-Passw0rd-7';
+
+  it('answers a wrong current password with 422 invalid_current_password on the field', async () => {
+    const { cookie } = await activatedAndSignedIn();
+
+    const res = await post('/api/v1/me/password', {
+      cookie,
+      data: { currentPassword: 'Wrong-Passw0rd', newPassword: NEW_PASSWORD },
+    });
+
+    expect(res.status).toBe(422);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.data.code).toBe('invalid_current_password');
+    expect(res.data.errors).toEqual([
+      { field: 'currentPassword', code: 'invalid_current_password' },
+    ]);
+    // Not a lost session: the same cookie still works.
+    expect((await get('/api/v1/sessions/current', { cookie })).status).toBe(200);
+  });
+
+  it('locks the change after 5 wrong current passwords with 429 login_locked', async () => {
+    const { user, cookie } = await activatedAndSignedIn();
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const res = await post('/api/v1/me/password', {
+        cookie,
+        data: { currentPassword: 'Wrong-Passw0rd', newPassword: NEW_PASSWORD },
+      });
+      expect(res.status).toBe(422);
+    }
+    // Locked: even the right current password is refused.
+    const locked = await post('/api/v1/me/password', {
+      cookie,
+      data: { currentPassword: user.password, newPassword: NEW_PASSWORD },
+    });
+
+    expect(locked.status).toBe(429);
+    expect(locked.data.code).toBe('login_locked');
+  });
+
+  it('changes the password, rotates the session and ends the old one', async () => {
+    const { user, cookie } = await activatedAndSignedIn();
+
+    const res = await post('/api/v1/me/password', {
+      cookie,
+      data: { currentPassword: user.password, newPassword: NEW_PASSWORD },
+    });
+
+    expect(res.status).toBe(204);
+    const rotated = sessionCookie(res);
+    expect(rotated).not.toBe(cookie);
+    expect((await get('/api/v1/sessions/current', { cookie })).status).toBe(401);
+    expect(
+      (await get('/api/v1/sessions/current', { cookie: rotated })).status,
+    ).toBe(200);
+    expect((await signIn(user.login, NEW_PASSWORD)).status).toBe(201);
+  });
+});
+
 describe('CSRF', () => {
   it('rejects a foreign Origin on PUT /sessions/current/store', async () => {
     const { user, cookie } = await activatedAndSignedIn();

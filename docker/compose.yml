@@ -82,6 +82,7 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:?set in the env file}
       ADMIN_ORIGIN: ${ADMIN_ORIGIN:?set in the env file}
       AUTH_TEST_COOKIES: ${AUTH_TEST_COOKIES:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
     ports:
       - '127.0.0.1:${API_PORT:?set in the env file}:3000'
     depends_on:

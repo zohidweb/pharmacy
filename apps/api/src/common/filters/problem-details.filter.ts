@@ -14,6 +14,7 @@ import {
 } from '../context/request-context';
 import { ProblemException } from '../errors/problem.exception';
 import {
+  FieldProblemException,
   type FieldError,
   ValidationFailedException,
 } from '../errors/validation-failed.exception';
@@ -25,7 +26,7 @@ interface ProblemBody {
   status: number;
   code: string;
   detail?: string;
-  /** Rejected fields of a 400 validation_failed (ADR-0015); paths and codes only. */
+  /** Rejected fields of a validation_failed or a field-level 422 (ADR-0015); paths and codes only. */
   errors?: readonly FieldError[];
   correlationId: string;
 }
@@ -127,9 +128,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         correlationId,
       };
       if (error.detail !== undefined) body.detail = error.detail;
+      if (error instanceof FieldProblemException) body.errors = error.errors;
       if (error instanceof ValidationFailedException) {
         body.title = 'Validation Failed';
-        body.errors = error.errors;
       }
       this.logServerError(status, error, correlationId);
       return body;

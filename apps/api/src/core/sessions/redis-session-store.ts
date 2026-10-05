@@ -21,9 +21,10 @@ const PATCHABLE_FIELDS = [
   'locale',
 ] as const;
 
-// A cached version is only a hint: a missing key means "read it from the database", so a bounded
-// lifetime caps the damage if a post-commit write of a newer version was lost.
-const PERMISSIONS_VERSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+// A cached version is only a hint: a missing key means "read it from the database". The lifetime
+// is short (minutes) so that a lost post-commit write of a newer version costs at most this much
+// staleness: the key expires, the next request reloads from the database and refills it.
+export const PERMISSIONS_VERSION_TTL_SECONDS = 300;
 
 const MAX_UPDATE_ATTEMPTS = 5;
 
@@ -31,6 +32,17 @@ const MAX_UPDATE_ATTEMPTS = 5;
 const COMPARE_AND_SET = `
 if redis.call('GET', KEYS[1]) == ARGV[1] then
   redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+  return 1
+end
+return 0`;
+
+// Set if greater: writes only when the key is missing or holds a lower version, and refreshes the
+// lifetime whenever it writes. Atomic, so concurrent writers end at the greatest version.
+// A non-numeric stored value is treated as missing.
+const SET_IF_GREATER = `
+local current = tonumber(redis.call('GET', KEYS[1]))
+if current == nil or current < tonumber(ARGV[1]) then
+  redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
   return 1
 end
 return 0`;
@@ -163,17 +175,10 @@ export class RedisPermissionsVersionCache extends PermissionsVersionCache {
     return parseVersion(await this.redis.get(versionKey(tenantId, employeeId)));
   }
 
-  async set(tenantId: string, employeeId: string, version: number): Promise<void> {
-    await this.redis.set(versionKey(tenantId, employeeId), String(version), {
-      expiration: { type: 'EX', value: PERMISSIONS_VERSION_TTL_SECONDS },
-    });
-  }
-
-  async setIfAbsent(tenantId: string, employeeId: string, version: number): Promise<void> {
-    // SET ... NX EX: atomic, a cached value always wins over this (possibly stale) one.
-    await this.redis.set(versionKey(tenantId, employeeId), String(version), {
-      condition: 'NX',
-      expiration: { type: 'EX', value: PERMISSIONS_VERSION_TTL_SECONDS },
+  async setIfGreater(tenantId: string, employeeId: string, version: number): Promise<void> {
+    await this.redis.eval(SET_IF_GREATER, {
+      keys: [versionKey(tenantId, employeeId)],
+      arguments: [String(version), String(PERMISSIONS_VERSION_TTL_SECONDS)],
     });
   }
 }

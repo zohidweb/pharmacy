@@ -23,6 +23,8 @@ module.exports = {
         // Issues the one-time activation code of an owner (auth design 2026-10-02, section 6): in test/prod
         // PostgreSQL is reachable only inside the compose network, so the operator runs it from the image.
         { input: './scripts', glob: 'create-activation-code.mjs', output: 'scripts' },
+        // Creates a platform operator and issues his one-time activation code (auth design, section 9).
+        { input: './scripts', glob: 'create-operator.mjs', output: 'scripts' },
       ],
       optimization: false,
       outputHashing: 'none',

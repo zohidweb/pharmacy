@@ -163,6 +163,12 @@ class FakeSessionStore extends SessionStore {
   async markTerminalRevoked(): Promise<void> {
     throw new Error('not used');
   }
+  async markTenantBlocked(): Promise<void> {
+    throw new Error('not used');
+  }
+  async clearTenantBlocked(): Promise<void> {
+    throw new Error('not used');
+  }
 }
 
 interface RecordedAudit {
@@ -201,6 +207,7 @@ function setup() {
   };
   const snapshot: PrincipalSnapshot = {
     status: 'active',
+    tenantStatus: 'active',
     permissions: ['pos:view', 'catalog:view'],
     storeScope: [STORE_1],
     permissionsVersion: 4,

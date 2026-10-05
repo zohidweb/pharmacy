@@ -183,7 +183,7 @@ export class SessionMiddleware implements NestMiddleware {
     const { jti: sessionId, tid: tenantId, sub: employeeId } = claims;
 
     // Step 3: the record and the current permissions version in one round trip.
-    const { session, permissionsVersion, terminalRevoked } =
+    const { session, permissionsVersion, terminalRevoked, tenantBlocked } =
       await this.sessions.lookup(
       sessionId,
       tenantId,
@@ -194,6 +194,11 @@ export class SessionMiddleware implements NestMiddleware {
     // or a request without the terminal's device-cookie ends it (a stolen session cookie alone is
     // useless).
     if (session === null) return null;
+    // A network blocked by the operator: every session of it ends on its next request.
+    if (tenantBlocked) {
+      await this.sessions.destroyAllFor(tenantId, employeeId);
+      return null;
+    }
     if (
       session.terminalId !== null &&
       (terminalRevoked ||
@@ -208,7 +213,11 @@ export class SessionMiddleware implements NestMiddleware {
       permissionsVersion !== record.permissionsVersion
     ) {
       const fresh = await this.loader.reload(tenantId, employeeId);
-      if (fresh === null || fresh.status !== 'active') {
+      if (
+        fresh === null ||
+        fresh.status !== 'active' ||
+        fresh.tenantStatus !== 'active'
+      ) {
         await this.sessions.destroyAllFor(tenantId, employeeId);
         return null;
       }

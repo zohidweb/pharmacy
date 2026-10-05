@@ -149,7 +149,7 @@ class FakeSessionStore extends SessionStore {
   }
   async lookup(sessionId: string) {
     this.events.push(`lookup:${sessionId}`);
-    return { session: this.found, permissionsVersion: 4, terminalRevoked: false };
+    return { session: this.found, permissionsVersion: 4, terminalRevoked: false, tenantBlocked: false };
   }
   async update(sessionId: string, patch: SessionPatch): Promise<void> {
     this.updates.push([sessionId, patch]);
@@ -177,6 +177,12 @@ class FakeSessionStore extends SessionStore {
     throw new Error('not used');
   }
   async markTerminalRevoked(): Promise<void> {
+    throw new Error('not used');
+  }
+  async markTenantBlocked(): Promise<void> {
+    throw new Error('not used');
+  }
+  async clearTenantBlocked(): Promise<void> {
     throw new Error('not used');
   }
 }

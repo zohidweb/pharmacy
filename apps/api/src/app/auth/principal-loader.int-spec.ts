@@ -72,6 +72,7 @@ describe('PrincipalLoader.reload', () => {
 
     expect(loaded).toEqual({
       status: 'active',
+      tenantStatus: 'active',
       permissions: expect.arrayContaining(['pos:view', 'catalog:view']),
       storeScope: 'all',
       permissionsVersion: 1,
@@ -135,6 +136,7 @@ describe('PrincipalLoader.reload', () => {
 
     await expect(loader.reload(a.tenantId, employeeId)).resolves.toEqual({
       status: 'blocked',
+      tenantStatus: 'active',
       permissions: [],
       storeScope: [a.storeId],
       permissionsVersion: 5,

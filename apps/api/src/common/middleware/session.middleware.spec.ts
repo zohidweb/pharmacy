@@ -82,8 +82,8 @@ class FakeSessionStore extends SessionStore {
       record.tenantId === tenantId &&
       record.employeeId === employeeId;
     return matches
-      ? { session: { ...record }, permissionsVersion: this.cachedVersion, terminalRevoked: false }
-      : { session: null, permissionsVersion: null, terminalRevoked: false };
+      ? { session: { ...record }, permissionsVersion: this.cachedVersion, terminalRevoked: false, tenantBlocked: false }
+      : { session: null, permissionsVersion: null, terminalRevoked: false, tenantBlocked: false };
   }
 
   async update(sessionId: string, patch: SessionPatch): Promise<void> {
@@ -107,6 +107,12 @@ class FakeSessionStore extends SessionStore {
     throw new Error('not used');
   }
   async markTerminalRevoked(): Promise<void> {
+    throw new Error('not used');
+  }
+  async markTenantBlocked(): Promise<void> {
+    throw new Error('not used');
+  }
+  async clearTenantBlocked(): Promise<void> {
     throw new Error('not used');
   }
 }
@@ -203,6 +209,7 @@ const snapshot = (
   overrides: Partial<PrincipalSnapshot> = {},
 ): PrincipalSnapshot => ({
   status: 'active',
+  tenantStatus: 'active',
   permissions: ['pos:view', 'pos:create', 'catalog:view'],
   storeScope: [STORE_1],
   permissionsVersion: 4,

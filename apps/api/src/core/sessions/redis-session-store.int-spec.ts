@@ -61,7 +61,11 @@ describe('RedisSessionStore (integration)', () => {
     const found = await store.lookup('sid-1', TENANT, EMPLOYEE);
 
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy).toHaveBeenCalledWith(['sess:sid-1', `pv:${TENANT}:${EMPLOYEE}`]);
+    expect(spy).toHaveBeenCalledWith([
+      'sess:sid-1',
+      `pv:${TENANT}:${EMPLOYEE}`,
+      `tenant-blocked:${TENANT}`,
+    ]);
     spy.mockRestore();
     expect(found.session).toEqual(created);
     expect(found.permissionsVersion).toBe(7);
@@ -80,6 +84,7 @@ describe('RedisSessionStore (integration)', () => {
       session: null,
       permissionsVersion: null,
       terminalRevoked: false,
+      tenantBlocked: false,
     });
   });
 

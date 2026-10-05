@@ -31,6 +31,8 @@ export interface SessionLookup {
   permissionsVersion: number | null;
   /** True when the session belongs to a terminal that has been revoked (PIN session only). */
   terminalRevoked: boolean;
+  /** True when the operator has blocked the session's network (tenants module). */
+  tenantBlocked: boolean;
 }
 
 // Port: Redis in the cloud, PostgreSQL on an offline store. DI token.
@@ -66,6 +68,12 @@ export abstract class SessionStore {
     terminalId: string,
     ttlSeconds: number,
   ): Promise<void>;
+
+  // A blocked network: lookup reports it for every session of the network until it is cleared.
+  // tenants.status stays the source of truth (spec 2026-10-05-tenants-module-design, section 6).
+  abstract markTenantBlocked(tenantId: string): Promise<void>;
+
+  abstract clearTenantBlocked(tenantId: string): Promise<void>;
 }
 
 // Port: the current permissions_version of an employee. DI token.

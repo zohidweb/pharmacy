@@ -5,6 +5,7 @@ export {
   ContextResolvers,
   type LoginKind,
   type ResolvedLogin,
+  type ResolvedTerminal,
 } from './context-resolvers';
 export { DatabaseModule } from './database.module';
 export { TenantDatabase, type TenantTransaction } from './tenant-database';

@@ -14,11 +14,22 @@ export interface ResolvedLogin {
   tenantStatus: string;
 }
 
+export interface ResolvedTerminal {
+  tenantId: string;
+  storeId: string;
+  terminalId: string;
+  revoked: boolean;
+  tenantStatus: string;
+}
+
 const LOGIN_KINDS: readonly string[] = ['login', 'phone', 'email'];
 
 // The only statement this class ever sends; the values are bound parameters.
 const RESOLVE_LOGIN_SQL =
   'select tenant_id, employee_id, tenant_status from pharmacy.resolve_login($1, $2)';
+
+const RESOLVE_TERMINAL_SQL =
+  'select tenant_id, store_id, terminal_id, revoked, tenant_status from pharmacy.resolve_terminal($1)';
 
 // A small pool: resolvers run once per sign-in, never per request.
 const RESOLVER_POOL_MAX = 2;
@@ -29,9 +40,21 @@ interface ResolveLoginRow {
   tenant_status: string;
 }
 
+interface ResolveTerminalRow {
+  tenant_id: string;
+  store_id: string;
+  terminal_id: string;
+  revoked: boolean;
+  tenant_status: string;
+}
+
+// SHA-256 of the device secret (terminals.credential_hash).
+const CREDENTIAL_HASH_BYTES = 32;
+
 // Pre-context resolvers (ADR-0013 p. 3, amendment 2026-10-02): before a tenant context exists,
 // a sign-in identifier is mapped to its tenant by the SECURITY DEFINER function
-// pharmacy.resolve_login, which returns ids and the tenant status only. Role pharmacy_app (the
+// pharmacy.resolve_login (and a device-cookie hash by pharmacy.resolve_terminal), which return
+// ids and the tenant status only. Role pharmacy_app (the
 // tenant settings, no tenant context set), its own pool and application_name 'api-resolver';
 // only fixed calls of pharmacy.resolve_* functions — no table is ever read from here.
 @Injectable()
@@ -64,6 +87,30 @@ export class ContextResolvers implements OnModuleDestroy {
     return {
       tenantId: row.tenant_id,
       employeeId: row.employee_id,
+      tenantStatus: row.tenant_status,
+    };
+  }
+
+  /**
+   * The terminal of a device-cookie SHA-256 (auth design, section 8), or null when nothing
+   * matches. A revoked terminal is returned with revoked = true; the caller decides.
+   */
+  async resolveTerminal(
+    credentialHash: Buffer,
+  ): Promise<ResolvedTerminal | null> {
+    if (credentialHash.length !== CREDENTIAL_HASH_BYTES) return null;
+    const { rows } = await this.getPool().query<ResolveTerminalRow>(
+      RESOLVE_TERMINAL_SQL,
+      [credentialHash],
+    );
+    // credential_hash is unique; anything but exactly one row fails closed.
+    if (rows.length !== 1) return null;
+    const [row] = rows;
+    return {
+      tenantId: row.tenant_id,
+      storeId: row.store_id,
+      terminalId: row.terminal_id,
+      revoked: row.revoked,
       tenantStatus: row.tenant_status,
     };
   }

@@ -30,9 +30,11 @@ export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
 ]);
 
 // SECURITY DEFINER resolver functions owned by pharmacy_resolver (ADR-0013 p. 3 and its
-// amendment 2026-10-02: resolve_login replaces resolve_tenant_by_code).
+// amendment 2026-10-02: resolve_login replaces resolve_tenant_by_code; resolve_terminal - auth
+// part 2).
 export const RESOLVER_FUNCTIONS: readonly string[] = Object.freeze([
   'resolve_login',
+  'resolve_terminal',
 ]);
 
 // Columns of stores visible to pharmacy_platform (the store registry without the address).

@@ -1,76 +1,47 @@
 import type { CreateTenantRequest } from '@pharmacy/shared-dto';
-import { parseMoneyToMinor } from '@pharmacy/shared-util';
 import { z } from 'zod';
 
 /** Error messages are keys under `validation` (ADR-0015). */
-export type CreateTenantErrorKey =
-  'required' | 'inn' | 'phone' | 'email' | 'dateFromToday' | 'money';
+export type CreateTenantErrorKey = 'required' | 'inn' | 'phone' | 'email' | 'login';
 
 const PHONE = /^\+992(\s?\d){9}$/;
 const INN = /^\d{9}$/;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+// A sign-in login (ADR-0008): not shaped like a phone or an e-mail, which are separate identifiers.
+const LOGIN = /^(?=.*[a-z])[a-z0-9._-]{3,64}$/i;
 
 const required = z.string().trim().min(1, { error: 'required' });
 
-export function createTenantSchema(today: string) {
+export function createTenantSchema() {
   return z.object({
     name: required,
     city: required,
     inn: z.string().trim().regex(INN, { error: 'inn' }),
     ownerFullName: required,
     ownerPhone: z.string().trim().regex(PHONE, { error: 'phone' }),
-    ownerLogin: z
-      .string()
-      .trim()
-      .pipe(z.email({ error: 'email' })),
-    storeName: required,
-    storeAddress: required,
-    mode: z.enum(['cloud', 'offline']),
-    licenseTerm: z.enum(['week', 'quarter', 'year']),
-    syncSchedule: z.enum(['daily', 'twice_daily', 'hourly', 'manual']),
-    paidUntil: z
-      .string()
-      .regex(DATE, { error: 'dateFromToday' })
-      .refine((value) => value >= today, { error: 'dateFromToday' }),
-    price: z.string().refine((value) => (parseMoneyToMinor(value) ?? 0) > 0, {
-      error: 'money',
-    }),
+    ownerLogin: z.string().trim().regex(LOGIN, { error: 'login' }),
+    ownerEmail: z.union([
+      z.literal(''),
+      z.string().trim().pipe(z.email({ error: 'email' })),
+    ]),
   });
 }
 
 export type CreateTenantValues = z.input<ReturnType<typeof createTenantSchema>>;
 
-/** Fields validated before leaving each wizard step. */
-export const stepFields: Array<Array<keyof CreateTenantValues>> = [
-  ['name', 'city', 'inn', 'ownerFullName', 'ownerPhone', 'ownerLogin'],
-  ['storeName', 'storeAddress', 'mode', 'licenseTerm', 'syncSchedule'],
-  ['paidUntil', 'price'],
-];
-
 export function toCreateTenantRequest(
   values: CreateTenantValues,
 ): CreateTenantRequest {
-  const offline = values.mode === 'offline';
+  const email = values.ownerEmail.trim().toLowerCase();
   return {
     name: values.name.trim(),
     city: values.city.trim(),
     inn: values.inn.trim(),
     owner: {
       fullName: values.ownerFullName.trim(),
-      phone: values.ownerPhone.trim(),
+      phone: values.ownerPhone.replace(/\s/g, ''),
       login: values.ownerLogin.trim().toLowerCase(),
+      ...(email !== '' && { email }),
     },
-    firstStore: {
-      name: values.storeName.trim(),
-      address: values.storeAddress.trim(),
-      mode: values.mode,
-      ...(offline && {
-        licenseTerm: values.licenseTerm,
-        syncSchedule: values.syncSchedule,
-      }),
-    },
-    paidUntil: values.paidUntil,
-    pricePerStoreMinor: parseMoneyToMinor(values.price) ?? 0,
   };
 }
 
@@ -82,7 +53,16 @@ export function isCreateTenantErrorKey(
     value === 'inn' ||
     value === 'phone' ||
     value === 'email' ||
-    value === 'dateFromToday' ||
-    value === 'money'
+    value === 'login'
   );
 }
+
+/** Problem codes of POST /operator/tenants that belong to one field. */
+export const FIELD_CONFLICTS: Readonly<
+  Record<string, keyof CreateTenantValues>
+> = {
+  inn_taken: 'inn',
+  login_taken: 'ownerLogin',
+  phone_taken: 'ownerPhone',
+  email_taken: 'ownerEmail',
+};

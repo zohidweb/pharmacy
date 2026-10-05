@@ -53,7 +53,7 @@ export function StatisticsPage() {
       month: 'long',
       year: 'numeric',
     });
-  const exportHref = `/api/v1/platform/usage-stats/export?period=${period}${tenantId ? `&tenantId=${encodeURIComponent(tenantId)}` : ''}`;
+  const exportHref = `/api/v1/operator/usage-stats/export?period=${period}${tenantId ? `&tenantId=${encodeURIComponent(tenantId)}` : ''}`;
 
   const activity = (row: Row) => {
     if (!row.lastActivityAt) return '—';

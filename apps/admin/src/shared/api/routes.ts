@@ -53,6 +53,7 @@ import type {
   BlockTenantRequest,
   CreateTenantRequest,
   CreateTenantResponse,
+  IssueOwnerCodeResponse,
   ImpersonationHandoff,
   ImpersonationRequest,
   MigrateStoreToCloudRequest,
@@ -123,149 +124,153 @@ export const apiRoutes = {
     undefined,
     undefined,
     TenantListQuery
-  >('GET', () => '/platform/tenants'),
+  >('GET', () => '/operator/tenants'),
   'tenants.create': route<CreateTenantResponse, CreateTenantRequest>(
     'POST',
-    () => '/platform/tenants',
+    () => '/operator/tenants',
   ),
   'tenants.get': route<TenantDetails, undefined, { id: string }>(
     'GET',
-    (p) => `/platform/tenants/${id(p)}`,
+    (p) => `/operator/tenants/${id(p)}`,
   ),
   'tenants.block': route<TenantDetails, BlockTenantRequest, { id: string }>(
     'POST',
-    (p) => `/platform/tenants/${id(p)}/block`,
+    (p) => `/operator/tenants/${id(p)}/block`,
+  ),
+  'tenants.ownerCode': route<IssueOwnerCodeResponse, undefined, { id: string }>(
+    'POST',
+    (p) => `/operator/tenants/${id(p)}/owner-activation-codes`,
   ),
   'tenants.unblock': route<TenantDetails, undefined, { id: string }>(
     'POST',
-    (p) => `/platform/tenants/${id(p)}/unblock`,
+    (p) => `/operator/tenants/${id(p)}/unblock`,
   ),
   'tenants.stores': route<StoreSummary[], undefined, { id: string }>(
     'GET',
-    (p) => `/platform/tenants/${id(p)}/stores`,
+    (p) => `/operator/tenants/${id(p)}/stores`,
   ),
   'tenants.invoices': route<TenantInvoiceItem[], undefined, { id: string }>(
     'GET',
-    (p) => `/platform/tenants/${id(p)}/invoices`,
+    (p) => `/operator/tenants/${id(p)}/invoices`,
   ),
   'tenants.payments': route<TenantPaymentItem[], undefined, { id: string }>(
     'GET',
-    (p) => `/platform/tenants/${id(p)}/payments`,
+    (p) => `/operator/tenants/${id(p)}/payments`,
   ),
   'tenants.services': route<TenantServiceItem[], undefined, { id: string }>(
     'GET',
-    (p) => `/platform/tenants/${id(p)}/services`,
+    (p) => `/operator/tenants/${id(p)}/services`,
   ),
   'tenants.stats': route<TenantStats, undefined, { id: string }>(
     'GET',
-    (p) => `/platform/tenants/${id(p)}/stats`,
+    (p) => `/operator/tenants/${id(p)}/stats`,
   ),
   'tenants.audit': route<
     Page<AuditEntry>,
     undefined,
     { id: string },
     { limit?: number; offset?: number }
-  >('GET', (p) => `/platform/tenants/${id(p)}/audit-log`),
+  >('GET', (p) => `/operator/tenants/${id(p)}/audit-log`),
 
   'stores.get': route<StoreDetails, undefined, { id: string }>(
     'GET',
-    (p) => `/platform/stores/${id(p)}`,
+    (p) => `/operator/stores/${id(p)}`,
   ),
   'stores.update': route<StoreDetails, UpdateStoreRequest, { id: string }>(
     'PATCH',
-    (p) => `/platform/stores/${id(p)}`,
+    (p) => `/operator/stores/${id(p)}`,
   ),
   'stores.updateLicenseSettings': route<
     StoreDetails,
     UpdateStoreLicenseSettingsRequest,
     { id: string }
-  >('PATCH', (p) => `/platform/stores/${id(p)}/license-settings`),
+  >('PATCH', (p) => `/operator/stores/${id(p)}/license-settings`),
   'stores.requestSync': route<void, undefined, { id: string }>(
     'POST',
-    (p) => `/platform/stores/${id(p)}/sync-requests`,
+    (p) => `/operator/stores/${id(p)}/sync-requests`,
   ),
   'stores.migrateToCloud': route<
     StoreDetails,
     MigrateStoreToCloudRequest,
     { id: string }
-  >('POST', (p) => `/platform/stores/${id(p)}/cloud-migrations`),
+  >('POST', (p) => `/operator/stores/${id(p)}/cloud-migrations`),
   'billing.summary': route<
     BillingSummary,
     undefined,
     undefined,
     { period?: string }
-  >('GET', () => '/platform/billing/summary'),
+  >('GET', () => '/operator/billing/summary'),
   'invoices.list': route<
     InvoiceListResponse,
     undefined,
     undefined,
     { filter?: InvoiceListFilter; limit?: number; offset?: number }
-  >('GET', () => '/platform/invoices'),
+  >('GET', () => '/operator/invoices'),
   'invoices.get': route<InvoiceDetails, undefined, { id: string }>(
     'GET',
-    (p) => `/platform/invoices/${id(p)}`,
+    (p) => `/operator/invoices/${id(p)}`,
   ),
   'invoices.generationPreview': route<
     InvoiceGenerationPreview,
     undefined,
     undefined,
     { period: string }
-  >('GET', () => '/platform/invoices/generation-preview'),
+  >('GET', () => '/operator/invoices/generation-preview'),
   'invoices.generate': route<GenerateInvoicesResponse, GenerateInvoicesRequest>(
     'POST',
-    () => '/platform/invoices/generations',
+    () => '/operator/invoices/generations',
   ),
   'invoices.recalculationPreview': route<
     RecalculationPreview,
     undefined,
     { id: string }
-  >('GET', (p) => `/platform/invoices/${id(p)}/recalculation-preview`),
+  >('GET', (p) => `/operator/invoices/${id(p)}/recalculation-preview`),
   'invoices.recalculate': route<InvoiceDetails, undefined, { id: string }>(
     'POST',
-    (p) => `/platform/invoices/${id(p)}/recalculation`,
+    (p) => `/operator/invoices/${id(p)}/recalculation`,
   ),
   'payments.list': route<
     Page<PaymentListItem>,
     undefined,
     undefined,
     { limit?: number; offset?: number }
-  >('GET', () => '/platform/payments'),
+  >('GET', () => '/operator/payments'),
   'payments.record': route<PaymentListItem, RecordPaymentRequest>(
     'POST',
-    () => '/platform/payments',
+    () => '/operator/payments',
   ),
   'payments.update': route<
     PaymentListItem,
     UpdatePaymentRequest,
     { id: string }
-  >('PATCH', (p) => `/platform/payments/${id(p)}`),
+  >('PATCH', (p) => `/operator/payments/${id(p)}`),
   'payments.cancel': route<
     PaymentListItem,
     CancelPaymentRequest,
     { id: string }
-  >('POST', (p) => `/platform/payments/${id(p)}/cancellation`),
+  >('POST', (p) => `/operator/payments/${id(p)}/cancellation`),
 
-  'services.list': route<PlatformService[]>('GET', () => '/platform/services'),
+  'services.list': route<PlatformService[]>('GET', () => '/operator/services'),
   'services.create': route<PlatformService, UpsertServiceRequest>(
     'POST',
-    () => '/platform/services',
+    () => '/operator/services',
   ),
   'services.update': route<
     PlatformService,
     UpsertServiceRequest,
     { id: string }
-  >('PUT', (p) => `/platform/services/${id(p)}`),
+  >('PUT', (p) => `/operator/services/${id(p)}`),
   'serviceRequests.list': route<ServiceRequestItem[]>(
     'GET',
-    () => '/platform/service-requests',
+    () => '/operator/service-requests',
   ),
   'serviceRequests.approve': route<void, undefined, { id: string }>(
     'POST',
-    (p) => `/platform/service-requests/${id(p)}/approval`,
+    (p) => `/operator/service-requests/${id(p)}/approval`,
   ),
   'serviceRequests.reject': route<void, RejectServiceRequest, { id: string }>(
     'POST',
-    (p) => `/platform/service-requests/${id(p)}/rejection`,
+    (p) => `/operator/service-requests/${id(p)}/rejection`,
   ),
 
   'licenses.list': route<
@@ -277,23 +282,23 @@ export const apiRoutes = {
       sort?: LicenseSortKey;
       direction?: 'asc' | 'desc';
     }
-  >('GET', () => '/platform/licenses'),
+  >('GET', () => '/operator/licenses'),
   'licenses.issue': route<LicenseListItem, IssueLicenseRequest>(
     'POST',
-    () => '/platform/licenses',
+    () => '/operator/licenses',
   ),
   'licenses.renew': route<LicenseListItem, RenewLicenseRequest, { id: string }>(
     'POST',
-    (p) => `/platform/licenses/${id(p)}/renewal`,
+    (p) => `/operator/licenses/${id(p)}/renewal`,
   ),
   'licenses.revoke': route<
     LicenseListItem,
     RevokeLicenseRequest,
     { id: string }
-  >('POST', (p) => `/platform/licenses/${id(p)}/revocation`),
+  >('POST', (p) => `/operator/licenses/${id(p)}/revocation`),
   'stores.offlineOptions': route<OfflineStoreOption[]>(
     'GET',
-    () => '/platform/stores/offline-options',
+    () => '/operator/stores/offline-options',
   ),
 
   'installations.list': route<
@@ -301,7 +306,7 @@ export const apiRoutes = {
     undefined,
     undefined,
     { filter?: InstallationFilter }
-  >('GET', () => '/platform/installations'),
+  >('GET', () => '/operator/installations'),
   'installations.scheduleUpdate': route<
     InstallationItem,
     ScheduleUpdateRequest,
@@ -309,42 +314,42 @@ export const apiRoutes = {
   >(
     'POST',
     (p) =>
-      `/platform/installations/${encodeURIComponent(p.storeId)}/update-plans`,
+      `/operator/installations/${encodeURIComponent(p.storeId)}/update-plans`,
   ),
-  'releases.list': route<Release[]>('GET', () => '/platform/releases'),
+  'releases.list': route<Release[]>('GET', () => '/operator/releases'),
   'attention.counts': route<AttentionCounts>(
     'GET',
-    () => '/platform/attention-counts',
+    () => '/operator/attention-counts',
   ),
-  'dashboard.get': route<DashboardResponse>('GET', () => '/platform/dashboard'),
+  'dashboard.get': route<DashboardResponse>('GET', () => '/operator/dashboard'),
   'usage.stats': route<
     UsageStatsResponse,
     undefined,
     undefined,
     { period: string; tenantId?: string }
-  >('GET', () => '/platform/usage-stats'),
+  >('GET', () => '/operator/usage-stats'),
 
   'notifications.list': route<
     NotificationListResponse,
     undefined,
     undefined,
     { topic?: NotificationTopic; limit?: number; offset?: number }
-  >('GET', () => '/platform/notifications'),
+  >('GET', () => '/operator/notifications'),
   'notifications.readAll': route<void>(
     'POST',
-    () => '/platform/notifications/read-all',
+    () => '/operator/notifications/read-all',
   ),
   'announcements.list': route<Announcement[]>(
     'GET',
-    () => '/platform/announcements',
+    () => '/operator/announcements',
   ),
   'announcements.create': route<Announcement, CreateAnnouncementRequest>(
     'POST',
-    () => '/platform/announcements',
+    () => '/operator/announcements',
   ),
   'announcements.cancel': route<Announcement, undefined, { id: string }>(
     'POST',
-    (p) => `/platform/announcements/${id(p)}/cancellation`,
+    (p) => `/operator/announcements/${id(p)}/cancellation`,
   ),
   'me.notificationPreferences': route<NotificationPreferences>(
     'GET',
@@ -360,24 +365,24 @@ export const apiRoutes = {
     undefined,
     undefined,
     OperatorAuditQuery
-  >('GET', () => '/platform/operator-audit-log'),
+  >('GET', () => '/operator/operator-audit-log'),
 
-  'settings.get': route<PlatformSettings>('GET', () => '/platform/settings'),
+  'settings.get': route<PlatformSettings>('GET', () => '/operator/settings'),
   'settings.update': route<PlatformSettings, PlatformSettings>(
     'PUT',
-    () => '/platform/settings',
+    () => '/operator/settings',
   ),
   'operators.list': route<PlatformOperator[]>(
     'GET',
-    () => '/platform/operators',
+    () => '/operator/operators',
   ),
   'operators.create': route<PlatformOperator, CreateOperatorRequest>(
     'POST',
-    () => '/platform/operators',
+    () => '/operator/operators',
   ),
   'operators.disable': route<PlatformOperator, undefined, { id: string }>(
     'POST',
-    (p) => `/platform/operators/${id(p)}/deactivation`,
+    (p) => `/operator/operators/${id(p)}/deactivation`,
   ),
 
   'me.get': route<OperatorMe>('GET', () => '/operator/me'),

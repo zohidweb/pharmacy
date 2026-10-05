@@ -9,7 +9,7 @@ import type { OperatorProfile } from './operator-auth.js';
 
 // ── Sidebar counters and dashboard ────────────────────────────────────────────────────────
 
-/** GET /platform/attention-counts */
+/** GET /operator/attention-counts */
 export interface AttentionCounts {
   serviceRequests: number;
   expiringLicenses: number;
@@ -67,7 +67,7 @@ export interface OperatorQueueItem {
   at: string;
 }
 
-/** GET /platform/dashboard */
+/** GET /operator/dashboard */
 export interface DashboardResponse {
   summary: DashboardSummary;
   /** Daily sales of all tenants for the last 14 days. */
@@ -104,7 +104,7 @@ export interface UsageTenantRow extends Omit<
   stores: UsageStoreRow[];
 }
 
-/** GET /platform/usage-stats?period&tenantId */
+/** GET /operator/usage-stats?period&tenantId */
 export interface UsageStatsResponse {
   period: string;
   kpi: UsageKpi;
@@ -125,7 +125,7 @@ export interface PlatformNotification {
   read: boolean;
 }
 
-/** GET /platform/notifications?topic&limit&offset */
+/** GET /operator/notifications?topic&limit&offset */
 export interface NotificationListResponse extends Page<PlatformNotification> {
   counts: Record<'all' | NotificationTopic, number>;
   unread: number;
@@ -144,7 +144,7 @@ export interface Announcement {
   status: AnnouncementStatus;
 }
 
-/** POST /platform/announcements — shown to tenants in the client product. */
+/** POST /operator/announcements — shown to tenants in the client product. */
 export interface CreateAnnouncementRequest {
   title: string;
   text: string;
@@ -172,7 +172,7 @@ export interface OperatorAuditEntry {
   description: string;
 }
 
-/** GET /platform/operator-audit-log?operatorId&type&from&to&limit&offset — read only. */
+/** GET /operator/operator-audit-log?operatorId&type&from&to&limit&offset — read only. */
 export interface OperatorAuditQuery {
   operatorId?: string;
   type?: OperatorActionType;
@@ -206,7 +206,7 @@ export interface PlatformOperator extends OperatorProfile {
   status: OperatorStatus;
 }
 
-/** POST /platform/operators — the first-login credentials are handed over in person. */
+/** POST /operator/operators — the first-login credentials are handed over in person. */
 export interface CreateOperatorRequest {
   fullName: string;
   login: string;

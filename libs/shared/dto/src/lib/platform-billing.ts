@@ -48,7 +48,7 @@ export interface InvoiceListItem {
 
 export type InvoiceListFilter = 'all' | 'paid' | 'overdue';
 
-/** GET /platform/invoices?filter&limit&offset */
+/** GET /operator/invoices?filter&limit&offset */
 export interface InvoiceListResponse extends Page<InvoiceListItem> {
   counts: Record<InvoiceListFilter, number>;
 }
@@ -68,7 +68,7 @@ export interface InvoiceDetails extends InvoiceListItem {
 
 export type PeriodState = 'closed' | 'current' | 'future';
 
-/** GET /platform/invoices/generation-preview?period */
+/** GET /operator/invoices/generation-preview?period */
 export interface InvoiceGenerationPreview {
   period: BillingPeriod;
   state: PeriodState;
@@ -81,7 +81,7 @@ export interface InvoiceGenerationPreview {
   totalMinor: number;
 }
 
-/** POST /platform/invoices/generations — only for a closed period. */
+/** POST /operator/invoices/generations — only for a closed period. */
 export interface GenerateInvoicesRequest {
   period: BillingPeriod;
 }
@@ -90,7 +90,7 @@ export interface GenerateInvoicesResponse {
   created: number;
 }
 
-/** GET /platform/invoices/{id}/recalculation-preview */
+/** GET /operator/invoices/{id}/recalculation-preview */
 export interface RecalculationPreview {
   beforeMinor: number;
   afterMinor: number;
@@ -111,7 +111,7 @@ export interface PaymentListItem {
   cancelled: boolean;
 }
 
-/** POST /platform/payments */
+/** POST /operator/payments */
 export interface RecordPaymentRequest {
   invoiceId: string;
   amountMinor: number;
@@ -122,7 +122,7 @@ export interface RecordPaymentRequest {
   comment?: string;
 }
 
-/** PATCH /platform/payments/{id} */
+/** PATCH /operator/payments/{id} */
 export interface UpdatePaymentRequest {
   amountMinor: number;
   paidOn: string;
@@ -130,7 +130,7 @@ export interface UpdatePaymentRequest {
   comment: string;
 }
 
-/** POST /platform/payments/{id}/cancellation — payments are cancelled, never deleted (audit). */
+/** POST /operator/payments/{id}/cancellation — payments are cancelled, never deleted (audit). */
 export interface CancelPaymentRequest {
   reason: string;
 }
@@ -166,7 +166,7 @@ export interface ServiceRequestItem {
   priceMinor: number;
 }
 
-/** POST /platform/service-requests/{id}/rejection */
+/** POST /operator/service-requests/{id}/rejection */
 export interface RejectServiceRequest {
   reason: string;
 }
@@ -194,7 +194,7 @@ export interface LicenseListItem {
   revokeReason: string | null;
 }
 
-/** GET /platform/licenses?filter&sort&direction */
+/** GET /operator/licenses?filter&sort&direction */
 export interface LicenseListResponse {
   items: LicenseListItem[];
   counts: Record<LicenseListFilter, number>;
@@ -202,7 +202,7 @@ export interface LicenseListResponse {
 
 export type LicenseTermChoice = LicenseTerm | 'custom';
 
-/** POST /platform/licenses (issue) and POST /platform/licenses/{id}/renewal */
+/** POST /operator/licenses (issue) and POST /operator/licenses/{id}/renewal */
 export interface IssueLicenseRequest {
   storeId: string;
   term: LicenseTermChoice;
@@ -214,7 +214,7 @@ export interface IssueLicenseRequest {
 
 export type RenewLicenseRequest = Omit<IssueLicenseRequest, 'storeId'>;
 
-/** POST /platform/licenses/{id}/revocation — takes effect at the store's next sync. */
+/** POST /operator/licenses/{id}/revocation — takes effect at the store's next sync. */
 export interface RevokeLicenseRequest {
   reason: string;
 }
@@ -258,7 +258,7 @@ export interface InstallationItem {
   plannedUpdateAt: string | null;
 }
 
-/** GET /platform/installations?filter */
+/** GET /operator/installations?filter */
 export interface InstallationListResponse {
   latest: Release;
   items: InstallationItem[];
@@ -266,7 +266,7 @@ export interface InstallationListResponse {
   updated: number;
 }
 
-/** POST /platform/installations/{storeId}/update-plans */
+/** POST /operator/installations/{storeId}/update-plans */
 export interface ScheduleUpdateRequest {
   targetVersion: string;
   /** ISO instant. */

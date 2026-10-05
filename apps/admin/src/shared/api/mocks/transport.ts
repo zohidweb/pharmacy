@@ -191,13 +191,20 @@ const handlers: MockHandlers = {
   },
   'tenants.create': ({ body, correlationId }) => {
     const db = mockDb();
+    const conflict = (code: string, field: string) =>
+      new ApiError(409, code, correlationId, [{ field, code }]);
     if (db.tenants.some((t) => t.inn === body.inn)) {
-      throw new ApiError(409, 'inn_taken', correlationId, [
-        { field: 'inn', code: 'taken' },
-      ]);
+      throw conflict('inn_taken', 'inn');
+    }
+    const login = body.owner.login.toLowerCase();
+    if (db.tenants.some((t) => t.owner.login.toLowerCase() === login)) {
+      throw conflict('login_taken', 'owner.login');
+    }
+    if (db.tenants.some((t) => t.owner.phone === body.owner.phone)) {
+      throw conflict('phone_taken', 'owner.phone');
     }
     const id = `t-${db.tenants.length + 1}-${Date.now()}`;
-    const cloud = body.firstStore.mode === 'cloud';
+    // The owner adds stores after activation (spec 2026-10-05-tenants-module, T2).
     db.tenants.push({
       id,
       name: body.name,
@@ -208,38 +215,22 @@ const handlers: MockHandlers = {
       status: 'active',
       overdue: false,
       block: null,
-      cloudStores: cloud ? 1 : 0,
-      offlineStores: cloud ? 0 : 1,
-      paidUntil: cloud ? body.paidUntil : null,
-      monthlyChargeMinor: cloud ? body.pricePerStoreMinor : 0,
-    });
-    db.stores.push({
-      id: `s-${Date.now()}`,
-      tenantId: id,
-      tenantName: body.name,
-      name: body.firstStore.name,
-      address: body.firstStore.address,
-      mode: body.firstStore.mode,
-      status: 'active',
-      closedOn: null,
-      paidUntil: cloud ? body.paidUntil : null,
-      licenseValidUntil: null,
-      lastSyncAt: null,
-      monthSalesMinor: 0,
-      managerName: '',
-      managerPhone: '',
-      cashiers: 0,
-      connectedOn: new Date().toISOString().slice(0, 10),
-      installedVersion: null,
-      latestVersion: '2.4.0',
-      monthReceipts: 0,
-      license: null,
-      syncHistory: [],
-      syncQueue: [],
+      cloudStores: 0,
+      offlineStores: 0,
+      paidUntil: null,
+      monthlyChargeMinor: 0,
     });
     audit(id, 'Компания создана оператором платформы');
     // Synthetic value: the real code is 128 bits of randomBytes (ADR-0008, amendment 2026-10-02).
-    return { id, activationCode: 'mock-activation-code' };
+    return { id, activationCode: 'MOCKACTIVATIONCODE00000000' };
+  },
+  'tenants.ownerCode': ({ params, correlationId }) => {
+    const tenant = findTenant(params.id, correlationId);
+    if (tenant.status === 'blocked') {
+      throw new ApiError(409, 'tenant_blocked', correlationId);
+    }
+    audit(tenant.id, 'Оператор выдал владельцу новый код активации');
+    return { activationCode: 'MOCKNEWOWNERCODE0000000000' };
   },
   'tenants.get': ({ params, correlationId }) =>
     findTenant(params.id, correlationId),

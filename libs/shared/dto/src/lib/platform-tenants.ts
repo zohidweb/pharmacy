@@ -18,7 +18,7 @@ export interface Page<T> {
 /** Access state of a tenant set by the operator; billing debt is reported separately. */
 export type TenantStatus = 'active' | 'blocked';
 
-/** List filter of GET /platform/tenants; `unpaid` = has an overdue invoice. */
+/** List filter of GET /operator/tenants; `unpaid` = has an overdue invoice. */
 export type TenantListFilter = 'all' | 'active' | 'unpaid' | 'blocked';
 export type TenantSortKey =
   'name' | 'owner' | 'stores' | 'paidUntil' | 'monthlyCharge';
@@ -47,7 +47,7 @@ export interface TenantListItem {
   monthlyChargeMinor: number;
 }
 
-/** GET /platform/tenants?filter&q&sort&direction&limit&offset */
+/** GET /operator/tenants?filter&q&sort&direction&limit&offset */
 export interface TenantListQuery {
   filter?: TenantListFilter;
   q?: string;
@@ -74,7 +74,7 @@ export interface TenantDetails extends TenantListItem {
   block: TenantBlockInfo | null;
 }
 
-/** POST /platform/tenants/{id}/block */
+/** POST /operator/tenants/{id}/block */
 export interface BlockTenantRequest {
   reason: string;
 }
@@ -140,7 +140,7 @@ export interface StoreDetails extends StoreSummary {
   syncQueue: Array<{ kind: SyncQueueKind; operations: number }>;
 }
 
-/** PATCH /platform/stores/{id} */
+/** PATCH /operator/stores/{id} */
 export interface UpdateStoreRequest {
   name: string;
   address: string;
@@ -148,13 +148,13 @@ export interface UpdateStoreRequest {
   managerPhone: string;
 }
 
-/** PATCH /platform/stores/{id}/license-settings */
+/** PATCH /operator/stores/{id}/license-settings */
 export interface UpdateStoreLicenseSettingsRequest {
   notifyDaysBefore: number;
   syncSchedule: SyncSchedule;
 }
 
-/** POST /platform/stores/{id}/cloud-migrations */
+/** POST /operator/stores/{id}/cloud-migrations */
 export interface MigrateStoreToCloudRequest {
   /** Date-only: "paid until" of the first cloud period. */
   paidUntil: string;
@@ -223,34 +223,36 @@ export interface AuditEntry {
 
 // ── Create tenant (wizard) ────────────────────────────────────────────────────────────────
 
-/** POST /platform/tenants — the operator creates a tenant with its owner and first store. */
+/**
+ * POST /operator/tenants — the operator creates a network and its owner (spec
+ * 2026-10-05-tenants-module); the owner adds stores after activation. Needs `tenants:manage` and a
+ * fresh operator sign-in. Errors: 409 `inn_taken`, `login_taken`, `phone_taken`, `email_taken`;
+ * 400 `validation_failed`.
+ */
 export interface CreateTenantRequest {
   name: string;
   city: string;
+  /** 9 digits. */
   inn: string;
   owner: TenantOwner;
-  firstStore: {
-    name: string;
-    address: string;
-    mode: StoreMode;
-    /** Offline only. */
-    licenseTerm?: LicenseTerm;
-    /** Offline only. */
-    syncSchedule?: SyncSchedule;
-  };
-  /** Date-only: end of the trial period. */
-  paidUntil: string;
-  pricePerStoreMinor: number;
 }
 
 export type LicenseTerm = 'week' | 'quarter' | 'year';
 
 /**
- * 201 from POST /platform/tenants. `activationCode` is the owner's one-time activation code: shown
+ * 201 from POST /operator/tenants. `activationCode` is the owner's one-time activation code: shown
  * to the operator once (it is stored as a hash only) and handed to the owner, who passes it to
  * POST /api/v1/activations to set the first password.
  */
 export interface CreateTenantResponse {
   id: string;
+  activationCode: string;
+}
+
+/**
+ * 201 from POST /operator/tenants/{id}/owner-activation-codes — a new one-time code for the
+ * owner (the password stays until the code is used); shown once. 409 `tenant_blocked`.
+ */
+export interface IssueOwnerCodeResponse {
   activationCode: string;
 }

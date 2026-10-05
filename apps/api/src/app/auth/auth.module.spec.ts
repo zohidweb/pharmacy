@@ -9,6 +9,9 @@ import { ActivationsService } from './activations.service';
 import { AuthModule } from './auth.module';
 import { LoginClock, SystemLoginClock } from './login-clock';
 import { LoginLimiter } from './login-limiter';
+import { MeController } from './me.controller';
+import { MeService } from './me.service';
+import { PermissionsVersionService } from './permissions-version.service';
 import { PrincipalLoader } from './principal-loader';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
@@ -38,7 +41,7 @@ const env = {
 };
 
 describe('AuthModule', () => {
-  it('wires the sessions and activations controllers, services, limiter and principal loader', async () => {
+  it('wires the sessions, activations and me controllers, services, limiter and principal loader', async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -62,6 +65,11 @@ describe('AuthModule', () => {
     );
     expect(moduleRef.get(ActivationsService)).toBeInstanceOf(
       ActivationsService,
+    );
+    expect(moduleRef.get(MeController)).toBeInstanceOf(MeController);
+    expect(moduleRef.get(MeService)).toBeInstanceOf(MeService);
+    expect(moduleRef.get(PermissionsVersionService)).toBeInstanceOf(
+      PermissionsVersionService,
     );
     expect(moduleRef.get(LoginLimiter)).toBeInstanceOf(LoginLimiter);
     expect(moduleRef.get(LoginClock)).toBeInstanceOf(SystemLoginClock);

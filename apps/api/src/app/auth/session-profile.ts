@@ -24,6 +24,11 @@ export function uiLocale(
   return (language ?? defaultLanguage) === 'tj' ? 'tg' : 'ru';
 }
 
+/** Database language of a UI locale: `tg` is stored as `tj`. */
+export function dbLanguage(locale: UiLocale): 'ru' | 'tj' {
+  return locale === 'tg' ? 'tj' : 'ru';
+}
+
 function stringAt(map: unknown, key: string): string | undefined {
   if (map === null || typeof map !== 'object') return undefined;
   const value = (map as Record<string, unknown>)[key];

@@ -8,6 +8,10 @@ import { ActivationsService } from './activations.service';
 import { EmployeeAuthRepository } from './employee-auth.repository';
 import { LoginClock, SystemLoginClock } from './login-clock';
 import { LOGIN_LIMITER_DEFAULTS, LoginLimiter } from './login-limiter';
+import { MeController } from './me.controller';
+import { MeService } from './me.service';
+import { PermissionsVersionRepository } from './permissions-version.repository';
+import { PermissionsVersionService } from './permissions-version.service';
 import { PrincipalLoader } from './principal-loader';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
@@ -18,12 +22,15 @@ import { SessionsService } from './sessions.service';
 // from the global CryptoModule, the Redis client from the global RedisModule.
 @Module({
   imports: [SessionsModule, AuditModule],
-  controllers: [SessionsController, ActivationsController],
+  controllers: [SessionsController, ActivationsController, MeController],
   providers: [
     EmployeeAuthRepository,
     PrincipalLoader,
     SessionsService,
     ActivationsService,
+    MeService,
+    PermissionsVersionRepository,
+    PermissionsVersionService,
     { provide: LoginClock, useClass: SystemLoginClock },
     {
       provide: LoginLimiter,
@@ -43,6 +50,6 @@ import { SessionsService } from './sessions.service';
       },
     },
   ],
-  exports: [PrincipalLoader],
+  exports: [PrincipalLoader, PermissionsVersionService],
 })
 export class AuthModule {}

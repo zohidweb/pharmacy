@@ -100,6 +100,34 @@ export class EmployeeAuthRepository {
   }
 
   /**
+   * Sets a new password for a password change by the employee, only while the stored hash is still
+   * the verified one: a password changed meanwhile is never overwritten. Returns false when
+   * nothing matched.
+   */
+  async changePassword(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+    verifiedPhc: string,
+    next: { phc: string; pepperVersion: number },
+  ): Promise<boolean> {
+    const row = await trx
+      .updateTable('employeeCredentials')
+      .set({
+        passwordHash: next.phc,
+        passwordPepperVersion: next.pepperVersion,
+        passwordChangedAt: sql<Date>`now()`,
+        updatedAt: sql<Date>`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('employeeId', '=', employeeId)
+      .where('passwordHash', '=', verifiedPhc)
+      .returning('employeeId')
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  /**
    * Consumes a one-time activation code and sets the password in one statement: the row changes
    * only while the stored code hash equals `codeHash`, the code has not expired, the employee is
    * active and the network is active, so an inactive account never loses its code. Returns false
@@ -222,6 +250,45 @@ export class EmployeeAuthRepository {
           row.cashierSessionIdleMin ?? DEFAULT_IDLE_MINUTES,
       },
     };
+  }
+
+  /** Own-profile facts outside the session profile; null for an unknown employee. */
+  async loadMeExtras(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<{ lastLoginAt: Date | null; pinSet: boolean } | null> {
+    const row = await trx
+      .selectFrom('employees')
+      .leftJoin('employeeCredentials', (join) =>
+        join
+          .onRef('employeeCredentials.tenantId', '=', 'employees.tenantId')
+          .onRef('employeeCredentials.employeeId', '=', 'employees.id'),
+      )
+      .select(['employees.lastLoginAt', 'employeeCredentials.pinHash'])
+      .where('employees.tenantId', '=', tenantId)
+      .where('employees.id', '=', employeeId)
+      .executeTakeFirst();
+    if (!row) return null;
+    return {
+      lastLoginAt: row.lastLoginAt === null ? null : new Date(row.lastLoginAt),
+      pinSet: row.pinHash !== null && row.pinHash !== undefined,
+    };
+  }
+
+  /** The interface language of the employee (`ru` | `tj`). */
+  async updateLanguage(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+    language: 'ru' | 'tj',
+  ): Promise<void> {
+    await trx
+      .updateTable('employees')
+      .set({ language })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', employeeId)
+      .execute();
   }
 
   /** Active stores of a scope: the whole network for 'all', otherwise the listed ones. */

@@ -1,6 +1,7 @@
 import type { EmployeeProfile, ProfileStore } from './employee-auth.repository';
 import {
   buildEmployeeSession,
+  dbLanguage,
   idleTtlSeconds,
   roleDisplayName,
   sessionStoreMode,
@@ -43,6 +44,13 @@ const store: ProfileStore = {
   address: 'Test address',
   mode: 'online',
 };
+
+describe('dbLanguage', () => {
+  it('stores the Tajik UI locale as tj and Russian as ru', () => {
+    expect(dbLanguage('tg')).toBe('tj');
+    expect(dbLanguage('ru')).toBe('ru');
+  });
+});
 
 describe('uiLocale', () => {
   it.each([

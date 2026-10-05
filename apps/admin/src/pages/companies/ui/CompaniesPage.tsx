@@ -28,7 +28,6 @@ import Link from 'next/link';
 import { useDeferredValue, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { TenantStatusPill, useTenantList } from '@/entities/tenant';
-import { ImpersonateTenant } from '@/features/impersonate-tenant';
 import { useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { PageHeader } from '@/widgets/app-shell';
@@ -140,11 +139,6 @@ export function CompaniesPage() {
       nowrap: true,
       cell: (tenant) => (
         <div className="flex items-center justify-end gap-1">
-          <ImpersonateTenant
-            tenant={tenant}
-            appearance="icon"
-            disabled={tenant.status === 'blocked'}
-          />
           <Link
             href={routes.company(tenant.id)}
             aria-label={t('open', { name: tenant.name })}
@@ -302,11 +296,7 @@ export function CompaniesPage() {
                     {t('columns.paidUntil')}:{' '}
                     {tenant.paidUntil ? formatDateOnly(tenant.paidUntil) : '—'}
                   </p>
-                  <div className="mt-auto flex items-center justify-between gap-2">
-                    <ImpersonateTenant
-                      tenant={tenant}
-                      disabled={tenant.status === 'blocked'}
-                    />
+                  <div className="mt-auto flex items-center justify-end gap-2">
                     <Link
                       href={routes.company(tenant.id)}
                       className={buttonClassName({ variant: 'tertiary' })}

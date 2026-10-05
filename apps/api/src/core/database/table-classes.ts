@@ -21,6 +21,9 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     employee_stores: 'tenant',
     terminals: 'tenant',
     audit_log: 'tenant',
+    operators: 'platform',
+    operator_credentials: 'platform',
+    platform_audit_log: 'platform',
   });
 
 // Tenant tables that are append-only (insert and select only; a trigger rejects update, delete

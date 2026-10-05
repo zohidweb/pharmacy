@@ -190,6 +190,21 @@ class EnvironmentVariables {
   @IsOptional()
   TERMINAL_PIN_WINDOW_SECONDS = 900;
 
+  // Platform operator sessions (auth design, section 9): idle timeout and absolute lifetime.
+  @Type(() => Number)
+  @IsInt()
+  @Min(60)
+  @Max(86400)
+  @IsOptional()
+  OPERATOR_SESSION_IDLE_SECONDS = 1800;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(300)
+  @Max(86400)
+  @IsOptional()
+  OPERATOR_SESSION_ABSOLUTE_SECONDS = 28800;
+
   // Number of reverse proxies in front of the API (Express `trust proxy` hop count); 0 = no proxy,
   // req.ip is the socket address. Behind a proxy it must equal the real hop count: too low makes
   // every client share the proxy's address (one platform-wide rate-limit bucket), too high lets a

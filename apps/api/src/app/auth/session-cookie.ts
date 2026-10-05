@@ -41,3 +41,27 @@ export function clearSessionCookie(res: Response, env: SessionCookieEnv): void {
   // The attributes must match the set cookie, otherwise the browser keeps the original.
   res.clearCookie(sessionCookieName(env), baseOptions(env));
 }
+
+// Operator cookie of the admin contour (auth design, section 9): the operator's JWT (aud=admin).
+
+export type OperatorCookieName = '__Host-op_sid' | 'op_sid';
+
+export function operatorCookieName(env: SessionCookieEnv): OperatorCookieName {
+  return env.AUTH_TEST_COOKIES ? 'op_sid' : '__Host-op_sid';
+}
+
+export function setOperatorCookie(
+  res: Response,
+  token: string,
+  maxAgeSeconds: number,
+  env: SessionCookieEnv,
+): void {
+  res.cookie(operatorCookieName(env), token, {
+    ...baseOptions(env),
+    maxAge: maxAgeSeconds * 1000,
+  });
+}
+
+export function clearOperatorCookie(res: Response, env: SessionCookieEnv): void {
+  res.clearCookie(operatorCookieName(env), baseOptions(env));
+}

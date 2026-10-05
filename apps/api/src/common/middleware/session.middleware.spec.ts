@@ -17,6 +17,7 @@ import {
 import {
   getRequestContext,
   type RequestContext,
+  type EmployeePrincipal,
 } from '../context/request-context';
 import { SessionMiddleware } from './session.middleware';
 import { CookieTokenExtractor } from './token-extractor';
@@ -177,10 +178,15 @@ function request(
   } as unknown as Request;
 }
 
+// The web contour only ever yields an employee principal.
+type EmployeeContext = Omit<RequestContext, 'principal'> & {
+  principal: EmployeePrincipal | null;
+};
+
 // Runs the middleware and returns the context seen by the next handler.
 async function handle(
   req: Request = request(),
-): Promise<RequestContext | undefined> {
+): Promise<EmployeeContext | undefined> {
   let seen: RequestContext | undefined;
   const next = jest.fn(() => {
     seen = getRequestContext();
@@ -188,7 +194,7 @@ async function handle(
   await middleware.use(req, {} as Response, next);
   expect(next).toHaveBeenCalledTimes(1);
   expect(next).toHaveBeenCalledWith();
-  return seen;
+  return seen as EmployeeContext | undefined;
 }
 
 const GUEST: RequestContext = { correlationId: CORRELATION, principal: null };

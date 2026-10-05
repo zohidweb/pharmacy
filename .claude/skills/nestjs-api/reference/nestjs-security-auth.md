@@ -96,7 +96,9 @@
 Дальше запрос идёт внутри этого контекста: `getPrincipal()` / `requirePrincipal()` /
 `requireTenantId()` читают его из `AsyncLocalStorage`; контекст неизменяем, `TenantDatabase`
 берёт тенанта только оттуда. **Guard'ы контекст не строят и не меняют — только решают** (пропустить
-или бросить `ProblemException`). Маршруты `/api/v1/operator/*` в части 1 получают гостя.
+или бросить `ProblemException`). На маршрутах `/api/v1/operator/*` middleware строит `OperatorPrincipal`
+(раздел «Оператор платформы»); `getPrincipal()`/`requirePrincipal()` возвращают только сотрудника,
+оператора — `getOperator()`/`requireOperator()`.
 
 **Порядок глобальных guard'ов** (`APP_GUARD` в `AppModule`, порядок регистрации важен):
 
@@ -189,7 +191,8 @@ async login(@Body() body: EmployeeLoginDto, @Req() req: Request, @Res({ passthro
 Решение пересматривается (ADR-0008, поправка 2026-10-02; спецификация аутентификации, раздел 13:
 вместо варианта E2 нужен отдельный способ доступа оператора к данным сети). До него:
 - нет маршрутов, сессий и значений `auth`, связанных с «от имени»; `EmployeeSession.impersonation`
-  всегда `null`; в `RequestContext` нет полей оператора;
+  всегда `null`; у `OperatorPrincipal` нет тенанта, а `runWithContext` не принимает `tenantId` вместе
+  с оператором;
 - данные тенанта оператору недоступны: `PlatformDatabase` не имеет прав на тенантные таблицы;
 - не добавляйте обходные пути (handoff-коды, режимы «только просмотр» поверх tenant-сессии) без
   нового решения в ADR.
@@ -265,12 +268,32 @@ create(@Body() dto: CreateReceiptDto) { /* ... */ }
 - Ключ на точке — в env-файле развёртывания; в логах, аудите и ошибках — никогда. Лимиты — по
   `keyId` и по IP для неудачных попыток.
 
-## Оператор платформы (apps/admin)
+## Оператор платформы (`apps/api/src/app/platform/auth`, apps/admin)
 
-Часть 3 проекта аутентификации. Сессии `__Host-op_sid` (`aud=admin`) с отдельным префиксом ключей,
-`OperatorSessionGuard` и `@RequireOperatorPermission`; контроллеры — только `/api/v1/operator/*` в `app/platform/**`, доступ
-к данным — `PlatformDatabase.platformTransaction({ kind: 'operator', operatorId }, …)`
-(`nestjs-config-data-access.md`). Tenant-сессия там не принимается.
+1. **Контур.** Ровно маршруты `/api/v1/operator/*` (`common/http/contour.ts`). Middleware на них читает
+   только cookie `__Host-op_sid` (`op_sid` при `AUTH_TEST_COOKIES`), JWT `aud=admin` без `tid`
+   (`SessionTokenService.signOperator`/`verifyOperator`), сессию `OperatorSessionStore`
+   (`op-sess:<id>`, `op-emp-sess:<operatorId>`; бездействие `OPERATOR_SESSION_IDLE_SECONDS`, абсолютный
+   срок `OPERATOR_SESSION_ABSOLUTE_SECONDS`) и **на каждом запросе** `operators.status` — заблокированный
+   оператор теряет все сессии сразу. Порт `OperatorPrincipalResolver` (common) реализует
+   `OperatorSessionResolver` (app/platform/auth): `PlatformDatabase` — только в `app/platform/**`.
+   Cookie сотрудника на пути оператора не читается, cookie оператора на остальных путях — тоже.
+2. **Guard'ы.** CSRF — `ADMIN_ORIGIN` на контуре оператора, `WEB_ORIGIN` на остальных. `PermissionsGuard`
+   тенанта контур оператора пропускает; решает `OperatorPermissionsGuard` (после него): на
+   `/operator/*` нужен `@Public()` или `@RequireOperatorPermission(...)` (каталог
+   `OPERATOR_PERMISSIONS` в `libs/shared/domain`, роль `full_access` — все права), иначе `403` +
+   `platform_audit_log` `access.denied`. Step-up для оператора — возраст `authenticatedAt`.
+3. **Вход.** `POST /operator/sessions { login, password }` — как вход сотрудника: только e-mail, лимит
+   `operator:<sha256>` до хеширования, фиктивный хеш, выравнивание неудачи, один `401
+   invalid_credentials`; аудит `auth.operator-login-succeeded`/`-failed`. `GET`/`DELETE
+   /operator/sessions/current` — `platform:view`.
+4. **Первый оператор.** `scripts/create-operator.mjs --login <e-mail> --name "<ФИО>"` — одноразовый код
+   (как у владельца), пароль оператор задаёт `POST /operator/activations { login, code, newPassword }`
+   (`401 invalid_code`, `422 password_policy`, `429 login_locked`). Пароль в консоли не вводится.
+5. **Журнал.** `PlatformAuditService.append(trx, event)` — actor (`operator`/`system`, `operator_id`, `job`)
+   берётся из `app.actor` транзакции, не от вызывающего; `platform_audit_log` только дополняется.
+6. **Вне части 3.** Создание и блокировка сетей, выдача кода владельцу через API (это запись в
+   тенантные таблицы — тот же вопрос доверия, что «от имени»), профиль и команда операторов.
 
 ## Запрещено
 

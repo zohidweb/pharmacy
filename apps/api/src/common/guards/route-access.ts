@@ -1,10 +1,15 @@
 import type { ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
-import type { Permission } from '@pharmacy/shared-domain';
+import type {
+  OperatorPermission,
+  Permission,
+} from '@pharmacy/shared-domain';
 import {
   IS_AUTHENTICATED_KEY,
   IS_PUBLIC_KEY,
+  type OperatorPermissionRequirement,
   type PermissionRequirement,
+  REQUIRED_OPERATOR_PERMISSION_KEY,
   REQUIRED_PERMISSION_KEY,
   type StoreScopeOptions,
 } from './decorators';
@@ -13,6 +18,7 @@ export type RouteAccess =
   | { kind: 'public' }
   | { kind: 'authenticated' }
   | { kind: 'permission'; permission: Permission; scope?: StoreScopeOptions }
+  | { kind: 'operator-permission'; permission: OperatorPermission }
   | { kind: 'none' };
 
 // A route handler or a controller class: where decorators put their metadata.
@@ -21,11 +27,21 @@ type MetadataTarget =
   | ReturnType<ExecutionContext['getClass']>;
 
 // The marker of one level, or null when it has none. Several markers on one level resolve to the
-// strictest (permission, then authenticated, then public), so a mistake fails closed.
+// strictest (operator permission, permission, then authenticated, then public), so a mistake fails
+// closed: an operator permission on a tenant route is never satisfied by an employee.
 function accessAt(
   reflector: Reflector,
   target: MetadataTarget,
 ): RouteAccess | null {
+  const operatorRequirement = reflector.get<
+    OperatorPermissionRequirement | undefined
+  >(REQUIRED_OPERATOR_PERMISSION_KEY, target);
+  if (operatorRequirement) {
+    return {
+      kind: 'operator-permission',
+      permission: operatorRequirement.permission,
+    };
+  }
   const requirement = reflector.get<PermissionRequirement | undefined>(
     REQUIRED_PERMISSION_KEY,
     target,

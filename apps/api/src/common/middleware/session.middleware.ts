@@ -1,5 +1,10 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
-import { Injectable, Logger, type NestMiddleware } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type NestMiddleware,
+  Optional,
+} from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import {
   PrincipalLoader,
@@ -14,8 +19,11 @@ import {
 } from '../../core/sessions';
 import {
   type EmployeePrincipal,
+  type OperatorPrincipal,
   runWithContext,
 } from '../context/request-context';
+import { isOperatorPath } from '../http/contour';
+import { OperatorPrincipalResolver } from './operator-principal-resolver';
 import { TokenExtractor } from './token-extractor';
 
 // The idle lifetime is extended at most once per this interval per session (design, section 7, step 5).
@@ -23,16 +31,6 @@ export const TOUCH_INTERVAL_MS = 60_000;
 
 // Upper bound of the per-process touch map; the oldest entries are evicted first.
 const MAX_TRACKED_SESSIONS = 10_000;
-
-// The operator contour (aud=admin, __Host-op_sid) arrives with part 3 of the auth design; until
-// then its routes get a guest context and never an employee principal.
-const OPERATOR_PREFIX = '/api/v1/operator';
-
-function isOperatorPath(originalUrl: string): boolean {
-  // Express routing is case-insensitive by default, so the comparison is too.
-  const path = originalUrl.split('?')[0].toLowerCase();
-  return path === OPERATOR_PREFIX || path.startsWith(`${OPERATOR_PREFIX}/`);
-}
 
 // Last touch time per session id, kept in process memory. A Map iterates in insertion order, so
 // re-inserting on every touch keeps the oldest entry first for eviction.
@@ -133,13 +131,17 @@ export class SessionMiddleware implements NestMiddleware {
     private readonly sessions: SessionStore,
     private readonly versions: PermissionsVersionCache,
     private readonly loader: PrincipalLoader,
+    // Absent on an offline store (no operator contour there).
+    @Optional() private readonly operators?: OperatorPrincipalResolver,
   ) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
     const correlationId = req.correlationId ?? randomUUID();
-    let principal: EmployeePrincipal | null = null;
+    let principal: EmployeePrincipal | OperatorPrincipal | null = null;
     try {
-      principal = await this.resolve(req);
+      principal = isOperatorPath(req.originalUrl)
+        ? await this.resolveOperator(req)
+        : await this.resolve(req);
     } catch (error) {
       // The error text may carry keys or values from the store or the database: name only.
       const name = error instanceof Error ? error.name : typeof error;
@@ -151,9 +153,21 @@ export class SessionMiddleware implements NestMiddleware {
     // Outside the try: an error thrown downstream is not a session failure and must not
     // trigger a second next().
     runWithContext(
-      { correlationId, tenantId: principal?.tenantId, principal },
+      {
+        correlationId,
+        tenantId: principal?.kind === 'employee' ? principal.tenantId : undefined,
+        principal,
+      },
       next,
     );
+  }
+
+  // The operator contour: only the operator cookie is read; an employee token is never accepted.
+  private async resolveOperator(req: Request): Promise<OperatorPrincipal | null> {
+    if (!this.operators) return null;
+    const token = this.extractor.extractOperator(req);
+    if (token === null) return null;
+    return this.operators.resolve(token);
   }
 
   private async resolve(req: Request): Promise<EmployeePrincipal | null> {

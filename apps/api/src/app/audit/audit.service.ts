@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { sql } from 'kysely';
 import {
+  getPrincipal,
   getRequestContext,
   requireTenantId,
 } from '../../common/context/request-context';
@@ -42,7 +43,8 @@ export class AuditService {
     // requireTenantId passed, so the context exists.
     const context = getRequestContext();
     if (!context) throw new Error('Request context is missing');
-    const principal = context.principal;
+    // The tenant audit records employees only; an operator context has no tenant at all.
+    const principal = getPrincipal();
 
     await trx
       .insertInto('auditLog')

@@ -14,6 +14,7 @@ import {
 import { ProblemException } from '../../common/errors/problem.exception';
 import type { StoreScopeOptions } from '../../common/guards/decorators';
 import { resolveRouteAccess } from '../../common/guards/route-access';
+import { isOperatorPath } from '../../common/http/contour';
 import { isUuid, TenantDatabase } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 
@@ -92,8 +93,13 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // The operator contour and operator markers are OperatorPermissionsGuard's to decide.
+    const req = context.switchToHttp().getRequest<Request>();
+    if (isOperatorPath(req.originalUrl)) return true;
     const access = resolveRouteAccess(this.reflector, context);
-    if (access.kind === 'public') return true;
+    if (access.kind === 'public' || access.kind === 'operator-permission') {
+      return true;
+    }
 
     // AuthGuard runs first; this is a second line, and a guest has no tenant to audit in.
     const principal = getPrincipal();
@@ -109,10 +115,7 @@ export class PermissionsGuard implements CanActivate {
     }
     if (scope === undefined) return true;
 
-    for (const storeId of storeIdsOf(
-      context.switchToHttp().getRequest<Request>(),
-      scope,
-    )) {
+    for (const storeId of storeIdsOf(req, scope)) {
       if (storeId === null) return this.deny(permission, 'store_missing');
       if (!inScope(principal, storeId)) {
         return this.deny(permission, 'store_out_of_scope', storeId);

@@ -25,6 +25,20 @@ export type VerifiedSessionClaims = SessionClaims & {
   exp: number;
 };
 
+/** Claims of a platform operator's token (aud=admin): no tenant (auth design, section 9). */
+export interface OperatorClaims {
+  jti: string;
+  sub: string;
+}
+
+export type VerifiedOperatorClaims = OperatorClaims & {
+  aud: 'admin';
+  iat: number;
+  exp: number;
+};
+
+const OPERATOR_AUDIENCE = 'admin';
+
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
@@ -55,6 +69,57 @@ export class SessionTokenService {
         expiresIn: ttlSeconds,
       },
     );
+  }
+
+  /** An operator token: jti, sub, aud=admin, iss, iat, exp — no tid. */
+  signOperator(claims: OperatorClaims, ttlSeconds: number): Promise<string> {
+    const key = this.keyRing.keys.get(this.keyRing.activeId);
+    if (!key)
+      throw new Error('The active session key is missing from the key ring');
+    return this.jwt.signAsync(
+      {},
+      {
+        secret: key,
+        algorithm: ALGORITHM,
+        keyid: this.keyRing.activeId,
+        issuer: SESSION_TOKEN_ISSUER,
+        audience: OPERATOR_AUDIENCE,
+        subject: claims.sub,
+        jwtid: claims.jti,
+        expiresIn: ttlSeconds,
+      },
+    );
+  }
+
+  /** Verified operator claims, or null; a token carrying a tenant is not an operator token. */
+  async verifyOperator(token: string): Promise<VerifiedOperatorClaims | null> {
+    try {
+      const key = this.keyFor(token);
+      if (!key) return null;
+      const payload = await this.jwt.verifyAsync<Record<string, unknown>>(
+        token,
+        {
+          secret: key,
+          algorithms: [ALGORITHM],
+          issuer: SESSION_TOKEN_ISSUER,
+          audience: OPERATOR_AUDIENCE,
+        },
+      );
+      const { jti, sub, tid, aud, iat, exp } = payload;
+      if (
+        !isNonEmptyString(jti) ||
+        !isNonEmptyString(sub) ||
+        tid !== undefined ||
+        aud !== OPERATOR_AUDIENCE ||
+        !isTimestamp(iat) ||
+        !isTimestamp(exp)
+      ) {
+        return null;
+      }
+      return { jti, sub, aud: OPERATOR_AUDIENCE, iat, exp };
+    } catch {
+      return null;
+    }
   }
 
   /** The verified claims, or null for any invalid, foreign, expired or malformed token. */

@@ -1,4 +1,5 @@
 export * from './lib/discount';
+export * from './lib/operator-permissions';
 export * from './lib/permissions';
 export * from './lib/password-policy';
 export * from './lib/pin-policy';

@@ -1,10 +1,17 @@
 import { PIN_MAX_LENGTH } from '@pharmacy/shared-domain';
 import type {
   BindTerminalRequest,
+  ChangePinRequest,
   PinLoginRequest,
 } from '@pharmacy/shared-dto';
 import { Transform } from 'class-transformer';
-import { IsString, IsUUID, Length, MaxLength } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  MaxLength,
+} from 'class-validator';
 
 const TERMINAL_NAME_MAX_LENGTH = 60;
 
@@ -29,4 +36,16 @@ export class PinLoginDto implements PinLoginRequest {
   @IsString()
   @MaxLength(PIN_MAX_LENGTH)
   pin!: string;
+}
+
+/** POST /api/v1/me/pin. Bounds cap the cost of hashing; the PIN rules are checked by the service. */
+export class ChangePinDto implements ChangePinRequest {
+  @IsOptional()
+  @IsString()
+  @MaxLength(PIN_MAX_LENGTH)
+  currentPin!: string | null;
+
+  @IsString()
+  @MaxLength(PIN_MAX_LENGTH)
+  newPin!: string;
 }

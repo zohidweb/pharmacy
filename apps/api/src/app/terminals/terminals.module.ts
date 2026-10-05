@@ -5,6 +5,8 @@ import { SessionsModule } from '../../core/sessions';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { LoginLimiter } from '../auth/login-limiter';
+import { MePinController } from './me-pin.controller';
+import { MePinService } from './me-pin.service';
 import { TerminalSessionsController } from './terminal-sessions.controller';
 import {
   TERMINAL_PIN_LIMITER,
@@ -20,11 +22,12 @@ import { TerminalsService } from './terminals.service';
 // loader from AuthModule.
 @Module({
   imports: [SessionsModule, AuditModule, AuthModule],
-  controllers: [TerminalsController, TerminalSessionsController],
+  controllers: [TerminalsController, TerminalSessionsController, MePinController],
   providers: [
     TerminalsRepository,
     TerminalsService,
     TerminalSessionsService,
+    MePinService,
     {
       provide: TERMINAL_PIN_LIMITER,
       inject: [REDIS_CLIENT, ConfigService],

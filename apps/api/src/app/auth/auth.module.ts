@@ -52,6 +52,6 @@ import { SessionsService } from './sessions.service';
       },
     },
   ],
-  exports: [PrincipalLoader, PermissionsVersionService, SessionIssuer],
+  exports: [PrincipalLoader, PermissionsVersionService, SessionIssuer, LoginLimiter],
 })
 export class AuthModule {}

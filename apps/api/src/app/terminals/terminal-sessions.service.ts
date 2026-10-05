@@ -125,6 +125,7 @@ export class TerminalSessionsService {
           action: counted.locked ? 'auth.pin-locked' : 'auth.pin-failed',
           entityType: 'employee',
           entityId: employeeId,
+          storeId,
           details: { terminalId, attempts: counted.attempts },
         });
         return counted;
@@ -148,6 +149,7 @@ export class TerminalSessionsService {
         action: 'auth.pin-succeeded',
         entityType: 'employee',
         entityId: employeeId,
+        storeId,
         details: { terminalId },
       });
       return this.issuer.issue(trx, {
@@ -185,6 +187,7 @@ export class TerminalSessionsService {
             action: 'auth.pin-failed',
             entityType: 'employee',
             entityId: employeeId,
+            storeId: device.storeId,
             details: { terminalId: device.terminalId, reason },
           }),
         );

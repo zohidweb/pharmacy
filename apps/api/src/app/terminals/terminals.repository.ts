@@ -38,6 +38,24 @@ export interface PinFailure {
   locked: boolean;
 }
 
+/** The own PIN state of an employee (POST /me/pin). */
+export interface PinState {
+  pinHash: string | null;
+  pinPepperVersion: number | null;
+  pinLockedAt: Date | null;
+}
+
+export interface MyTerminalRow {
+  id: string;
+  name: string;
+  storeName: string | null;
+  boundAt: Date;
+  lastSignInAt: Date;
+}
+
+/** How far back GET /me/terminals looks (auth design, section 8). */
+const MY_TERMINALS_DAYS = 90;
+
 /** PIN failures in a row that lock the PIN (auth design 2026-10-02, section 8). */
 export const PIN_MAX_FAILED_ATTEMPTS = 3;
 
@@ -277,5 +295,109 @@ export class TerminalsRepository {
       .where('employeeId', '=', employeeId)
       .where('pinFailedAttempts', '>', 0)
       .execute();
+  }
+
+  async pinState(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<PinState> {
+    const row = await trx
+      .selectFrom('employeeCredentials')
+      .select(['pinHash', 'pinPepperVersion', 'pinLockedAt'])
+      .where('tenantId', '=', tenantId)
+      .where('employeeId', '=', employeeId)
+      .executeTakeFirst();
+    return {
+      pinHash: row?.pinHash ?? null,
+      pinPepperVersion: row?.pinPepperVersion ?? null,
+      pinLockedAt:
+        row?.pinLockedAt === null || row?.pinLockedAt === undefined
+          ? null
+          : new Date(row.pinLockedAt),
+    };
+  }
+
+  /** Sets the PIN and clears the failure counter and the lock; creates the credentials row. */
+  async setPin(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+    next: { phc: string; pepperVersion: number },
+  ): Promise<void> {
+    await trx
+      .insertInto('employeeCredentials')
+      .values({
+        tenantId,
+        employeeId,
+        pinHash: next.phc,
+        pinPepperVersion: next.pepperVersion,
+        pinFailedAttempts: 0,
+        pinLockedAt: null,
+      })
+      .onConflict((oc) =>
+        oc.columns(['tenantId', 'employeeId']).doUpdateSet({
+          pinHash: next.phc,
+          pinPepperVersion: next.pepperVersion,
+          pinFailedAttempts: 0,
+          pinLockedAt: null,
+          updatedAt: sql<Date>`now()`,
+        }),
+      )
+      .execute();
+  }
+
+  /** Terminals the employee signed in on by PIN within MY_TERMINALS_DAYS, latest first. */
+  async myTerminals(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<MyTerminalRow[]> {
+    const rows = await trx
+      .with('signIns', (db) =>
+        db
+          .selectFrom('auditLog')
+          .select([
+            sql<string>`details ->> 'terminalId'`.as('terminalId'),
+            sql<Date>`max(recorded_at)`.as('lastSignInAt'),
+          ])
+          .where('tenantId', '=', tenantId)
+          .where('action', '=', 'auth.pin-succeeded')
+          .where('entityType', '=', 'employee')
+          .where('entityId', '=', employeeId)
+          .where(
+            'recordedAt',
+            '>=',
+            sql<Date>`now() - ${sql.lit(`${MY_TERMINALS_DAYS} days`)}::interval`,
+          )
+          .groupBy(sql`details ->> 'terminalId'`),
+      )
+      .selectFrom('signIns')
+      .innerJoin('terminals', (join) =>
+        join
+          .on('terminals.tenantId', '=', tenantId)
+          .on(sql`terminals.id::text`, '=', sql.ref('signIns.terminalId')),
+      )
+      .leftJoin('stores', (join) =>
+        join
+          .onRef('stores.tenantId', '=', 'terminals.tenantId')
+          .onRef('stores.id', '=', 'terminals.storeId'),
+      )
+      .select([
+        'terminals.id',
+        'terminals.name',
+        'stores.name as storeName',
+        'terminals.boundAt',
+        'signIns.lastSignInAt',
+      ])
+      .orderBy('signIns.lastSignInAt', 'desc')
+      .execute();
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      storeName: row.storeName ?? null,
+      boundAt: new Date(row.boundAt),
+      lastSignInAt: new Date(row.lastSignInAt),
+    }));
   }
 }

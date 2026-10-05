@@ -32,7 +32,7 @@ export interface PinCandidate {
   pinLockedAt: Date | null;
 }
 
-/** The PIN failure counter after one more failure. */
+/** The PIN failure counter after a reserved attempt. */
 export interface PinFailure {
   attempts: number;
   locked: boolean;
@@ -259,41 +259,45 @@ export class TerminalsRepository {
     };
   }
 
-  // One more failure, counted and locked atomically in one statement, so concurrent wrong PINs
-  // cannot get past PIN_MAX_FAILED_ATTEMPTS.
-  async recordPinFailure(
+  // Reserves one PIN attempt before scrypt, atomically: counted as a failure in advance and locking
+  // the PIN when it reaches PIN_MAX_FAILED_ATTEMPTS, only while the PIN is not locked. Concurrent
+  // attempts therefore get at most PIN_MAX_FAILED_ATTEMPTS checks; a success clears the count
+  // and the lock (clearPinFailures). Null when the PIN is locked (or there are no credentials).
+  async reservePinAttempt(
     trx: TenantTransaction,
     tenantId: string,
     employeeId: string,
-  ): Promise<PinFailure> {
+  ): Promise<PinFailure | null> {
     const row = await trx
       .updateTable('employeeCredentials')
       .set((eb) => ({
         pinFailedAttempts: eb('pinFailedAttempts', '+', 1),
-        pinLockedAt: sql<Date | null>`case when pin_failed_attempts + 1 >= ${PIN_MAX_FAILED_ATTEMPTS} then coalesce(pin_locked_at, now()) else pin_locked_at end`,
+        pinLockedAt: sql<Date | null>`case when pin_failed_attempts + 1 >= ${PIN_MAX_FAILED_ATTEMPTS} then now() else null end`,
         updatedAt: sql<Date>`now()`,
       }))
       .where('tenantId', '=', tenantId)
       .where('employeeId', '=', employeeId)
+      .where('pinLockedAt', 'is', null)
       .returning(['pinFailedAttempts', 'pinLockedAt'])
       .executeTakeFirst();
+    if (!row) return null;
     return {
-      attempts: row?.pinFailedAttempts ?? 0,
-      locked: row?.pinLockedAt !== null && row?.pinLockedAt !== undefined,
+      attempts: row.pinFailedAttempts,
+      locked: row.pinLockedAt !== null,
     };
   }
 
-  async resetPinFailures(
+  /** After a correct PIN: the reserved attempt and any lock it set are cleared. */
+  async clearPinFailures(
     trx: TenantTransaction,
     tenantId: string,
     employeeId: string,
   ): Promise<void> {
     await trx
       .updateTable('employeeCredentials')
-      .set({ pinFailedAttempts: 0, updatedAt: sql<Date>`now()` })
+      .set({ pinFailedAttempts: 0, pinLockedAt: null, updatedAt: sql<Date>`now()` })
       .where('tenantId', '=', tenantId)
       .where('employeeId', '=', employeeId)
-      .where('pinFailedAttempts', '>', 0)
       .execute();
   }
 

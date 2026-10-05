@@ -108,6 +108,13 @@ export class TerminalSessionsService {
     // Step 4: a locked PIN signs in by password only.
     if (candidate.pinLockedAt !== null) throw pinLocked();
 
+    // The attempt is counted before scrypt (see reservePinAttempt): a burst of concurrent PINs
+    // gets no more than PIN_MAX_FAILED_ATTEMPTS checks before the lock.
+    const reserved = await this.db.tenantTransaction((trx) =>
+      this.repository.reservePinAttempt(trx, tenantId, employeeId),
+    );
+    if (reserved === null) throw pinLocked();
+
     // Step 5: scrypt; no transaction is held open meanwhile.
     const ok = await this.hasher.verify(
       pin,
@@ -115,22 +122,16 @@ export class TerminalSessionsService {
       candidate.pinPepperVersion,
     );
     if (!ok) {
-      const failure = await this.db.tenantTransaction(async (trx) => {
-        const counted = await this.repository.recordPinFailure(
-          trx,
-          tenantId,
-          employeeId,
-        );
-        await this.audit.append(trx, {
-          action: counted.locked ? 'auth.pin-locked' : 'auth.pin-failed',
+      await this.db.tenantTransaction((trx) =>
+        this.audit.append(trx, {
+          action: reserved.locked ? 'auth.pin-locked' : 'auth.pin-failed',
           entityType: 'employee',
           entityId: employeeId,
           storeId,
-          details: { terminalId, attempts: counted.attempts },
-        });
-        return counted;
-      });
-      throw failure.locked ? pinLocked() : invalidPin();
+          details: { terminalId, attempts: reserved.attempts },
+        }),
+      );
+      throw reserved.locked ? pinLocked() : invalidPin();
     }
 
     // The role's permissions and the version; the scope becomes the terminal's store.
@@ -143,7 +144,7 @@ export class TerminalSessionsService {
     await this.sessions.destroyForTerminal(tenantId, terminalId);
 
     const issued = await this.db.tenantTransaction(async (trx) => {
-      await this.repository.resetPinFailures(trx, tenantId, employeeId);
+      await this.repository.clearPinFailures(trx, tenantId, employeeId);
       await this.repository.touchLastSeen(trx, tenantId, terminalId);
       await this.audit.append(trx, {
         action: 'auth.pin-succeeded',

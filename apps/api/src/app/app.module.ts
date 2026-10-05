@@ -27,6 +27,7 @@ import { SessionsModule } from '../core/sessions';
 import { validateEnv } from './config/env.validation';
 import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
+import { TerminalsModule } from './terminals/terminals.module';
 import { PermissionsGuard } from './auth/permissions.guard';
 import { CatalogModule } from './catalog/catalog.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -65,6 +66,7 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       }),
     }),
     AuthModule,
+    TerminalsModule,
     CatalogModule,
     InventoryModule,
     PosModule,

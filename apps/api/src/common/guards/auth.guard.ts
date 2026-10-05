@@ -4,7 +4,9 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { getPrincipal } from '../context/request-context';
+import type { Request } from 'express';
+import { getOperator, getPrincipal } from '../context/request-context';
+import { isOperatorPath } from '../http/contour';
 import { ProblemException } from '../errors/problem.exception';
 import { resolveRouteAccess } from './route-access';
 
@@ -19,7 +21,10 @@ export class AuthGuard implements CanActivate {
     if (resolveRouteAccess(this.reflector, context).kind === 'public') {
       return true;
     }
-    if (!getPrincipal()) throw new ProblemException(401, 'unauthenticated');
+    // The principal of the route's contour: an operator on /operator/*, an employee elsewhere.
+    const { originalUrl } = context.switchToHttp().getRequest<Request>();
+    const principal = isOperatorPath(originalUrl) ? getOperator() : getPrincipal();
+    if (!principal) throw new ProblemException(401, 'unauthenticated');
     return true;
   }
 }

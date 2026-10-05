@@ -6,3 +6,7 @@ export {
   type SessionPatch,
   type SessionRecord,
 } from './session-store';
+export {
+  OperatorSessionStore,
+  type OperatorSessionRecord,
+} from './operator-session-store';

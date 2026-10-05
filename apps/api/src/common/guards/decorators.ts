@@ -1,5 +1,8 @@
 import { SetMetadata } from '@nestjs/common';
-import type { Permission } from '@pharmacy/shared-domain';
+import type {
+  OperatorPermission,
+  Permission,
+} from '@pharmacy/shared-domain';
 
 // Route access markers read by the global guards (auth design 2026-10-02, section 7). A route
 // carries exactly one of @Public(), @Authenticated() or @RequirePermission(...) (app/auth); a
@@ -12,6 +15,8 @@ export const REQUIRE_FRESH_AUTH_KEY = 'pharmacy:requireFreshAuth';
 // Set by @RequirePermission (app/auth/decorators.ts); defined here so that every guard resolves
 // the route's access the same way.
 export const REQUIRED_PERMISSION_KEY = 'pharmacy:requiredPermission';
+// Set by @RequireOperatorPermission (app/platform/auth/decorators.ts): the operator contour.
+export const REQUIRED_OPERATOR_PERMISSION_KEY = 'pharmacy:requiredOperatorPermission';
 
 // Where the store of a request is read from: a route parameter, a query parameter or a top-level
 // body field. When an option is set, the value is required and must be in the principal's scope.
@@ -24,6 +29,10 @@ export interface StoreScopeOptions {
 export interface PermissionRequirement {
   permission: Permission;
   scope?: StoreScopeOptions;
+}
+
+export interface OperatorPermissionRequirement {
+  permission: OperatorPermission;
 }
 
 /** No principal needed (login, activation, health). CSRF is still checked. */

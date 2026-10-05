@@ -28,6 +28,8 @@ import { validateEnv } from './config/env.validation';
 import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
 import { TerminalsModule } from './terminals/terminals.module';
+import { OperatorAuthModule } from './platform/auth/operator-auth.module';
+import { OperatorPermissionsGuard } from './platform/auth/operator-permissions.guard';
 import { PermissionsGuard } from './auth/permissions.guard';
 import { CatalogModule } from './catalog/catalog.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -67,6 +69,7 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     }),
     AuthModule,
     TerminalsModule,
+    OperatorAuthModule,
     CatalogModule,
     InventoryModule,
     PosModule,
@@ -89,6 +92,7 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: PrincipalThrottlerGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_GUARD, useClass: OperatorPermissionsGuard },
     { provide: APP_GUARD, useClass: FreshAuthGuard },
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },
   ],

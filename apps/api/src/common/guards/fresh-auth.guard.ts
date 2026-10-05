@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { getPrincipal } from '../context/request-context';
+import { getOperator, getPrincipal } from '../context/request-context';
 import { ProblemException } from '../errors/problem.exception';
 import { REQUIRE_FRESH_AUTH_KEY } from './decorators';
 
@@ -31,13 +31,19 @@ export class FreshAuthGuard implements CanActivate {
     );
     if (!required) return true;
 
+    // An operator signs in by password only, so the age alone decides for him.
     const principal = getPrincipal();
-    if (!principal) throw new ProblemException(401, 'unauthenticated');
+    const operator = getOperator();
+    const authenticatedAt = principal?.authenticatedAt ?? operator?.authenticatedAt;
+    if (authenticatedAt === undefined) {
+      throw new ProblemException(401, 'unauthenticated');
+    }
+    const byPassword = principal ? principal.auth === 'password' : true;
 
     // NaN (an unparseable timestamp) fails the comparison and is rejected. A timestamp slightly
     // in the future (clock skew between API instances) counts as fresh.
-    const age = Date.now() - Date.parse(principal.authenticatedAt);
-    if (principal.auth !== 'password' || !(age <= this.maxAgeMs)) {
+    const age = Date.now() - Date.parse(authenticatedAt);
+    if (!byPassword || !(age <= this.maxAgeMs)) {
       throw new ProblemException(403, 'fresh_auth_required');
     }
     return true;

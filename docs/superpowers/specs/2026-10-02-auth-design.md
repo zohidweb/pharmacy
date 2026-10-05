@@ -371,8 +371,11 @@ revoked_at)`; нет или отозван → `404 not_bound`. В `withTenant`:
 - Таблицы класса `platform`: `operators` (`login` = рабочий e-mail, unique; `full_name`, `status`),
   `operator_credentials` (хеш пароля, версия pepper), `platform_audit_log` (только добавление).
   Доступ через `PlatformDatabase`; резолвер не нужен.
-- Первый оператор — `node scripts/create-operator.mjs --login <e-mail> --name "<ФИО>"` в образе API;
-  пароль вводится в консоли без эха, не аргументом. Остальные операторы — из админки позже.
+- Первый оператор — `node scripts/create-operator.mjs --login <e-mail> --name "<ФИО>"` в образе API:
+  скрипт создаёт оператора и печатает одноразовый код (как у владельца, раздел 6); пароль оператор
+  задаёт сам через `POST /api/v1/operator/activations { login, code, newPassword }` (поправка
+  2026-10-05, план части 3, решение P1: без повторения scrypt и pepper вне `PasswordHasher`).
+  Остальные операторы — из админки позже.
 - `POST /api/v1/operator/sessions { login, password }` → 201 `OperatorSession`; хеширование, лимиты,
   фиктивный хеш — как у сотрудника. Сессия в Redis, `aud=admin`, cookie `__Host-op_sid`,
   бездействие `OPERATOR_SESSION_IDLE_SECONDS` (1800), абсолютный срок
@@ -381,6 +384,9 @@ revoked_at)`; нет или отозван → `404 not_bound`. В `withTenant`:
   `OperatorPermissionsGuard` + `@RequireOperatorPermission` на `/operator/*`; step-up — для
   управления операторами и выдачи кода активации.
 - `platform_audit_log`: вход, неудачи, блокировки, выдача кода активации.
+- Вне части 3 (план, решения P2–P3): создание и блокировка сетей с закрытием их сессий, выдача кода
+  владельцу через API — модуль «сети» админки со своим планом (запись в тенантные таблицы требует
+  решения о доступе оператора, раздел 13); профиль, смена пароля и команда операторов.
 
 ## 10. Офлайн-точка (часть 4)
 

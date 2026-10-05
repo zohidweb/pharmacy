@@ -16,6 +16,8 @@ module.exports = {
   globalTeardown: '<rootDir>/src/support/global-teardown.ts',
   setupFiles: ['<rootDir>/src/support/test-setup.ts'],
   testEnvironment: 'node',
+  // Sign-in takes at least the 400 ms failure floor plus scrypt (p=3); a lock test makes six of them.
+  testTimeout: 30_000,
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },

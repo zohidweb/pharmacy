@@ -1,5 +1,6 @@
 import { closeAll, ownerPool } from '../../../test/integration/connections';
 import {
+  APPEND_ONLY_TABLES,
   RESOLVER_FUNCTIONS,
   STORE_PLATFORM_COLUMNS,
   TABLE_CLASSES,
@@ -88,9 +89,10 @@ async function tablePrivilegeViolations(
 
 describe('database catalog (ADR-0013 p. 8)', () => {
   it('every table in schema pharmacy is in TABLE_CLASSES and vice versa', async () => {
+    // Partitions inherit the class of their parent and are checked separately below.
     const rows = await query<{ name: string }>(
       `select relname as name from pg_class
-       where relnamespace = 'pharmacy'::regnamespace and relkind in ('r', 'p')
+       where relnamespace = 'pharmacy'::regnamespace and relkind in ('r', 'p') and not relispartition
        order by 1`,
     );
     // Views, materialized views and foreign tables escape the manifest and its isolation checks,
@@ -133,11 +135,47 @@ describe('database catalog (ADR-0013 p. 8)', () => {
     expect(
       await tablePrivilegeViolations(
         'pharmacy_app',
-        tablesOf('tenant'),
+        tablesOf('tenant').filter((table) => !APPEND_ONLY_TABLES.includes(table)),
         ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
         'exact',
       ),
     ).toEqual([]);
+  });
+
+  it('pharmacy_app has exactly SELECT, INSERT on append-only tables', async () => {
+    expect(
+      await tablePrivilegeViolations(
+        'pharmacy_app',
+        [...APPEND_ONLY_TABLES].sort(),
+        ['SELECT', 'INSERT'],
+        'exact',
+      ),
+    ).toEqual([]);
+  });
+
+  it('partitions have a parent in TABLE_CLASSES and no privileges for runtime roles', async () => {
+    // Access goes through the parent only: its RLS policies do not apply to a partition queried
+    // directly, so any privilege on a partition would bypass tenant isolation.
+    const rows = await query<{ violation: string }>(
+      `select c.relname || ': parent ' || parent.relname || ' not in manifest' as violation
+       from pg_class c
+       join pg_inherits i on i.inhrelid = c.oid
+       join pg_class parent on parent.oid = i.inhparent
+       where c.relnamespace = 'pharmacy'::regnamespace and c.relkind in ('r', 'p') and c.relispartition
+         and not (parent.relname = any($1::text[]))
+       union all
+       select r.role || ' on ' || c.relname || ': has ' || p.privilege
+       from pg_class c
+       cross join unnest($2::text[]) as r(role)
+       cross join unnest($3::text[]) as p(privilege)
+       where c.relnamespace = 'pharmacy'::regnamespace and c.relkind in ('r', 'p') and c.relispartition
+         and (has_table_privilege(r.role, c.oid, p.privilege)
+              or (p.privilege in ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
+                  and has_any_column_privilege(r.role, c.oid, p.privilege)))
+       order by 1`,
+      [Object.keys(TABLE_CLASSES), RUNTIME_ROLES, TABLE_PRIVILEGES],
+    );
+    expect(rows.map((row) => row.violation)).toEqual([]);
   });
 
   it('pharmacy_app has at most SELECT on platform tables', async () => {

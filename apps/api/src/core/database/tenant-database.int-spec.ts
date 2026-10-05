@@ -210,7 +210,7 @@ describe('TenantDatabase.withTenant', () => {
 describe('TenantDatabase.tenantTransaction', () => {
   it('tenantTransaction uses the tenant from the request context and fails without it', async () => {
     const tenantId = await runWithContext(
-      { correlationId: 'corr-tdb-0001', tenantId: b.tenantId },
+      { correlationId: 'corr-tdb-0001', tenantId: b.tenantId, principal: null },
       () =>
         db.tenantTransaction(async (trx) => (await sessionState(trx)).tenantId),
     );
@@ -221,7 +221,7 @@ describe('TenantDatabase.tenantTransaction', () => {
       TenantContextMissingError,
     );
     await expect(
-      runWithContext({ correlationId: 'corr-tdb-0002' }, () =>
+      runWithContext({ correlationId: 'corr-tdb-0002', principal: null }, () =>
         db.tenantTransaction(work),
       ),
     ).rejects.toThrow(TenantContextMissingError);

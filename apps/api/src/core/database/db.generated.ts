@@ -23,6 +23,24 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface AuditLog {
+  actingOperatorId: string | null;
+  action: string;
+  businessDate: string;
+  correlationId: string;
+  details: Generated<Json>;
+  employeeId: string | null;
+  entityId: string | null;
+  entityType: string | null;
+  id: string;
+  impersonationId: string | null;
+  recordedAt: Generated<Timestamp>;
+  source: string;
+  storeId: string | null;
+  tenantId: string;
+  terminalId: string | null;
+}
+
 export interface EmployeeCredentials {
   createdAt: Generated<Timestamp>;
   employeeId: string;
@@ -42,10 +60,12 @@ export interface EmployeeCredentials {
 export interface Employees {
   archivedAt: Timestamp | null;
   createdAt: Generated<Timestamp>;
+  email: string | null;
   employeeCode: string | null;
   fullName: string;
   id: string;
   language: string | null;
+  lastLoginAt: Timestamp | null;
   login: string;
   permissionsVersion: Generated<bigint>;
   phone: string | null;
@@ -95,6 +115,7 @@ export interface Roles {
   isOwner: Generated<boolean>;
   name: Json;
   status: Generated<string>;
+  templateKey: string | null;
   tenantId: string;
   updatedAt: Generated<Timestamp>;
 }
@@ -164,6 +185,7 @@ export interface Terminals {
 }
 
 export interface DB {
+  auditLog: AuditLog;
   employeeCredentials: EmployeeCredentials;
   employees: Employees;
   employeeStores: EmployeeStores;

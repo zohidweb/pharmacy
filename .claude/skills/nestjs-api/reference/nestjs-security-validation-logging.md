@@ -110,7 +110,7 @@ ADR-0008). Защита
 
 ## 5. OWASP Top 10 — что это значит здесь
 
-- [ ] **A01 Broken Access Control** — глобальные `SessionAuthGuard` + `PermissionsGuard`, охват точек, `tenant_id` в каждом запросе, RLS; чужой ресурс → 404.
+- [ ] **A01 Broken Access Control** — глобальные `AuthGuard` + `PermissionsGuard`, охват точек, `tenant_id` в каждом запросе, RLS; чужой ресурс → 404.
 - [ ] **A02 Cryptographic Failures** — только хеширование паролей/PIN из accepted ADR (ADR-0008), HTTPS везде, токены сессий хранятся хешем.
 - [ ] **A03 Injection** — параметризованный SQL, whitelist сортировок, DTO с whitelist.
 - [ ] **A04 Insecure Design** — инварианты: остатки из движений, append-only аудит, идемпотентность финопераций.

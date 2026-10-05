@@ -4,10 +4,11 @@ import {
   databaseSettings,
   TENANT_DATABASE_SETTINGS,
 } from './database-settings';
+import { ContextResolvers } from './context-resolvers';
 import { TenantDatabase } from './tenant-database';
 
-// Tenant data path for every domain module (ADR-0006). Global, exports TenantDatabase only:
-// the settings, the pool and the root Kysely stay inside.
+// Tenant data path for every domain module (ADR-0006). Global, exports TenantDatabase and the
+// pre-context resolvers (ADR-0013 p. 3): the settings, the pools and the root Kysely stay inside.
 @Global()
 @Module({
   providers: [
@@ -21,7 +22,8 @@ import { TenantDatabase } from './tenant-database';
         }),
     },
     TenantDatabase,
+    ContextResolvers,
   ],
-  exports: [TenantDatabase],
+  exports: [TenantDatabase, ContextResolvers],
 })
 export class DatabaseModule {}

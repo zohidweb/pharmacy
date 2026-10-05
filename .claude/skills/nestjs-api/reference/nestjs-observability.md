@@ -142,7 +142,7 @@ SLOW_REQUEST_MS=1000
 | Проблема | Симптом | Решение |
 |---|---|---|
 | Нет correlationId в логах | поле пустое | `CorrelationIdMiddleware` не применён глобально, или запись сделана вне контекста (cron, воркер) — оборачивать в `runWithContext` |
-| Нет tenantId в логах запроса | поле пустое до авторизации | Нормально для логов до guard-а; после — `SessionAuthGuard` дополняет контекст (`nestjs-resilience-context.md`) |
+| Нет tenantId в логах запроса | поле пустое до авторизации | Нормально для логов до guard-а; после — `AuthGuard` дополняет контекст (`nestjs-resilience-context.md`) |
 | ПДн в логах | ФИО/телефон в `msg` | Не интерполировать данные в строку — передавать объектом через `mask()`; дополнить `PII_KEYS` |
 | Логи не JSON | текст Nest по умолчанию | `bufferLogs: true` + `app.useLogger(new JsonLogger())` до `listen` |
 | Шум | много `debug` | `LOG_LEVEL=log` в проде |

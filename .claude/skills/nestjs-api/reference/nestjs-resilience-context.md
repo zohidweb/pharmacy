@@ -11,12 +11,12 @@ Circuit breaker, retry, timeout — `nestjs-resilience-circuit-breaker.md`. Те
 | Поле | Кто заполняет | Источник |
 |---|---|---|
 | `correlationId` | `CorrelationIdMiddleware` | заголовок `X-Correlation-Id` (если валиден) или новый UUID |
-| `tenantId`, `employeeId`, `storeScope`, `terminalId`, `actingOperatorId`, `impersonationId`, `permissions` | `SessionAuthGuard` | серверная cookie-сессия (облако — Redis, офлайн — PostgreSQL; `nestjs-security-auth.md`) |
+| `tenantId`, `employeeId`, `storeScope`, `terminalId`, `permissions` | `SessionMiddleware` (замороженный `RequestContext`) | серверная cookie-сессия (облако — Redis, офлайн — PostgreSQL; `nestjs-security-auth.md`) |
 | `tenantId`, `storeId` для эндпоинтов sync | `LicenseKeyGuard` | лицензионный ключ точки, найденный резолвером `resolve_license_key` (SECURITY DEFINER, ADR-0013) |
 | `tenantId`, `jobId` для фоновой задачи | `TenantJobRunner` | строка очереди / список активных тенантов (ADR-0013 §4) |
-| `storeId` для PIN-сессии кассы | `SessionAuthGuard` | точка привязанного терминала |
+| `storeId` для PIN-сессии кассы | `SessionMiddleware` | точка привязанного терминала |
 
-`tenantId`, `employeeId`, `storeId` **никогда не берутся из тела, query или заголовков клиента**. `employeeId` — «сотрудник» из глоссария (термин вместо общего `userId`); для оператора платформы в режиме «от имени» дополнительно `actingOperatorId`.
+`tenantId`, `employeeId`, `storeId` **никогда не берутся из тела, query или заголовков клиента**. `employeeId` — «сотрудник» из глоссария (термин вместо общего `userId`); у оператора платформы своя сессия и свой контекст (часть 3 проекта аутентификации).
 
 Реальный файл — `apps/api/src/common/context/request-context.ts`; сейчас в нём `correlationId` и
 `tenantId`, остальные поля добавляет план аутентификации:

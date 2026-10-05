@@ -26,13 +26,14 @@ last-reviewed: "2026-10-02"
 
 - HTTP-адаптер — стандартный Express; структура — Nx (`apps/api`, `libs/shared/*`), генераторы `@nx/nest`, тесты — Jest;
 - слой данных — Kysely поверх `pg`, миграции node-pg-migrate (ADR-0006): tenant-транзакции, RLS, атомарность «чек + движения + аудит»; кросс-тенантный путь — `PlatformDatabase` без `BYPASSRLS` (ADR-0013);
-- аутентификация — самописная (логин+пароль, PIN терминала, cookie-сессии в Redis, scrypt из `node:crypto`, ADR-0008), не JWT; авторизация — RBAC с каталогом прав `модуль:действие` (ADR-0018);
+- аутентификация — самописная (логин+пароль, PIN терминала, scrypt из `node:crypto`, ADR-0008): токен — JWT через `@nestjs/jwt` в HttpOnly-cookie, но источник истины — серверная сессия (Redis), stateless-JWT не используется; авторизация — RBAC с каталогом прав `модуль:действие` (ADR-0018);
 - брокеры (BullMQ/RabbitMQ/Kafka) заменены очередями-таблицами PostgreSQL; OpenTelemetry/облачное логирование — встроенным `Logger`;
 - удалено нерелевантное: GDPR, транзакционный email, feature flags, Stripe/webhooks, CI-пайплайны, GCP/Kubernetes.
 
 **Решено принятыми ADR** (используем как есть): Kysely + `pg`, node-pg-migrate (ADR-0006) ·
-scrypt из `node:crypto`, cookie-сессии `__Host-sid`, CSRF через Fetch Metadata / `Origin`,
-device-cookie терминала, вход оператора «от имени» только на просмотр, node-redis (ADR-0008) ·
+scrypt из `node:crypto`, JWT (`@nestjs/jwt`) в cookie `__Host-sid` с проверкой серверной сессии, CSRF через
+Fetch Metadata / `Origin`, device-cookie терминала, node-redis (ADR-0008; вход «от имени» не реализуется —
+решение пересматривается) ·
 роли БД и `PlatformDatabase` (ADR-0013) · протокол синхронизации офлайн-точек (ADR-0014) ·
 RBAC и каталог прав (ADR-0018) · тесты и CI на GitHub Actions (ADR-0009).
 
@@ -102,7 +103,7 @@ API gateway / ESB, push → не используются.
 | **Transactions** | Документ/чек + `stock_movements` + `audit_log` атомарно; `FOR UPDATE` на партиях; остаток = сумма движений |
 | **Idempotency** | Заголовок `Idempotency-Key`, `UNIQUE (tenant_id, key)`, повтор возвращает исходный результат |
 | **Errors** | Доменные исключения → `ProblemDetailsFilter` → `application/problem+json` (RFC 7807) с `code`, `correlationId` |
-| **Auth** | Cookie-сессии в Redis (логин+пароль, PIN терминала; scrypt, ADR-0008); глобальные `SessionAuthGuard` + `PermissionsGuard`: `@RequirePermission('inventory:post')` по каталогу прав ADR-0018, охват точек, запрет по умолчанию |
+| **Auth** | JWT в cookie + серверная сессия в Redis (логин+пароль, PIN терминала; scrypt, ADR-0008); контекст строит `SessionMiddleware`, глобальные guard'ы по порядку `AuthGuard` → `CsrfGuard` → `PrincipalThrottlerGuard` → `PermissionsGuard` → `FreshAuthGuard`: `@RequirePermission('inventory:post')` по каталогу прав ADR-0018, охват точек, запрет по умолчанию |
 | **Pagination** | `limit`/`offset` → `{ items, total, limit, offset }`, сортировка по whitelist |
 | **Background work** | Очереди-таблицы PostgreSQL (`FOR UPDATE SKIP LOCKED`), outbox в транзакции операции |
 | **Integrations** | Только закрытый список: фискализация (порт + заглушка MVP; HTTP-клиент вендора ККМ — `fetch` с таймаутом), 1С (файлы XML), синхронизация точек (лицензионный ключ) |
@@ -203,7 +204,7 @@ npx nx run api:db-types-verify           # fail if types drifted from the schema
 - No message brokers (BullMQ, RabbitMQ, Kafka, NATS…) — PostgreSQL queue tables (ADR-0002) until an ADR revises it.
 - No technology outside `stack.md` and accepted ADRs (technologies from proposed ADRs are not used either):
   Fastify, another ORM or migration tool (ADR-0006 chose Kysely + node-pg-migrate),
-  pino/winston/OpenTelemetry/Sentry, Vault, JWT/OAuth/Passport as the auth standard, Vitest —
+  pino/winston/OpenTelemetry/Sentry, Vault, OAuth/Passport or stateless JWT as the auth standard (session JWT is only a carrier of ids, ADR-0008), Vitest —
   each only via an accepted ADR.
 - No direct `pg` pool or root `Kysely` outside `core/database/**`; no `PlatformDatabase` outside
   `app/platform/**` and `app/sync/**`; inside a transaction only `trx` is used (ADR-0006, ADR-0013).

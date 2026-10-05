@@ -55,6 +55,7 @@
 - Final: minor (deferred, must precede auth guards): getRequestContext returns a mutable store
 - Final: minor (deferred): exact-set test will need per-table exceptions for future append-only tenant tables (REVOKE UPDATE, DELETE)
 - Final: minor (deferred): app.* role-setting test proven RED only indirectly (needs superuser)
+- Auth part 1: follow-up (before 2027-11): a scheduled job creating monthly `audit_log` partitions (owner role) is needed — the part-1 migration creates partitions statically only up to 2027-12
 
 ## Заметки
 

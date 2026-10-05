@@ -8,10 +8,27 @@
 import type { Permission, RoleTemplateKey } from '@pharmacy/shared-domain';
 import type { StoreMode } from './platform-tenants.js';
 
-/** POST /api/v1/sessions */
+/**
+ * POST /api/v1/sessions. `login` is a login, a phone (E.164 or 9 digits without the country code)
+ * or an e-mail: all three are unique on the whole platform (ADR-0008, amendment 2026-10-02), so
+ * the network is resolved from the identifier. Errors: 401 `invalid_credentials` (an unknown
+ * identifier and a wrong password are indistinguishable), 429 `login_locked`.
+ */
 export interface EmployeeLoginRequest {
   login: string;
   password: string;
+}
+
+/**
+ * POST /api/v1/activations (public, 204): the first password of an owner (or a reset) by the
+ * one-time activation code the platform operator hands over. The code is single-use and lives
+ * `ACTIVATION_CODE_TTL_HOURS`; sign in with POST /sessions afterwards. Errors: 401 `invalid_code`
+ * (unknown, expired or used code — not distinguished), 422 `password_policy`, 429 `login_locked`.
+ */
+export interface ActivationRequest {
+  login: string;
+  code: string;
+  newPassword: string;
 }
 
 export type UiLocale = 'ru' | 'tg';

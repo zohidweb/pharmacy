@@ -33,9 +33,9 @@ Project class: Full
 | Backend | NestJS (Express adapter), TypeScript strict | ADR-0003 |
 | Frontend (web, admin) | Next.js (React, TypeScript), **static export (SPA)** | ADR-0004 |
 | БД | PostgreSQL | ADR-0001 |
-| Кэш / сессии | Redis, клиент `redis` (node-redis); на офлайн-точке Redis нет — сессии в PostgreSQL | ADR-0001, ADR-0008 |
+| Кэш / сессии | Redis, клиент `redis` (node-redis): серверные сессии (запись по `jti`), версия прав, лимиты входа и throttler; на офлайн-точке Redis нет — сессии в PostgreSQL | ADR-0001, ADR-0008 |
 | API-стиль | REST | ADR-0001 |
-| Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`, cookie-сессии (Redis; офлайн — PostgreSQL) | ADR-0001, ADR-0008 |
+| Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`; токен — JWT (`@nestjs/jwt`, HS256) в HttpOnly-cookie `__Host-sid` **с проверкой серверной сессии** (Redis; офлайн — PostgreSQL); контекст запроса строит `SessionMiddleware`, guard'ы только решают; вход «от имени» не реализуется (решение пересматривается) | ADR-0001, ADR-0008 |
 | Авторизация | RBAC: динамические роли тенанта, каталог прав `модуль:действие` (`libs/shared/domain`), одна роль + охват точек, запрет эскалации, проверка только на сервере | ADR-0018 |
 | Архитектура фронтенда | Feature-Sliced Design в `apps/web` и `apps/admin` («pages first», Steiger) | ADR-0017 |
 | Фронтенд-библиотеки | TanStack Query, Zustand, React Hook Form + zod, use-intl, idb, uuid; свои: API-клиент, Service Worker, сканер | ADR-0015 |
@@ -98,7 +98,7 @@ npx nx fsd web / admin               # Steiger — слои FSD (ADR-0017)
 npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
 npx nx dev admin                     # http://localhost:4300
-npx nx e2e api-e2e                   # e2e API (поднимает api сам)
+npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
 npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
 npx nx run api:integration           # интеграционные тесты на БД pharmacy_test (нужен npm run dev:deps)
@@ -248,11 +248,40 @@ npm run prod:build / prod:up / prod:down
   `migrations/` попадают в образ через assets webpack. Если API не стартует из-за миграции —
   `npm run stack -- <env> logs migrate`.
 - web/admin контейнеризуются вместе с reverse proxy после принятия ADR-0012 (proposed); до этого — `npx nx dev`.
+- `TRUST_PROXY` (число reverse proxy перед API, 0–5, по умолчанию 0 = выключено; в `docker/env/*.env`
+  закомментирован) — обязательная часть выкладки за reverse proxy ADR-0012: без него `req.ip` — адрес
+  прокси, и лимиты по IP (гостевой, входа, активации) становятся одним общим лимитом платформы, а адрес в
+  аудите входа — адресом прокси. Значение должно равняться реальному числу прокси: завышенное позволяет
+  клиенту подделать `X-Forwarded-For`. Не новая технология, ADR не нужен (stack.md, вопрос № 13).
+- Первый код активации владельца (часть 1 аутентификации; выдаёт оператор, печатается один раз). В test/prod
+  PostgreSQL доступен только в сети compose, поэтому скрипт запускается из образа `api`
+  (`scripts/create-activation-code.mjs`, `DATABASE_URL` уже задан в сервисе `api`, срок —
+  `ACTIVATION_CODE_TTL_HOURS`, по умолчанию 72 ч). Стек должен быть поднят (`npm run stack -- <env> up`):
+
+  ```
+  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose --project-name pharmacy-<test|prod>     --env-file docker/env/<test|prod>.env -f docker/compose.yml -f docker/compose.<test|prod>.yml     run --rm --no-deps api node scripts/create-activation-code.mjs --login <логин|телефон|e-mail>
+  ```
+
+  `IMAGE_TAG` — тег образа, собранного `build` (короткий sha; у test с незакоммиченными изменениями —
+  `<sha>-dirty`). В dev: `node --env-file=.env apps/api/scripts/create-activation-code.mjs --login …`
+  (нужен `npm run dev:deps`). Скрипт печатает код и срок и больше ничего; ни код, ни хеш не логируются.
 - Порты в compose публикуются только на `127.0.0.1`.
 
 ## Local development secrets
 
 - Never commit secrets (passwords, keys, connection strings, tokens) to git, in any form.
+- Переменные аутентификации `SESSION_JWT_KEYS`, `SESSION_JWT_ACTIVE_KID`, `PASSWORD_PEPPERS`,
+  `PASSWORD_PEPPER_ACTIVE` (а также `WEB_ORIGIN`, `ADMIN_ORIGIN`) обязательны: без них API не стартует, а
+  `docker/compose.yml` не поднимает даже `npm run dev:deps`. Перенесите их из `.env.example` в `.env`;
+  свои ключи — случайные 32 байта base64url. Команда заменяет в `.env` четыре строки ключей и ничего не
+  печатает:
+
+  ```
+  node -e "const c=require('crypto'),f=require('fs'),k=()=>c.randomBytes(32).toString('base64url'),n=['SESSION_JWT_KEYS','SESSION_JWT_ACTIVE_KID','PASSWORD_PEPPERS','PASSWORD_PEPPER_ACTIVE'];const o=f.existsSync('.env')?f.readFileSync('.env','utf8').split(/\r?\n/).filter(l=>!n.some(x=>l.startsWith(x+'='))):[];f.writeFileSync('.env',o.join('\n').replace(/\n+$/,'')+'\nSESSION_JWT_KEYS=k1:'+k()+'\nSESSION_JWT_ACTIVE_KID=k1\nPASSWORD_PEPPERS=1:'+k()+'\nPASSWORD_PEPPER_ACTIVE=1\n')"
+  ```
+
+  Для e2e (`npx nx e2e api-e2e`) в `.env` нужны ещё `DATABASE_URL`, `PLATFORM_DATABASE_URL`, `REDIS_URL`;
+  `APP_ENV=test` и `AUTH_TEST_COOKIES=true` тест задаёт сам для запускаемого процесса API.
 - `.env` (API, docker compose) и `.env.local` (frontend) — в `.gitignore`; в git только `.env.example`
   без реальных значений.
 - Production secrets: хранилище секретов пока не выбрано — через ADR (вопрос № 8 в stack.md);
@@ -274,6 +303,9 @@ npm run prod:build / prod:up / prod:down
   no client data to external LLMs/SaaS, no external SaaS DBs for tenant data, closed list of integrations.
 - Пароли — только хеши; PIN ≥ 4 цифр; HTTPS на всех соединениях; таймаут сессии кассира —
   настройка на уровне сети тенанта.
+- JWT — только носитель идентификаторов (`jti`, `sub`, `tid`, `aud`): права и ПДн в токен не кладутся, без
+  записи сессии на сервере токен недействителен. `AUTH_TEST_COOKIES=true` (cookie `sid` без `Secure`, для
+  e2e) допустим только при `APP_ENV=test`.
 
 ## AI usage rules (vibe-coding)
 

@@ -78,4 +78,11 @@
 | `import_jobs` | tenant | `kind` `catalog` / `opening_balance`, `store_id null`, `file_sha256` (уникален в `(tenant_id, kind, store_id, file_sha256)` — повтор не создаёт дублей), `status` `validating` / `failed` / `applied`, `errors jsonb` (строка, причина), `created_by`. Частичной загрузки нет (КП 10) |
 | `export_1c_runs` | tenant | `legal_entity_id`, `period_from`, `period_to`, `status`, `unmapped_count`, `file_sha256`, `created_by`. Файл генерируется при запросе |
 | `export_1c_nomenclature_map` | tenant | Ключ `(tenant_id, product_id)`: `external_code` (код 1С). По умолчанию сопоставляется по штрихкоду или артикулу, несопоставленные не выгружаются (КП 8) |
-| `sessions` | tenant | Только офлайн-точка (в облаке — Redis, ADR-0008): `token_hash bytea` PK, `employee_id`, `terminal_id null`, `auth_method`, `authenticated_at`, `idle_expires_at`, `absolute_expires_at`, `permissions_version`. Читается резолвером `resolve_session` (ADR-0013) |
+| `sessions` | tenant | Только офлайн-точка (в облаке — Redis, ADR-0008): ключ `(tenant_id, jti)` — `jti` из JWT сессии, `employee_id`, `terminal_id null`, `auth_method`, `authenticated_at`, `idle_expires_at`, `absolute_expires_at`, снимок прав и `permissions_version`. Ищется под RLS в `withTenant(tid из JWT)`; резолвер `resolve_session` не нужен (поправка 2026-10-02) |
+
+## Поправка 2026-10-02 (аутентификация)
+
+Решения архитектора по спецификации `docs/superpowers/specs/2026-10-02-auth-design.md` (ADR-0008 и ADR-0013, поправки той же даты).
+
+- `sessions` (офлайн-точка): ключ `(tenant_id, jti)` вместо `token_hash`; токен сессии — JWT, значение cookie в таблице не хранится.
+- `audit_log` секционируется по месяцам с первой миграции аутентификации: секции создаются статически на период вперёд, плановая задача (роль-владелец) создаёт последующие — см. `docs/superpowers/plans/2026-09-30-data-layer-followups.md`. События входа: `auth.login-succeeded`, `auth.login-failed`, `auth.pin-succeeded`, `auth.pin-failed`, `auth.pin-locked`, `access.denied`, `terminal.bound`, `terminal.revoked`.

@@ -14,8 +14,7 @@
           "{projectRoot}/test-output/jest/coverage"
         ],
         "dependsOn": [
-          "api:build",
-          "api:serve"
+          "api:build"
         ],
         "options": {
           "jestConfig": "apps/api-e2e/jest.config.cts",

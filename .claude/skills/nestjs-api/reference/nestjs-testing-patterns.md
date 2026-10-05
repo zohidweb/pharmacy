@@ -124,7 +124,7 @@ describe('request context', () => {
     await expect(Promise.all([read('r-1', 10), read('r-2', 1)])).resolves.toEqual(['r-1', 'r-2']);
   });
 
-  it('requireTenantId fails closed until SessionAuthGuard fills the principal', () => {
+  it('requireTenantId fails closed until SessionMiddleware fills the principal', () => {
     runWithContext({ correlationId: 'corr-1' }, () => {
       expect(() => requireTenantId()).toThrow();
       Object.assign(getRequestContext()!, { tenantId: 'tenant-a', employeeId: 'employee-1', storeScope: ['store-1'] });

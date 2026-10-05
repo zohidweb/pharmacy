@@ -47,9 +47,9 @@ export class TenantAwareThrottlerGuard extends ThrottlerGuard {
 }
 ```
 
-Guard регистрируется глобально вместо `ThrottlerGuard` и **после** `SessionAuthGuard`
+Guard регистрируется глобально вместо `ThrottlerGuard` и **после** `AuthGuard`
 (порядок: session → throttle → permissions), иначе контекст сотрудника ещё пуст.
-`SessionAuthGuard` для `@Public()`-маршрутов пропускает запрос дальше, и трекером становится
+`AuthGuard` для `@Public()`-маршрутов пропускает запрос дальше, и трекером становится
 IP; поэтому логин дополнительно ограничивается по учётной записи (ниже).
 
 ## Жёсткие лимиты на аутентификацию

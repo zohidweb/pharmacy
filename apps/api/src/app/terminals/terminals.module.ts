@@ -4,7 +4,8 @@ import { REDIS_CLIENT, type RedisClient } from '../../core/redis/redis.tokens';
 import { SessionsModule } from '../../core/sessions';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
-import { LoginLimiter } from '../auth/login-limiter';
+import { RedisLoginLimiter } from '../auth/login-limiter';
+import { MemoryLoginLimiter } from '../auth/memory-login-limiter';
 import { MePinController } from './me-pin.controller';
 import { MePinService } from './me-pin.service';
 import { TerminalSessionsController } from './terminal-sessions.controller';
@@ -32,23 +33,21 @@ import { TerminalsService } from './terminals.service';
       provide: TERMINAL_PIN_LIMITER,
       inject: [REDIS_CLIENT, ConfigService],
       useFactory: (client: RedisClient | null, config: ConfigService) => {
-        // The offline store gets its own limiter with part 4 of the design.
-        if (client === null) {
-          throw new Error(
-            'The terminal PIN limiter supports STORE_MODE=cloud only until part 4 of the auth design',
-          );
-        }
         const windowSeconds = config.getOrThrow<number>(
           'TERMINAL_PIN_WINDOW_SECONDS',
         );
         // N failures within the window lock the terminal for the window; no longer repeat lock.
-        return new LoginLimiter(client, {
+        const options = {
           maxFailures: config.getOrThrow<number>('TERMINAL_PIN_MAX_FAILURES'),
           windowSeconds,
           lockSeconds: windowSeconds,
           repeatLockSeconds: windowSeconds,
           repeatWindowSeconds: windowSeconds,
-        });
+        };
+        // No Redis on an offline store: the counters live in the single API process.
+        return client === null
+          ? new MemoryLoginLimiter(options)
+          : new RedisLoginLimiter(client, options);
       },
     },
   ],

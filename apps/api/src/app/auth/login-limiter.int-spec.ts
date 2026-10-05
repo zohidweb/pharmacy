@@ -8,6 +8,7 @@ import {
   LoginLimiter,
   loginLimiterKey,
   type LoginLimiterOptions,
+  RedisLoginLimiter,
 } from './login-limiter';
 
 // LoginLimiter on the real Redis (logical database 15; auth design 2026-10-02, section 6, step 3).
@@ -29,7 +30,7 @@ describe('LoginLimiter (integration)', () => {
   let redis: RedisClient;
 
   const limiter = (overrides: Partial<LoginLimiterOptions> = {}) =>
-    new LoginLimiter(redis, { ...LOGIN_LIMITER_DEFAULTS, ...overrides });
+    new RedisLoginLimiter(redis, { ...LOGIN_LIMITER_DEFAULTS, ...overrides });
 
   async function acquire(
     target: LoginLimiter,

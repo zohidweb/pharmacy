@@ -33,7 +33,10 @@ function parseArgs(argv) {
 }
 
 function definedNames(content) {
-  return NAMES.filter((name) => new RegExp(`^\\s*${name}\\s*=`, 'm').test(content));
+  // `NAME=` and the shell form `export NAME=` both define a value; a commented line does not.
+  return NAMES.filter((name) =>
+    new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`, 'm').test(content),
+  );
 }
 
 function main() {

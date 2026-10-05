@@ -18,6 +18,17 @@
           }
         }
       },
+      "dev-api": {
+        "executor": "nx:run-commands",
+        "continuous": true,
+        "options": {
+          "command": "next dev -p 4300",
+          "cwd": "{projectRoot}",
+          "env": {
+            "NEXT_PUBLIC_API_MOCKS": "partial"
+          }
+        }
+      },
       "fsd": {
         "executor": "nx:run-commands",
         "cache": true,

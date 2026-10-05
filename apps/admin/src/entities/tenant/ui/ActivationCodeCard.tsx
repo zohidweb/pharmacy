@@ -22,16 +22,24 @@ function groups(code: string): string {
  * The owner's one-time activation code, shown once (spec 2026-10-05-tenants-module): only its hash
  * is stored, so it cannot be shown again — a lost code is replaced with a new one.
  */
-export function ActivationCodeCard({ code, title, action }: ActivationCodeCardProps) {
+export function ActivationCodeCard({
+  code,
+  title,
+  action,
+}: ActivationCodeCardProps) {
   const t = useTranslations('activationCode');
   const [copied, setCopied] = useState(false);
   const display = groups(code);
 
   return (
-    <Card as="section" aria-labelledby="activation-code-title" className="flex flex-col gap-4">
+    <Card
+      as="section"
+      aria-labelledby="activation-code-title"
+      className="flex flex-col gap-4"
+    >
       <CardHeader title={title} titleId="activation-code-title" level={2} />
       <p
-        className="m-0 select-all font-mono text-xl font-bold tracking-wider"
+        className="m-0 select-all whitespace-nowrap font-mono text-lg font-bold tracking-wider"
         aria-label={t('codeLabel')}
       >
         {display}
@@ -42,7 +50,9 @@ export function ActivationCodeCard({ code, title, action }: ActivationCodeCardPr
           variant="secondary"
           iconStart="clipboard-list"
           onClick={() => {
-            void navigator.clipboard?.writeText(display).then(() => setCopied(true));
+            void navigator.clipboard
+              ?.writeText(display)
+              .then(() => setCopied(true));
           }}
         >
           {copied ? t('copied') : t('copy')}

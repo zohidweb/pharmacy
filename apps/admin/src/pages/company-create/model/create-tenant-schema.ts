@@ -2,7 +2,8 @@ import type { CreateTenantRequest } from '@pharmacy/shared-dto';
 import { z } from 'zod';
 
 /** Error messages are keys under `validation` (ADR-0015). */
-export type CreateTenantErrorKey = 'required' | 'inn' | 'phone' | 'email' | 'login';
+export type CreateTenantErrorKey =
+  'required' | 'inn' | 'phone' | 'email' | 'login';
 
 const PHONE = /^\+992(\s?\d){9}$/;
 const INN = /^\d{9}$/;
@@ -21,7 +22,10 @@ export function createTenantSchema() {
     ownerLogin: z.string().trim().regex(LOGIN, { error: 'login' }),
     ownerEmail: z.union([
       z.literal(''),
-      z.string().trim().pipe(z.email({ error: 'email' })),
+      z
+        .string()
+        .trim()
+        .pipe(z.email({ error: 'email' })),
     ]),
   });
 }

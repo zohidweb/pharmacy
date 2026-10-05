@@ -2,8 +2,8 @@
 
 /*
  * Client providers of the admin: server-data cache (TanStack Query), i18n (use-intl) and toasts.
- * In development with NEXT_PUBLIC_API_MOCKS=true the in-memory API mocks are installed before any
- * query runs; the mock code is loaded only then and never reaches a build without the flag.
+ * In development with NEXT_PUBLIC_API_MOCKS=true (or `partial`: apps/api for the routes it serves)
+ * the in-memory API mocks are installed before any query runs; the mock code is loaded only then and never reaches a build without the flag.
  */
 import { ToastProvider } from '@pharmacy/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -11,7 +11,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { IntlProvider } from 'use-intl';
 import {
   apiMocksEnabled,
+  apiMocksMode,
   loadMockTransport,
+  partialTransport,
   setApiTransport,
 } from '@/shared/api';
 import {
@@ -58,7 +60,11 @@ function useApiReady() {
   useEffect(() => {
     if (!apiMocksEnabled) return;
     loadMockTransport().then((mockTransport) => {
-      setApiTransport(mockTransport);
+      setApiTransport(
+        apiMocksMode === 'partial'
+          ? partialTransport(mockTransport)
+          : mockTransport,
+      );
       setReady(true);
     });
   }, []);

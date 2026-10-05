@@ -200,7 +200,11 @@ export function CompanyCreatePage() {
               >
                 {tCommon('cancel')}
               </Link>
-              <Button type="submit" iconStart="check" loading={create.isPending}>
+              <Button
+                type="submit"
+                iconStart="check"
+                loading={create.isPending}
+              >
                 {t('submit')}
               </Button>
             </div>

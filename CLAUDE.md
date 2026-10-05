@@ -97,7 +97,8 @@ npx nx affected -t build test lint fsd   # только затронутое и�
 npx nx fsd web / admin               # Steiger — слои FSD (ADR-0017)
 npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
-npx nx dev admin                     # http://localhost:4300
+npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
+npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети) — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
 npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
@@ -236,12 +237,15 @@ npm run prod:build / prod:up / prod:down
 ## Containers (ADR-0005)
 
 - Образы: `apps/api/Dockerfile` (multi-stage, `nx run api:prune`, non-root), `docker/postgres`
-  (роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver`, схема
+  (роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver` / `pharmacy_provisioner`, схема
   `pharmacy`, `pg_trgm`), `docker/redis` (без персистентности). Контекст сборки — корень репозитория
   (`.dockerignore`).
 - Роли БД (ADR-0006, ADR-0013): база принадлежит `pharmacy_owner`. API в рантайме подключается ролями
   `pharmacy_app` (tenant-путь, `DATABASE_URL`) и `pharmacy_platform` (только `app/platform/**` и
-  `app/sync/**`, `PLATFORM_DATABASE_URL`); `pharmacy_resolver` — NOLOGIN (владелец функций SECURITY DEFINER).
+  `app/sync/**`, `PLATFORM_DATABASE_URL`); `pharmacy_resolver` — NOLOGIN (владелец резолверов SECURITY DEFINER,
+  только чтение); `pharmacy_provisioner` — NOLOGIN (владелец функций создания сети `provision_tenant` /
+  `issue_owner_code`, ADR-0013, поправка 2026-10-05). На кластере, созданном до поправки, роль добавляется
+  один раз суперпользователем: `docker/postgres/initdb/03-provisioner-role.sql` (команда — в его шапке).
   `pharmacy_owner` используется только сервисом `migrate`; `PHARMACY_OWNER_PASSWORD` не передаётся в `api`.
 - Миграции: одноразовый сервис `migrate` (тот же образ `pharmacy/api`, `node scripts/migrate.mjs`) применяет
   SQL-миграции ролью `pharmacy_owner` до старта API (`api` ждёт `service_completed_successfully`). Скрипт и

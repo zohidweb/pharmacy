@@ -151,7 +151,7 @@ pharmacy.issue_owner_code(p_tenant_id uuid, p_code_hash text, p_expires_at times
 | Статус | Коды |
 |---|---|
 | 404 | `not_found` |
-| 409 | `login_taken`, `phone_taken`, `email_taken`, `already_blocked`, `not_blocked`, `tenant_blocked` |
+| 409 | `inn_taken`, `login_taken`, `phone_taken`, `email_taken`, `already_blocked`, `not_blocked`, `tenant_blocked` |
 | 400 | `validation_failed` с `errors[]` (DTO, ADR-0015): ИНН — 9 цифр (формат ИНН Таджикистана); город и название — 1–120 символов; логин, телефон, e-mail — правила `normalizeIdentifier`; причина блокировки — 5–500 символов |
 
 ## 9. Вне объёма

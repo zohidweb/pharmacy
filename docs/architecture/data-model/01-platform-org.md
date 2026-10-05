@@ -33,7 +33,14 @@ erDiagram
 | `status` | text | `active` / `blocked` (АП 2, 6). Заблокированный тенант не входит, данные сохраняются |
 | `billing_name`, `billing_tax_id`, `billing_address`, `billing_phone`, `billing_email` | text null | Реквизиты для счёта платформы отдельными полями; ИНН — проверка формата в приложении (решение 2026-10-01) |
 | `billing_bank_details` | text null | Банковские реквизиты одним текстом |
+| `city` | text | Город сети (модуль «сети», 2026-10-05) |
+| `owner_full_name`, `owner_login`, `owner_phone`, `owner_email` | text null | Контакт владельца для платформы; пишет `provision_tenant` при создании сети (ADR-0013, поправка 2026-10-05) — `employees` платформа не читает |
+| `blocked_at`, `blocked_by`, `block_reason` | null | Блокировка оператором: заданы вместе и только у `blocked` (`blocked_by` — оператор, без FK) |
 | `created_at`, `updated_at` | timestamptz | |
+
+ИНН (`billing_tax_id`) уникален среди сетей (`tenants_inn_uq`). Сеть с её владельцем создаёт только
+функция `provision_tenant`, новый код владельцу — `issue_owner_code` (SECURITY DEFINER, владелец
+`pharmacy_provisioner`, вызывает `pharmacy_platform`).
 
 ## `tenant_settings` — настройки сети (класс `tenant`, одна строка на тенанта)
 

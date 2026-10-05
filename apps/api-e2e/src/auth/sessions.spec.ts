@@ -86,6 +86,15 @@ async function activatedAndSignedIn(
   return { user, cookie: sessionCookie(res) };
 }
 
+// Every object key of a JSON value, at any depth.
+function keysOf(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(keysOf);
+  if (value !== null && typeof value === 'object') {
+    return Object.entries(value).flatMap(([key, item]) => [key, ...keysOf(item)]);
+  }
+  return [];
+}
+
 // The JWT with another tenant id in its payload and the original signature.
 function withForgedTenant(token: string, tenantId: string): string {
   const [header, payload, signature] = token.split('.');
@@ -116,8 +125,15 @@ describe('activation and sign-in', () => {
       expect(cookie).toMatch(/SameSite=Strict/i);
       expect(res.data.employee.login).toBe(user.login);
       expect(res.data.tenant.id).toBe(user.tenantId);
-      // The answer carries no secrets.
-      expect(JSON.stringify(res.data)).not.toMatch(/password|hash/i);
+      // The answer carries no secrets: not the password, not the session JWT, no secret-shaped keys.
+      // (`auth: 'password'` is a legitimate value, so the word itself is not searched for.)
+      const text = JSON.stringify(res.data);
+      expect(text).not.toContain(user.password);
+      expect(text).not.toContain(sessionCookie(res));
+      const keys = keysOf(res.data).map((key) => key.toLowerCase());
+      for (const secret of ['token', 'jwt', 'passwordhash', 'password_hash', 'hash']) {
+        expect(keys).not.toContain(secret);
+      }
     }
   });
 
@@ -186,6 +202,15 @@ describe('activation and sign-in', () => {
     expect(res.status).toBe(400);
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(res.data.code).toBe('validation_failed');
+    // errors[] (ADR-0015): the DTO field with a stable code, and one nameless entry for the
+    // unknown property; the client's names and values never come back.
+    expect(res.data.errors).toEqual(
+      expect.arrayContaining([
+        { field: 'login', code: expect.stringMatching(/^[a-z_]+$/) },
+        { field: '', code: 'unknown_property' },
+      ]),
+    );
+    expect(res.data.errors).toHaveLength(2);
     const text = JSON.stringify(res.data);
     expect(text).not.toContain('SECRET-VALUE-9');
     expect(text).not.toContain('ECHOED-FIELD');

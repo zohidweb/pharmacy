@@ -13,6 +13,10 @@ import {
   UnauthenticatedError,
 } from '../context/request-context';
 import { ProblemException } from '../errors/problem.exception';
+import {
+  type FieldError,
+  ValidationFailedException,
+} from '../errors/validation-failed.exception';
 
 // RFC 7807 body. `code` is the machine-readable part (auth design 2026-10-02, section 11).
 interface ProblemBody {
@@ -21,6 +25,8 @@ interface ProblemBody {
   status: number;
   code: string;
   detail?: string;
+  /** Rejected fields of a 400 validation_failed (ADR-0015); paths and codes only. */
+  errors?: readonly FieldError[];
   correlationId: string;
 }
 
@@ -121,6 +127,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         correlationId,
       };
       if (error.detail !== undefined) body.detail = error.detail;
+      if (error instanceof ValidationFailedException) {
+        body.title = 'Validation Failed';
+        body.errors = error.errors;
+      }
       this.logServerError(status, error, correlationId);
       return body;
     }
@@ -130,7 +140,8 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
 
     if (error instanceof BadRequestException) {
-      // A ValidationPipe failure (the message is a list of rule texts) and a malformed body alike:
+      // A default-pipe validation failure (the message is a list of rule texts; the app's own pipe throws
+      // ValidationFailedException with errors[], handled above) and a malformed body alike:
       // the texts name the rejected properties, so none is sent.
       const response = error.getResponse();
       const validation =
@@ -143,6 +154,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
             title: 'Validation Failed',
             status: 400,
             code: 'validation_failed',
+            errors: [],
             correlationId,
           }
         : problem(400, 'bad_request', correlationId);

@@ -1,9 +1,10 @@
-import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
+import { Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app/app.module';
+import { createValidationPipe } from './common/validation/validation-pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -18,13 +19,7 @@ async function bootstrap() {
   // REST: /api/v1/... (CLAUDE.md, "Conventions").
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(createValidationPipe());
   app.enableShutdownHooks();
 
   const port = app.get(ConfigService).get<number>('PORT', 3000);

@@ -174,6 +174,22 @@ class EnvironmentVariables {
   @IsOptional()
   ACTIVATION_CODE_TTL_HOURS = 72;
 
+  // PIN failures on one terminal within the window lock the terminal (423 terminal_locked) until
+  // the window has passed (auth design, section 8).
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  TERMINAL_PIN_MAX_FAILURES = 10;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(60)
+  @Max(86400)
+  @IsOptional()
+  TERMINAL_PIN_WINDOW_SECONDS = 900;
+
   // Number of reverse proxies in front of the API (Express `trust proxy` hop count); 0 = no proxy,
   // req.ip is the socket address. Behind a proxy it must equal the real hop count: too low makes
   // every client share the proxy's address (one platform-wide rate-limit bucket), too high lets a

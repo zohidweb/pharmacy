@@ -81,8 +81,8 @@ class FakeSessionStore extends SessionStore {
       record.tenantId === tenantId &&
       record.employeeId === employeeId;
     return matches
-      ? { session: { ...record }, permissionsVersion: this.cachedVersion }
-      : { session: null, permissionsVersion: null };
+      ? { session: { ...record }, permissionsVersion: this.cachedVersion, terminalRevoked: false }
+      : { session: null, permissionsVersion: null, terminalRevoked: false };
   }
 
   async update(sessionId: string, patch: SessionPatch): Promise<void> {
@@ -101,6 +101,12 @@ class FakeSessionStore extends SessionStore {
   async destroyAllFor(tenantId: string, employeeId: string): Promise<void> {
     this.destroyAllCalls(tenantId, employeeId);
     this.record = null;
+  }
+  async destroyForTerminal(): Promise<void> {
+    throw new Error('not used');
+  }
+  async markTerminalRevoked(): Promise<void> {
+    throw new Error('not used');
   }
 }
 

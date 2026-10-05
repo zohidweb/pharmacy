@@ -110,6 +110,16 @@ export interface BoundTerminal {
 }
 
 /**
+ * POST /api/v1/terminals — binds this browser to a store as a terminal; needs `terminals:create`
+ * and a fresh password session. The answer is `BoundTerminal` and the device-cookie.
+ */
+export interface BindTerminalRequest {
+  storeId: string;
+  /** Unique among the store's active terminals; 1–60 characters after trimming. */
+  name: string;
+}
+
+/**
  * POST /api/v1/terminal-sessions. Errors: 401 `invalid_pin`, 423 `pin_locked` after 3 failures
  * (sign-in by password only), 423 `terminal_locked` after too many failures on the terminal (ADR-0008).
  */

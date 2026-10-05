@@ -410,9 +410,9 @@ revoked_at)`; нет или отозван → `404 not_bound`. В `withTenant`:
 |---|---|
 | 401 | `unauthenticated`, `session_expired`, `invalid_credentials`, `invalid_pin`, `invalid_code` |
 | 403 | `forbidden`, `fresh_auth_required`, `csrf_rejected` |
-| 404 | `not_bound` |
-| 409 | `conflict` (пароль изменился параллельно при смене) |
-| 422 | `password_policy`, `invalid_current_password`, `pin_trivial`, `pin_length` |
+| 404 | `not_bound`, `not_found` (терминал вне охвата, точка не найдена) |
+| 409 | `conflict` (пароль изменился параллельно при смене), `terminal_name_taken` |
+| 422 | `password_policy`, `invalid_current_password`, `invalid_current_pin`, `pin_trivial`, `pin_length`, `store_not_pharmacy` |
 | 423 | `pin_locked`, `terminal_locked` |
 | 429 | `login_locked`, `too_many_requests` |
 

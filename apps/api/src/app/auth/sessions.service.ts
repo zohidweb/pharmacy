@@ -8,18 +8,14 @@ import {
   runWithContext,
 } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
-import { PasswordHasher, SessionTokenService } from '../../core/crypto';
+import { PasswordHasher } from '../../core/crypto';
 import {
   ContextResolvers,
   type ResolvedLogin,
   TenantDatabase,
   type TenantTransaction,
 } from '../../core/database';
-import {
-  PermissionsVersionCache,
-  type SessionRecord,
-  SessionStore,
-} from '../../core/sessions';
+import { SessionStore } from '../../core/sessions';
 import { AuditService } from '../audit/audit.service';
 import {
   EmployeeAuthRepository,
@@ -29,12 +25,8 @@ import { normalizeIdentifier } from './identifier';
 import { LoginClock, padFailure } from './login-clock';
 import { LoginLimiter, loginLimiterKey } from './login-limiter';
 import { PrincipalLoader } from './principal-loader';
-import {
-  buildEmployeeSession,
-  idleTtlSeconds,
-  type SessionView,
-  uiLocale,
-} from './session-profile';
+import { SessionIssuer } from './session-issuer';
+import { buildEmployeeSession, type SessionView } from './session-profile';
 
 export interface LoginResult {
   /** Session JWT for the cookie; never in a response body or a log. */
@@ -65,9 +57,6 @@ const invalidCredentials = () =>
 @Injectable()
 export class SessionsService {
   private readonly logger = new Logger(SessionsService.name);
-  private readonly idleMinSeconds: number;
-  private readonly idleMaxSeconds: number;
-  private readonly absoluteTtlSeconds: number;
   private readonly failureFloorMs: number;
 
   constructor(
@@ -76,23 +65,13 @@ export class SessionsService {
     private readonly repository: EmployeeAuthRepository,
     private readonly loader: PrincipalLoader,
     private readonly hasher: PasswordHasher,
-    private readonly tokens: SessionTokenService,
+    private readonly issuer: SessionIssuer,
     private readonly sessions: SessionStore,
-    private readonly versions: PermissionsVersionCache,
     private readonly limiter: LoginLimiter,
     private readonly audit: AuditService,
     private readonly clock: LoginClock,
     config: ConfigService,
   ) {
-    this.idleMinSeconds = config.getOrThrow<number>(
-      'SESSION_IDLE_TIMEOUT_MIN_SECONDS',
-    );
-    this.idleMaxSeconds = config.getOrThrow<number>(
-      'SESSION_IDLE_TIMEOUT_MAX_SECONDS',
-    );
-    this.absoluteTtlSeconds = config.getOrThrow<number>(
-      'SESSION_ABSOLUTE_TTL_SECONDS',
-    );
     this.failureFloorMs = config.getOrThrow<number>('LOGIN_FAILURE_FLOOR_MS');
   }
 
@@ -226,20 +205,7 @@ export class SessionsService {
       ? await this.hasher.hash(password)
       : null;
 
-    const now = Date.now();
-    const sessionId = randomUUID();
-    const token = await this.tokens.sign(
-      { jti: sessionId, sub: employeeId, tid: tenantId, aud: 'web' },
-      this.absoluteTtlSeconds,
-    );
-
-    const session = await this.db.tenantTransaction(async (trx) => {
-      const profile = await this.requireProfile(trx, tenantId, employeeId);
-      const stores = await this.repository.activeStores(
-        trx,
-        tenantId,
-        snapshot.storeScope,
-      );
+    const issued = await this.db.tenantTransaction(async (trx) => {
       if (rehash !== null) {
         await this.repository.updatePasswordHash(
           trx,
@@ -249,62 +215,32 @@ export class SessionsService {
           rehash,
         );
       }
-      // last_login_at and the success audit commit together.
-      await this.repository.recordLogin(trx, tenantId, employeeId);
+      // The success audit, last_login_at and the session commit together.
       await this.audit.append(trx, {
         action: 'auth.login-succeeded',
         entityType: 'employee',
         entityId: employeeId,
         details: { ip },
       });
-
-      const record: SessionRecord = {
-        sessionId,
+      return this.issuer.issue(trx, {
         tenantId,
         employeeId,
         auth: 'password',
-        authenticatedAt: new Date(now).toISOString(),
-        permissions: snapshot.permissions,
-        permissionsVersion: snapshot.permissionsVersion,
-        storeScope: snapshot.storeScope,
-        // Step 6: the only store of the scope is chosen; otherwise the web asks.
-        currentStoreId: stores.length === 1 ? stores[0].id : null,
-        terminalId: null,
-        terminalCredentialHash: null,
-        locale: uiLocale(
-          profile.employee.language,
-          profile.settings.defaultLanguage,
-        ),
-        idleTtlSeconds: idleTtlSeconds(
-          profile.settings.cashierSessionIdleMin,
-          this.idleMinSeconds,
-          this.idleMaxSeconds,
-        ),
-        absoluteExpiresAt: new Date(
-          now + this.absoluteTtlSeconds * 1000,
-        ).toISOString(),
-      };
-      // Last inside the transaction: if the session cannot be stored, the audit rolls back.
-      await this.sessions.create(record);
-      return buildEmployeeSession(profile, stores, record);
+        snapshot,
+      });
     });
-
-    // Seed the cache with the version the snapshot was built from, so the first request of the
-    // session does not take the cache-miss path. Only a hint: a failure must not undo the login.
-    try {
-      await this.versions.setIfGreater(
-        tenantId,
-        employeeId,
-        snapshot.permissionsVersion,
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Permissions version seed failed (${error instanceof Error ? error.name : typeof error}) [correlationId=${getRequestContext()?.correlationId}]`,
-      );
-    }
+    await this.issuer.seedVersion(
+      tenantId,
+      employeeId,
+      snapshot.permissionsVersion,
+    );
 
     await this.limiter.reset(key);
-    return { token, maxAgeSeconds: this.absoluteTtlSeconds, session };
+    return {
+      token: issued.token,
+      maxAgeSeconds: issued.maxAgeSeconds,
+      session: issued.session,
+    };
   }
 
   // Exactly one scrypt check per call: the stored hash, or the dummy one when there is none.

@@ -150,22 +150,39 @@ async login(@Body() body: EmployeeLoginDto, @Req() req: Request, @Res({ passthro
   одноразовый код оператора (128 бит, в БД только SHA-256, срок `ACTIVATION_CODE_TTL_HOURS`),
   `204`, затем обычный вход.
 
-## Терминал и PIN (часть 2 проекта аутентификации — ещё не реализовано)
+## Терминал и PIN (`apps/api/src/app/terminals`)
 
-1. **Привязка.** Сотрудник с правом `terminals:create` входит паролем на этом ПК →
-   `POST /api/v1/terminals` (точка из его охвата, имя) → `terminals` с `credential_hash`
-   (SHA-256 от `randomBytes(32)`), device-cookie `__Host-term`, аудит. Отзыв — `revoked_at`,
-   действует немедленно (статус кэшируется в Redis с инвалидацией).
-2. **PIN-переключение.** `POST /api/v1/terminal-sessions` `{ employeeId | employeeCode, pin }` +
-   device-cookie. Проверки: терминал не отозван (резолвер `resolve_terminal`), сотрудник активен
-   и имеет доступ к точке терминала, PIN не заблокирован, PIN верен. Предыдущая PIN-сессия
-   терминала уничтожается; новая — с `terminalId`, охват = только точка терминала.
-3. **Лимиты.** По `(tenant, employee, terminal)`: **после 3 неудач** PIN сотрудника блокируется
-   (вход только паролем, разблокировка — заведующим или успешным входом с заменой PIN) + аудит.
-   По терминалу: `TERMINAL_PIN_MAX_FAILURES` (10) неудач по разным кассирам за 15 мин — PIN-вход
-   на терминале закрыт на 15 мин + уведомление заведующему.
-4. **Step-up.** Привязка и отвязка терминала, управление сотрудниками и ролями, смена своего
-   пароля — только в сессии, открытой паролем, не старше `STEP_UP_MAX_AGE`.
+1. **Привязка.** `POST /api/v1/terminals { storeId, name }` — `@RequirePermission('terminals:create',
+   { storeBody: 'storeId' })` + `@RequireFreshAuth()`; точка `kind = 'pharmacy'` (иначе
+   `422 store_not_pharmacy`). Секрет устройства `randomToken(32)` → device-cookie `__Host-term`
+   (`term` при `AUTH_TEST_COOKIES`, 400 дней, `device-cookie.ts`); в `terminals.credential_hash` —
+   SHA-256 секрета. Уже привязанный терминал этого браузера в той же сети отзывается. Имя уникально
+   среди неотозванных терминалов точки (`409 terminal_name_taken`). Аудит `terminal.bound`.
+2. **Текущий терминал.** `GET /api/v1/terminals/current` (`@Public`): SHA-256 cookie → резолвер
+   `resolve_terminal` (ADR-0013) → `BoundTerminal` (кассиры с PIN, `pinLength`); нет, отозван или
+   сеть не активна → `404 not_bound`. Работа в сети терминала — `TerminalsService.inTerminalTenant`.
+3. **PIN-вход.** `POST /api/v1/terminal-sessions { employeeId, pin }` + device-cookie, по порядку:
+   терминал → счётчик терминала (`LoginLimiter`, ключ `terminal-pin:<id>`, `TERMINAL_PIN_*`,
+   `423 terminal_locked`) → сотрудник активен, есть доступ к точке, PIN задан (иначе тот же
+   `401 invalid_pin`) → `pin_locked_at` (`423 pin_locked`) → scrypt. Неудача — атомарный
+   `pin_failed_attempts + 1`, на 3-й — блокировка; аудит `auth.pin-failed` / `auth.pin-locked`.
+   Успех: прежняя PIN-сессия терминала и сессия этого браузера уничтожаются, `SessionIssuer.issue`
+   с `auth: 'pin'` и терминалом (охват и рабочая точка — точка терминала), аудит `auth.pin-succeeded`.
+4. **Каждый запрос PIN-сессии** (`SessionMiddleware`, шаг 4): флаг отзыва `term-rev:<tid>:<id>` и
+   совпадение SHA-256 device-cookie с `terminalCredentialHash` (`timingSafeEqual`); иначе сессия
+   уничтожается, запрос — гость. При перечитывании прав охват остаётся `[точка терминала]`, а если
+   доступ к ней потерян — сессия уничтожается.
+5. **Отвязка.** `DELETE /api/v1/terminals/{id}` — `terminals:delete` + step-up; терминал вне охвата —
+   `404 not_found`. `revoked_at` + аудит `terminal.revoked`, после коммита `markTerminalRevoked`
+   (флаг живёт `SESSION_ABSOLUTE_TTL_SECONDS`) и `destroyForTerminal`; ошибка Redis — 500, повтор
+   доделывает очистку.
+6. **Свой PIN.** `POST /api/v1/me/pin { currentPin, newPin }` — только сессия по паролю (step-up);
+   `currentPin` проверяется, если PIN задан и не заблокирован (`422 invalid_current_pin`, лимит
+   `pin-change:<tid>:<eid>`); `checkPin` → `422 pin_length` / `pin_trivial`; сброс счётчика и
+   блокировки — так кассир снимает свою блокировку. `GET /api/v1/me/terminals` — по аудиту
+   `auth.pin-succeeded` за 90 дней.
+7. **Step-up.** Привязка и отвязка терминала, смена своего пароля и PIN, управление сотрудниками
+   и ролями — только в сессии, открытой паролем, не старше `STEP_UP_MAX_AGE_SECONDS`.
 
 ## Вход «от имени» — не реализуется
 

@@ -32,6 +32,7 @@ import { LoginClock } from './login-clock';
 import { type LoginLimiter, loginLimiterKey } from './login-limiter';
 import type { PrincipalLoader, PrincipalSnapshot } from './principal-loader';
 import { SessionsService } from './sessions.service';
+import { SessionIssuer } from './session-issuer';
 
 // SessionsService (auth design 2026-10-02, section 6) with fakes of the resolver, the repository,
 // the hasher, the session store, the token service, the limiter, the loader and the audit.
@@ -156,6 +157,12 @@ class FakeSessionStore extends SessionStore {
   async destroyAllFor(): Promise<void> {
     throw new Error('not used');
   }
+  async destroyForTerminal(): Promise<void> {
+    throw new Error('not used');
+  }
+  async markTerminalRevoked(): Promise<void> {
+    throw new Error('not used');
+  }
 }
 
 interface RecordedAudit {
@@ -241,9 +248,14 @@ function setup() {
     repository as unknown as EmployeeAuthRepository,
     loader as unknown as PrincipalLoader,
     hasher as unknown as PasswordHasher,
-    tokens as unknown as SessionTokenService,
+    new SessionIssuer(
+      repository as unknown as EmployeeAuthRepository,
+      tokens as unknown as SessionTokenService,
+      sessions,
+      versions as unknown as PermissionsVersionCache,
+      config,
+    ),
     sessions,
-    versions as unknown as PermissionsVersionCache,
     limiter as unknown as LoginLimiter,
     audit as unknown as AuditService,
     clock,

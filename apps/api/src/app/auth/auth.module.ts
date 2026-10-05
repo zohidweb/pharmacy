@@ -14,6 +14,7 @@ import { PermissionsVersionRepository } from './permissions-version.repository';
 import { PermissionsVersionService } from './permissions-version.service';
 import { PrincipalLoader } from './principal-loader';
 import { SessionsController } from './sessions.controller';
+import { SessionIssuer } from './session-issuer';
 import { SessionsService } from './sessions.service';
 
 // Employee authentication of the web contour (auth design 2026-10-02): sessions, owner activation
@@ -27,6 +28,7 @@ import { SessionsService } from './sessions.service';
     EmployeeAuthRepository,
     PrincipalLoader,
     SessionsService,
+    SessionIssuer,
     ActivationsService,
     MeService,
     PermissionsVersionRepository,
@@ -50,6 +52,6 @@ import { SessionsService } from './sessions.service';
       },
     },
   ],
-  exports: [PrincipalLoader, PermissionsVersionService],
+  exports: [PrincipalLoader, PermissionsVersionService, SessionIssuer, LoginLimiter],
 })
 export class AuthModule {}

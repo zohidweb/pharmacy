@@ -29,6 +29,8 @@ export type SessionPatch = Partial<
 export interface SessionLookup {
   session: SessionRecord | null;
   permissionsVersion: number | null;
+  /** True when the session belongs to a terminal that has been revoked (PIN session only). */
+  terminalRevoked: boolean;
 }
 
 // Port: Redis in the cloud, PostgreSQL on an offline store. DI token.
@@ -50,6 +52,19 @@ export abstract class SessionStore {
     tenantId: string,
     employeeId: string,
     exceptSessionId?: string,
+  ): Promise<void>;
+
+  // The PIN session of a terminal (one at a time: a new PIN sign-in replaces it), auth design
+  // 2026-10-02, section 8.
+  abstract destroyForTerminal(tenantId: string, terminalId: string): Promise<void>;
+
+  // A revocation flag that lookup reports for every session of the terminal; it lives at least as
+  // long as any session created before the revocation. terminals.revoked_at stays the source of
+  // truth.
+  abstract markTerminalRevoked(
+    tenantId: string,
+    terminalId: string,
+    ttlSeconds: number,
   ): Promise<void>;
 }
 

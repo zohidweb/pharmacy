@@ -79,6 +79,7 @@ describe('RedisSessionStore (integration)', () => {
     expect(await store.lookup('nope', TENANT, EMPLOYEE)).toEqual({
       session: null,
       permissionsVersion: null,
+      terminalRevoked: false,
     });
   });
 

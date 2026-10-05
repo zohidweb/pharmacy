@@ -101,6 +101,41 @@ export interface LegalEntities {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface OperatorCredentials {
+  createdAt: Generated<Timestamp>;
+  oneTimeCodeExpiresAt: Timestamp | null;
+  oneTimeCodeHash: string | null;
+  operatorId: string;
+  passwordChangedAt: Timestamp | null;
+  passwordHash: string | null;
+  passwordPepperVersion: number | null;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface Operators {
+  createdAt: Generated<Timestamp>;
+  fullName: string;
+  id: string;
+  lastLoginAt: Timestamp | null;
+  login: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface PlatformAuditLog {
+  action: string;
+  actorKind: string;
+  correlationId: string;
+  details: Generated<Json>;
+  entityId: string | null;
+  entityType: string | null;
+  id: string;
+  job: string | null;
+  operatorId: string | null;
+  recordedAt: Generated<Timestamp>;
+  tenantId: string | null;
+}
+
 export interface RolePermissions {
   createdAt: Generated<Timestamp>;
   permission: string;
@@ -190,6 +225,9 @@ export interface DB {
   employees: Employees;
   employeeStores: EmployeeStores;
   legalEntities: LegalEntities;
+  operatorCredentials: OperatorCredentials;
+  operators: Operators;
+  platformAuditLog: PlatformAuditLog;
   rolePermissions: RolePermissions;
   roles: Roles;
   stores: Stores;

@@ -11,6 +11,18 @@ export interface OperatorLoginRequest {
   password: string;
 }
 
+/**
+ * POST /api/v1/operator/activations — the first password of an operator, by the one-time code
+ * from `scripts/create-operator.mjs`. 204; errors as owner activation: 401 `invalid_code`,
+ * 422 `password_policy`, 429 `login_locked`.
+ */
+export interface OperatorActivationRequest {
+  /** Work e-mail. */
+  login: string;
+  code: string;
+  newPassword: string;
+}
+
 export type OperatorRole = 'full_access';
 
 export interface OperatorProfile {

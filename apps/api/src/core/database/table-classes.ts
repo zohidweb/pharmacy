@@ -21,6 +21,7 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     employee_stores: 'tenant',
     terminals: 'tenant',
     audit_log: 'tenant',
+    sessions: 'tenant',
     operators: 'platform',
     operator_credentials: 'platform',
     platform_audit_log: 'platform',

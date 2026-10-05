@@ -29,6 +29,7 @@ import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
 import { TerminalsModule } from './terminals/terminals.module';
 import { OperatorAuthModule } from './platform/auth/operator-auth.module';
+import { TenantsModule } from './platform/tenants/tenants.module';
 import { OperatorPermissionsGuard } from './platform/auth/operator-permissions.guard';
 import { PermissionsGuard } from './auth/permissions.guard';
 import { CatalogModule } from './catalog/catalog.module';
@@ -73,6 +74,10 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     // routes (auth design, section 10).
     ConditionalModule.registerWhen(
       OperatorAuthModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
+    ConditionalModule.registerWhen(
+      TenantsModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
     CatalogModule,

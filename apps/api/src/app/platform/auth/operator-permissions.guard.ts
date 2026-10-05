@@ -3,6 +3,7 @@ import {
   type ExecutionContext,
   Injectable,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { OPERATOR_ROLE_PERMISSIONS } from '@pharmacy/shared-domain';
@@ -28,8 +29,10 @@ export class OperatorPermissionsGuard implements CanActivate {
 
   constructor(
     private readonly reflector: Reflector,
-    private readonly db: PlatformDatabase,
-    private readonly audit: PlatformAuditService,
+    // Absent on an offline store, which has no operator contour (every request there is denied
+    // before an audit would be written: no operator principal ever exists).
+    @Optional() private readonly db?: PlatformDatabase,
+    @Optional() private readonly audit?: PlatformAuditService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -56,11 +59,13 @@ export class OperatorPermissionsGuard implements CanActivate {
     reason: string,
     permission: string | null,
   ): Promise<never> {
+    const { db, audit } = this;
+    if (!db || !audit) throw new ProblemException(403, 'forbidden');
     try {
-      await this.db.platformTransaction(
+      await db.platformTransaction(
         { kind: 'operator', operatorId: operator.operatorId },
         (trx) =>
-          this.audit.append(trx, {
+          audit.append(trx, {
             action: 'access.denied',
             details: { permission, reason },
           }),

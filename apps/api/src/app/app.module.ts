@@ -4,7 +4,7 @@ import {
   type NestModule,
   RequestMethod,
 } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConditionalModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ProblemDetailsFilter } from '../common/filters/problem-details.filter';
@@ -69,7 +69,12 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     }),
     AuthModule,
     TerminalsModule,
-    OperatorAuthModule,
+    // The operator contour exists in the cloud only: an offline store registers no /operator/*
+    // routes (auth design, section 10).
+    ConditionalModule.registerWhen(
+      OperatorAuthModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     CatalogModule,
     InventoryModule,
     PosModule,

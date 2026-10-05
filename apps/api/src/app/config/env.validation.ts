@@ -11,6 +11,7 @@ import {
   Max,
   Min,
   validateSync,
+  IsUUID,
 } from 'class-validator';
 import { type KeyRing, parseKeyRing } from '../../core/crypto/key-ring';
 
@@ -100,6 +101,12 @@ class EnvironmentVariables {
   @IsIn(['cloud', 'offline'])
   @IsOptional()
   STORE_MODE: 'cloud' | 'offline' = 'cloud';
+
+  // The one network an offline store serves (plan auth-part4, decision P1); required with
+  // STORE_MODE=offline, refused in the cloud (cross-field check in validateEnv).
+  @IsUUID()
+  @IsOptional()
+  OFFLINE_TENANT_ID?: string;
 
   // Required in cloud mode (cross-field check in validateEnv).
   @Matches(REDIS_URL)
@@ -252,6 +259,12 @@ function checkCrossFields(env: EnvironmentVariables): string[] {
   const problems: string[] = [];
   if (env.STORE_MODE === 'cloud' && !env.REDIS_URL) {
     problems.push('REDIS_URL is required when STORE_MODE=cloud');
+  }
+  if (env.STORE_MODE === 'offline' && !env.OFFLINE_TENANT_ID) {
+    problems.push('OFFLINE_TENANT_ID is required when STORE_MODE=offline');
+  }
+  if (env.STORE_MODE === 'cloud' && env.OFFLINE_TENANT_ID) {
+    problems.push('OFFLINE_TENANT_ID is allowed only when STORE_MODE=offline');
   }
   if (
     env.SESSION_IDLE_TIMEOUT_MIN_SECONDS > env.SESSION_IDLE_TIMEOUT_MAX_SECONDS

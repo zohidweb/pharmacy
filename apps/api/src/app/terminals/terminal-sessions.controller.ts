@@ -5,7 +5,11 @@ import type { EmployeeSession } from '@pharmacy/shared-dto';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/guards/decorators';
 import { readDeviceSecret } from '../auth/device-cookie';
-import { type SessionCookieEnv, setSessionCookie } from '../auth/session-cookie';
+import {
+  type SessionCookieEnv,
+  setSessionCookie,
+  cookieEnvFrom,
+} from '../auth/session-cookie';
 import { PinLoginDto } from './dto/terminal.dto';
 import { TerminalSessionsService } from './terminal-sessions.service';
 
@@ -21,9 +25,7 @@ export class TerminalSessionsController {
     private readonly terminalSessions: TerminalSessionsService,
     config: ConfigService,
   ) {
-    this.cookieEnv = {
-      AUTH_TEST_COOKIES: config.getOrThrow<boolean>('AUTH_TEST_COOKIES'),
-    };
+    this.cookieEnv = cookieEnvFrom(config);
   }
 
   /**

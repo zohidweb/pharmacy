@@ -18,6 +18,7 @@ import {
   clearOperatorCookie,
   type SessionCookieEnv,
   setOperatorCookie,
+  cookieEnvFrom,
 } from '../../auth/session-cookie';
 import { RequireOperatorPermission } from './decorators';
 import { OperatorActivationDto, OperatorLoginDto } from './dto/operator.dto';
@@ -36,9 +37,7 @@ export class OperatorSessionsController {
     private readonly operatorSessions: OperatorSessionsService,
     config: ConfigService,
   ) {
-    this.cookieEnv = {
-      AUTH_TEST_COOKIES: config.getOrThrow<boolean>('AUTH_TEST_COOKIES'),
-    };
+    this.cookieEnv = cookieEnvFrom(config);
   }
 
   /** 201 `OperatorSession` + `__Host-op_sid`; 401 `invalid_credentials`, 429 `login_locked`. */

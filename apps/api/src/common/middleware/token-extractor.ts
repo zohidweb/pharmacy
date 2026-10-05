@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { readDeviceSecret } from '../../app/auth/device-cookie';
 import {
+  cookieEnvFrom,
   type OperatorCookieName,
   operatorCookieName,
   sessionCookieName,
@@ -40,9 +41,7 @@ export class CookieTokenExtractor extends TokenExtractor {
 
   constructor(config: ConfigService) {
     super();
-    this.cookieEnv = {
-      AUTH_TEST_COOKIES: config.get<boolean>('AUTH_TEST_COOKIES') === true,
-    };
+    this.cookieEnv = cookieEnvFrom(config);
     this.cookieName = sessionCookieName(this.cookieEnv);
     this.operatorCookie = operatorCookieName(this.cookieEnv);
   }

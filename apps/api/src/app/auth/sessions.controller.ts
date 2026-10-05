@@ -21,6 +21,7 @@ import {
   clearSessionCookie,
   type SessionCookieEnv,
   setSessionCookie,
+  cookieEnvFrom,
 } from './session-cookie';
 import { SessionsService } from './sessions.service';
 
@@ -37,9 +38,7 @@ export class SessionsController {
     private readonly sessions: SessionsService,
     config: ConfigService,
   ) {
-    this.cookieEnv = {
-      AUTH_TEST_COOKIES: config.getOrThrow<boolean>('AUTH_TEST_COOKIES'),
-    };
+    this.cookieEnv = cookieEnvFrom(config);
   }
 
   /** 201 EmployeeSession + Set-Cookie; 401 invalid_credentials, 429 login_locked. */

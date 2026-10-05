@@ -68,14 +68,27 @@ return 0
 
 const ms = (seconds: number): string => String(seconds * 1000);
 
+// Port: attempts per key (sign-in, activation, password and PIN changes, terminal PIN) with a lock
+// after maxFailures within the window. Redis in the cloud (shared by all API instances), process
+// memory on an offline store (one process, ADR-0008). DI token.
+export abstract class LoginLimiter {
+  /** Reserves one attempt, or refuses it with the seconds until the key is unlocked. */
+  abstract tryAcquire(key: string): Promise<LoginAttempt>;
+
+  /** After a success: clears the attempts and any lock (the lock history stays). */
+  abstract reset(key: string): Promise<void>;
+}
+
 // Sign-in attempts per identifier in Redis, shared by all API instances (cloud; the offline store
 // gets its own implementation with part 4 of the auth design). Keys carry a hash of the
 // identifier only, so Redis holds no personal data.
-export class LoginLimiter {
+export class RedisLoginLimiter extends LoginLimiter {
   constructor(
     private readonly redis: RedisClient,
     private readonly options: LoginLimiterOptions,
-  ) {}
+  ) {
+    super();
+  }
 
   /** Reserves one attempt, or refuses it with the seconds until the identifier is unlocked. */
   async tryAcquire(key: string): Promise<LoginAttempt> {

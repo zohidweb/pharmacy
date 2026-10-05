@@ -271,6 +271,12 @@ npm run prod:build / prod:up / prod:down
   Скрипт работает ролью `pharmacy_platform` (`PLATFORM_DATABASE_URL`, задан в сервисе `api`) и пишет
   `platform_audit_log`. Запуск — как выше, с `node scripts/create-operator.mjs …`; в dev —
   `node --env-file=.env apps/api/scripts/create-operator.mjs --login … --name "…"`.
+- Офлайн-точка (часть 4 аутентификации): `STORE_MODE=offline` и `OFFLINE_TENANT_ID=<сеть точки>`,
+  Redis не нужен — сессии в таблице `sessions` PostgreSQL точки, лимиты попыток в памяти процесса,
+  маршрутов оператора нет. Ключи JWT и pepper точки генерируются на её ПК:
+  `node scripts/generate-store-secrets.mjs --env-file <env-файл точки>` (значения не печатает,
+  существующие не перезаписывает; бэкап pepper — отдельно от бэкапа БД). Дистрибутив точки
+  (ADR-0005) — отдельной задачей.
 - Порты в compose публикуются только на `127.0.0.1`.
 
 ## Local development secrets

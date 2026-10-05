@@ -17,7 +17,11 @@ import {
 } from '../../common/guards/decorators';
 import { ChangePasswordDto, UpdateMeDto } from './dto/me.dto';
 import { MeService } from './me.service';
-import { type SessionCookieEnv, setSessionCookie } from './session-cookie';
+import {
+  type SessionCookieEnv,
+  setSessionCookie,
+  cookieEnvFrom,
+} from './session-cookie';
 
 // The own profile of the signed-in employee (auth design 2026-10-02, section 6). Personal data of
 // the employee himself, so the routes need a session but no catalog permission.
@@ -29,9 +33,7 @@ export class MeController {
     private readonly me: MeService,
     config: ConfigService,
   ) {
-    this.cookieEnv = {
-      AUTH_TEST_COOKIES: config.getOrThrow<boolean>('AUTH_TEST_COOKIES'),
-    };
+    this.cookieEnv = cookieEnvFrom(config);
   }
 
   @Authenticated()

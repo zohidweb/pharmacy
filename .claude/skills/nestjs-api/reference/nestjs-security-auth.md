@@ -73,8 +73,15 @@
   ADR. CORS выключен.
 - **e2e:** `AUTH_TEST_COOKIES=true` даёт cookie `sid` без `Secure` — процесс с этим флагом не
   стартует при `APP_ENV` не `test`.
-- **Транспорт (офлайн-точка):** `http://localhost`, cookie `sid` / `term` с `HttpOnly;
-  SameSite=Strict` без префикса `__Host-`.
+- **Офлайн-точка (`STORE_MODE=offline`, часть 4):** `http://localhost`, cookie `sid` / `term`
+  (`Secure; HttpOnly; SameSite=Strict`, без префикса `__Host-`; имена — `cookieEnvFrom(config)`).
+  Redis-клиента нет (`REDIS_CLIENT === null`): `SessionsModule` отдаёт `PgSessionStore` и
+  `PgPermissionsVersionCache` (таблица `sessions`, класс `tenant`, `withTenant(OFFLINE_TENANT_ID)`;
+  версия прав и отзыв терминала читаются тем же запросом; просроченные строки не принимаются и
+  удаляются при `create`), лимиты — `MemoryLoginLimiter` вместо `RedisLoginLimiter` (обнуляются при
+  перезапуске), throttler — в памяти. Точка обслуживает одну сеть: токен с другим `tid` — гость.
+  Модули оператора не регистрируются (`ConditionalModule.registerWhen`), `/operator/*` → 404.
+  Ключи точки — `scripts/generate-store-secrets.mjs --env-file <путь>`.
 - **Жизнь:** idle-TTL = таймаут сети тенанта, зажатый в `[SESSION_IDLE_TIMEOUT_MIN_SECONDS,
   SESSION_IDLE_TIMEOUT_MAX_SECONDS]`, продлевается не чаще раза в 60 с; абсолютный срок
   `SESSION_ABSOLUTE_TTL_SECONDS`; новый токен при входе, PIN-переключении и смене пароля; смена

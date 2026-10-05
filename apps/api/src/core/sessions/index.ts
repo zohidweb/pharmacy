@@ -10,3 +10,4 @@ export {
   OperatorSessionStore,
   type OperatorSessionRecord,
 } from './operator-session-store';
+export { PgPermissionsVersionCache, PgSessionStore } from './pg-session-store';

@@ -15,7 +15,7 @@ import {
   RequireFreshAuth,
 } from '../../common/guards/decorators';
 import { readDeviceSecret } from '../auth/device-cookie';
-import type { SessionCookieEnv } from '../auth/session-cookie';
+import { cookieEnvFrom, type SessionCookieEnv } from '../auth/session-cookie';
 import { ChangePinDto } from './dto/terminal.dto';
 import { MePinService } from './me-pin.service';
 
@@ -29,9 +29,7 @@ export class MePinController {
     private readonly mePin: MePinService,
     config: ConfigService,
   ) {
-    this.cookieEnv = {
-      AUTH_TEST_COOKIES: config.getOrThrow<boolean>('AUTH_TEST_COOKIES'),
-    };
+    this.cookieEnv = cookieEnvFrom(config);
   }
 
   /**

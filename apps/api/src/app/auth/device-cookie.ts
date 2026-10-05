@@ -14,7 +14,9 @@ export const DEVICE_COOKIE_MAX_AGE_SECONDS = 34_560_000;
 const DEVICE_SECRET = /^[A-Za-z0-9_-]{43}$/;
 
 export function deviceCookieName(env: SessionCookieEnv): DeviceCookieName {
-  return env.AUTH_TEST_COOKIES ? 'term' : '__Host-term';
+  return env.AUTH_TEST_COOKIES || env.STORE_MODE === 'offline'
+    ? 'term'
+    : '__Host-term';
 }
 
 function baseOptions(env: SessionCookieEnv): CookieOptions {

@@ -155,6 +155,25 @@ export interface Roles {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface Sessions {
+  absoluteExpiresAt: Timestamp;
+  authenticatedAt: Timestamp;
+  authMethod: string;
+  createdAt: Generated<Timestamp>;
+  currentStoreId: string | null;
+  employeeId: string;
+  idleExpiresAt: Timestamp;
+  idleTtlSeconds: number;
+  jti: string;
+  locale: string;
+  permissions: Generated<string[]>;
+  permissionsVersion: bigint;
+  storeScope: Json;
+  tenantId: string;
+  terminalCredentialHash: string | null;
+  terminalId: string | null;
+}
+
 export interface Stores {
   address: string;
   closedAt: Timestamp | null;
@@ -230,6 +249,7 @@ export interface DB {
   platformAuditLog: PlatformAuditLog;
   rolePermissions: RolePermissions;
   roles: Roles;
+  sessions: Sessions;
   stores: Stores;
   tenants: Tenants;
   tenantSettings: TenantSettings;

@@ -25,6 +25,8 @@ module.exports = {
         { input: './scripts', glob: 'create-activation-code.mjs', output: 'scripts' },
         // Creates a platform operator and issues his one-time activation code (auth design, section 9).
         { input: './scripts', glob: 'create-operator.mjs', output: 'scripts' },
+        // Generates the JWT key and pepper of an offline store into its env file (auth design, section 10).
+        { input: './scripts', glob: 'generate-store-secrets.mjs', output: 'scripts' },
       ],
       optimization: false,
       outputHashing: 'none',

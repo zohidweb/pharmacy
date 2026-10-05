@@ -17,7 +17,7 @@ import type { Request, Response } from 'express';
 import { Public, RequireFreshAuth } from '../../common/guards/decorators';
 import { RequirePermission } from '../auth/decorators';
 import { readDeviceSecret, setDeviceCookie } from '../auth/device-cookie';
-import type { SessionCookieEnv } from '../auth/session-cookie';
+import { cookieEnvFrom, type SessionCookieEnv } from '../auth/session-cookie';
 import { BindTerminalDto } from './dto/terminal.dto';
 import { TerminalsService } from './terminals.service';
 
@@ -30,9 +30,7 @@ export class TerminalsController {
     private readonly terminals: TerminalsService,
     config: ConfigService,
   ) {
-    this.cookieEnv = {
-      AUTH_TEST_COOKIES: config.getOrThrow<boolean>('AUTH_TEST_COOKIES'),
-    };
+    this.cookieEnv = cookieEnvFrom(config);
   }
 
   /**

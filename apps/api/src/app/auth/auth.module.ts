@@ -7,7 +7,12 @@ import { ActivationsController } from './activations.controller';
 import { ActivationsService } from './activations.service';
 import { EmployeeAuthRepository } from './employee-auth.repository';
 import { LoginClock, SystemLoginClock } from './login-clock';
-import { LOGIN_LIMITER_DEFAULTS, LoginLimiter } from './login-limiter';
+import {
+  LOGIN_LIMITER_DEFAULTS,
+  LoginLimiter,
+  RedisLoginLimiter,
+} from './login-limiter';
+import { MemoryLoginLimiter } from './memory-login-limiter';
 import { MeController } from './me.controller';
 import { MeService } from './me.service';
 import { PermissionsVersionRepository } from './permissions-version.repository';
@@ -38,17 +43,15 @@ import { SessionsService } from './sessions.service';
       provide: LoginLimiter,
       inject: [REDIS_CLIENT, ConfigService],
       useFactory: (client: RedisClient | null, config: ConfigService) => {
-        // The PostgreSQL implementation for STORE_MODE=offline arrives with part 4 of the design.
-        if (client === null) {
-          throw new Error(
-            'The login limiter supports STORE_MODE=cloud only until part 4 of the auth design',
-          );
-        }
-        return new LoginLimiter(client, {
+        const options = {
           ...LOGIN_LIMITER_DEFAULTS,
           maxFailures: config.getOrThrow<number>('LOGIN_MAX_FAILURES'),
           lockSeconds: config.getOrThrow<number>('LOGIN_LOCK_SECONDS'),
-        });
+        };
+        // No Redis on an offline store: the counters live in the single API process.
+        return client === null
+          ? new MemoryLoginLimiter(options)
+          : new RedisLoginLimiter(client, options);
       },
     },
   ],

@@ -123,7 +123,12 @@ describe('validateEnv', () => {
     it('does not require REDIS_URL in offline mode', () => {
       const withoutRedis = without(base, 'REDIS_URL');
       expect(
-        validateEnv({ ...withoutRedis, STORE_MODE: 'offline' }).STORE_MODE,
+        validateEnv({
+          ...withoutRedis,
+          STORE_MODE: 'offline',
+          // The network of the offline store (auth part 4), required in offline mode.
+          OFFLINE_TENANT_ID: '0190a0b0-0000-7000-8000-000000000001',
+        }).STORE_MODE,
       ).toBe('offline');
     });
 

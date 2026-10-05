@@ -383,3 +383,35 @@ proposed; сами проверки от выбора инструментов �
    (ADR-0008, поправка 2026-10-02) несёт `tid`, `PgSessionStore` открывает `withTenant(tid)` и
    читает `sessions` по ключу `(tenant_id, jti)`. Из списка резолверов исключается.
 3. Остальные резолверы (`resolve_license_key`, `resolve_terminal`) без изменений.
+
+## Поправка 2026-10-05 (создание сети оператором) — черновик, на утверждении
+
+Модуль «сети» админки (`docs/superpowers/specs/2026-10-05-tenants-module-design.md`). Оператор
+создаёт сеть с владельцем и выдаёт владельцу одноразовый код активации, но не читает и не меняет
+данные сети (ADR-0008, поправка 2026-10-05). Владелец — строки тенантных таблиц, к которым у
+`pharmacy_platform` нет прав.
+
+1. **Функции создания сети** — новый закрытый класс SECURITY DEFINER-функций рядом с резолверами
+   (раздел 3):
+   - `provision_tenant(...)` — создаёт новую сеть целиком: `tenants`, `tenant_settings`, роль
+     владельца из шаблона, сотрудника-владельца и хеш его кода активации; существующую сеть не
+     меняет (конфликт ключа — ошибка);
+   - `issue_owner_code(tenant_id, code_hash, expires_at)` — пишет только хеш и срок кода владельцу
+     активной сети.
+   Правила как у резолверов: `security definer`, `set search_path = ''`, на входе только
+   идентификаторы и фиксированные поля, ничего не возвращают из тенантных таблиц, `revoke all from
+   public`, `EXECUTE` только `pharmacy_platform`.
+2. **Роль `pharmacy_provisioner`** (NOLOGIN) — владелец функций создания сети: `INSERT` на
+   `tenants`, `tenant_settings`, `roles`, `employees`, `employee_credentials`, `UPDATE` только
+   колонок кода в `employee_credentials`, `SELECT` колонок для проверок, политики RLS `TO
+   pharmacy_provisioner`. `pharmacy_resolver` остаётся только для чтения — функции записи ему не
+   передаются. Роль создаётся `initdb` (у `pharmacy_owner` нет `CREATEROLE`).
+3. **Тест каталога** (раздел 8): функции создания сети — ровно закрытый список
+   (`PROVISIONING_FUNCTIONS` в `table-classes.ts`), владелец `pharmacy_provisioner`, `search_path`
+   закреплён, нет `EXECUTE` у `PUBLIC` и `pharmacy_app`; у `pharmacy_resolver` нет прав на запись.
+4. **Контакт владельца в `tenants`** (`owner_full_name`, `owner_login`, `owner_phone`,
+   `owner_email`) — платформенные колонки (контакт сети для платформы, как реквизиты для счёта),
+   их пишет `provision_tenant`; чтение `employees` платформой по-прежнему запрещено.
+5. Блокировка сети — платформенные колонки `tenants` (`status`, `blocked_at`, `blocked_by`,
+   `block_reason`), права `pharmacy_platform` (`UPDATE` своей таблицы) достаточно; сессии сети
+   закрываются флагом в хранилище сессий (спецификация, раздел 6), без доступа к тенантным данным.

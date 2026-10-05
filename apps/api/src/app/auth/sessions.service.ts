@@ -22,7 +22,7 @@ import {
   type LoginCredentials,
 } from './employee-auth.repository';
 import { normalizeIdentifier } from './identifier';
-import { LoginClock } from './login-clock';
+import { LoginClock, padFailure } from './login-clock';
 import { LoginLimiter, loginLimiterKey } from './login-limiter';
 import { PrincipalLoader } from './principal-loader';
 import {
@@ -54,9 +54,6 @@ type PasswordCheck =
 // One answer for every failure: an unknown identifier and a wrong password are indistinguishable.
 const invalidCredentials = () =>
   new ProblemException(401, 'invalid_credentials');
-
-// Upper bound of the random part added to LOGIN_FAILURE_FLOOR_MS.
-const FAILURE_JITTER_MAX_MS = 50;
 
 // Sign-in by password, the session profile, the working store and sign-out (auth design
 // 2026-10-02, section 6). Passwords, hashes, tokens and identifier values are never logged or
@@ -106,17 +103,10 @@ export class SessionsService {
         error instanceof ProblemException &&
         error.code === 'invalid_credentials'
       ) {
-        await this.padFailure(started);
+        await padFailure(this.clock, this.failureFloorMs, started);
       }
       throw error;
     }
-  }
-
-  private async padFailure(started: number): Promise<void> {
-    const floor =
-      this.failureFloorMs + this.clock.jitterMs(FAILURE_JITTER_MAX_MS);
-    const wait = floor - (this.clock.now() - started);
-    if (wait > 0) await this.clock.sleep(wait);
   }
 
   private async attemptLogin(

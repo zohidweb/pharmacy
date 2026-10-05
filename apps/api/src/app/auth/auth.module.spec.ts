@@ -4,6 +4,8 @@ import { Test } from '@nestjs/testing';
 import { CryptoModule, parseKeyRing } from '../../core/crypto';
 import { ContextResolvers, DatabaseModule } from '../../core/database';
 import { RedisModule } from '../../core/redis/redis.module';
+import { ActivationsController } from './activations.controller';
+import { ActivationsService } from './activations.service';
 import { AuthModule } from './auth.module';
 import { LoginClock, SystemLoginClock } from './login-clock';
 import { LoginLimiter } from './login-limiter';
@@ -36,7 +38,7 @@ const env = {
 };
 
 describe('AuthModule', () => {
-  it('wires the sessions controller, service, limiter and principal loader', async () => {
+  it('wires the sessions and activations controllers, services, limiter and principal loader', async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -55,6 +57,12 @@ describe('AuthModule', () => {
       SessionsController,
     );
     expect(moduleRef.get(SessionsService)).toBeInstanceOf(SessionsService);
+    expect(moduleRef.get(ActivationsController)).toBeInstanceOf(
+      ActivationsController,
+    );
+    expect(moduleRef.get(ActivationsService)).toBeInstanceOf(
+      ActivationsService,
+    );
     expect(moduleRef.get(LoginLimiter)).toBeInstanceOf(LoginLimiter);
     expect(moduleRef.get(LoginClock)).toBeInstanceOf(SystemLoginClock);
     expect(moduleRef.get(PrincipalLoader)).toBeInstanceOf(PrincipalLoader);

@@ -99,6 +99,57 @@ export class EmployeeAuthRepository {
       .execute();
   }
 
+  /**
+   * Consumes a one-time activation code and sets the password in one statement: the row changes
+   * only while the stored code hash equals `codeHash`, the code has not expired, the employee is
+   * active and the network is active, so an inactive account never loses its code. Returns false
+   * when nothing matched (unknown, used, expired or wrong code are not told apart).
+   */
+  async consumeActivationCode(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+    codeHash: string,
+    next: { phc: string; pepperVersion: number },
+  ): Promise<boolean> {
+    const row = await trx
+      .updateTable('employeeCredentials')
+      .set({
+        passwordHash: next.phc,
+        passwordPepperVersion: next.pepperVersion,
+        passwordChangedAt: sql<Date>`now()`,
+        oneTimeCodeHash: null,
+        oneTimeCodeExpiresAt: null,
+        updatedAt: sql<Date>`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('employeeId', '=', employeeId)
+      .where('oneTimeCodeHash', '=', codeHash)
+      .where('oneTimeCodeExpiresAt', '>', sql<Date>`now()`)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('employees')
+            .select('employees.id')
+            .where('employees.tenantId', '=', tenantId)
+            .where('employees.id', '=', employeeId)
+            .where('employees.status', '=', 'active'),
+        ),
+      )
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('tenants')
+            .select('tenants.id')
+            .where('tenants.id', '=', tenantId)
+            .where('tenants.status', '=', 'active'),
+        ),
+      )
+      .returning('employeeId')
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   async recordLogin(
     trx: TenantTransaction,
     tenantId: string,

@@ -24,3 +24,21 @@ export class SystemLoginClock extends LoginClock {
     return randomInt(0, maxMs + 1);
   }
 }
+
+// Upper bound of the random part added to LOGIN_FAILURE_FLOOR_MS.
+const FAILURE_JITTER_MAX_MS = 50;
+
+/**
+ * Pads a failed attempt to at least floorMs (plus up to FAILURE_JITTER_MAX_MS of jitter) from
+ * `started`, so its timing does not tell an unknown identifier from a known one: their paths
+ * differ in database work. Shared by sign-in and activation.
+ */
+export async function padFailure(
+  clock: LoginClock,
+  floorMs: number,
+  started: number,
+): Promise<void> {
+  const floor = floorMs + clock.jitterMs(FAILURE_JITTER_MAX_MS);
+  const wait = floor - (clock.now() - started);
+  if (wait > 0) await clock.sleep(wait);
+}

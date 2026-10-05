@@ -90,33 +90,10 @@ describe('CompaniesPage', () => {
     expect(await screen.findByText('Демо Фарм')).toBeTruthy();
   });
 
-  it('requires a reason before impersonating an owner', async () => {
+  it('offers no impersonation (ADR-0008 amendment 2026-10-05)', async () => {
     renderWithProviders(<CompaniesPage />);
-    fireEvent.click(
-      await screen.findByRole('button', {
-        name: 'Войти от имени владельца «Демо Фарм»',
-      }),
-    );
-    const dialog = screen.getByRole('dialog', {
-      name: 'Войти от имени владельца?',
-    });
-
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Начать сеанс' }),
-    );
-    expect(
-      await within(dialog).findByText('Опишите причину (не меньше 5 символов)'),
-    ).toBeTruthy();
-
-    fireEvent.input(within(dialog).getByLabelText('Причина'), {
-      target: { value: 'Проверка обращения в поддержку' },
-    });
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Начать сеанс' }),
-    );
-    expect(
-      await screen.findByText('Сеанс от имени «Демо Фарм» начат'),
-    ).toBeTruthy();
+    expect(await screen.findByText('Демо Фарм')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Войти от имени/ })).toBeNull();
   });
 });
 
@@ -154,13 +131,6 @@ describe('CompanyPage', () => {
       await screen.findByText('Компания заблокирована', { selector: 'p' }),
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Разблокировать' })).toBeTruthy();
-    expect(
-      (
-        screen.getByRole('button', {
-          name: 'Войти от имени',
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
   });
 
   it('switches tabs and loads their data', async () => {

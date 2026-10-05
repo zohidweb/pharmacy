@@ -11,7 +11,6 @@ import {
   Icon,
   SegmentedControl,
   StatusPill,
-  Switch,
   TextField,
   useToast,
 } from '@pharmacy/ui';
@@ -44,7 +43,9 @@ function PersonalData({ me }: { me: OperatorMe }) {
   const [phone, setPhone] = useState(me.phone);
   const [position, setPosition] = useState(me.position);
   const [locale, setLocaleValue] = useState<Locale>(me.locale);
-  const [reminder, setReminder] = useState(me.impersonationReminder);
+  // «От имени» is not available in the MVP (ADR-0008 amendment 2026-10-05): the setting is kept
+  // as it is and not shown.
+  const reminder = me.impersonationReminder;
   const [touched, setTouched] = useState(false);
   const invalid = {
     fullName: fullName.trim().length < 3,
@@ -115,12 +116,6 @@ function PersonalData({ me }: { me: OperatorMe }) {
           value,
           label: tLocales(value),
         }))}
-      />
-      <Switch
-        label={t('reminder')}
-        description={t('reminderHint')}
-        checked={reminder}
-        onCheckedChange={setReminder}
       />
       <div className="flex justify-end">
         <Button

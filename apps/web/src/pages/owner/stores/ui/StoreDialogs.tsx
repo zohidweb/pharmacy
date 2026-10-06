@@ -16,7 +16,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiRequest,
+  isApiRouteAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { StoreForm } from '@/features/store-form';
 import { QueryState } from '@/shared/ui';
 
@@ -37,6 +41,8 @@ export function StoreDialog({
   const t = useTranslations('ownerStores.dialog');
   const tStores = useTranslations('ownerStores');
   const editable = canEdit && store?.status !== 'closed';
+  // Closing moves the stock by a transfer: only where the closing route answers (full mocks).
+  const closable = canClose && isApiRouteAvailable('stores.close');
 
   return (
     <Dialog
@@ -87,7 +93,7 @@ export function StoreDialog({
           onSaved={onClose}
           actions={
             <>
-              {store?.status === 'active' && canClose && (
+              {store?.status === 'active' && closable && (
                 <Button
                   variant="destructive"
                   iconStart="ban"
@@ -102,7 +108,7 @@ export function StoreDialog({
             </>
           }
         />
-        {store?.status === 'active' && canClose && (
+        {store?.status === 'active' && closable && (
           <p className="text-xs text-fg-subtle">{t('closeHint')}</p>
         )}
       </div>

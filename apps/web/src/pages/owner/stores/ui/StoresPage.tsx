@@ -83,10 +83,16 @@ function StoresTab() {
         </div>
       ),
     },
-    { key: 'code', header: t('columns.code'), cell: (row) => row.code },
+    {
+      key: 'code',
+      header: t('columns.code'),
+      nowrap: true,
+      cell: (row) => row.code,
+    },
     {
       key: 'kind',
       header: t('columns.kind'),
+      nowrap: true,
       cell: (row) => t(`kinds.${row.kind}`),
     },
     {

@@ -1,17 +1,27 @@
 'use client';
 
 import { formatDateOnly, formatDateTime } from '@pharmacy/shared-util';
-import { Alert, Avatar, Card, Icon, Spinner, Tabs } from '@pharmacy/ui';
+import {
+  Alert,
+  Avatar,
+  Card,
+  Icon,
+  Spinner,
+  type TabItem,
+  Tabs,
+} from '@pharmacy/ui';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { TenantStatusPill, useTenant } from '@/entities/tenant';
 import { RecordPayment } from '@/features/record-payment';
+import { isApiRouteAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { BlockTenant } from './BlockTenant';
+import { IssueOwnerCode } from './IssueOwnerCode';
 import {
   AuditTab,
   BillingTab,
@@ -21,6 +31,10 @@ import {
 } from './CompanyTabs';
 
 type Tab = 'stores' | 'billing' | 'services' | 'stats' | 'audit';
+
+// Billing, services, statistics and the tenant audit have no API yet (spec 2026-10-05-tenants-module,
+// T1): they are shown only where their routes answer (the full mocks).
+const MOCK_ONLY_SECTIONS = isApiRouteAvailable('tenants.invoices');
 
 function CompanyView() {
   const t = useTranslations('company');
@@ -67,7 +81,10 @@ function CompanyView() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <RecordPayment tenantId={company.id} variant="tertiary" />
+                  {MOCK_ONLY_SECTIONS && (
+                    <RecordPayment tenantId={company.id} variant="tertiary" />
+                  )}
+                  <IssueOwnerCode tenant={company} />
                   <BlockTenant tenant={company} />
                 </div>
               </Card>
@@ -91,26 +108,30 @@ function CompanyView() {
                     count: company.cloudStores + company.offlineStores,
                     panel: <StoresTab tenantId={company.id} />,
                   },
-                  {
-                    value: 'billing',
-                    label: t('tabs.billing'),
-                    panel: <BillingTab tenantId={company.id} />,
-                  },
-                  {
-                    value: 'services',
-                    label: t('tabs.services'),
-                    panel: <ServicesTab tenantId={company.id} />,
-                  },
-                  {
-                    value: 'stats',
-                    label: t('tabs.stats'),
-                    panel: <StatsTab tenantId={company.id} />,
-                  },
-                  {
-                    value: 'audit',
-                    label: t('tabs.audit'),
-                    panel: <AuditTab tenantId={company.id} />,
-                  },
+                  ...(MOCK_ONLY_SECTIONS
+                    ? ([
+                        {
+                          value: 'billing',
+                          label: t('tabs.billing'),
+                          panel: <BillingTab tenantId={company.id} />,
+                        },
+                        {
+                          value: 'services',
+                          label: t('tabs.services'),
+                          panel: <ServicesTab tenantId={company.id} />,
+                        },
+                        {
+                          value: 'stats',
+                          label: t('tabs.stats'),
+                          panel: <StatsTab tenantId={company.id} />,
+                        },
+                        {
+                          value: 'audit',
+                          label: t('tabs.audit'),
+                          panel: <AuditTab tenantId={company.id} />,
+                        },
+                      ] satisfies TabItem<Tab>[])
+                    : []),
                 ]}
               />
             </>

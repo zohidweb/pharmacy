@@ -216,57 +216,45 @@ describe('CompanyCreatePage', () => {
   const fill = (label: string | RegExp, value: string) =>
     fireEvent.input(screen.getByLabelText(label), { target: { value } });
 
-  it('validates each step before moving on and creates the tenant', async () => {
+  const fillValid = (overrides: Partial<Record<string, string>> = {}) => {
+    const values: Record<string, string> = {
+      'Название сети или аптеки': 'Новая Демо Аптека',
+      Город: 'Куляб',
+      ИНН: '000000099',
+      'ФИО владельца': 'Владелец Новый',
+      'Телефон владельца': '+992 00 000 00 50',
+      'Логин владельца': 'owner9',
+      ...overrides,
+    };
+    for (const [label, value] of Object.entries(values)) fill(label, value);
+  };
+
+  it('validates the form and shows the owner code once after creating', async () => {
     renderWithProviders(<CompanyCreatePage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Создать компанию' }));
     expect(
       (await screen.findAllByText('Заполните поле')).length,
     ).toBeGreaterThan(0);
 
-    fill('Название сети или аптеки', 'Новая Демо Аптека');
-    fill('Город', 'Куляб');
-    fill('ИНН', '000000099');
-    fill('ФИО владельца', 'Владелец Новый');
-    fill('Телефон владельца', '+992 00 000 00 50');
-    fill(/Логин владельца/, 'owner9@example.test');
-    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+    fillValid();
+    fireEvent.click(screen.getByRole('button', { name: 'Создать компанию' }));
 
-    await screen.findByLabelText('Название точки');
-    fill('Название точки', 'Новая Демо Аптека №1');
-    fill('Адрес', 'Куляб, ул. Тестовая, 1');
-    fireEvent.click(screen.getByRole('radio', { name: /Автономная/ }));
     expect(
-      screen.getByRole('combobox', { name: 'Срок лицензионного ключа' }),
+      await screen.findByRole('heading', { name: 'Код активации владельца' }),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
-
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Создать компанию' }),
+    expect(screen.getByLabelText('Код активации').textContent).toBe(
+      'MOCK-ACTI-VATI-ONCO-DE00-0000-00',
     );
-    await waitFor(() =>
-      expect(push).toHaveBeenCalledWith(
-        expect.stringMatching(/^\/companies\/view\?id=t-/),
-      ),
-    );
+    expect(
+      screen.getByRole('link', { name: 'Перейти к компании' }).getAttribute('href'),
+    ).toMatch(/^\/companies\/view\?id=t-/);
   });
 
-  it('returns to the first step when the INN is taken', async () => {
+  it('marks the INN when it is taken', async () => {
     renderWithProviders(<CompanyCreatePage />);
-    fill('Название сети или аптеки', 'Дубль');
-    fill('Город', 'Душанбе');
-    fill('ИНН', '000000001');
-    fill('ФИО владельца', 'Владелец Дубль');
-    fill('Телефон владельца', '+992 00 000 00 51');
-    fill(/Логин владельца/, 'owner10@example.test');
-    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
-    await screen.findByLabelText('Название точки');
-    fill('Название точки', 'Дубль №1');
-    fill('Адрес', 'Душанбе, ул. Тестовая, 2');
-    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Создать компанию' }),
-    );
+    fillValid({ ИНН: '000000001', 'Логин владельца': 'owner10' });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать компанию' }));
 
     expect(
       await screen.findByText('Компания с таким ИНН уже есть'),

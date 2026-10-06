@@ -166,8 +166,15 @@ await this.platform.platformTransaction({ kind: 'operator', operatorId }, (trx) 
   `actor` обязателен (`{ kind: 'operator', operatorId }` или `{ kind: 'system', job }`),
   попадает в `app.actor`; без него — исключение.
 - Платформа видит только платформенные таблицы, витрины и колонки реестра `stores`; тенантные
-  таблицы — `42501`. Доступ оператора к данным тенанта (вход «от имени») не реализуется — решение
-  пересматривается (`nestjs-security-auth.md`).
+  таблицы — `42501`. Доступ оператора к данным тенанта (вход «от имени») в MVP не реализуется
+  (ADR-0008, поправка 2026-10-05; `nestjs-security-auth.md`).
+- Единственный путь из платформы в тенантные таблицы — функции создания сети (ADR-0013, поправка
+  2026-10-05): `select pharmacy.provision_tenant(...)` (новая сеть с владельцем и хешем кода) и
+  `select pharmacy.issue_owner_code(tenant, hash, expires, operator, auditId, correlationId)` (новый
+  код владельцу активной сети + запись в `audit_log` сети) в
+  `platformTransaction`. Владелец функций — `pharmacy_provisioner`, `EXECUTE` — только
+  `pharmacy_platform`; каталог-тест держит закрытый список `PROVISIONING_FUNCTIONS`. Новую запись в
+  тенантные таблицы из платформы — только новой функцией этого класса через поправку ADR.
 - `PlatformDatabaseModule` не `@Global` и импортируется только модулями платформы.
 
 ## RLS, роли и гранты (в миграции)

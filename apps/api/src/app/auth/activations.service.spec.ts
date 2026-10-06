@@ -100,6 +100,12 @@ class FakeSessionStore extends SessionStore {
   async markTerminalRevoked(): Promise<void> {
     throw new Error('not used');
   }
+  async markTenantBlocked(): Promise<void> {
+    throw new Error('not used');
+  }
+  async clearTenantBlocked(): Promise<void> {
+    throw new Error('not used');
+  }
 }
 
 function setup() {

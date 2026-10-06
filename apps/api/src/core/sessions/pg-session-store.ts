@@ -13,6 +13,7 @@ const NONE: SessionLookup = {
   session: null,
   permissionsVersion: null,
   terminalRevoked: false,
+  tenantBlocked: false,
 };
 
 function toVersion(value: unknown): number | null {
@@ -98,6 +99,7 @@ export class PgSessionStore extends SessionStore {
             .onRef('employees.tenantId', '=', 'sessions.tenantId')
             .onRef('employees.id', '=', 'sessions.employeeId'),
         )
+        .innerJoin('tenants', 'tenants.id', 'sessions.tenantId')
         .leftJoin('terminals', (join) =>
           join
             .onRef('terminals.tenantId', '=', 'sessions.tenantId')
@@ -107,6 +109,7 @@ export class PgSessionStore extends SessionStore {
         .select([
           'employees.permissionsVersion as currentVersion',
           sql<boolean>`terminals.revoked_at is not null`.as('terminalRevoked'),
+          'tenants.status as tenantStatus',
         ])
         .where('sessions.tenantId', '=', this.tenantId)
         .where('sessions.jti', '=', sessionId)
@@ -138,6 +141,7 @@ export class PgSessionStore extends SessionStore {
       session,
       permissionsVersion: toVersion(row.currentVersion),
       terminalRevoked: row.terminalRevoked === true,
+      tenantBlocked: row.tenantStatus !== 'active',
     };
   }
 
@@ -213,6 +217,15 @@ export class PgSessionStore extends SessionStore {
 
   // terminals.revoked_at is the source of truth and lookup reads it directly (plan decision P3).
   markTerminalRevoked(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  // tenants.status (synchronized from the cloud) is read by lookup directly.
+  markTenantBlocked(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  clearTenantBlocked(): Promise<void> {
     return Promise.resolve();
   }
 }

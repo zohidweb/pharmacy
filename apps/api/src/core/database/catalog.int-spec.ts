@@ -1,6 +1,7 @@
 import { closeAll, ownerPool } from '../../../test/integration/connections';
 import {
   APPEND_ONLY_TABLES,
+  PROVISIONING_FUNCTIONS,
   RESOLVER_FUNCTIONS,
   STORE_PLATFORM_COLUMNS,
   TABLE_CLASSES,
@@ -282,31 +283,44 @@ describe('database catalog (ADR-0013 p. 8)', () => {
     expect(rows.map((row) => row.rolname)).toEqual([]);
   });
 
-  it('security definer functions are exactly the resolver list', async () => {
+  it('security definer functions are exactly the resolvers and the provisioning functions', async () => {
     const rows = await query<{
       name: string;
       owner: string;
       pinned: boolean;
       publicExecute: boolean;
+      appExecute: boolean;
     }>(
       `select p.proname as name,
               pg_get_userbyid(p.proowner) as owner,
               coalesce((select bool_or(setting like 'search_path=%') from unnest(p.proconfig) as s(setting)), false)
                 as pinned,
-              has_function_privilege('public', p.oid, 'EXECUTE') as "publicExecute"
+              has_function_privilege('public', p.oid, 'EXECUTE') as "publicExecute",
+              has_function_privilege('pharmacy_app', p.oid, 'EXECUTE') as "appExecute"
        from pg_proc p
        where p.prosecdef and p.pronamespace in ('pharmacy'::regnamespace, 'public'::regnamespace)
        order by 1`,
     );
+    // Each class has its own owner: resolvers only read, provisioning functions only write.
+    const expectedOwner = (name: string): string | null =>
+      RESOLVER_FUNCTIONS.includes(name)
+        ? 'pharmacy_resolver'
+        : PROVISIONING_FUNCTIONS.includes(name)
+          ? 'pharmacy_provisioner'
+          : null;
+    const listed = [...RESOLVER_FUNCTIONS, ...PROVISIONING_FUNCTIONS];
     const violations = [
       ...rows
-        .filter((row) => !RESOLVER_FUNCTIONS.includes(row.name))
-        .map((row) => `${row.name}: not a resolver`),
-      ...RESOLVER_FUNCTIONS.filter(
-        (name) => !rows.some((row) => row.name === name),
-      ).map((name) => `${name}: missing`),
+        .filter((row) => expectedOwner(row.name) === null)
+        .map((row) => `${row.name}: not a resolver or a provisioning function`),
+      ...listed
+        .filter((name) => !rows.some((row) => row.name === name))
+        .map((name) => `${name}: missing`),
       ...rows
-        .filter((row) => row.owner !== 'pharmacy_resolver')
+        .filter((row) => {
+          const owner = expectedOwner(row.name);
+          return owner !== null && row.owner !== owner;
+        })
         .map((row) => `${row.name}: owner ${row.owner}`),
       ...rows
         .filter((row) => !row.pinned)
@@ -314,8 +328,26 @@ describe('database catalog (ADR-0013 p. 8)', () => {
       ...rows
         .filter((row) => row.publicExecute)
         .map((row) => `${row.name}: EXECUTE granted to PUBLIC`),
+      // The tenant path never provisions: only pharmacy_platform calls these.
+      ...rows
+        .filter((row) => PROVISIONING_FUNCTIONS.includes(row.name) && row.appExecute)
+        .map((row) => `${row.name}: EXECUTE granted to pharmacy_app`),
     ];
     expect(violations).toEqual([]);
+  });
+
+  it('pharmacy_resolver cannot write any pharmacy table', async () => {
+    const rows = await query<{ violation: string }>(
+      `select 'pharmacy_resolver on ' || c.relname || ': ' || p.privilege as violation
+       from pg_class c
+       cross join unnest(array['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE']) as p(privilege)
+       where c.relnamespace = 'pharmacy'::regnamespace and c.relkind in ('r', 'p')
+         and (has_table_privilege('pharmacy_resolver', c.oid, p.privilege)
+              or (p.privilege in ('INSERT', 'UPDATE')
+                  and has_any_column_privilege('pharmacy_resolver', c.oid, p.privilege)))
+       order by 1`,
+    );
+    expect(rows.map((row) => row.violation)).toEqual([]);
   });
 
   it('pharmacy_app is not a member of pharmacy_platform or pharmacy_resolver', async () => {

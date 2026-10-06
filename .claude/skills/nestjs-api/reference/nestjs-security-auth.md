@@ -300,8 +300,13 @@ create(@Body() dto: CreateReceiptDto) { /* ... */ }
    (`401 invalid_code`, `422 password_policy`, `429 login_locked`). Пароль в консоли не вводится.
 5. **Журнал.** `PlatformAuditService.append(trx, event)` — actor (`operator`/`system`, `operator_id`, `job`)
    берётся из `app.actor` транзакции, не от вызывающего; `platform_audit_log` только дополняется.
-6. **Вне части 3.** Создание и блокировка сетей, выдача кода владельцу через API (это запись в
-   тенантные таблицы — тот же вопрос доверия, что «от имени»), профиль и команда операторов.
+6. **Сети (`app/platform/tenants`, модуль «сети»).** `GET/POST /operator/tenants`, `GET …/{id}`,
+   `…/{id}/stores`, `POST …/{id}/owner-activation-codes`, `…/block`, `…/unblock`; мутации —
+   `tenants:manage` + step-up. Создание и новый код — через `provision_tenant` / `issue_owner_code`
+   (код 128 бит, показывается один раз, в БД — SHA-256). Блокировка: `tenants.status` + флаг
+   `tenant-blocked:<tid>` (`SessionStore.markTenantBlocked`), который `lookup` читает вместе с сессией
+   — сессии сети гаснут на следующем запросе; подстраховка — статус сети в `PrincipalLoader.reload`.
+   Профиль и команда операторов — позже.
 
 ## Запрещено
 

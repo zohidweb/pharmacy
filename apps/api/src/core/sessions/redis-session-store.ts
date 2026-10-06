@@ -16,6 +16,7 @@ const terminalSessionKey = (tenantId: string, terminalId: string): string =>
   `term-sess:${tenantId}:${terminalId}`;
 const terminalRevokedKey = (tenantId: string, terminalId: string): string =>
   `term-rev:${tenantId}:${terminalId}`;
+const tenantBlockedKey = (tenantId: string): string => `tenant-blocked:${tenantId}`;
 
 const PATCHABLE_FIELDS = [
   'permissions',
@@ -106,10 +107,12 @@ export class RedisSessionStore extends SessionStore {
   }
 
   async lookup(sessionId: string, tenantId: string, employeeId: string): Promise<SessionLookup> {
-    const [rawSession, rawVersion] = await this.redis.mGet([
+    const [rawSession, rawVersion, rawBlocked] = await this.redis.mGet([
       sessionKey(sessionId),
       versionKey(tenantId, employeeId),
+      tenantBlockedKey(tenantId),
     ]);
+    const tenantBlocked = rawBlocked !== null;
     const session = parseRecord(rawSession as string | null);
     if (
       session === null ||
@@ -117,7 +120,7 @@ export class RedisSessionStore extends SessionStore {
       session.tenantId !== tenantId ||
       session.employeeId !== employeeId
     ) {
-      return { session: null, permissionsVersion: null, terminalRevoked: false };
+      return { session: null, permissionsVersion: null, terminalRevoked: false, tenantBlocked };
     }
     // A second round trip only for PIN sessions: the terminal is known after the record is read.
     const terminalRevoked =
@@ -127,6 +130,7 @@ export class RedisSessionStore extends SessionStore {
       session,
       permissionsVersion: parseVersion(rawVersion as string | null),
       terminalRevoked,
+      tenantBlocked,
     };
   }
 
@@ -198,6 +202,15 @@ export class RedisSessionStore extends SessionStore {
     await this.redis.set(terminalRevokedKey(tenantId, terminalId), '1', {
       expiration: { type: 'EX', value: ttlSeconds },
     });
+  }
+
+  // No lifetime: the flag lives as long as the block; unblock deletes it.
+  async markTenantBlocked(tenantId: string): Promise<void> {
+    await this.redis.set(tenantBlockedKey(tenantId), '1');
+  }
+
+  async clearTenantBlocked(tenantId: string): Promise<void> {
+    await this.redis.del(tenantBlockedKey(tenantId));
   }
 }
 

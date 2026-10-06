@@ -10,6 +10,8 @@ import { TenantDatabase } from '../../core/database';
 // 2026-10-02, section 7, step 4; ADR-0018).
 export interface PrincipalSnapshot {
   status: string;
+  /** Status of the employee's network: not `active` ends the session like an inactive employee. */
+  tenantStatus: string;
   permissions: Permission[];
   storeScope: 'all' | string[];
   permissionsVersion: number;
@@ -34,8 +36,10 @@ export class PrincipalLoader {
             .onRef('roles.tenantId', '=', 'employees.tenantId')
             .onRef('roles.id', '=', 'employees.roleId'),
         )
+        .innerJoin('tenants', 'tenants.id', 'employees.tenantId')
         .select([
           'employees.status',
+          'tenants.status as tenantStatus',
           'employees.storeScope',
           'employees.permissionsVersion',
           'employees.roleId',
@@ -82,6 +86,7 @@ export class PrincipalLoader {
 
       return {
         status: employee.status,
+        tenantStatus: employee.tenantStatus,
         permissions: granted,
         storeScope,
         permissionsVersion,

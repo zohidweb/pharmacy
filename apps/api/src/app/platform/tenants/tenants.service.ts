@@ -15,7 +15,7 @@ import {
 } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
-import { newId } from '../../../core/database';
+import { newId, uniqueConstraint } from '../../../core/database';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { SessionStore } from '../../../core/sessions';
 import {
@@ -48,12 +48,6 @@ const CONFLICTS: Readonly<Record<string, { code: string; field: string }>> = {
   employees_email_global_uq: { code: 'email_taken', field: 'owner.email' },
 };
 const TENANT_CODE_CONSTRAINT = 'tenants_code_key';
-
-function uniqueConstraint(error: unknown): string | null {
-  if (typeof error !== 'object' || error === null) return null;
-  const { code, constraint } = error as { code?: unknown; constraint?: unknown };
-  return code === '23505' && typeof constraint === 'string' ? constraint : null;
-}
 
 const notFound = () => new ProblemException(404, 'not_found');
 

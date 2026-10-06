@@ -2,7 +2,8 @@
  * Thin API client (ADR-0015, ось 2б): fetch to the same origin (/api/v1, cookie session),
  * X-Correlation-Id on every request, timeout, RFC 7807 problem+json → typed ApiError.
  * Response bodies and personal data are never logged. During UI development without apps/api
- * the transport is swapped for in-memory mocks (./mocks, NEXT_PUBLIC_API_MOCKS=true).
+ * the transport is swapped for in-memory mocks (./mocks, NEXT_PUBLIC_API_MOCKS=true), or only the
+ * routes apps/api does not serve yet go to them (NEXT_PUBLIC_API_MOCKS=partial).
  */
 import {
   apiRoutes,
@@ -119,6 +120,41 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
   }
   return (await response.json()) as ApiResponse<typeof route>;
 };
+
+/**
+ * Routes apps/api already serves (spec 2026-10-06-owner-stores, section 6): in the `partial` mocks
+ * mode they go to the API, every other route to the mocks. GET /terminals (`terminals.list`) is
+ * not served yet; binding a terminal has no route in this client.
+ */
+export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
+  'sessions.create',
+  'sessions.current',
+  'sessions.selectStore',
+  'sessions.delete',
+  'activations.create',
+  'me.get',
+  'me.update',
+  'me.changePassword',
+  'me.changePin',
+  'me.terminals',
+  'terminals.current',
+  'terminals.unbind',
+  'terminalSessions.create',
+  'stores.overview',
+  'stores.create',
+  'stores.update',
+  'legalEntities.list',
+  'legalEntities.create',
+  'legalEntities.update',
+]);
+
+/** The API for the routes it serves, the given mocks for the rest. */
+export function partialTransport(mocks: ApiTransport): ApiTransport {
+  return (route, options, correlationId) =>
+    REAL_API_ROUTES.has(route)
+      ? fetchTransport(route, options, correlationId)
+      : mocks(route, options, correlationId);
+}
 
 let transport: ApiTransport = fetchTransport;
 

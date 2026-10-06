@@ -15,7 +15,7 @@ export type NavSectionKey =
   | 'settings';
 
 /** Screens that have a menu item (sign-in and profile live elsewhere). */
-export type NavRoute = Exclude<StaticRouteName, 'login' | 'profile'>;
+export type NavRoute = Exclude<StaticRouteName, 'login' | 'activate' | 'profile'>;
 
 export interface NavItem {
   route: NavRoute;

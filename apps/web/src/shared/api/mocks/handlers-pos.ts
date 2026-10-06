@@ -155,7 +155,7 @@ function move(
   });
 }
 
-/** Receipt settings of the store: the network settings and the store's receipt texts. */
+/** Receipt settings of the store: the network settings and the INN of the store's legal entity. */
 function networkSettingsOf(storeName: string, storeAddress: string) {
   const base = storeSettings(storeName, storeAddress);
   const network = mockDb().owner.settings;
@@ -167,8 +167,9 @@ function networkSettingsOf(storeName: string, storeAddress: string) {
     networkName: network.networkName,
     returnWindowDays: network.returnWindowDays,
     ...(store && {
-      taxId: store.receipt.taxId || base.taxId,
-      receiptFooter: store.receipt.footer || base.receiptFooter,
+      taxId:
+        mockDb().owner.legalEntities.find((e) => e.id === store.legalEntityId)
+          ?.taxId ?? base.taxId,
     }),
   };
 }

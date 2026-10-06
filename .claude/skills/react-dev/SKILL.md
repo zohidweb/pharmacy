@@ -51,6 +51,13 @@ apps/<web|admin>/
   финансовых операций, таймаут `AbortSignal.timeout`, разбор problem+json в
   `ApiError { status, code, correlationId, errors[] }`, 401 — переход на вход/PIN. Карта маршрутов
   `ApiRoutes` сверяется тестом с маршрутами Nest. `axios` во фронтендах не используется.
+- **Моки API** — `NEXT_PUBLIC_API_MOCKS`: `true` — всё в in-memory моках (`shared/api/mocks`, тесты,
+  e2e, демо); `partial` — маршруты из `REAL_API_ROUTES` (`shared/api/client.ts`) идут в apps/api,
+  остальные в моки (`partialTransport`; цели `web:dev-api`, `admin:dev-api`); не задана — всё в API.
+  Новый маршрут, реализованный в API, добавляется в `REAL_API_ROUTES`. Действие без маршрута в
+  текущем режиме скрывается через `isApiRouteAvailable(route)`. В `partial` моки web без своей сессии
+  отвечают от демо-сессии владельца (`mocks/session.ts`), иначе экраны на моках вернули бы 401 и
+  цикл входа.
 - **Типы** — `import type { … } from '@pharmacy/shared-dto'`; `class-validator`/`class-transformer`
   во фронтендах запрещены (ESLint).
 - **Серверные данные** — TanStack Query 5 (`entities/*/api`, `features/*/api`); `onlineManager`

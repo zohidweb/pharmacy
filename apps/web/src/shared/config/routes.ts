@@ -5,6 +5,7 @@
 export const routes = {
   dashboard: () => '/',
   login: () => '/login',
+  activate: () => '/activate',
   profile: () => '/profile',
 
   pos: () => '/pos',

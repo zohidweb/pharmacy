@@ -1,77 +1,22 @@
 'use client';
 
 import type { EmployeeSession } from '@pharmacy/shared-dto';
-import { Alert, Button, Icon, SegmentedControl, Spinner } from '@pharmacy/ui';
+import { Alert, Button, Icon, Spinner } from '@pharmacy/ui';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { useSession } from '@/entities/session';
+import { canWrite, useSession } from '@/entities/session';
 import { LoginForm } from '@/features/auth-by-password';
 import { PinLoginForm, useBoundTerminal } from '@/features/auth-by-pin';
 import { StorePicker } from '@/features/select-store';
-import { locales, setLocale, useLocale } from '@/shared/i18n';
+import { SignOutButton } from '@/features/sign-out';
+import { routes } from '@/shared/config';
 import { landingRoute } from '@/widgets/app-shell';
+import { FirstStoreStep } from './FirstStoreStep';
+import { LoginCard } from './LoginCard';
 
 type Method = 'pin' | 'password';
-
-function LoginCard({
-  title,
-  subtitle,
-  wide = false,
-  children,
-}: {
-  title: string;
-  subtitle: ReactNode;
-  /** The PIN step: form and keypad side by side to fit a 1280×800 screen. */
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  const t = useTranslations();
-  const locale = useLocale();
-  return (
-    <main className="grid min-h-dvh place-items-center bg-bg p-6">
-      <section
-        aria-labelledby="login-title"
-        className={
-          wide
-            ? 'flex w-full max-w-(--ph-size-login) flex-col gap-6 rounded-lg bg-surface p-8 shadow-lg'
-            : 'flex w-full max-w-(--ph-size-dialog-md) flex-col gap-6 rounded-lg bg-surface p-8 shadow-lg'
-        }
-      >
-        <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-2">
-            <span className="grid size-avatar-sm place-items-center rounded-md bg-primary text-on-primary">
-              <Icon name="pill" size="md" />
-            </span>
-            <span className="text-lg font-bold tracking-tight">
-              {t('shell.productName')}
-            </span>
-          </span>
-          <SegmentedControl
-            label={t('shell.localeLabel')}
-            value={locale}
-            onValueChange={setLocale}
-            options={locales.map((value) => ({
-              value,
-              label: value === 'tg' ? 'TJ' : 'RU',
-              ariaLabel: t(`locales.${value}`),
-            }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <h1
-            id="login-title"
-            className="text-2xl font-bold tracking-tight text-fg"
-          >
-            {title}
-          </h1>
-          <p className="text-sm text-fg-subtle">{subtitle}</p>
-        </div>
-        {children}
-      </section>
-    </main>
-  );
-}
 
 /**
  * Sign-in of the client product (UI mockup «Вход»): login + password, then the working store; on a
@@ -99,6 +44,27 @@ export function LoginPage() {
       <div className="grid min-h-dvh place-items-center text-primary">
         <Spinner size="xl" />
       </div>
+    );
+  }
+
+  // A network without stores: the owner creates the first one (spec 2026-10-06-owner-stores, S4).
+  if (session.data && session.data.stores.length === 0) {
+    const owner = canWrite(session.data, 'stores:create');
+    return (
+      <LoginCard
+        wide={owner}
+        title={owner ? t('firstStore.title') : t('store.noStoresTitle')}
+        subtitle={`${session.data.employee.fullName} · ${session.data.role.name}`}
+      >
+        {owner ? (
+          <FirstStoreStep onDone={goOn} />
+        ) : (
+          <>
+            <StorePicker session={session.data} onSelected={goOn} />
+            <SignOutButton variant="secondary" block />
+          </>
+        )}
+      </LoginCard>
     );
   }
 
@@ -153,6 +119,12 @@ export function LoginPage() {
           {t('usePin')}
         </Button>
       )}
+      <Link
+        href={routes.activate()}
+        className="self-start text-sm text-primary hover:text-primary-hover"
+      >
+        {t('activateLink')}
+      </Link>
       <p className="flex gap-2 text-xs text-fg-subtle">
         <Icon name="info" size="sm" />
         {t('resetHint')}

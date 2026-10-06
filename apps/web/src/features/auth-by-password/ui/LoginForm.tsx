@@ -17,13 +17,15 @@ import {
 
 export interface LoginFormProps {
   onSuccess: (session: EmployeeSession) => void;
+  /** Prefilled login (right after the first sign-in by an activation code). */
+  defaultLogin?: string;
 }
 
 /**
  * Employee sign-in by login and password (ADR-0008). Field errors come from zod (i18n keys); a
  * wrong pair is one message that does not tell which field was wrong (401 invalid_credentials).
  */
-export function LoginForm({ onSuccess }: LoginFormProps) {
+export function LoginForm({ onSuccess, defaultLogin = '' }: LoginFormProps) {
   const t = useTranslations('auth');
   const tErrors = useTranslations('errors');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,7 +36,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     formState: { errors },
   } = useForm<LoginFormValues, unknown, LoginPayload>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { login: '', password: '' },
+    defaultValues: { login: defaultLogin, password: '' },
   });
 
   const fieldError = (message: string | undefined) =>
@@ -68,7 +70,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         autoComplete="username"
         autoCapitalize="none"
         spellCheck={false}
-        autoFocus
+        autoFocus={defaultLogin === ''}
         required
         error={fieldError(errors.login?.message)}
         {...register('login')}

@@ -16,9 +16,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { IntlProvider } from 'use-intl';
 import {
   apiMocksEnabled,
+  apiMocksMode,
   apiRequest,
   isOnline,
   loadMockTransport,
+  partialTransport,
   setApiTransport,
   startConnectivity,
   subscribeConnectivity,
@@ -71,7 +73,11 @@ function useApiReady() {
   useEffect(() => {
     if (!apiMocksEnabled) return;
     loadMockTransport().then((mockTransport) => {
-      setApiTransport(mockTransport);
+      setApiTransport(
+        apiMocksMode === 'partial'
+          ? partialTransport(mockTransport)
+          : mockTransport,
+      );
       setReady(true);
     });
   }, []);

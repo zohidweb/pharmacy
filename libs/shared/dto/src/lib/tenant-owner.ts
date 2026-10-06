@@ -1,8 +1,8 @@
 /*
  * REST contract of the owner cabinet (ТЗ «Кабинет владельца», UI mockups «Точки, услуги, оплата»,
  * «Отчёты», «Настройки», «Офлайн-точка»). Amounts are integer dirams, TJS only (ADR-0016) — no
- * exchange rates. A new store waits for activation by the platform operator; closing a store moves
- * its stock by a transfer and completes when the receiver accepts it. Offline stores (ADR-0014):
+ * exchange rates. The owner creates stores and their legal entities (spec 2026-10-06-owner-stores);
+ * closing a store moves its stock by a transfer and completes when the receiver accepts it. Offline stores (ADR-0014):
  * the cloud shows their synchronisation; an offline store decides its product duplicates itself.
  */
 import type { Page, StoreMode } from './platform-tenants.js';
@@ -11,51 +11,103 @@ import type { Page, StoreMode } from './platform-tenants.js';
 
 export type OwnerStoreStatus = 'pending' | 'active' | 'closing' | 'closed';
 
-export interface StoreReceiptSettings {
-  /** ИНН on the receipt. */
+/** A pharmacy sells; a warehouse only stores (terminals and shifts are refused by the API). */
+export type StoreKind = 'pharmacy' | 'warehouse';
+
+/**
+ * A legal entity of the network (data model 01, `legal_entities`): the requisites of the receipt and
+ * of the 1C export of its stores. The owner creates it in the store form (spec
+ * 2026-10-06-owner-stores, S2).
+ */
+export interface LegalEntity {
+  id: string;
+  name: string;
+  /** 9 digits; unique among the active legal entities of the network. */
   taxId: string;
-  header: string;
-  footer: string;
-  /** Print the receipt right after the payment. */
-  autoPrint: boolean;
+  legalAddress: string;
+  phone: string | null;
+  email: string | null;
+  bankDetails: string | null;
+  /** Stores of the network that belong to this legal entity (any status). */
+  stores: number;
+}
+
+/** POST /api/v1/legal-entities (`stores:create`). 409 `tax_id_taken`, 400 `validation_failed`. */
+export type LegalEntityInput = Pick<
+  LegalEntity,
+  'name' | 'taxId' | 'legalAddress' | 'phone' | 'email' | 'bankDetails'
+>;
+
+/** PATCH /api/v1/legal-entities/{id} (`stores:update`). 404, 409 `tax_id_taken`. */
+export type UpdateLegalEntityRequest = Partial<LegalEntityInput>;
+
+/** GET /api/v1/legal-entities (`stores:view`). */
+export interface LegalEntitiesResponse {
+  /** Active legal entities of the network, by name. */
+  items: LegalEntity[];
+  /** The network's own name and INN, to prefill the first legal entity. */
+  defaults: { name: string; taxId: string | null };
 }
 
 export interface OwnerStore {
   id: string;
   name: string;
+  /** `^[A-Z0-9]{1,8}$`, unique in the network; part of document numbers, fixed after creation. */
+  code: string;
+  /** Actual address for the receipt. */
   address: string;
-  phone: string;
-  managerId: string | null;
-  managerName: string | null;
+  /** Fixed after creation. */
+  kind: StoreKind;
+  legalEntityId: string;
+  legalEntityName: string;
+  /** Print the receipt right after the payment. */
+  printReceiptDefault: boolean;
   mode: StoreMode;
+  /** `pending` — an offline kit is issued (mode offline_pending); `closing` is not used yet. */
   status: OwnerStoreStatus;
-  /** Cloud store: paid until; offline store: the license key is valid until. */
+  /** Cloud store: paid until; null until billing for the owner exists. */
   paidUntil: string | null;
+  /** Offline store: the license key is valid until; null until offline stores exist. */
   licenseValidUntil: string | null;
+  /** 0 until the POS module exists. */
   receiptsThisMonth: number;
-  minStockPacks: number;
-  receipt: StoreReceiptSettings;
-  /** A closed or closing store: where its stock went. */
+  /** YYYY-MM-DD of a closed store. */
   closedOn: string | null;
+  /** A closed store: where its stock went (null until store closing exists). */
   stockMovedTo: string | null;
 }
 
-/** POST /api/v1/stores, PUT /api/v1/stores/{id} */
-export type StoreInput = Pick<
-  OwnerStore,
-  | 'name'
-  | 'address'
-  | 'phone'
-  | 'managerId'
-  | 'mode'
-  | 'minStockPacks'
-  | 'receipt'
->;
+/**
+ * POST /api/v1/stores (`stores:create`) — a cloud store; exactly one of `legalEntityId` (an active
+ * legal entity of the network) and `newLegalEntity` (created in the same transaction). Optional
+ * header `Idempotency-Key` (UUID): a repeated key returns the store created with it. 201
+ * `OwnerStore`; 404 (no such active legal entity), 409 `store_code_taken` / `tax_id_taken`, 400
+ * `validation_failed`.
+ */
+export interface CreateStoreRequest {
+  legalEntityId?: string;
+  newLegalEntity?: LegalEntityInput;
+  name: string;
+  code: string;
+  address: string;
+  kind: StoreKind;
+  printReceiptDefault: boolean;
+}
 
+/**
+ * PUT /api/v1/stores/{id} (`stores:update`) — a store of the employee's scope. 404 (outside the
+ * scope or no such active legal entity), 409 `store_closed`.
+ */
+export interface UpdateOwnerStoreRequest {
+  name: string;
+  address: string;
+  legalEntityId: string;
+  printReceiptDefault: boolean;
+}
+
+/** GET /api/v1/stores (`stores:view`) — the stores of the employee's scope, active first. */
 export interface StoresOverview {
   stores: OwnerStore[];
-  /** The last session of the platform operator «от имени» the owner (ADR-0008). */
-  lastImpersonation: { from: string; to: string } | null;
 }
 
 export interface StoreClosingLine {

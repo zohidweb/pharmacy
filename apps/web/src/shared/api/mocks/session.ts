@@ -79,8 +79,25 @@ export function toSession(stored: StoredSession, correlationId: string) {
   return { session, employee };
 }
 
+// In the `partial` mode the real session lives in apps/api, which the mocks cannot see: the mocked
+// screens answer for the demo owner at the first demo store instead of 401, which would send the
+// app back to sign-in in a loop (plan 2026-10-06-owner-stores, task 4).
+function demoSession(): StoredSession | null {
+  if (process.env.NEXT_PUBLIC_API_MOCKS !== 'partial') return null;
+  const owner = mockDb().employees.find((e) => e.login === 'firuz');
+  if (!owner) return null;
+  return {
+    employeeId: owner.id,
+    currentStoreId: stores[0]?.id ?? null,
+    auth: 'password',
+    terminalId: null,
+    authenticatedAt: new Date().toISOString(),
+    impersonation: null,
+  };
+}
+
 export function current(correlationId: string) {
-  const stored = readSession();
+  const stored = readSession() ?? demoSession();
   if (!stored) throw new ApiError(401, 'unauthenticated', correlationId);
   return { stored, ...toSession(stored, correlationId) };
 }

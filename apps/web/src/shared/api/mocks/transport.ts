@@ -5,7 +5,7 @@
  * failures (ADR-0008), view-only impersonation. The mock session lives in sessionStorage to survive
  * a reload in development. Enabled only by NEXT_PUBLIC_API_MOCKS=true.
  */
-import { checkPin, isTrivialPin } from '@pharmacy/shared-domain';
+import { checkPin, isTrivialPin, passwordProblems } from '@pharmacy/shared-domain';
 import type {
   DashboardPeriod,
   EmployeeMe,
@@ -34,6 +34,8 @@ import type { MockHandlers, MockRequest } from './types';
 /** Simulated network latency in development; none in tests (fast, deterministic). */
 const LATENCY_MS = process.env.NODE_ENV === 'test' ? 0 : 300;
 const PIN_MAX_FAILURES = 3;
+/** The one-time activation code the mocks accept for any demo login. */
+export const MOCK_ACTIVATION_CODE = 'DEMOACTIVATIONCODE00000000';
 
 const PERIOD_DAYS: Record<DashboardPeriod, number> = {
   today: 1,
@@ -145,6 +147,19 @@ const handlers: MockHandlers = {
   },
   'sessions.delete': () => {
     writeSession(null);
+  },
+  // First sign-in by a one-time code (synthetic code of the demo data; ADR-0008).
+  'activations.create': ({ body, correlationId }) => {
+    const code = body.code.replace(/[\s-]/g, '').toUpperCase();
+    const known = mockDb().employees.some(
+      (e) => e.login === body.login.trim().toLowerCase(),
+    );
+    if (!known || code !== MOCK_ACTIVATION_CODE) {
+      throw new ApiError(401, 'invalid_code', correlationId);
+    }
+    if (passwordProblems(body.newPassword).length > 0) {
+      throw new ApiError(422, 'password_policy', correlationId);
+    }
   },
 
   'terminals.current': ({ correlationId }) => {
@@ -334,6 +349,7 @@ export const mockTransport: ApiTransport = async (
     query: options.query as ApiQuery<typeof route>,
     body: options.body as ApiBody<typeof route>,
     correlationId,
+    idempotencyKey: options.idempotencyKey,
   });
   return result === undefined
     ? result

@@ -26,6 +26,10 @@ const knownCodes = [
   'document_posted',
   'stock_insufficient',
   'transfer_not_in_transit',
+  'store_code_taken',
+  'tax_id_taken',
+  'invalid_code',
+  'password_policy',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

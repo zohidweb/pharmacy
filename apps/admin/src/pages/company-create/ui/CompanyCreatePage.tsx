@@ -1,6 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { CreateTenantResponse } from '@pharmacy/shared-dto';
 import {
   Alert,
   Button,
@@ -38,12 +39,9 @@ export function CompanyCreatePage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const schema = useMemo(() => createTenantSchema(), []);
-  // One key per form: a retried submit cannot create the network twice.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
-  const [created, setCreated] = useState<{
-    id: string;
-    activationCode: string;
-  } | null>(null);
+  // A retried submit cannot create the network twice: the INN is unique (409 inn_taken). If the
+  // response was lost, the operator issues a new owner code in the company card.
+  const [created, setCreated] = useState<CreateTenantResponse | null>(null);
 
   const form = useForm<CreateTenantValues>({
     resolver: zodResolver(schema),
@@ -63,7 +61,7 @@ export function CompanyCreatePage() {
 
   const create = useMutation({
     mutationFn: (request: ReturnType<typeof toCreateTenantRequest>) =>
-      apiRequest('tenants.create', { body: request, idempotencyKey }),
+      apiRequest('tenants.create', { body: request }),
     onSuccess: (response) => {
       void queryClient.invalidateQueries({ queryKey: tenantKeys.all });
       toast.show(t('created'));
@@ -101,6 +99,7 @@ export function CompanyCreatePage() {
         <div className="p-6">
           <ActivationCodeCard
             code={created.activationCode}
+            expiresAt={created.activationCodeExpiresAt}
             title={t('code.title')}
             action={
               <Link

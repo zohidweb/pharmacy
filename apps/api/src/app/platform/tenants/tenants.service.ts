@@ -135,7 +135,11 @@ export class TenantsService {
             entityId: tenantId,
           });
         });
-        return { id: tenantId, activationCode: display };
+        return {
+          id: tenantId,
+          activationCode: display,
+          activationCodeExpiresAt: codeExpiresAt.toISOString(),
+        };
       } catch (error) {
         const constraint = uniqueConstraint(error);
         if (constraint === TENANT_CODE_CONSTRAINT && attempt < CODE_ATTEMPTS) continue;
@@ -175,7 +179,10 @@ export class TenantsService {
         entityId: tenantId,
       });
     });
-    return { activationCode: display };
+    return {
+      activationCode: display,
+      activationCodeExpiresAt: expiresAt.toISOString(),
+    };
   }
 
   /**

@@ -67,6 +67,7 @@ export function IssueOwnerCode({ tenant }: { tenant: TenantDetails }) {
         {issue.data && (
           <ActivationCodeCard
             code={issue.data.activationCode}
+            expiresAt={issue.data.activationCodeExpiresAt}
             title={t('codeTitle')}
           />
         )}

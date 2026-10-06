@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateTime } from '@pharmacy/shared-util';
 import { Alert, Button, Card, CardHeader } from '@pharmacy/ui';
 import { type ReactNode, useState } from 'react';
 import { useTranslations } from 'use-intl';
@@ -7,6 +8,8 @@ import { useTranslations } from 'use-intl';
 export interface ActivationCodeCardProps {
   /** The one-time activation code exactly as the API returned it. */
   code: string;
+  /** ISO 8601 expiry as the API returned it. */
+  expiresAt: string;
   title: string;
   /** What the operator does next (a link to the company, a close button). */
   action?: ReactNode;
@@ -24,11 +27,12 @@ function groups(code: string): string {
  */
 export function ActivationCodeCard({
   code,
+  expiresAt,
   title,
   action,
 }: ActivationCodeCardProps) {
   const t = useTranslations('activationCode');
-  const [copied, setCopied] = useState(false);
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const display = groups(code);
 
   return (
@@ -44,18 +48,32 @@ export function ActivationCodeCard({
       >
         {display}
       </p>
-      <Alert tone="warning">{t('once')}</Alert>
+      <Alert tone="warning">
+        {t('once', { expiresAt: formatDateTime(expiresAt) })}
+      </Alert>
+      {copy === 'failed' && (
+        <Alert tone="danger" live="assertive">
+          {t('copyFailed')}
+        </Alert>
+      )}
       <div className="flex items-center justify-between gap-3">
         <Button
           variant="secondary"
           iconStart="clipboard-list"
           onClick={() => {
-            void navigator.clipboard
-              ?.writeText(display)
-              .then(() => setCopied(true));
+            // No clipboard outside a secure context, or the permission is denied.
+            const write = navigator.clipboard?.writeText(display);
+            if (!write) {
+              setCopy('failed');
+              return;
+            }
+            write.then(
+              () => setCopy('copied'),
+              () => setCopy('failed'),
+            );
           }}
         >
-          {copied ? t('copied') : t('copy')}
+          {copy === 'copied' ? t('copied') : t('copy')}
         </Button>
         {action}
       </div>

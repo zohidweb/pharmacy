@@ -201,6 +201,19 @@ grant select, insert, update, delete on pharmacy.legal_entities to pharmacy_app;
   каталога (`catalog.int-spec.ts`) сверяет манифест, RLS, точные наборы прав по ролям и
   отсутствие `default` у `id`. Подробно — скил `postgres-best-practices`.
 
+## Идемпотентное создание и конфликты уникальности (модуль `stores`)
+
+Образец — `apps/api/src/app/stores` (спецификация 2026-10-06-owner-stores):
+- ключ `Idempotency-Key` (UUID, необязательный) хранится в самой строке (`stores.idempotency_key`,
+  уникальный индекс `(tenant_id, idempotency_key) where … is not null`): до вставки — поиск по ключу и
+  возврат найденного без записи; гонка двух запросов → нарушение индекса → проигравший перечитывает
+  строку по ключу;
+- нарушение уникальности разбирается по имени ограничения: `uniqueConstraint(error)` из
+  `core/database` (SQLSTATE `23505`) → 409 с кодом и полем (`store_code_taken`, `tax_id_taken`).
+  Нарушение внутри транзакции её прерывает, поэтому разбор — снаружи `tenantTransaction`;
+- справочная запись, создаваемая вместе с основной (новое юрлицо в форме точки), пишется в той же
+  транзакции тем же сервисом (`LegalEntitiesService.createIn(trx, …)`), аудит — тоже в ней.
+
 ## Коды ошибок PostgreSQL
 
 Файла ещё нет — создаётся с первым прикладным модулем вместе с глобальным фильтром ошибок.

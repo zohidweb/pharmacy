@@ -19,8 +19,6 @@ import { AuditService } from '../audit/audit.service';
 import { asConflict, LegalEntitiesService, notFound } from './legal-entities.service';
 import { StoresRepository, type StoreRow } from './stores.repository';
 
-const IDEMPOTENCY_CONSTRAINT = 'stores_idempotency_key_uq';
-
 export function toOwnerStore(row: StoreRow): OwnerStore {
   return {
     id: row.id,
@@ -110,8 +108,10 @@ export class StoresService {
         return this.read(trx, tenantId, id);
       });
     } catch (error) {
-      // Two requests with one key raced: the loser returns the winner's store.
-      if (idempotencyKey !== null && uniqueConstraint(error) === IDEMPOTENCY_CONSTRAINT) {
+      // Two requests with one key raced past the lookup: the loser fails on whichever unique index
+      // PostgreSQL checks first (the INN of a new legal entity, the store code or the key itself),
+      // so any unique violation re-reads the store by the key and returns the winner's store.
+      if (idempotencyKey !== null && uniqueConstraint(error) !== null) {
         const winner = await this.db.tenantTransaction((trx) =>
           this.repository.findStoreByKey(trx, tenantId, idempotencyKey),
         );

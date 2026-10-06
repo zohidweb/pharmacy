@@ -11,6 +11,7 @@ import {
   type RoleTemplateKey,
 } from '@pharmacy/shared-domain';
 import type {
+  LegalEntity,
   NetworkSettings,
   OfflineQueueItem,
   OwnerStore,
@@ -32,17 +33,23 @@ export interface MockRole {
 /** Store data the owner edits on top of the session store (name, address, mode). */
 export type StoreDetails = Omit<
   OwnerStore,
-  'id' | 'name' | 'address' | 'mode' | 'managerName' | 'receiptsThisMonth'
+  'id' | 'name' | 'address' | 'mode' | 'legalEntityName' | 'receiptsThisMonth'
 > & {
   /** Transfer of the stock of a closing store; its acceptance closes the store. */
   closingTransferId?: string;
 };
+
+/** A legal entity of the mock network; `stores` is counted on read. */
+export type MockLegalEntity = Omit<LegalEntity, 'stores'>;
 
 export interface OwnerMockDb {
   roles: MockRole[];
   storeDetails: Record<string, StoreDetails>;
   /** Stores that are not in the session list: pending activation or closed. */
   extraStores: OwnerStore[];
+  legalEntities: MockLegalEntity[];
+  /** Idempotency-Key of a created store → its id (spec 2026-10-06-owner-stores, S5). */
+  storeKeys: Record<string, string>;
   services: TenantService[];
   invoices: TenantInvoice[];
   audit: TenantAuditEntry[];
@@ -53,7 +60,13 @@ export interface OwnerMockDb {
   offlineQueue: OfflineQueueItem[];
   lastSyncAt: string;
   deployment: 'cloud' | 'offline-store';
-  counters: { store: number; role: number; employee: number; audit: number };
+  counters: {
+    store: number;
+    role: number;
+    employee: number;
+    audit: number;
+    legalEntity: number;
+  };
 }
 
 const ago = (minutes: number) =>
@@ -79,26 +92,19 @@ function templateRole(key: RoleTemplateKey): MockRole {
   };
 }
 
-const receipt = (taxId = '020012345') => ({
-  taxId,
-  header: 'Аптечная сеть «Шифо»',
-  footer: 'Спасибо за покупку! Обмен и возврат — 14 дней при наличии чека.',
-  autoPrint: true,
-});
-
 const details = (
-  managerId: string | null,
-  phone: string,
+  code: string,
+  legalEntityId: string,
   paidUntil: string | null,
   licenseValidUntil: string | null = null,
 ): StoreDetails => ({
-  phone,
-  managerId,
+  code,
+  kind: 'pharmacy',
+  legalEntityId,
+  printReceiptDefault: true,
   status: 'active',
   paidUntil,
   licenseValidUntil,
-  minStockPacks: 10,
-  receipt: receipt(),
   closedOn: null,
   stockMovedTo: null,
 });
@@ -139,26 +145,48 @@ export function createOwnerDb(): OwnerMockDb {
       },
     ],
     storeDetails: {
-      'store-1': details('emp-manager', '+992 37 221-10-01', dateIn(30)),
-      'store-2': details(null, '+992 37 221-10-02', dateIn(30)),
-      'store-3': details('emp-manager', '+992 37 221-10-03', dateIn(30)),
-      'store-4': details(null, '+992 3 226-20-04', null, dateIn(14)),
+      'store-1': details('DSH1', 'le-1', dateIn(30)),
+      'store-2': details('DSH2', 'le-1', dateIn(30)),
+      'store-3': details('RDK1', 'le-2', dateIn(30)),
+      'store-4': details('KHJ1', 'le-2', null, dateIn(14)),
     },
+    // Synthetic requisites (ADR-0011: no real client data).
+    legalEntities: [
+      {
+        id: 'le-1',
+        name: 'ООО «Шифо»',
+        taxId: '020012345',
+        legalAddress: 'г. Душанбе, пр. Рудаки, 10',
+        phone: '+992372211001',
+        email: null,
+        bankDetails: null,
+      },
+      {
+        id: 'le-2',
+        name: 'ИП Каримов А.',
+        taxId: '020054321',
+        legalAddress: 'г. Душанбе, ул. Сино, 5',
+        phone: null,
+        email: null,
+        bankDetails: null,
+      },
+    ],
+    storeKeys: {},
     extraStores: [
       {
         id: 'store-5',
         name: 'Аптека №5 · Хуҷанд',
         address: 'г. Худжанд, ул. Ленина, 20',
-        phone: '',
-        managerId: null,
-        managerName: null,
+        code: 'KHJ0',
+        kind: 'pharmacy',
+        legalEntityId: 'le-1',
+        legalEntityName: 'ООО «Шифо»',
+        printReceiptDefault: true,
         mode: 'cloud',
         status: 'closed',
         paidUntil: null,
         licenseValidUntil: null,
         receiptsThisMonth: 0,
-        minStockPacks: 10,
-        receipt: receipt(),
         closedOn: dateIn(-90),
         stockMovedTo: 'Аптека №1 · Центр',
       },
@@ -379,6 +407,6 @@ export function createOwnerDb(): OwnerMockDb {
     ],
     lastSyncAt: ago(130),
     deployment: 'cloud',
-    counters: { store: 6, role: 1, employee: 1, audit: 12 },
+    counters: { store: 6, role: 1, employee: 1, audit: 12, legalEntity: 3 },
   };
 }

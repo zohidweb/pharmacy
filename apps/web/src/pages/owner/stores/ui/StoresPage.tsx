@@ -10,7 +10,6 @@ import type {
 import {
   daysBetween,
   formatDateOnly,
-  formatDateTime,
   formatMoney,
   toAppDate,
 } from '@pharmacy/shared-util';
@@ -84,6 +83,17 @@ function StoresTab() {
         </div>
       ),
     },
+    { key: 'code', header: t('columns.code'), cell: (row) => row.code },
+    {
+      key: 'kind',
+      header: t('columns.kind'),
+      cell: (row) => t(`kinds.${row.kind}`),
+    },
+    {
+      key: 'legalEntity',
+      header: t('columns.legalEntity'),
+      cell: (row) => row.legalEntityName,
+    },
     {
       key: 'mode',
       header: t('columns.mode'),
@@ -126,14 +136,6 @@ function StoresTab() {
     <QueryState query={overview}>
       {(data) => (
         <div className="flex flex-col gap-4">
-          {data.lastImpersonation && (
-            <Alert tone="info">
-              {t('operatorSession', {
-                from: formatDateTime(data.lastImpersonation.from),
-                to: formatDateTime(data.lastImpersonation.to),
-              })}
-            </Alert>
-          )}
           <Card padding="none">
             <CardHeader
               title={t('storesCount', {

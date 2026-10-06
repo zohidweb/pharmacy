@@ -13,18 +13,22 @@ const dayOfMonth = () => Number(toAppDate().slice(8, 10));
 export function ownerStore(id: string): OwnerStore | null {
   const base = stores.find((s) => s.id === id);
   if (!base) return owner().extraStores.find((s) => s.id === id) ?? null;
-  const { closingTransferId: _transfer, ...details } =
-    owner().storeDetails[id] ?? {};
-  const manager = mockDb().employees.find((e) => e.id === details?.managerId);
+  const stored = owner().storeDetails[id];
+  if (!stored) return null;
+  const { closingTransferId: _transfer, ...details } = stored;
   return {
     id: base.id,
     name: base.name,
     address: base.address,
     mode: base.mode,
-    managerName: manager?.shortName ?? null,
+    legalEntityName: legalEntityName(details.legalEntityId),
     receiptsThisMonth: (storeDay[id]?.receipts ?? 0) * dayOfMonth(),
     ...details,
   };
+}
+
+export function legalEntityName(id: string): string {
+  return owner().legalEntities.find((e) => e.id === id)?.name ?? '—';
 }
 
 /** Called when a transfer is accepted: a closing store whose stock left completes its closing. */

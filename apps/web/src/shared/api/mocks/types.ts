@@ -11,6 +11,8 @@ export interface MockRequest<K extends ApiRouteKey> {
   query: ApiQuery<K>;
   body: ApiBody<K>;
   correlationId: string;
+  /** The Idempotency-Key header of the request, if any. */
+  idempotencyKey?: string;
 }
 
 export type MockHandlers = {

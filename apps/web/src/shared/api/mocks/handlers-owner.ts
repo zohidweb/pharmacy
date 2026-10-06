@@ -14,7 +14,9 @@ import type {
   ReportColumn,
   ReportKind,
   ReportTable,
-  StoreInput,
+  CreateStoreRequest,
+  LegalEntity,
+  LegalEntityInput,
 } from '@pharmacy/shared-dto';
 import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
@@ -23,7 +25,7 @@ import { mockDb } from './db';
 import { categories } from './fixtures-pos';
 import { storeDay, stores } from './fixtures';
 import { debtOf } from './handlers-purchasing';
-import { ownerStore } from './owner-stores';
+import { legalEntityName, ownerStore } from './owner-stores';
 import { appendAudit } from './handlers-staff';
 import { context, findDoc, stockAt, stockHandlers } from './handlers-stock';
 import { storePrice } from './pricing';
@@ -32,6 +34,7 @@ import type { MockHandlers } from './types';
 type OwnerRoute = Extract<
   ApiRouteKey,
   | `stores.${string}`
+  | `legalEntities.${string}`
   | `services.${string}`
   | 'billing.get'
   | 'reports.get'
@@ -52,21 +55,107 @@ const validation = (correlationId: string, field: string, code: string) =>
 
 /* ---------------- stores ---------------- */
 
-function storeInput(body: StoreInput, correlationId: string) {
-  if (!body.name.trim()) throw validation(correlationId, 'name', 'required');
+const TAX_ID = /^\d{9}$/;
+const STORE_CODE = /^[A-Z0-9]{1,8}$/;
+
+const invalid = (correlationId: string, field: string, code: string) =>
+  new ApiError(400, 'validation_failed', correlationId, [{ field, code }]);
+
+function legalEntityInput(
+  body: Partial<LegalEntityInput>,
+  correlationId: string,
+  prefix = '',
+): Partial<LegalEntityInput> {
+  if (body.name !== undefined && !body.name.trim()) {
+    throw invalid(correlationId, `${prefix}name`, 'required');
+  }
+  if (body.taxId !== undefined && !TAX_ID.test(body.taxId.trim())) {
+    throw invalid(correlationId, `${prefix}taxId`, 'format');
+  }
+  if (body.legalAddress !== undefined && !body.legalAddress.trim()) {
+    throw invalid(correlationId, `${prefix}legalAddress`, 'required');
+  }
+  const blankToNull = (value: string | null | undefined) =>
+    value === undefined ? undefined : value?.trim() || null;
+  return Object.fromEntries(
+    Object.entries({
+      name: body.name?.trim(),
+      taxId: body.taxId?.trim(),
+      legalAddress: body.legalAddress?.trim(),
+      phone: blankToNull(body.phone),
+      email: blankToNull(body.email),
+      bankDetails: blankToNull(body.bankDetails),
+    }).filter(([, value]) => value !== undefined),
+  );
+}
+
+function taxIdTaken(taxId: string, exceptId: string | null) {
+  return owner().legalEntities.some(
+    (e) => e.taxId === taxId && e.id !== exceptId,
+  );
+}
+
+function toLegalEntity(id: string): LegalEntity {
+  const entity = owner().legalEntities.find((e) => e.id === id);
+  if (!entity) throw new Error(`no legal entity ${id}`);
+  const all = [
+    ...Object.values(owner().storeDetails),
+    ...owner().extraStores,
+  ];
+  return {
+    ...entity,
+    stores: all.filter((s) => s.legalEntityId === id).length,
+  };
+}
+
+function createLegalEntity(
+  input: LegalEntityInput,
+  correlationId: string,
+  taxIdField: string,
+): string {
+  if (taxIdTaken(input.taxId, null)) {
+    throw new ApiError(409, 'tax_id_taken', correlationId, [
+      { field: taxIdField, code: 'tax_id_taken' },
+    ]);
+  }
+  const id = `le-${owner().counters.legalEntity++}`;
+  owner().legalEntities.push({
+    id,
+    name: input.name,
+    taxId: input.taxId,
+    legalAddress: input.legalAddress,
+    phone: input.phone ?? null,
+    email: input.email ?? null,
+    bankDetails: input.bankDetails ?? null,
+  });
+  return id;
+}
+
+function storeCodes(): string[] {
+  return [
+    ...Object.values(owner().storeDetails).map((d) => d.code),
+    ...owner().extraStores.map((s) => s.code),
+  ];
+}
+
+function checkStore(body: CreateStoreRequest, correlationId: string) {
+  if (!body.name.trim()) throw invalid(correlationId, 'name', 'required');
   if (!body.address.trim()) {
-    throw validation(correlationId, 'address', 'required');
+    throw invalid(correlationId, 'address', 'required');
   }
-  if (body.receipt.taxId && !/^\d{9}$/.test(body.receipt.taxId)) {
-    throw validation(correlationId, 'taxId', 'format');
+  if (!STORE_CODE.test(body.code.trim().toUpperCase())) {
+    throw invalid(correlationId, 'code', 'format');
   }
-  if (
-    body.managerId &&
-    !mockDb().employees.some((e) => e.id === body.managerId)
-  ) {
-    throw validation(correlationId, 'managerId', 'unknown');
+  if (Boolean(body.legalEntityId) === Boolean(body.newLegalEntity)) {
+    throw invalid(correlationId, 'legalEntityId', 'exactly_one');
   }
-  return body;
+}
+
+function activeLegalEntity(id: string, correlationId: string): string {
+  if (!owner().legalEntities.some((e) => e.id === id)) {
+    throw new ApiError(404, 'not_found', correlationId);
+  }
+  return id;
 }
 
 /* ---------------- reports ---------------- */
@@ -564,71 +653,98 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
         session.scope === 'network'
           ? [...visible, ...owner().extraStores]
           : visible,
-      lastImpersonation: {
-        from: new Date(Date.now() - 26 * 3_600_000).toISOString(),
-        to: new Date(Date.now() - 25.75 * 3_600_000).toISOString(),
-      },
     };
   },
-  'stores.create': ({ body, correlationId }) => {
+  'stores.create': ({ body, correlationId, idempotencyKey }) => {
     const { session } = context(correlationId, 'stores:create', {
       write: true,
     });
-    const input = storeInput(body, correlationId);
-    const store: OwnerStore = {
-      id: `store-${owner().counters.store++}`,
-      ...input,
-      name: input.name.trim(),
-      address: input.address.trim(),
-      managerName:
-        mockDb().employees.find((e) => e.id === input.managerId)?.shortName ??
-        null,
-      status: 'pending',
+    const repeated = idempotencyKey && owner().storeKeys[idempotencyKey];
+    if (repeated) {
+      const store = ownerStore(repeated);
+      if (store) return store;
+    }
+    checkStore(body, correlationId);
+    const code = body.code.trim().toUpperCase();
+    if (storeCodes().includes(code)) {
+      throw new ApiError(409, 'store_code_taken', correlationId, [
+        { field: 'code', code: 'store_code_taken' },
+      ]);
+    }
+    const legalEntityId = body.newLegalEntity
+      ? createLegalEntity(
+          legalEntityInput(
+            body.newLegalEntity,
+            correlationId,
+            'newLegalEntity.',
+          ) as LegalEntityInput,
+          correlationId,
+          'newLegalEntity.taxId',
+        )
+      : activeLegalEntity(body.legalEntityId ?? '', correlationId);
+    // A new store is an active cloud store at once (spec 2026-10-06-owner-stores, section 3).
+    const id = `store-${owner().counters.store++}`;
+    stores.push({
+      id,
+      name: body.name.trim(),
+      address: body.address.trim(),
+      mode: 'cloud',
+    });
+    owner().storeDetails[id] = {
+      code,
+      kind: body.kind,
+      legalEntityId,
+      printReceiptDefault: body.printReceiptDefault,
+      status: 'active',
       paidUntil: null,
       licenseValidUntil: null,
-      receiptsThisMonth: 0,
       closedOn: null,
       stockMovedTo: null,
     };
-    owner().extraStores.unshift(store);
+    if (idempotencyKey) owner().storeKeys[idempotencyKey] = id;
     appendAudit(session, {
       action: 'settings_change',
-      object: store.name,
-      details: 'Новая точка · ожидает активации',
+      object: body.name.trim(),
+      details: 'Новая точка',
       storeName: null,
     });
+    const store = ownerStore(id);
+    if (!store) throw new ApiError(404, 'not_found', correlationId);
     return store;
   },
   'stores.update': ({ params, body, correlationId }) => {
     const { session } = context(correlationId, 'stores:update', {
       write: true,
     });
-    const input = storeInput(body, correlationId);
-    const pending = owner().extraStores.find((s) => s.id === params.id);
-    if (pending) {
-      if (pending.status !== 'pending') {
+    if (!body.name.trim()) throw invalid(correlationId, 'name', 'required');
+    if (!body.address.trim()) {
+      throw invalid(correlationId, 'address', 'required');
+    }
+    const legalEntityId = activeLegalEntity(body.legalEntityId, correlationId);
+    const extra = owner().extraStores.find((s) => s.id === params.id);
+    if (extra) {
+      if (extra.status === 'closed') {
         throw new ApiError(409, 'store_closed', correlationId);
       }
-      Object.assign(pending, input);
-      return pending;
+      Object.assign(extra, {
+        name: body.name.trim(),
+        address: body.address.trim(),
+        legalEntityId,
+        legalEntityName: legalEntityName(legalEntityId),
+        printReceiptDefault: body.printReceiptDefault,
+      });
+      return extra;
     }
     const base = stores.find((s) => s.id === params.id);
-    if (!base) throw new ApiError(404, 'not_found', correlationId);
-    if (!session.stores.some((s) => s.id === base.id)) {
-      throw new ApiError(403, 'store_not_in_scope', correlationId);
+    // a store outside the scope does not exist for the employee
+    if (!base || !session.stores.some((s) => s.id === base.id)) {
+      throw new ApiError(404, 'not_found', correlationId);
     }
-    // the mode of an active store changes with the operator (license key, ADR-0014)
-    if (input.mode !== base.mode) {
-      throw new ApiError(409, 'store_mode_locked', correlationId);
-    }
-    base.name = input.name.trim();
-    base.address = input.address.trim();
-    const details = owner().storeDetails[base.id];
-    Object.assign(details, {
-      phone: input.phone,
-      managerId: input.managerId,
-      minStockPacks: input.minStockPacks,
-      receipt: input.receipt,
+    base.name = body.name.trim();
+    base.address = body.address.trim();
+    Object.assign(owner().storeDetails[base.id], {
+      legalEntityId,
+      printReceiptDefault: body.printReceiptDefault,
     });
     appendAudit(session, {
       action: 'settings_change',
@@ -640,6 +756,36 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
     const updated = ownerStore(base.id);
     if (!updated) throw new ApiError(404, 'not_found', correlationId);
     return updated;
+  },
+  'legalEntities.list': ({ correlationId }) => {
+    context(correlationId, 'stores:view');
+    return {
+      items: owner()
+        .legalEntities.map((e) => toLegalEntity(e.id))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      defaults: {
+        name: owner().settings.networkName,
+        taxId: owner().legalEntities[0]?.taxId ?? null,
+      },
+    };
+  },
+  'legalEntities.create': ({ body, correlationId }) => {
+    context(correlationId, 'stores:create', { write: true });
+    const input = legalEntityInput(body, correlationId) as LegalEntityInput;
+    return toLegalEntity(createLegalEntity(input, correlationId, 'taxId'));
+  },
+  'legalEntities.update': ({ params, body, correlationId }) => {
+    context(correlationId, 'stores:update', { write: true });
+    const entity = owner().legalEntities.find((e) => e.id === params.id);
+    if (!entity) throw new ApiError(404, 'not_found', correlationId);
+    const change = legalEntityInput(body, correlationId);
+    if (change.taxId && taxIdTaken(change.taxId, entity.id)) {
+      throw new ApiError(409, 'tax_id_taken', correlationId, [
+        { field: 'taxId', code: 'tax_id_taken' },
+      ]);
+    }
+    Object.assign(entity, change);
+    return toLegalEntity(entity.id);
   },
   'stores.closingPreview': ({ params, correlationId }) => {
     const { session, canSeeCost } = context(correlationId, 'stores:delete');

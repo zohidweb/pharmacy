@@ -28,7 +28,12 @@ import type {
   SetArticle1cRequest,
   SetEmployeeStatusRequest,
   StoreClosingPreview,
-  StoreInput,
+  CreateStoreRequest,
+  LegalEntitiesResponse,
+  LegalEntity,
+  LegalEntityInput,
+  UpdateLegalEntityRequest,
+  UpdateOwnerStoreRequest,
   StoresOverview,
   SyncRunResult,
   TenantBilling,
@@ -112,6 +117,7 @@ import type {
   ChangePasswordRequest,
   ChangePinRequest,
   DashboardPeriod,
+  ActivationRequest,
   EmployeeLoginRequest,
   EmployeeMe,
   EmployeeSession,
@@ -162,6 +168,10 @@ export const apiRoutes = {
     () => '/sessions/current/store',
   ),
   'sessions.delete': route<void>('DELETE', () => '/sessions/current'),
+  'activations.create': route<void, ActivationRequest>(
+    'POST',
+    () => '/activations',
+  ),
 
   'terminals.current': route<BoundTerminal>('GET', () => '/terminals/current'),
   'terminals.unbind': route<void, undefined, { id: string }>(
@@ -429,11 +439,27 @@ export const apiRoutes = {
   ),
 
   'stores.overview': route<StoresOverview>('GET', () => '/stores'),
-  'stores.create': route<OwnerStore, StoreInput>('POST', () => '/stores'),
-  'stores.update': route<OwnerStore, StoreInput, { id: string }>(
+  'stores.create': route<OwnerStore, CreateStoreRequest>(
+    'POST',
+    () => '/stores',
+  ),
+  'stores.update': route<OwnerStore, UpdateOwnerStoreRequest, { id: string }>(
     'PUT',
     (p) => `/stores/${id(p)}`,
   ),
+  'legalEntities.list': route<LegalEntitiesResponse>(
+    'GET',
+    () => '/legal-entities',
+  ),
+  'legalEntities.create': route<LegalEntity, LegalEntityInput>(
+    'POST',
+    () => '/legal-entities',
+  ),
+  'legalEntities.update': route<
+    LegalEntity,
+    UpdateLegalEntityRequest,
+    { id: string }
+  >('PATCH', (p) => `/legal-entities/${id(p)}`),
   'stores.closingPreview': route<
     StoreClosingPreview,
     undefined,

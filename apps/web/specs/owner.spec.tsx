@@ -1,5 +1,5 @@
 /*
- * Owner cabinet against the in-memory API mocks: stores (a new one waits for activation, a closing
+ * Owner cabinet against the in-memory API mocks: stores (a new one is active at once, a closing
  * one moves its stock by a transfer), employees and roles without escalation (ADR-0018), reports
  * with cost only by permission, the 1C export with article mapping, the read-only audit log,
  * network settings that reach the POS, and the offline store (ADR-0014).
@@ -44,7 +44,7 @@ async function clickWhenEnabled(name: string | RegExp) {
 }
 
 describe('StoresPage', () => {
-  it('lists the stores with a closed one and creates a store waiting for activation', async () => {
+  it('lists the stores with a closed one and creates an active store of a legal entity', async () => {
     await signInAs('firuz', 'store-1');
     const { container } = renderWithProviders(<StoresPage />);
     const table = await screen.findByRole('table', { name: 'Точки' });
@@ -54,15 +54,31 @@ describe('StoresPage', () => {
 
     await clickWhenEnabled('Добавить точку');
     const form = await dialog('Новая точка');
+    await within(form).findByRole('textbox', { name: /Код точки/ });
     fireEvent.click(
       within(form).getByRole('button', { name: 'Создать точку' }),
     );
-    expect(await within(form).findByText('Укажите название')).toBeTruthy();
+    expect(
+      (await within(form).findAllByText('Заполните поле')).length,
+    ).toBeGreaterThan(0);
     fireEvent.change(within(form).getByRole('textbox', { name: /Название/ }), {
       target: { value: 'Аптека №6 · Турсунзода' },
     });
+    fireEvent.change(within(form).getByRole('textbox', { name: /Код точки/ }), {
+      target: { value: 'dsh1' },
+    });
     fireEvent.change(within(form).getByRole('textbox', { name: /Адрес/ }), {
       target: { value: 'г. Турсунзода, ул. Мира, 1' },
+    });
+    fireEvent.click(
+      within(form).getByRole('button', { name: 'Создать точку' }),
+    );
+    // DSH1 belongs to another store of the network (spec 2026-10-06-owner-stores, 409)
+    expect(
+      await within(form).findByText('Этот код уже есть у другой точки сети'),
+    ).toBeTruthy();
+    fireEvent.change(within(form).getByRole('textbox', { name: /Код точки/ }), {
+      target: { value: 'tsz1' },
     });
     fireEvent.click(
       within(form).getByRole('button', { name: 'Создать точку' }),
@@ -71,7 +87,9 @@ describe('StoresPage', () => {
       await within(table).findByText('Аптека №6 · Турсунзода')
     ).closest('tr');
     if (!row) throw new Error('no store row');
-    expect(within(row).getByText('Ожидает активации')).toBeTruthy();
+    expect(within(row).getByText('Активна')).toBeTruthy();
+    expect(within(row).getByText('TSZ1')).toBeTruthy();
+    expect(within(row).getByText('ИП Каримов А.')).toBeTruthy();
   });
 
   it('closes a store by a transfer of its stock, completed on acceptance', async () => {
@@ -82,7 +100,7 @@ describe('StoresPage', () => {
     );
     const card = await dialog('Аптека №2 · Сино');
     fireEvent.click(
-      within(card).getByRole('button', { name: 'Закрыть точку' }),
+      await within(card).findByRole('button', { name: 'Закрыть точку' }),
     );
     const closing = await dialog('Закрытие точки');
     await within(closing).findByRole('table', {

@@ -180,6 +180,7 @@ export interface Stores {
   code: string;
   createdAt: Generated<Timestamp>;
   id: string;
+  idempotencyKey: string | null;
   kind: string;
   legalEntityId: string;
   mode: Generated<string>;

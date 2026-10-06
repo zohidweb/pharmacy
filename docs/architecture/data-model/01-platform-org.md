@@ -92,6 +92,7 @@ erDiagram
 | `status` | text | `active` / `closed`. «Ожидает активации» в макете — это `mode = 'offline_pending'` |
 | `print_receipt_default` | boolean | true (КП 5) |
 | `closed_at` | timestamptz null | Обязателен при `status = 'closed'` |
+| `idempotency_key` | uuid null | Ключ повтора создания точки (заголовок `Idempotency-Key`, спецификация 2026-10-06-owner-stores); уникален в сети, если задан |
 
 Ключи и индексы: `unique (tenant_id, id)` — цель составных ссылок; `(tenant_id, legal_entity_id)`.
 

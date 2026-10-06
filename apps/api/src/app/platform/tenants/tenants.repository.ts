@@ -238,14 +238,24 @@ export class TenantsRepository {
     )`.execute(trx);
   }
 
+  /**
+   * A new owner code; the network's own audit_log records who issued it (acting_operator_id), so
+   * the owner sees it (ADR-0008, amendment 2026-10-05).
+   */
   async issueOwnerCode(
     trx: Transaction<DB>,
-    tenantId: string,
-    codeHash: string,
-    expiresAt: Date,
+    input: {
+      tenantId: string;
+      codeHash: string;
+      expiresAt: Date;
+      operatorId: string;
+      auditId: string;
+      correlationId: string;
+    },
   ): Promise<boolean> {
     const { rows } = await sql<{ ok: boolean }>`select pharmacy.issue_owner_code(
-      ${tenantId}::uuid, ${codeHash}, ${expiresAt.toISOString()}::timestamptz
+      ${input.tenantId}::uuid, ${input.codeHash}, ${input.expiresAt.toISOString()}::timestamptz,
+      ${input.operatorId}::uuid, ${input.auditId}::uuid, ${input.correlationId}
     ) as ok`.execute(trx);
     return rows[0]?.ok === true;
   }

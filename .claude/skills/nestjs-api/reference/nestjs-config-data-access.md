@@ -170,7 +170,8 @@ await this.platform.platformTransaction({ kind: 'operator', operatorId }, (trx) 
   (ADR-0008, поправка 2026-10-05; `nestjs-security-auth.md`).
 - Единственный путь из платформы в тенантные таблицы — функции создания сети (ADR-0013, поправка
   2026-10-05): `select pharmacy.provision_tenant(...)` (новая сеть с владельцем и хешем кода) и
-  `select pharmacy.issue_owner_code(tenant, hash, expires)` (новый код владельцу активной сети) в
+  `select pharmacy.issue_owner_code(tenant, hash, expires, operator, auditId, correlationId)` (новый
+  код владельцу активной сети + запись в `audit_log` сети) в
   `platformTransaction`. Владелец функций — `pharmacy_provisioner`, `EXECUTE` — только
   `pharmacy_platform`; каталог-тест держит закрытый список `PROVISIONING_FUNCTIONS`. Новую запись в
   тенантные таблицы из платформы — только новой функцией этого класса через поправку ADR.

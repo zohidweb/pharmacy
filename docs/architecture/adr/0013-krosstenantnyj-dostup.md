@@ -398,14 +398,17 @@ proposed; сами проверки от выбора инструментов �
    - `provision_tenant(...)` — создаёт новую сеть целиком: `tenants`, `tenant_settings`, роль
      владельца из шаблона, сотрудника-владельца и хеш его кода активации; существующую сеть не
      меняет (конфликт ключа — ошибка);
-   - `issue_owner_code(tenant_id, code_hash, expires_at)` — пишет только хеш и срок кода владельцу
-     активной сети.
+   - `issue_owner_code(tenant_id, code_hash, expires_at, operator_id, audit_id, correlation_id)` —
+     пишет только хеш и срок кода владельцу активной сети и запись `owner.activation-code-issued` в
+     `audit_log` сети (оператор — `acting_operator_id`; дополнено 2026-10-06, ADR-0008 поправка
+     2026-10-05 п. 7).
    Правила как у резолверов: `security definer`, `set search_path = ''`, на входе только
    идентификаторы и фиксированные поля, ничего не возвращают из тенантных таблиц, `revoke all from
    public`, `EXECUTE` только `pharmacy_platform`.
 2. **Роль `pharmacy_provisioner`** (NOLOGIN) — владелец функций создания сети: `INSERT` на
    `tenants`, `tenant_settings`, `roles`, `employees`, `employee_credentials`, `UPDATE` только
-   колонок кода в `employee_credentials`, `SELECT` колонок для проверок, политики RLS `TO
+   колонок кода в `employee_credentials`, `INSERT` в `audit_log` (append-only), `SELECT` колонок
+   для проверок (в том числе `tenant_settings.timezone` для бизнес-даты), политики RLS `TO
    pharmacy_provisioner`. `pharmacy_resolver` остаётся только для чтения — функции записи ему не
    передаются. Роль создаётся `initdb` (у `pharmacy_owner` нет `CREATEROLE`).
 3. **Тест каталога** (раздел 8): функции создания сети — ровно закрытый список

@@ -97,8 +97,13 @@ pharmacy.provision_tenant(
   `409 login_taken` / `phone_taken` / `email_taken` (по имени индекса).
 
 ```
-pharmacy.issue_owner_code(p_tenant_id uuid, p_code_hash text, p_expires_at timestamptz) returns boolean
+pharmacy.issue_owner_code(p_tenant_id uuid, p_code_hash text, p_expires_at timestamptz,
+  p_operator_id uuid, p_audit_id uuid, p_correlation_id text) returns boolean
 ```
+- в той же транзакции пишет в `audit_log` сети `owner.activation-code-issued` (`entity_type
+  'employee'`, `entity_id` — владелец, `acting_operator_id`, `source 'cloud'`, бизнес-дата — по
+  `tenant_settings.timezone`): владелец видит выдачу в журнале сети (дополнено 2026-10-06, ADR-0008
+  поправка 2026-10-05 п. 7 — выдача только по звонку владельца с фиксацией в заявке);
 - обновляет только `one_time_code_hash`, `one_time_code_expires_at`, `updated_at` у
   `employee_credentials` владельца сети (роль `is_owner`, сотрудник `active`), строку создаёт, если
   её нет; сеть не `active` или владельца нет → `false` (приложение: `409 tenant_blocked` /

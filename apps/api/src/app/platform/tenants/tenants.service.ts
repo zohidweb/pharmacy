@@ -153,13 +153,16 @@ export class TenantsService {
   async issueOwnerCode(tenantId: string): Promise<IssueOwnerCodeResponse> {
     const { code, display } = generateActivationCode();
     const expiresAt = new Date(Date.now() + this.codeTtlHours * 3600_000);
-    await this.db.platformTransaction(this.actor(), async (trx) => {
-      const issued = await this.repository.issueOwnerCode(
-        trx,
+    const actor = this.actor();
+    await this.db.platformTransaction(actor, async (trx) => {
+      const issued = await this.repository.issueOwnerCode(trx, {
         tenantId,
-        hashActivationCode(code),
+        codeHash: hashActivationCode(code),
         expiresAt,
-      );
+        operatorId: actor.operatorId,
+        auditId: newId(),
+        correlationId: getRequestContext()?.correlationId ?? newId(),
+      });
       if (!issued) {
         const status = await this.repository.status(trx, tenantId);
         if (status === 'blocked') throw new ProblemException(409, 'tenant_blocked');

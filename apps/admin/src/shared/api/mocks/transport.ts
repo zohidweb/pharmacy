@@ -93,6 +93,11 @@ function toListItem(tenant: TenantDetails): TenantListItem {
   return item;
 }
 
+// The API's default ACTIVATION_CODE_TTL_HOURS.
+function mockCodeExpiresAt(): string {
+  return new Date(Date.now() + 72 * 3600_000).toISOString();
+}
+
 const handlers: MockHandlers = {
   ...billingHandlers,
   ...systemHandlers,
@@ -222,7 +227,11 @@ const handlers: MockHandlers = {
     });
     audit(id, 'Компания создана оператором платформы');
     // Synthetic value: the real code is 128 bits of randomBytes (ADR-0008, amendment 2026-10-02).
-    return { id, activationCode: 'MOCKACTIVATIONCODE00000000' };
+    return {
+      id,
+      activationCode: 'MOCKACTIVATIONCODE00000000',
+      activationCodeExpiresAt: mockCodeExpiresAt(),
+    };
   },
   'tenants.ownerCode': ({ params, correlationId }) => {
     const tenant = findTenant(params.id, correlationId);
@@ -230,12 +239,18 @@ const handlers: MockHandlers = {
       throw new ApiError(409, 'tenant_blocked', correlationId);
     }
     audit(tenant.id, 'Оператор выдал владельцу новый код активации');
-    return { activationCode: 'MOCKNEWOWNERCODE0000000000' };
+    return {
+      activationCode: 'MOCKNEWOWNERCODE0000000000',
+      activationCodeExpiresAt: mockCodeExpiresAt(),
+    };
   },
   'tenants.get': ({ params, correlationId }) =>
     findTenant(params.id, correlationId),
   'tenants.block': ({ params, body, correlationId }) => {
     const tenant = findTenant(params.id, correlationId);
+    if (tenant.status === 'blocked') {
+      throw new ApiError(409, 'already_blocked', correlationId);
+    }
     tenant.status = 'blocked';
     tenant.block = {
       blockedAt: new Date().toISOString(),
@@ -247,6 +262,9 @@ const handlers: MockHandlers = {
   },
   'tenants.unblock': ({ params, correlationId }) => {
     const tenant = findTenant(params.id, correlationId);
+    if (tenant.status !== 'blocked') {
+      throw new ApiError(409, 'not_blocked', correlationId);
+    }
     tenant.status = 'active';
     tenant.block = null;
     audit(tenant.id, 'Компания разблокирована');

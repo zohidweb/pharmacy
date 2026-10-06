@@ -247,6 +247,8 @@ export type LicenseTerm = 'week' | 'quarter' | 'year';
 export interface CreateTenantResponse {
   id: string;
   activationCode: string;
+  /** ISO 8601; the code's lifetime is ACTIVATION_CODE_TTL_HOURS of the API. */
+  activationCodeExpiresAt: string;
 }
 
 /**
@@ -255,4 +257,6 @@ export interface CreateTenantResponse {
  */
 export interface IssueOwnerCodeResponse {
   activationCode: string;
+  /** ISO 8601; the code's lifetime is ACTIVATION_CODE_TTL_HOURS of the API. */
+  activationCodeExpiresAt: string;
 }

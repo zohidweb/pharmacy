@@ -20,6 +20,7 @@ const knownCodes = [
   'login_taken',
   'cannot_disable_self',
   'wrong_password',
+  'fresh_auth_required',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

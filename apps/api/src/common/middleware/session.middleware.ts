@@ -194,10 +194,16 @@ export class SessionMiddleware implements NestMiddleware {
     // or a request without the terminal's device-cookie ends it (a stolen session cookie alone is
     // useless).
     if (session === null) return null;
-    // A network blocked by the operator: every session of it ends on its next request.
+    // A network blocked by the operator: every session of it ends on its next request. The flag is
+    // a hint (unblock may have failed to delete it, or a block raced an unblock): tenants.status
+    // decides, and a stale flag on an active network is cleared instead of locking it out.
     if (tenantBlocked) {
-      await this.sessions.destroyAllFor(tenantId, employeeId);
-      return null;
+      const fresh = await this.loader.reload(tenantId, employeeId);
+      if (fresh === null || fresh.tenantStatus !== 'active') {
+        await this.sessions.destroyAllFor(tenantId, employeeId);
+        return null;
+      }
+      await this.sessions.clearTenantBlocked(tenantId);
     }
     if (
       session.terminalId !== null &&

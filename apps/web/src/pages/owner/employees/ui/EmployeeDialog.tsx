@@ -75,6 +75,7 @@ export function EmployeeDialog({
   const [card, setCard] = useState(employee);
   const [touched, setTouched] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [newPin, setNewPin] = useState('');
   const self = employee?.id === session?.employee.id;
   const role = roles.find((r) => r.id === form.roleId);
   const network = role?.system ?? false;
@@ -118,6 +119,21 @@ export function EmployeeDialog({
     onSuccess: () => {
       setNewPassword('');
       toast.show(t('passwordReset'));
+    },
+  });
+  const pinChange = useMutation({
+    mutationFn: () =>
+      withFreshAuth(() =>
+        apiRequest('employees.setPin', {
+          params: { id: employee?.id ?? '' },
+          body: { pin: newPin },
+        }),
+      ),
+    onSuccess: () => {
+      setNewPin('');
+      if (card) setCard({ ...card, pinSet: true, pinLocked: false });
+      void invalidate();
+      toast.show(t('pinSet'));
     },
   });
   const status = useMutation({
@@ -329,7 +345,42 @@ export function EmployeeDialog({
             </>
           )}
         </fieldset>
-        {employee && (
+        {employee && !self && (
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-bold">{t('pinTitle')}</h3>
+            {card?.pinLocked && <Alert tone="warning">{t('pinLocked')}</Alert>}
+            <div className="grid grid-cols-(--ph-search-columns) items-start gap-3">
+              <TextField
+                label={t('newPin', { min: minPinLength })}
+                hideLabel
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={t('newPin', { min: minPinLength })}
+                value={newPin}
+                error={
+                  newPin && checkPin(newPin, minPinLength) !== null
+                    ? t('pinInvalid')
+                    : undefined
+                }
+                onChange={(event) =>
+                  setNewPin(event.target.value.replace(/\D/g, ''))
+                }
+              />
+              <Button
+                variant="secondary"
+                iconStart="key-round"
+                loading={pinChange.isPending}
+                disabled={!newPin || checkPin(newPin, minPinLength) !== null}
+                onClick={() => pinChange.mutate()}
+              >
+                {t('setPin')}
+              </Button>
+            </div>
+            <p className="text-xs text-fg-subtle">{t('pinSetHint')}</p>
+          </section>
+        )}
+        {employee && !self && (
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-bold">{t('resetTitle')}</h3>
             <div className="grid grid-cols-(--ph-search-columns) items-start gap-3">

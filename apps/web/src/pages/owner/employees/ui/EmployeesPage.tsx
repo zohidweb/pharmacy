@@ -280,10 +280,10 @@ function RolesTab() {
       key: 'type',
       header: t('roleType'),
       cell: (row) =>
-        row.system || row.templateKey ? (
+        row.system ? (
           <span className="inline-flex items-center gap-1 text-fg-muted">
-            {row.system && <Icon name="lock" size="sm" />}
-            {row.system ? t('systemRole') : t('templateRole')}
+            <Icon name="lock" size="sm" />
+            {t('systemRole')}
           </span>
         ) : (
           t('customRole')

@@ -137,8 +137,7 @@
     "allStatuses": "Все статусы",
     "roleType": "Тип",
     "systemRole": "Системная",
-    "templateRole": "Базовая",
-    "customRole": "Своя",
+    "customRole": "Обычная",
     "permissionsCount": "Прав",
     "employeesCount": "Сотрудников",
     "pagination": "Страницы сотрудников",
@@ -217,7 +216,13 @@
       "at": "Дата и время",
       "action": "Действие",
       "object": "Объект",
-      "details": "Детали"
+      "details": "Детали",
+      "pinTitle": "PIN терминала",
+      "newPin": "Новый PIN (не меньше {min} цифр)",
+      "setPin": "Задать PIN",
+      "pinSet": "PIN задан",
+      "pinSetHint": "Новый PIN снимает блокировку после трёх ошибок; передайте его сотруднику лично.",
+      "pinLocked": "PIN заблокирован после трёх неверных попыток. Задайте новый PIN."
     },
     "role": {
       "newTitle": "Новая роль",

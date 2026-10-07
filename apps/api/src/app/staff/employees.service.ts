@@ -284,8 +284,12 @@ export class EmployeesService {
       }
       return this.card(trx, await this.read(trx, employee.id));
     });
-    await afterCommit();
-    if (blocked) await this.sessions.destroyAllFor(tenantId, employeeId);
+    try {
+      await afterCommit();
+    } finally {
+      // A failed cache write of the version must not keep a blocked employee signed in.
+      if (blocked) await this.sessions.destroyAllFor(tenantId, employeeId);
+    }
     return card;
   }
 
@@ -333,8 +337,9 @@ export class EmployeesService {
     return employee;
   }
 
-  // A visible employee whose role is not above the editor: resetting the password of a stronger
-  // employee would hand over that employee's permissions (ADR-0018, п. 4).
+  // A visible employee who is not above the editor — neither the role nor the stores: resetting the
+  // password of a stronger employee, or of one working in other stores too, would hand over that
+  // employee's permissions or stores (ADR-0018, п. 4).
   private async editable(
     trx: TenantTransaction,
     editor: Editor,
@@ -345,6 +350,9 @@ export class EmployeesService {
     const role = await this.repository.findRole(trx, requirePrincipal().tenantId, employee.roleId);
     if (role === null || !roleWithinEditor(editor, role)) {
       throw new ProblemException(403, 'permission_escalation');
+    }
+    if (!scopeWithinEditor(editor, scopeOfRow(employee))) {
+      throw new ProblemException(403, 'store_not_in_scope');
     }
     return employee;
   }

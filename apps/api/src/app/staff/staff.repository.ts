@@ -219,19 +219,25 @@ export class StaffRepository {
     return row?.pinMinLength ?? 4;
   }
 
-  /** Active employees with the owner role. */
+  /**
+   * Active employees with the owner role. Their rows are locked until the transaction ends: two
+   * owners blocking or demoting each other at once would otherwise both see two owners and leave
+   * the network without one. The second waits, re-reads the rows and sees one owner.
+   */
   async activeOwners(trx: TenantTransaction, tenantId: string): Promise<number> {
-    const row = await trx
+    const rows = await trx
       .selectFrom('employees as e')
       .innerJoin('roles as r', (join) =>
         join.onRef('r.tenantId', '=', 'e.tenantId').onRef('r.id', '=', 'e.roleId'),
       )
-      .select((eb) => eb.fn.countAll<string>().as('owners'))
+      .select('e.id')
       .where('e.tenantId', '=', tenantId)
       .where('e.status', '=', 'active')
       .where('r.isOwner', '=', true)
-      .executeTakeFirstOrThrow();
-    return Number(row.owners);
+      .orderBy('e.id')
+      .forUpdate('e')
+      .execute();
+    return rows.length;
   }
 
   async insertEmployee(

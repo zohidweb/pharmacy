@@ -40,6 +40,8 @@ const owner = () => mockDb().owner;
 
 const validation = (correlationId: string, field: string, code: string) =>
   new ApiError(400, 'validation_failed', correlationId, [{ field, code }]);
+const conflict = (correlationId: string, field: string, code: string) =>
+  new ApiError(409, code, correlationId, [{ field, code }]);
 
 /** Store ids of the session scope; null — the whole network. */
 const scopeOf = (session: EmployeeSession) =>
@@ -99,6 +101,31 @@ function employeeOf(
 ) {
   const employee = findDoc(mockDb().employees, id, correlationId);
   if (!visibleTo(session, employee)) {
+    throw new ApiError(403, 'store_not_in_scope', correlationId);
+  }
+  return employee;
+}
+
+/**
+ * Another employee may be changed only when not above the editor — role and stores (ADR-0018,
+ * п. 4): a password reset would otherwise hand over a stronger account or other stores.
+ */
+function editableOf(
+  session: EmployeeSession,
+  id: string,
+  correlationId: string,
+) {
+  const employee = employeeOf(session, id, correlationId);
+  if (employee.id === session.employee.id) return employee;
+  const role = roleOf(employee.roleId);
+  if (
+    !role ||
+    (role.system && !session.role.system) ||
+    exceedingPermissions(session.permissions, role.permissions).length > 0
+  ) {
+    throw new ApiError(403, 'permission_escalation', correlationId);
+  }
+  if (!scopeWithin(scopeOf(session), employee.storeIds)) {
     throw new ApiError(403, 'store_not_in_scope', correlationId);
   }
   return employee;
@@ -240,7 +267,7 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     const { session } = context(correlationId, 'employees:update', {
       write: true,
     });
-    const employee = employeeOf(session, params.id, correlationId);
+    const employee = editableOf(session, params.id, correlationId);
     const input = employeeInput(body, correlationId, employee.id);
     const sameStores =
       JSON.stringify(employee.storeIds) === JSON.stringify(body.storeIds);
@@ -274,7 +301,7 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     const { session } = context(correlationId, 'employees:update', {
       write: true,
     });
-    const employee = employeeOf(session, params.id, correlationId);
+    const employee = editableOf(session, params.id, correlationId);
     if (passwordProblems(body.newPassword).length > 0) {
       throw validation(correlationId, 'newPassword', 'policy');
     }
@@ -289,7 +316,7 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     const { session } = context(correlationId, 'employees:update', {
       write: true,
     });
-    const employee = employeeOf(session, params.id, correlationId);
+    const employee = editableOf(session, params.id, correlationId);
     if (employee.id === session.employee.id) {
       throw new ApiError(403, 'own_assignment', correlationId);
     }
@@ -311,7 +338,7 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     const { session } = context(correlationId, 'employees:update', {
       write: true,
     });
-    const employee = employeeOf(session, params.id, correlationId);
+    const employee = editableOf(session, params.id, correlationId);
     if (employee.id === session.employee.id) {
       throw new ApiError(403, 'own_assignment', correlationId);
     }
@@ -433,7 +460,18 @@ function employeeInput(
     throw validation(correlationId, 'login', 'format');
   }
   if (mockDb().employees.some((e) => e.id !== exceptId && e.login === login)) {
-    throw validation(correlationId, 'login', 'taken');
+    throw conflict(correlationId, 'login', 'login_taken');
+  }
+  const phone = body.phone.replace(/[\s()-]/g, '');
+  if (!/^\+[1-9][0-9]{7,14}$/.test(phone)) {
+    throw validation(correlationId, 'phone', 'phone_format');
+  }
+  if (
+    mockDb().employees.some(
+      (e) => e.id !== exceptId && e.phone.replace(/[\s()-]/g, '') === phone,
+    )
+  ) {
+    throw conflict(correlationId, 'phone', 'phone_taken');
   }
   return {
     fullName,

@@ -28,7 +28,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
+import {
+  ApiError,
+  apiRequest,
+  useApiErrorMessage,
+  withFreshAuth,
+} from '@/shared/api';
 
 type Form = CreateEmployeeRequest;
 
@@ -85,6 +90,8 @@ export function EmployeeDialog({
   const invalid = {
     fullName: form.fullName.trim() === '',
     login: !/^[a-z0-9._-]{3,32}$/.test(form.login.trim().toLowerCase()),
+    // E.164 after removing spaces, brackets and dashes — the API's sign-in identifier rule.
+    phone: !/^\+[1-9][0-9]{7,14}$/.test(form.phone.replace(/[\s()-]/g, '')),
     password: !employee && passwordProblems(form.password).length > 0,
     pin:
       !employee && form.pin !== '' && checkPin(form.pin, minPinLength) !== null,
@@ -149,7 +156,18 @@ export function EmployeeDialog({
       void invalidate();
     },
   });
-  const error = useApiErrorMessage(save.error ?? reset.error ?? status.error);
+  // Login and phone conflicts are shown at their fields (409 `login_taken` / `phone_taken`).
+  const conflict =
+    save.error instanceof ApiError &&
+    (save.error.code === 'login_taken' || save.error.code === 'phone_taken')
+      ? save.error.code
+      : null;
+  const error = useApiErrorMessage(
+    (conflict ? null : save.error) ??
+      reset.error ??
+      status.error ??
+      pinChange.error,
+  );
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
   const rules = (value: string): PasswordRule[] => passwordProblems(value);
@@ -237,7 +255,16 @@ export function EmployeeDialog({
           <TextField
             label={t('phone')}
             type="tel"
+            required
+            placeholder="+992 00 000 00 00"
             value={form.phone}
+            error={
+              conflict === 'phone_taken'
+                ? t('phoneTaken')
+                : touched && invalid.phone
+                  ? t('phoneFormat')
+                  : undefined
+            }
             onChange={(event) => set('phone', event.target.value)}
           />
           <TextField
@@ -246,7 +273,13 @@ export function EmployeeDialog({
             autoComplete="off"
             value={form.login}
             hint={t('loginHint')}
-            error={touched && invalid.login ? t('loginFormat') : undefined}
+            error={
+              conflict === 'login_taken'
+                ? t('loginTaken')
+                : touched && invalid.login
+                  ? t('loginFormat')
+                  : undefined
+            }
             onChange={(event) => set('login', event.target.value)}
           />
           <Select

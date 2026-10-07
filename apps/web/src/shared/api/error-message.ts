@@ -36,6 +36,12 @@ const knownCodes = [
   'tax_id_taken',
   'invalid_code',
   'password_policy',
+  'permission_escalation',
+  'own_assignment',
+  'login_taken',
+  'phone_taken',
+  'email_taken',
+  'login_locked',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

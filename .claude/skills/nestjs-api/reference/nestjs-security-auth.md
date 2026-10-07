@@ -262,6 +262,31 @@ create(@Body() dto: CreateReceiptDto) { /* ... */ }
 - Аудит: изменения ролей, прав, назначений и охвата, отказы `403` (право и точка) — отдельные
   события `audit_log` без секретов.
 
+## Сотрудники и роли (`apps/api/src/app/staff`, спецификация 2026-10-06-staff-design)
+
+- Правила назначения — чистые функции `assignment-rules.ts` (без БД): `isVisible` (охваты
+  пересекаются; сотрудника «вся сеть» видит только «вся сеть»), `roleWithinEditor` (права роли ⊆ права
+  редактора; «Владелец» — только владельцу), `scopeWithinEditor`, `sameScope`.
+- Любое действие над **другим** сотрудником, чья роль сильнее редактора, — 403 `permission_escalation`:
+  иначе сброс пароля передал бы чужие права. Свои роль, охват, статус, пароль и PIN через
+  `/employees/{id}/*` не меняются (403 `own_assignment`) — свои секреты меняются в `/me` с текущим
+  паролем. Роль, чьи текущие права шире редактора, не редактируется вовсе.
+- Смена роли, охвата, статуса и прав роли — `PermissionsVersionService.bump(trx, ids)` в той же
+  транзакции, `afterCommit()` после неё; блокировка и сброс пароля — `SessionStore.destroyAllFor` после
+  коммита. Новый PIN обнуляет счётчик ошибок и снимает блокировку PIN.
+- Названия ролей сравниваются в коде (`toLocaleLowerCase('ru')`): `lower()` базы зависит от локали
+  кластера и может не понижать кириллицу.
+- Роли новой сети создаёт `provision_tenant` (ADR-0013, поправка 2026-10-05, п. 6): «Владелец» + три
+  обычные роли с правами по умолчанию из `roleTemplates`.
+
+## Подтверждение паролем (ADR-0008, поправка 2026-10-06)
+
+`POST /sessions/current/confirmation` (`SessionsService.confirm`): только парольная сессия (иначе 403
+`password_session_required`); лимит `reconfirm:<tenant>:<employee>` в `LoginLimiter`; верный пароль —
+`SessionStore.update(sessionId, { authenticatedAt })`, и `@RequireFreshAuth()` снова пропускает;
+неверный — 422 `invalid_current_password` у поля `password`; аудит `auth.reconfirmed` /
+`auth.reconfirm-failed`.
+
 ## Синхронизация офлайн-точек — лицензионный ключ (ADR-0014 §6–7)
 
 - `Authorization: Bearer phk_<keyId>_<secret>`; ключ — `randomBytes(32)` base64url. В облаке —

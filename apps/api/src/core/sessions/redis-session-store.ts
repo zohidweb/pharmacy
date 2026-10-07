@@ -24,6 +24,7 @@ const PATCHABLE_FIELDS = [
   'storeScope',
   'currentStoreId',
   'locale',
+  'authenticatedAt',
 ] as const;
 
 // A cached version is only a hint: a missing key means "read it from the database". The lifetime

@@ -8,6 +8,7 @@ import {
   runWithContext,
 } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
+import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { PasswordHasher } from '../../core/crypto';
 import {
   ContextResolvers,
@@ -172,6 +173,56 @@ export class SessionsService {
 
   async logout(): Promise<void> {
     await this.sessions.destroy(requirePrincipal().sessionId);
+  }
+
+  /**
+   * POST /sessions/current/confirmation (ADR-0008, amendment 2026-10-06): the password of the
+   * current session renews its fresh sign-in, so actions behind RequireFreshAuth work again without
+   * a new sign-in. Only a password session; failures count in the same lockout as a sign-in.
+   */
+  async confirm(password: string): Promise<void> {
+    const principal = requirePrincipal();
+    if (principal.auth !== 'password') {
+      throw new ProblemException(403, 'password_session_required');
+    }
+    const { tenantId, employeeId } = principal;
+    // Reserved atomically before any hashing or database call (see LoginLimiter).
+    const limiterKey = `reconfirm:${tenantId}:${employeeId}`;
+    const attempt = await this.limiter.tryAcquire(limiterKey);
+    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+
+    const credentials = await this.db.tenantTransaction((trx) =>
+      this.repository.findCredentials(trx, tenantId, employeeId),
+    );
+    const phc = credentials?.passwordHash ?? null;
+    const pepperVersion = credentials?.passwordPepperVersion ?? null;
+    const verified =
+      phc !== null && pepperVersion !== null
+        ? await this.hasher.verify(password, phc, pepperVersion)
+        : await this.hasher.verifyDummy(password);
+    if (!verified) {
+      await this.db.tenantTransaction((trx) =>
+        this.audit.append(trx, {
+          action: 'auth.reconfirm-failed',
+          entityType: 'employee',
+          entityId: employeeId,
+        }),
+      );
+      throw new FieldProblemException(422, 'invalid_current_password', [
+        { field: 'password', code: 'invalid_current_password' },
+      ]);
+    }
+    await this.limiter.reset(limiterKey);
+    await this.sessions.update(principal.sessionId, {
+      authenticatedAt: new Date().toISOString(),
+    });
+    await this.db.tenantTransaction((trx) =>
+      this.audit.append(trx, {
+        action: 'auth.reconfirmed',
+        entityType: 'employee',
+        entityId: employeeId,
+      }),
+    );
   }
 
   private async loginInTenant(

@@ -154,6 +154,9 @@ export class PgSessionStore extends SessionStore {
     if (patch.storeScope !== undefined) values.storeScope = JSON.stringify(patch.storeScope);
     if (patch.currentStoreId !== undefined) values.currentStoreId = patch.currentStoreId;
     if (patch.locale !== undefined) values.locale = patch.locale;
+    if (patch.authenticatedAt !== undefined) {
+      values.authenticatedAt = new Date(patch.authenticatedAt);
+    }
     if (Object.keys(values).length === 0) return;
     await this.db.withTenant(this.tenantId, (trx) =>
       trx

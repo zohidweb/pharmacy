@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { TenantTerminal } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
 
@@ -402,6 +403,51 @@ export class TerminalsRepository {
       storeName: row.storeName ?? null,
       boundAt: new Date(row.boundAt),
       lastSignInAt: new Date(row.lastSignInAt),
+    }));
+  }
+
+  /** Active terminals of the stores in the scope, by store and name. */
+  async listTerminals(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeScope: 'all' | readonly string[],
+  ): Promise<TenantTerminal[]> {
+    let query = trx
+      .selectFrom('terminals as t')
+      .innerJoin('stores as s', (join) =>
+        join.onRef('s.tenantId', '=', 't.tenantId').onRef('s.id', '=', 't.storeId'),
+      )
+      .innerJoin('employees as e', (join) =>
+        join.onRef('e.tenantId', '=', 't.tenantId').onRef('e.id', '=', 't.boundBy'),
+      )
+      .select([
+        't.id',
+        't.name',
+        't.storeId',
+        's.name as storeName',
+        's.mode as storeMode',
+        'e.fullName as boundByName',
+        't.boundAt',
+        't.lastSeenAt',
+      ])
+      .where('t.tenantId', '=', tenantId)
+      .where('t.revokedAt', 'is', null);
+    if (storeScope !== 'all') {
+      if (storeScope.length === 0) return [];
+      query = query.where('t.storeId', 'in', [...storeScope]);
+    }
+    const rows = await query.orderBy('s.name').orderBy('t.name').execute();
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      // A short, human-readable reference of the terminal for support calls.
+      serial: row.id.replace(/-/g, '').slice(-8).toUpperCase(),
+      storeId: row.storeId,
+      storeName: row.storeName,
+      storeOffline: row.storeMode !== 'online',
+      boundByName: row.boundByName,
+      boundAt: row.boundAt.toISOString(),
+      lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
     }));
   }
 }

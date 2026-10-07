@@ -27,6 +27,7 @@ import { SessionsModule } from '../core/sessions';
 import { validateEnv } from './config/env.validation';
 import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
+import { StaffModule } from './staff/staff.module';
 import { StoresModule } from './stores/stores.module';
 import { TerminalsModule } from './terminals/terminals.module';
 import { OperatorAuthModule } from './platform/auth/operator-auth.module';
@@ -84,6 +85,11 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     // Stores and legal entities are kept in the cloud only (spec 2026-10-06-owner-stores).
     ConditionalModule.registerWhen(
       StoresModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
+    // Employees and roles are kept in the cloud only (spec 2026-10-06-staff-design).
+    ConditionalModule.registerWhen(
+      StaffModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
     CatalogModule,

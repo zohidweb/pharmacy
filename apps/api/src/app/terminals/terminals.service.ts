@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { BoundTerminal, TerminalCashier } from '@pharmacy/shared-dto';
+import type { BoundTerminal, TenantTerminal, TerminalCashier } from '@pharmacy/shared-dto';
 import {
   getRequestContext,
   requirePrincipal,
@@ -171,6 +171,14 @@ export class TerminalsService {
       await this.afterRevoke(principal.tenantId, previous);
     }
     return { secret, terminal };
+  }
+
+  /** GET /terminals — active terminals of the stores in the principal's scope (spec 2026-10-06-staff-design). */
+  async list(): Promise<TenantTerminal[]> {
+    const { tenantId, storeScope } = requirePrincipal();
+    return this.db.tenantTransaction((trx) =>
+      this.repository.listTerminals(trx, tenantId, storeScope),
+    );
   }
 
   /**

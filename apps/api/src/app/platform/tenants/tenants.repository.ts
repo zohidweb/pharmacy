@@ -30,6 +30,12 @@ export interface ProvisionInput {
   owner: { fullName: string; login: string; phone: string; email: string | null };
   codeHash: string;
   codeExpiresAt: Date;
+  /** Ordinary roles of the new network (spec 2026-10-06-staff-design, section 3). */
+  defaultRoles: ReadonlyArray<{
+    id: string;
+    name: { ru: string; tj: string };
+    permissions: readonly string[];
+  }>;
 }
 
 type TenantRow = {
@@ -234,7 +240,8 @@ export class TenantsRepository {
       ${input.tenantId}::uuid, ${input.code}, ${input.name}, ${input.city}, ${input.inn},
       ${input.ownerEmployeeId}::uuid, ${input.ownerRoleId}::uuid, ${JSON.stringify(input.ownerRoleName)}::jsonb,
       ${input.owner.fullName}, ${input.owner.login}, ${input.owner.phone}, ${input.owner.email},
-      ${input.codeHash}, ${input.codeExpiresAt.toISOString()}::timestamptz
+      ${input.codeHash}, ${input.codeExpiresAt.toISOString()}::timestamptz,
+      ${JSON.stringify(input.defaultRoles)}::jsonb
     )`.execute(trx);
   }
 

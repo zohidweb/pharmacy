@@ -40,7 +40,9 @@ erDiagram
 
 ИНН (`billing_tax_id`) уникален среди сетей (`tenants_inn_uq`). Сеть с её владельцем создаёт только
 функция `provision_tenant`, новый код владельцу — `issue_owner_code` (SECURITY DEFINER, владелец
-`pharmacy_provisioner`, вызывает `pharmacy_platform`).
+`pharmacy_provisioner`, вызывает `pharmacy_platform`). Вместе с ролью «Владелец» функция создаёт три
+обычные роли сети — «Заведующий точкой», «Фармацевт-кассир», «Бухгалтер» — с правами по умолчанию из
+`roleTemplates` (`template_key` пустой; ADR-0013, поправка 2026-10-05, п. 6).
 
 ## `tenant_settings` — настройки сети (класс `tenant`, одна строка на тенанта)
 

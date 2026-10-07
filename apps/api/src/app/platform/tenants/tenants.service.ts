@@ -15,6 +15,7 @@ import {
 } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
+import { roleTemplates } from '@pharmacy/shared-domain';
 import { newId, uniqueConstraint } from '../../../core/database';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { SessionStore } from '../../../core/sessions';
@@ -28,6 +29,15 @@ import { type TenantListParams, TenantsRepository } from './tenants.repository';
 
 // The owner role of every new network (ADR-0018: the system role «Владелец», the whole catalog).
 const OWNER_ROLE_NAME = { ru: 'Владелец', tj: 'Соҳиб' } as const;
+
+// The ordinary roles every new network starts with (spec 2026-10-06-staff-design, section 3): the
+// permissions are only initial values from roleTemplates; the network edits them like any role.
+// Tajik names are to be reviewed by a native speaker.
+const DEFAULT_ROLES = [
+  { key: 'manager', name: { ru: 'Заведующий точкой', tj: 'Мудири нуқта' } },
+  { key: 'cashier', name: { ru: 'Фармацевт-кассир', tj: 'Фармасевт-хазинадор' } },
+  { key: 'accountant', name: { ru: 'Бухгалтер', tj: 'Муҳосиб' } },
+] as const;
 
 // tenants.code: never used for sign-in, generated — `t-` and 8 lower-case base32 characters.
 const CODE_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
@@ -118,6 +128,11 @@ export class TenantsService {
             ownerEmployeeId: newId(),
             ownerRoleId: newId(),
             ownerRoleName: OWNER_ROLE_NAME,
+            defaultRoles: DEFAULT_ROLES.map((role) => ({
+              id: newId(),
+              name: role.name,
+              permissions: [...roleTemplates[role.key].permissions],
+            })),
             owner,
             codeHash: hashActivationCode(code),
             codeExpiresAt,

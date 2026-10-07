@@ -15,6 +15,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { EmployeeSession } from '@pharmacy/shared-dto';
 import type { Request, Response } from 'express';
 import { Authenticated, Public } from '../../common/guards/decorators';
+import { ConfirmSessionDto } from './dto/confirm-session.dto';
 import { EmployeeLoginDto } from './dto/employee-login.dto';
 import { SelectStoreDto } from './dto/select-store.dto';
 import {
@@ -71,6 +72,18 @@ export class SessionsController {
   @Put('current/store')
   selectStore(@Body() body: SelectStoreDto): Promise<EmployeeSession> {
     return this.sessions.selectStore(body.storeId);
+  }
+
+  /**
+   * 204 — the password renews the fresh sign-in of this session (ADR-0008, amendment 2026-10-06).
+   * 403 `password_session_required`, 422 `invalid_current_password`, 429 `login_locked`.
+   */
+  @Authenticated()
+  @Throttle({ default: AUTH_ROUTE_LIMIT })
+  @Post('current/confirmation')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  confirm(@Body() body: ConfirmSessionDto): Promise<void> {
+    return this.sessions.confirm(body.password);
   }
 
   @Authenticated()

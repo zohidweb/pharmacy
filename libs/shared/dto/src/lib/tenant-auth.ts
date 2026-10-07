@@ -85,6 +85,15 @@ export interface EmployeeSession {
   locale: UiLocale;
 }
 
+/**
+ * POST /api/v1/sessions/current/confirmation — the password of the current session renews the
+ * fresh sign-in (ADR-0008, amendment 2026-10-06). 204; 403 `password_session_required` (a PIN
+ * session), 422 `invalid_current_password`, 429 `login_locked`.
+ */
+export interface ConfirmSessionRequest {
+  password: string;
+}
+
 /** PUT /api/v1/sessions/current/store — the store must be in the employee scope (403 otherwise). */
 export interface SelectStoreRequest {
   storeId: string;

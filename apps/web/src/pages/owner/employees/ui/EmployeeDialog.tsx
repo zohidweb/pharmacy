@@ -28,7 +28,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  ApiError,
+  apiRequest,
+  useApiErrorMessage,
+  withFreshAuth,
+} from '@/shared/api';
 
 type Form = CreateEmployeeRequest;
 
@@ -75,6 +80,7 @@ export function EmployeeDialog({
   const [card, setCard] = useState(employee);
   const [touched, setTouched] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [newPin, setNewPin] = useState('');
   const self = employee?.id === session?.employee.id;
   const role = roles.find((r) => r.id === form.roleId);
   const network = role?.system ?? false;
@@ -84,6 +90,8 @@ export function EmployeeDialog({
   const invalid = {
     fullName: form.fullName.trim() === '',
     login: !/^[a-z0-9._-]{3,32}$/.test(form.login.trim().toLowerCase()),
+    // E.164 after removing spaces, brackets and dashes — the API's sign-in identifier rule.
+    phone: !/^\+[1-9][0-9]{7,14}$/.test(form.phone.replace(/[\s()-]/g, '')),
     password: !employee && passwordProblems(form.password).length > 0,
     pin:
       !employee && form.pin !== '' && checkPin(form.pin, minPinLength) !== null,
@@ -92,15 +100,16 @@ export function EmployeeDialog({
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['employees'] });
   const save = useMutation({
-    mutationFn: () => {
-      const body = { ...form, storeIds: network ? null : form.storeIds };
-      if (!employee) return apiRequest('employees.create', { body });
-      const { password: _p, pin: _n, ...update } = body;
-      return apiRequest('employees.update', {
-        params: { id: employee.id },
-        body: update,
-      });
-    },
+    mutationFn: () =>
+      withFreshAuth(async () => {
+        const body = { ...form, storeIds: network ? null : form.storeIds };
+        if (!employee) return apiRequest('employees.create', { body });
+        const { password: _p, pin: _n, ...update } = body;
+        return apiRequest('employees.update', {
+          params: { id: employee.id },
+          body: update,
+        });
+      }),
     onSuccess: () => {
       void invalidate();
       onClose();
@@ -108,27 +117,57 @@ export function EmployeeDialog({
   });
   const reset = useMutation({
     mutationFn: () =>
-      apiRequest('employees.resetPassword', {
-        params: { id: employee?.id ?? '' },
-        body: { newPassword },
-      }),
+      withFreshAuth(() =>
+        apiRequest('employees.resetPassword', {
+          params: { id: employee?.id ?? '' },
+          body: { newPassword },
+        }),
+      ),
     onSuccess: () => {
       setNewPassword('');
       toast.show(t('passwordReset'));
     },
   });
+  const pinChange = useMutation({
+    mutationFn: () =>
+      withFreshAuth(() =>
+        apiRequest('employees.setPin', {
+          params: { id: employee?.id ?? '' },
+          body: { pin: newPin },
+        }),
+      ),
+    onSuccess: () => {
+      setNewPin('');
+      if (card) setCard({ ...card, pinSet: true, pinLocked: false });
+      void invalidate();
+      toast.show(t('pinSet'));
+    },
+  });
   const status = useMutation({
     mutationFn: () =>
-      apiRequest('employees.setStatus', {
-        params: { id: employee?.id ?? '' },
-        body: { status: card?.status === 'blocked' ? 'active' : 'blocked' },
-      }),
+      withFreshAuth(() =>
+        apiRequest('employees.setStatus', {
+          params: { id: employee?.id ?? '' },
+          body: { status: card?.status === 'blocked' ? 'active' : 'blocked' },
+        }),
+      ),
     onSuccess: (next) => {
       setCard(next);
       void invalidate();
     },
   });
-  const error = useApiErrorMessage(save.error ?? reset.error ?? status.error);
+  // Login and phone conflicts are shown at their fields (409 `login_taken` / `phone_taken`).
+  const conflict =
+    save.error instanceof ApiError &&
+    (save.error.code === 'login_taken' || save.error.code === 'phone_taken')
+      ? save.error.code
+      : null;
+  const error = useApiErrorMessage(
+    (conflict ? null : save.error) ??
+      reset.error ??
+      status.error ??
+      pinChange.error,
+  );
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
   const rules = (value: string): PasswordRule[] => passwordProblems(value);
@@ -216,7 +255,16 @@ export function EmployeeDialog({
           <TextField
             label={t('phone')}
             type="tel"
+            required
+            placeholder="+992 00 000 00 00"
             value={form.phone}
+            error={
+              conflict === 'phone_taken'
+                ? t('phoneTaken')
+                : touched && invalid.phone
+                  ? t('phoneFormat')
+                  : undefined
+            }
             onChange={(event) => set('phone', event.target.value)}
           />
           <TextField
@@ -225,7 +273,13 @@ export function EmployeeDialog({
             autoComplete="off"
             value={form.login}
             hint={t('loginHint')}
-            error={touched && invalid.login ? t('loginFormat') : undefined}
+            error={
+              conflict === 'login_taken'
+                ? t('loginTaken')
+                : touched && invalid.login
+                  ? t('loginFormat')
+                  : undefined
+            }
             onChange={(event) => set('login', event.target.value)}
           />
           <Select
@@ -324,7 +378,42 @@ export function EmployeeDialog({
             </>
           )}
         </fieldset>
-        {employee && (
+        {employee && !self && (
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-bold">{t('pinTitle')}</h3>
+            {card?.pinLocked && <Alert tone="warning">{t('pinLocked')}</Alert>}
+            <div className="grid grid-cols-(--ph-search-columns) items-start gap-3">
+              <TextField
+                label={t('newPin', { min: minPinLength })}
+                hideLabel
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={t('newPin', { min: minPinLength })}
+                value={newPin}
+                error={
+                  newPin && checkPin(newPin, minPinLength) !== null
+                    ? t('pinInvalid')
+                    : undefined
+                }
+                onChange={(event) =>
+                  setNewPin(event.target.value.replace(/\D/g, ''))
+                }
+              />
+              <Button
+                variant="secondary"
+                iconStart="key-round"
+                loading={pinChange.isPending}
+                disabled={!newPin || checkPin(newPin, minPinLength) !== null}
+                onClick={() => pinChange.mutate()}
+              >
+                {t('setPin')}
+              </Button>
+            </div>
+            <p className="text-xs text-fg-subtle">{t('pinSetHint')}</p>
+          </section>
+        )}
+        {employee && !self && (
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-bold">{t('resetTitle')}</h3>
             <div className="grid grid-cols-(--ph-search-columns) items-start gap-3">

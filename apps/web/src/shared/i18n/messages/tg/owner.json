@@ -137,8 +137,7 @@
     "allStatuses": "Ҳамаи ҳолатҳо",
     "roleType": "Навъ",
     "systemRole": "Системавӣ",
-    "templateRole": "Асосӣ",
-    "customRole": "Худӣ",
+    "customRole": "Оддӣ",
     "permissionsCount": "Ҳуқуқ",
     "employeesCount": "Кормандон",
     "pagination": "Саҳифаҳои кормандон",
@@ -217,7 +216,16 @@
       "at": "Сана ва вақт",
       "action": "Амал",
       "object": "Объект",
-      "details": "Тафсилот"
+      "details": "Тафсилот",
+      "pinTitle": "PIN-и терминал",
+      "newPin": "PIN-и нав (на камтар аз {min} рақам)",
+      "setPin": "Муқаррар кардани PIN",
+      "pinSet": "PIN муқаррар шуд",
+      "pinSetHint": "PIN-и нав басташавиро пас аз се хато мекушояд; онро шахсан ба корманд диҳед.",
+      "pinLocked": "PIN пас аз се кӯшиши нодуруст баста шуд. PIN-и нав муқаррар кунед.",
+      "phoneFormat": "Телефон дар шакли +992XXXXXXXXX",
+      "phoneTaken": "Телефон аллакай аз ҷониби корманди дигар истифода мешавад",
+      "loginTaken": "Логин аллакай банд аст"
     },
     "role": {
       "newTitle": "Нақши нав",

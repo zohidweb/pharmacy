@@ -26,6 +26,7 @@ import type {
   Role,
   RoleInput,
   SetArticle1cRequest,
+  SetEmployeePinRequest,
   SetEmployeeStatusRequest,
   StoreClosingPreview,
   CreateStoreRequest,
@@ -123,6 +124,7 @@ import type {
   EmployeeSession,
   MyTerminal,
   PinLoginRequest,
+  ConfirmSessionRequest,
   SelectStoreRequest,
   SyncStatus,
   TenantDashboard,
@@ -168,6 +170,10 @@ export const apiRoutes = {
     () => '/sessions/current/store',
   ),
   'sessions.delete': route<void>('DELETE', () => '/sessions/current'),
+  'sessions.confirm': route<void, ConfirmSessionRequest>(
+    'POST',
+    () => '/sessions/current/confirmation',
+  ),
   'activations.create': route<void, ActivationRequest>(
     'POST',
     () => '/activations',
@@ -426,6 +432,10 @@ export const apiRoutes = {
     SetEmployeeStatusRequest,
     { id: string }
   >('POST', (p) => `/employees/${id(p)}/status`),
+  'employees.setPin': route<void, SetEmployeePinRequest, { id: string }>(
+    'POST',
+    (p) => `/employees/${id(p)}/pin`,
+  ),
   'roles.list': route<Role[]>('GET', () => '/roles'),
   'roles.create': route<Role, RoleInput>('POST', () => '/roles'),
   'roles.update': route<Role, RoleInput, { id: string }>(

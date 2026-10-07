@@ -22,7 +22,12 @@ export interface SessionRecord {
 export type SessionPatch = Partial<
   Pick<
     SessionRecord,
-    'permissions' | 'permissionsVersion' | 'storeScope' | 'currentStoreId' | 'locale'
+    | 'permissions'
+    | 'permissionsVersion'
+    | 'storeScope'
+    | 'currentStoreId'
+    | 'locale'
+    | 'authenticatedAt'
   >
 >;
 

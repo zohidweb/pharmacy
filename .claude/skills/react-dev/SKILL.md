@@ -51,6 +51,11 @@ apps/<web|admin>/
   финансовых операций, таймаут `AbortSignal.timeout`, разбор problem+json в
   `ApiError { status, code, correlationId, errors[] }`, 401 — переход на вход/PIN. Карта маршрутов
   `ApiRoutes` сверяется тестом с маршрутами Nest. `axios` во фронтендах не используется.
+- **Свежий вход** — мутации, которым API отвечает 403 `fresh_auth_required` (сотрудники, роли, отвязка
+  терминала, свои пароль и PIN), оборачиваются в `withFreshAuth(() => apiRequest(...))` из
+  `@/shared/api`: окно `features/confirm-password` (смонтировано в `AppProviders`) просит пароль, вызывает
+  `sessions.confirm` и один раз повторяет действие; закрытое окно — `FreshAuthCancelled`, который
+  `useApiErrorMessage` не показывает.
 - **Моки API** — `NEXT_PUBLIC_API_MOCKS`: `true` — всё в in-memory моках (`shared/api/mocks`, тесты,
   e2e, демо); `partial` — маршруты из `REAL_API_ROUTES` (`shared/api/client.ts`) идут в apps/api,
   остальные в моки (`partialTransport`; цели `web:dev-api`, `admin:dev-api`); не задана — всё в API.

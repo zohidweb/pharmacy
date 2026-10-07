@@ -66,8 +66,8 @@ ADR-0012 reverse proxy и статика (отложен до выбора хо�
 ```
 pharmacy/
 ├── apps/
-│   ├── api/          # NestJS: модульный монолит — src/app/{stores, catalog, inventory, pos,
-│   │                 #   purchasing, pricing, returns, billing, sync, fiscal, export-1c, audit}
+│   ├── api/          # NestJS: модульный монолит — src/app/{stores, staff, catalog, inventory,
+│   │                 #   pos, purchasing, pricing, returns, billing, sync, fiscal, export-1c, audit}
 │   ├── api-e2e/      # e2e-тесты API (Jest)
 │   ├── web/          # Next.js: клиентский продукт (касса, склад, кабинет владельца)
 │   │                 #   app/ — маршруты (реэкспорты), pages/ — пустая; src/{app,pages,widgets,features,entities,shared} — FSD (ADR-0017)
@@ -97,7 +97,7 @@ npx nx affected -t build test lint fsd   # только затронутое и�
 npx nx fsd web / admin               # Steiger — слои FSD (ADR-0017)
 npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
-npx nx run web:dev-api               # то же, но готовые маршруты (вход, активация, точки, юрлица) — в apps/api
+npx nx run web:dev-api               # то же, но готовые маршруты (вход, точки, сотрудники, роли) — в apps/api
 npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
 npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети) — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)

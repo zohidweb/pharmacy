@@ -14,6 +14,7 @@ import {
 } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { IntlProvider } from 'use-intl';
+import { ConfirmPasswordDialog } from '@/features/confirm-password';
 import {
   apiMocksEnabled,
   apiMocksMode,
@@ -114,6 +115,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
             <>
               <ServiceWorker />
               {children}
+              <ConfirmPasswordDialog />
             </>
           ) : null}
         </ToastProvider>

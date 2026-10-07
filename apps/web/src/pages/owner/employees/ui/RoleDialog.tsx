@@ -12,7 +12,7 @@ import { Alert, Button, Checkbox, Dialog, TextField } from '@pharmacy/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
 
 const ACTIONS = [
   'view',
@@ -56,12 +56,13 @@ export function RoleDialog({
   const own = new Set(editorPermissions);
   const editable = canManage && !role?.system;
   const save = useMutation({
-    mutationFn: () => {
-      const body = { name, permissions: [...granted] };
-      return role
-        ? apiRequest('roles.update', { params: { id: role.id }, body })
-        : apiRequest('roles.create', { body });
-    },
+    mutationFn: () =>
+      withFreshAuth(async () => {
+        const body = { name, permissions: [...granted] };
+        return role
+          ? apiRequest('roles.update', { params: { id: role.id }, body })
+          : apiRequest('roles.create', { body });
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['roles'] });
       onClose();

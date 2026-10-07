@@ -12,7 +12,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { BoundTerminal } from '@pharmacy/shared-dto';
+import type { BoundTerminal, TenantTerminal } from '@pharmacy/shared-dto';
 import type { Request, Response } from 'express';
 import { Public, RequireFreshAuth } from '../../common/guards/decorators';
 import { RequirePermission } from '../auth/decorators';
@@ -53,6 +53,13 @@ export class TerminalsController {
     );
     setDeviceCookie(res, this.cookieEnv, secret);
     return terminal;
+  }
+
+  /** Active terminals of the stores in the scope (spec 2026-10-06-staff-design). */
+  @RequirePermission('terminals:view')
+  @Get()
+  list(): Promise<TenantTerminal[]> {
+    return this.terminals.list();
   }
 
   /** The terminal of this browser by its device-cookie; 404 `not_bound`. */

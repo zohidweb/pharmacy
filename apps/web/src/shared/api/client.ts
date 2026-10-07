@@ -123,8 +123,8 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
 
 /**
  * Routes apps/api already serves (spec 2026-10-06-owner-stores, section 6): in the `partial` mocks
- * mode they go to the API, every other route to the mocks. GET /terminals (`terminals.list`) is
- * not served yet; binding a terminal has no route in this client.
+ * mode they go to the API, every other route to the mocks;
+ * binding a terminal has no route in this client.
  */
 export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'sessions.create',
@@ -146,6 +146,18 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'legalEntities.list',
   'legalEntities.create',
   'legalEntities.update',
+  'sessions.confirm',
+  'employees.list',
+  'employees.get',
+  'employees.create',
+  'employees.update',
+  'employees.resetPassword',
+  'employees.setStatus',
+  'employees.setPin',
+  'roles.list',
+  'roles.create',
+  'roles.update',
+  'terminals.list',
 ]);
 
 /** The API for the routes it serves, the given mocks for the rest. */

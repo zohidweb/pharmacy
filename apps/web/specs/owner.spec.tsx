@@ -161,6 +161,10 @@ describe('EmployeesPage', () => {
     fireEvent.change(within(form).getByRole('textbox', { name: /Логин/ }), {
       target: { value: 'sabina' },
     });
+    // the phone is a sign-in identifier: required, E.164 (spec 2026-10-06-staff-design)
+    fireEvent.change(within(form).getByRole('textbox', { name: /Телефон/ }), {
+      target: { value: '+992 90 700-11-01' },
+    });
     fireEvent.change(within(form).getByLabelText(/^Пароль/), {
       target: { value: 'sabina' },
     });
@@ -197,7 +201,7 @@ describe('EmployeesPage', () => {
         {
           body: {
             fullName: 'Тест',
-            phone: '',
+            phone: '+992907001102',
             login: 'test-owner',
             password: 'Demo12345',
             pin: '',
@@ -215,7 +219,7 @@ describe('EmployeesPage', () => {
         {
           body: {
             fullName: 'Тест',
-            phone: '',
+            phone: '+992907001103',
             login: 'test-cashier',
             password: 'Demo12345',
             pin: '',
@@ -260,7 +264,7 @@ describe('EmployeesPage', () => {
       {
         body: {
           fullName: 'Кадровик Тестов',
-          phone: '',
+          phone: '+992907001104',
           login: 'kadry',
           password: 'Kadry2026',
           pin: '',
@@ -344,7 +348,7 @@ describe('ReportsPage', () => {
       {
         body: {
           fullName: 'Аналитик Тестов',
-          phone: '',
+          phone: '+992907001105',
           login: 'analyst',
           password: 'Analyst2026',
           pin: '',

@@ -25,6 +25,8 @@ export interface EmployeeListItem {
   locale: UiLocale;
   status: EmployeeStatus;
   pinSet: boolean;
+  /** The PIN is locked after three wrong attempts (ADR-0008); a new PIN unlocks it. */
+  pinLocked: boolean;
   lastLoginAt: string | null;
 }
 
@@ -36,12 +38,18 @@ export interface EmployeeListQuery {
   offset?: number;
 }
 
-/** GET /api/v1/employees?storeId=&roleId=&status=&limit=&offset= */
+/**
+ * GET /api/v1/employees?storeId=&roleId=&status=&limit=&offset= (`employees:view`) — employees whose
+ * scope meets the viewer's; a whole-network employee only for a whole-network viewer.
+ */
 export type EmployeeListResponse = Page<EmployeeListItem>;
 
 /**
- * POST /api/v1/employees — password and PIN follow ADR-0008 (PIN by the network minimum). Login,
- * phone (E.164) and e-mail are unique on the whole platform and double as sign-in identifiers.
+ * POST /api/v1/employees (`employees:create`, fresh sign-in) — password and PIN follow ADR-0008 (PIN
+ * by the network minimum). Login, phone (E.164) and e-mail are unique on the whole platform and
+ * double as sign-in identifiers. Errors: 403 `permission_escalation` / `store_not_in_scope`, 409
+ * `login_taken` / `phone_taken` / `email_taken`, 422 `password_policy` / `pin_length` / `pin_trivial`,
+ * 400 `validation_failed`.
  */
 export interface CreateEmployeeRequest {
   fullName: string;
@@ -57,20 +65,38 @@ export interface CreateEmployeeRequest {
   locale: UiLocale;
 }
 
-/** PUT /api/v1/employees/{id} */
+/**
+ * PUT /api/v1/employees/{id} (`employees:update`; a new role or scope also `employees:assign-role`).
+ * 404 outside the viewer's scope, 403 `own_assignment` / `permission_escalation` /
+ * `store_not_in_scope`, 409 `last_owner` and the identifier conflicts.
+ */
 export type UpdateEmployeeRequest = Omit<
   CreateEmployeeRequest,
   'password' | 'pin'
 >;
 
-/** POST /api/v1/employees/{id}/password — set by the manager; the employee's sessions end. */
+/**
+ * POST /api/v1/employees/{id}/password (`employees:update`) — set by the manager; the employee's
+ * sessions end. 422 `password_policy`.
+ */
 export interface ResetEmployeePasswordRequest {
   newPassword: string;
 }
 
-/** POST /api/v1/employees/{id}/status — blocking ends the employee's sessions (ADR-0018, п. 7). */
+/**
+ * POST /api/v1/employees/{id}/status (`employees:update`) — blocking ends the employee's sessions
+ * (ADR-0018, п. 7). 403 `own_assignment`, 409 `last_owner`.
+ */
 export interface SetEmployeeStatusRequest {
   status: EmployeeStatus;
+}
+
+/**
+ * POST /api/v1/employees/{id}/pin (`employees:update`) — a new PIN set by the manager; it also lifts
+ * the PIN lock after three wrong attempts. 204; 422 `pin_length` / `pin_trivial`.
+ */
+export interface SetEmployeePinRequest {
+  pin: string;
 }
 
 export interface EmployeeActivityEntry {
@@ -95,7 +121,11 @@ export interface Role {
   employees: number;
 }
 
-/** POST /api/v1/roles, PUT /api/v1/roles/{id} — 403 `permission_escalation` above the editor. */
+/**
+ * POST /api/v1/roles, PUT /api/v1/roles/{id} (`roles:manage`, fresh sign-in) — 403
+ * `permission_escalation` above the editor, `own_assignment` for one's own role; 409 `system_role`
+ * («Владелец»), `role_name_taken` (case-insensitive within the network).
+ */
 export interface RoleInput {
   name: string;
   permissions: Permission[];

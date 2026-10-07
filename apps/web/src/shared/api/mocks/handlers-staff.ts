@@ -64,6 +64,7 @@ function employeeItem(e: MockEmployeeState): EmployeeListItem {
     locale: e.locale,
     status: e.status,
     pinSet: e.pin !== null,
+    pinLocked: e.pinLocked,
     lastLoginAt: e.lastLoginAt,
   };
 }

@@ -25,7 +25,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -374,7 +374,7 @@ function TerminalsTab() {
   });
   const unbind = useMutation({
     mutationFn: (id: string) =>
-      apiRequest('terminals.unbind', { params: { id } }),
+      withFreshAuth(() => apiRequest('terminals.unbind', { params: { id } })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['terminals'] }),
   });
   const error = useApiErrorMessage(unbind.error);

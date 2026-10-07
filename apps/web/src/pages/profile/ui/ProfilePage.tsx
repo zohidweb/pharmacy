@@ -28,7 +28,12 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
 import { SignOutButton } from '@/features/sign-out';
-import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  ApiError,
+  apiRequest,
+  useApiErrorMessage,
+  withFreshAuth,
+} from '@/shared/api';
 import { locales, setLocale, type Locale, WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -135,9 +140,11 @@ function PasswordCard({ locked }: { locked: string | null }) {
   const rulesOk = passwordRules.every((rule) => rule.test(next));
   const change = useMutation({
     mutationFn: () =>
-      apiRequest('me.changePassword', {
-        body: { currentPassword: current, newPassword: next },
-      }),
+      withFreshAuth(() =>
+        apiRequest('me.changePassword', {
+          body: { currentPassword: current, newPassword: next },
+        }),
+      ),
     onSuccess: () => {
       setCurrent('');
       setNext('');
@@ -248,9 +255,11 @@ function PinCard({ me, locked }: { me: EmployeeMe; locked: string | null }) {
   const problem = checkPin(next);
   const change = useMutation({
     mutationFn: () =>
-      apiRequest('me.changePin', {
-        body: { currentPin: me.pinSet ? current : null, newPin: next },
-      }),
+      withFreshAuth(() =>
+        apiRequest('me.changePin', {
+          body: { currentPin: me.pinSet ? current : null, newPin: next },
+        }),
+      ),
     onSuccess: () => {
       setCurrent('');
       setNext('');
@@ -337,7 +346,7 @@ function TerminalsCard({ canUnbind }: { canUnbind: boolean }) {
   const [target, setTarget] = useState<MyTerminal | null>(null);
   const unbind = useMutation({
     mutationFn: (id: string) =>
-      apiRequest('terminals.unbind', { params: { id } }),
+      withFreshAuth(() => apiRequest('terminals.unbind', { params: { id } })),
     onSuccess: () => {
       setTarget(null);
       void queryClient.invalidateQueries({ queryKey: terminalsKey });

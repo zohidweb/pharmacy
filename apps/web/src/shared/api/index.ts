@@ -12,6 +12,12 @@ export {
   type ApiTransport,
 } from './client';
 export {
+  FreshAuthCancelled,
+  freshAuthStore,
+  isFreshAuthCancelled,
+  withFreshAuth,
+} from './fresh-auth';
+export {
   apiRoutes,
   type ApiBody,
   type ApiResponse,

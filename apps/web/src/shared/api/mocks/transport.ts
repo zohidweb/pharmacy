@@ -148,6 +148,18 @@ const handlers: MockHandlers = {
   'sessions.delete': () => {
     writeSession(null);
   },
+  // Password re-confirmation (ADR-0008, amendment 2026-10-06); the mocks have no session age.
+  'sessions.confirm': ({ body, correlationId }) => {
+    const { employee, stored } = current(correlationId);
+    if (stored.auth !== 'password') {
+      throw new ApiError(403, 'password_session_required', correlationId);
+    }
+    if (employee.password !== body.password) {
+      throw new ApiError(422, 'invalid_current_password', correlationId, [
+        { field: 'password', code: 'invalid_current_password' },
+      ]);
+    }
+  },
   // First sign-in by a one-time code (synthetic code of the demo data; ADR-0008).
   'activations.create': ({ body, correlationId }) => {
     const code = body.code.replace(/[\s-]/g, '').toUpperCase();
@@ -188,7 +200,7 @@ const handlers: MockHandlers = {
       write: true,
     });
     if (stored.auth !== 'password') {
-      throw new ApiError(403, 'step_up_required', correlationId);
+      throw new ApiError(403, 'fresh_auth_required', correlationId);
     }
     const db = mockDb();
     const tenantTerminal = db.owner.terminals.find((t) => t.id === params.id);
@@ -286,7 +298,7 @@ const handlers: MockHandlers = {
       write: true,
     });
     if (stored.auth !== 'password') {
-      throw new ApiError(403, 'step_up_required', correlationId);
+      throw new ApiError(403, 'fresh_auth_required', correlationId);
     }
     if (employee.password !== body.currentPassword) {
       throw new ApiError(422, 'wrong_password', correlationId, [
@@ -300,7 +312,7 @@ const handlers: MockHandlers = {
       write: true,
     });
     if (stored.auth !== 'password') {
-      throw new ApiError(403, 'step_up_required', correlationId);
+      throw new ApiError(403, 'fresh_auth_required', correlationId);
     }
     if (employee.pin !== null && employee.pin !== body.currentPin) {
       throw new ApiError(422, 'wrong_pin', correlationId, [

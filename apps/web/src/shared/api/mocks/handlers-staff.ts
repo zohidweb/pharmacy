@@ -39,7 +39,7 @@ type StaffRoute = Extract<
 const owner = () => mockDb().owner;
 
 const validation = (correlationId: string, field: string, code: string) =>
-  new ApiError(422, 'validation_failed', correlationId, [{ field, code }]);
+  new ApiError(400, 'validation_failed', correlationId, [{ field, code }]);
 
 /** Store ids of the session scope; null — the whole network. */
 const scopeOf = (session: EmployeeSession) =>
@@ -283,6 +283,28 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
       action: 'password_reset',
       object: employee.fullName,
       details: '—',
+    });
+  },
+  'employees.setPin': ({ params, body, correlationId }) => {
+    const { session } = context(correlationId, 'employees:update', {
+      write: true,
+    });
+    const employee = employeeOf(session, params.id, correlationId);
+    if (employee.id === session.employee.id) {
+      throw new ApiError(403, 'own_assignment', correlationId);
+    }
+    const problem = checkPin(body.pin, owner().settings.minPinLength);
+    if (problem !== null) {
+      const code = problem === 'trivial' ? 'pin_trivial' : 'pin_length';
+      throw new ApiError(422, code, correlationId, [{ field: 'pin', code }]);
+    }
+    employee.pin = body.pin;
+    employee.pinFailures = 0;
+    employee.pinLocked = false;
+    appendAudit(session, {
+      action: 'password_reset',
+      object: employee.fullName,
+      details: 'PIN',
     });
   },
   'employees.setStatus': ({ params, body, correlationId }) => {

@@ -28,7 +28,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
 
 type Form = CreateEmployeeRequest;
 
@@ -92,15 +92,16 @@ export function EmployeeDialog({
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['employees'] });
   const save = useMutation({
-    mutationFn: () => {
-      const body = { ...form, storeIds: network ? null : form.storeIds };
-      if (!employee) return apiRequest('employees.create', { body });
-      const { password: _p, pin: _n, ...update } = body;
-      return apiRequest('employees.update', {
-        params: { id: employee.id },
-        body: update,
-      });
-    },
+    mutationFn: () =>
+      withFreshAuth(async () => {
+        const body = { ...form, storeIds: network ? null : form.storeIds };
+        if (!employee) return apiRequest('employees.create', { body });
+        const { password: _p, pin: _n, ...update } = body;
+        return apiRequest('employees.update', {
+          params: { id: employee.id },
+          body: update,
+        });
+      }),
     onSuccess: () => {
       void invalidate();
       onClose();
@@ -108,10 +109,12 @@ export function EmployeeDialog({
   });
   const reset = useMutation({
     mutationFn: () =>
-      apiRequest('employees.resetPassword', {
-        params: { id: employee?.id ?? '' },
-        body: { newPassword },
-      }),
+      withFreshAuth(() =>
+        apiRequest('employees.resetPassword', {
+          params: { id: employee?.id ?? '' },
+          body: { newPassword },
+        }),
+      ),
     onSuccess: () => {
       setNewPassword('');
       toast.show(t('passwordReset'));
@@ -119,10 +122,12 @@ export function EmployeeDialog({
   });
   const status = useMutation({
     mutationFn: () =>
-      apiRequest('employees.setStatus', {
-        params: { id: employee?.id ?? '' },
-        body: { status: card?.status === 'blocked' ? 'active' : 'blocked' },
-      }),
+      withFreshAuth(() =>
+        apiRequest('employees.setStatus', {
+          params: { id: employee?.id ?? '' },
+          body: { status: card?.status === 'blocked' ? 'active' : 'blocked' },
+        }),
+      ),
     onSuccess: (next) => {
       setCard(next);
       void invalidate();

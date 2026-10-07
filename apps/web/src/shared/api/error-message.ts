@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'use-intl';
 import { ApiError } from './client';
+import { isFreshAuthCancelled } from './fresh-auth';
 
 /** Problem codes with their own localized message (`apiErrors.<code>`). */
 const knownCodes = [
@@ -14,7 +15,12 @@ const knownCodes = [
   'pin_trivial',
   'wrong_password',
   'wrong_pin',
-  'step_up_required',
+  'fresh_auth_required',
+  'password_session_required',
+  'role_name_taken',
+  'last_owner',
+  'system_role',
+  'pin_length',
   'read_only_session',
   'shift_open',
   'no_open_shift',
@@ -42,7 +48,8 @@ const isKnown = (code: string): code is KnownCode =>
  */
 export function useApiErrorMessage(error: unknown): string | null {
   const t = useTranslations();
-  if (!error) return null;
+  // a cancelled password confirmation is the employee's choice, not an error
+  if (!error || isFreshAuthCancelled(error)) return null;
   if (error instanceof ApiError) {
     if (error.code === 'network' || error.code === 'timeout')
       return t('errors.network');

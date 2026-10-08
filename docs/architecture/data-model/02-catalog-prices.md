@@ -2,6 +2,19 @@
 
 Соглашения — в [README](README.md). `tenant_id`, `(tenant_id, id)` и `created_at` в списках колонок не повторяются.
 
+> **Введено миграцией `catalog-pricing` (2026-10-07, спецификация `docs/superpowers/specs/2026-10-07-catalog-pricing-design.md`):**
+> `categories`, `dictionary_values`, `products`, `product_barcodes`, `store_products`, `discount_rules`,
+> `discount_rule_tiers`, `discount_rule_stores` — только колонки, у которых есть потребитель. Колонки синхронизации,
+> справочника препаратов, прихода и склада (`products.origin`, `created_at_store_id`, `merged_into_product_id`,
+> `drug_reference_id`, `store_products.draft_*`, `min_stock_pieces`) добавят миграции своих модулей; `drug_reference`
+> и `payment_methods` — тоже. Решения при реализации:
+> - розничная цена есть только у пары «товар × точка» (подтверждено 2026-10-07): цены сети нет, экран «Цены» задаёт
+>   цену нескольким точкам одним запросом;
+> - `products.unit` — закрытый список кодов `pack` / `piece` / `ml` (`productUnits`, `libs/shared/domain`), строк
+>   справочника для единиц нет;
+> - МНН в контракте — одна строка, хранится как `{"ru": …}` (индекс аналогов — по `inn->>'ru'`);
+> - стартовые категории и лекарственные формы новой сети создаёт `provision_tenant` (ADR-0013, поправка 2026-10-05, п. 7).
+
 ```mermaid
 erDiagram
   drug_reference ||--o{ drug_reference_barcodes : ""
@@ -39,7 +52,8 @@ erDiagram
 |---|---|---|
 | `name` | jsonb | D6; индексы `pg_trgm` по `name->>'ru'` и `name->>'tj'` |
 | `inn` | jsonb null | МНН; индекс по `lower(inn->>'ru')` для поиска аналогов |
-| `dosage_form`, `dosage`, `manufacturer`, `country`, `unit` | text null | Значения из `dictionary_values`, хранятся текстом |
+| `dosage_form`, `dosage`, `manufacturer`, `country` | text null | Форма — название из `dictionary_values` на языке сети; производитель — свободный текст; страна — ISO 3166-1 alpha-2 |
+| `unit` | text | `pack` / `piece` / `ml` (check) |
 | `pieces_per_pack` | integer ≥ 1 | 1 — не делится |
 | `sold_by_piece` | boolean | Разрешена поштучная продажа — включается для каждого товара отдельно; при `pieces_per_pack = 1` — false |
 | `is_prescription`, `is_controlled` | boolean | Рецептурный — предупреждение; ПКУ — право `pos:sell-controlled` и рецепт |
@@ -68,7 +82,7 @@ erDiagram
 
 | Колонка | Тип | Правило |
 |---|---|---|
-| `kind` | text | `unit`, `dosage_form`, `manufacturer`, `inn`, `write_off_reason`, `customer_return_reason` |
+| `kind` | text | Сейчас `dosage_form`; `write_off_reason`, `customer_return_reason` добавят модули склада и возвратов (check расширяется миграцией) |
 | `code` | text null | У системных значений — стабильный код (например, `write_off_reason.expired`); уникален в `(tenant_id, kind, code)` |
 | `name` | jsonb | D6 |
 | `is_system` | boolean | Стартовый набор, не удаляется |

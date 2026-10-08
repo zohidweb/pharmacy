@@ -22,6 +22,7 @@ import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { CategoriesCard } from './CategoriesCard';
 
 const NOTIFICATIONS: NotificationKind[] = [
   'expiry',
@@ -341,9 +342,17 @@ function SettingsPageView() {
         <QueryState query={settings}>
           {(data) => <NetworkCard settings={data} editable={editable} />}
         </QueryState>
+        <CategoriesCard />
         <div className="grid grid-cols-2 items-start gap-4">
           <QueryState query={markups}>
-            {(data) => <MarkupsCard markups={data} editable={editable} />}
+            {(data) => (
+              <MarkupsCard
+                // a new or archived category resets the inputs
+                key={data.map((m) => m.categoryId).join()}
+                markups={data}
+                editable={editable}
+              />
+            )}
           </QueryState>
           <ReferencesCard />
         </div>

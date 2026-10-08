@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'use-intl';
-import { ApiError } from './client';
+import { ApiError, type ApiFieldError } from './client';
 import { isFreshAuthCancelled } from './fresh-auth';
 
 /** Problem codes with their own localized message (`apiErrors.<code>`). */
@@ -42,8 +42,18 @@ const knownCodes = [
   'phone_taken',
   'email_taken',
   'login_locked',
+  'barcode_taken',
+  'product_archived',
+  'category_in_use',
+  'category_name_taken',
+  'above_max_price',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
+
+/** Field errors (`errors[]`) of a failed request; empty for anything else. */
+export function apiFieldErrors(error: unknown): readonly ApiFieldError[] {
+  return error instanceof ApiError ? error.errors : [];
+}
 
 const isKnown = (code: string): code is KnownCode =>
   (knownCodes as readonly string[]).includes(code);

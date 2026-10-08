@@ -17,7 +17,11 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiFieldErrors,
+  apiRequest,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -68,7 +72,9 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const canEdit = canWrite(session, 'catalog:update');
+  const archived = card.status === 'archived';
+  const canEdit = canWrite(session, 'catalog:update') && !archived;
+  const canArchive = canWrite(session, 'catalog:delete');
   const refs = useCatalogReferences();
   const [draft, setDraft] = useState<ProductDraft>(() => draftOf(card));
   const [touched, setTouched] = useState(false);
@@ -83,7 +89,25 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
       toast.show(t('saved'));
     },
   });
-  const error = useApiErrorMessage(save.error);
+  const setStatus = useMutation({
+    mutationFn: () =>
+      apiRequest('catalog.status', {
+        params: { id: card.id },
+        body: { status: archived ? 'active' : 'archived' },
+      }),
+    onSuccess: (product) => {
+      void queryClient.invalidateQueries({ queryKey: ['catalog'] });
+      void queryClient.invalidateQueries({ queryKey: ['prices'] });
+      toast.show(
+        t(product.status === 'archived' ? 'archivedToast' : 'restoredToast'),
+      );
+    },
+  });
+  const fieldErrors = apiFieldErrors(save.error);
+  // a rejected field is shown at the field itself
+  const error = useApiErrorMessage(
+    fieldErrors.length > 0 ? setStatus.error : (save.error ?? setStatus.error),
+  );
   const problems = draftProblems(draft);
   const valid =
     !problems.nameRu && !problems.piecesPerPack && !problems.maxPrice;
@@ -91,6 +115,7 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
   return (
     <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">
       <Card className="flex flex-col gap-4">
+        {archived && <Alert tone="info">{t('archivedNotice')}</Alert>}
         {error && (
           <Alert tone="danger" live="assertive">
             {error}
@@ -103,9 +128,20 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
             refs={refs.data}
             touched={touched}
             disabled={!canEdit}
+            fieldErrors={fieldErrors}
           />
         )}
         <div className="flex flex-wrap justify-end gap-2">
+          {canArchive && (
+            <Button
+              variant="secondary"
+              iconStart={archived ? 'undo-2' : 'inbox'}
+              loading={setStatus.isPending}
+              onClick={() => setStatus.mutate()}
+            >
+              {t(archived ? 'restore' : 'archive')}
+            </Button>
+          )}
           <Button
             variant="secondary"
             iconStart="printer"

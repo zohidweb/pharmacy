@@ -106,17 +106,27 @@ export function ProductForm({
   refs,
   touched,
   disabled,
+  fieldErrors = [],
 }: {
   draft: ProductDraft;
   onChange: (change: (draft: ProductDraft) => ProductDraft) => void;
   refs: CatalogReferences;
   touched: boolean;
   disabled: boolean;
+  /** `errors[]` of the last rejected save, laid onto the fields. */
+  fieldErrors?: ReadonlyArray<{ field: string; code: string }>;
 }) {
   const t = useTranslations('products.form');
   const id = useId();
   const [code, setCode] = useState('');
   const problems = draftProblems(draft);
+  const serverError = (field: string) => {
+    const code = fieldErrors.find((error) => error.field === field)?.code;
+    if (code === undefined) return undefined;
+    if (code === 'required') return t('nameRequired');
+    if (code === 'barcode_taken') return t('barcodeTaken');
+    return t('invalidValue');
+  };
   const set = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) =>
     onChange((current) => ({ ...current, [key]: value }));
   const codeError =
@@ -144,7 +154,11 @@ export function ProductForm({
           required
           disabled={disabled}
           value={draft.nameRu}
-          error={touched && problems.nameRu ? t('nameRequired') : undefined}
+          error={
+            touched && problems.nameRu
+              ? t('nameRequired')
+              : serverError('nameRu')
+          }
           onChange={(event) => set('nameRu', event.target.value)}
         />
         <TextField
@@ -152,6 +166,7 @@ export function ProductForm({
           lang="tg"
           disabled={disabled}
           value={draft.nameTj}
+          error={serverError('nameTj')}
           onChange={(event) => set('nameTj', event.target.value)}
         />
         <TextField
@@ -166,6 +181,7 @@ export function ProductForm({
           label={t('category')}
           disabled={disabled}
           value={draft.categoryId}
+          error={serverError('categoryId')}
           onChange={(event) => set('categoryId', event.target.value)}
           options={refs.categories.map((c) => ({ value: c.id, label: c.name }))}
         />
@@ -173,6 +189,7 @@ export function ProductForm({
           label={t('formField')}
           disabled={disabled}
           value={draft.form}
+          error={serverError('form')}
           onChange={(event) => set('form', event.target.value)}
           options={refs.forms.map((value) => ({ value, label: value }))}
         />
@@ -194,6 +211,7 @@ export function ProductForm({
           label={t('country')}
           disabled={disabled}
           value={draft.countryCode}
+          error={serverError('countryCode')}
           onChange={(event) => set('countryCode', event.target.value)}
           options={refs.countries.map((c) => ({
             value: c.code,
@@ -215,7 +233,11 @@ export function ProductForm({
           inputMode="numeric"
           disabled={disabled}
           value={String(draft.piecesPerPack)}
-          error={touched && problems.piecesPerPack ? t('positive') : undefined}
+          error={
+            touched && problems.piecesPerPack
+              ? t('positive')
+              : serverError('piecesPerPack')
+          }
           onChange={(event) =>
             set(
               'piecesPerPack',
@@ -308,6 +330,11 @@ export function ProductForm({
         )}
         {draft.barcodes.length === 0 && (
           <p className="text-xs text-fg-subtle">{t('noBarcodeHint')}</p>
+        )}
+        {serverError('barcodes') && (
+          <p role="alert" className="text-sm text-danger">
+            {serverError('barcodes')}
+          </p>
         )}
       </section>
 

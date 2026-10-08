@@ -183,6 +183,7 @@ export function PriceDialog({
                       label={t('newOf', { store: price.storeName })}
                       valueMinor={value(price.storeId)}
                       invalidText={tDocs('amountFormat')}
+                      allowEmpty
                       onChange={(priceMinor) =>
                         setPrices((current) => ({
                           ...current,

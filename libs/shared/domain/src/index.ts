@@ -1,3 +1,4 @@
+export * from './lib/catalog';
 export * from './lib/discount';
 export * from './lib/operator-permissions';
 export * from './lib/permissions';

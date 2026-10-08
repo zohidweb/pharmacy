@@ -294,7 +294,8 @@ export interface NetworkSettings {
 export interface CategoryMarkup {
   categoryId: string;
   categoryName: string;
-  markupPercent: number;
+  /** null — no markup of the category yet. */
+  markupPercent: number | null;
   products: number;
 }
 

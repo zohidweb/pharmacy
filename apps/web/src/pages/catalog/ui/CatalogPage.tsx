@@ -5,6 +5,7 @@ import type {
   CatalogFlag,
   CatalogListItem,
   CatalogReferences,
+  CatalogStatus,
 } from '@pharmacy/shared-dto';
 import { formatDateOnly, formatMoney } from '@pharmacy/shared-util';
 import {
@@ -29,7 +30,12 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { canWrite, useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiFieldErrors,
+  apiRequest,
+  isApiRouteAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -38,12 +44,14 @@ import {
   draftProblems,
   emptyDraft,
   inputOf,
+  shownAtFields,
   type ProductDraft,
 } from './ProductForm';
 import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 20;
 const FLAGS: CatalogFlag[] = ['rx', 'controlled', 'regulated', 'no_barcode'];
+const STATUSES: CatalogStatus[] = ['active', 'archived'];
 
 const flagTone: Record<CatalogFlag, StatusTone> = {
   rx: 'info',
@@ -69,13 +77,6 @@ export function useCatalogReferences() {
   });
 }
 
-export function useSupplierOptions() {
-  return useQuery({
-    queryKey: ['suppliers', 'options'],
-    queryFn: ({ signal }) => apiRequest('suppliers.options', { signal }),
-  });
-}
-
 /** Catalog of products (UI mockup «Каталог товаров»). */
 function CatalogPageView() {
   const t = useTranslations('products');
@@ -86,12 +87,13 @@ function CatalogPageView() {
   const [categoryId, setCategoryId] = useState('');
   const [form, setForm] = useState('');
   const [flag, setFlag] = useState<CatalogFlag | ''>('');
+  const [status, setStatus] = useState<CatalogStatus>('active');
   const [offset, setOffset] = useState(0);
   const [creating, setCreating] = useState(false);
   const refs = useCatalogReferences();
 
   const list = useQuery({
-    queryKey: ['catalog', 'list', q, categoryId, form, flag, offset],
+    queryKey: ['catalog', 'list', q, categoryId, form, flag, status, offset],
     queryFn: ({ signal }) =>
       apiRequest('catalog.list', {
         query: {
@@ -99,6 +101,7 @@ function CatalogPageView() {
           categoryId: categoryId || undefined,
           form: form || undefined,
           flag: flag || undefined,
+          status,
           limit: PAGE,
           offset,
         },
@@ -109,13 +112,18 @@ function CatalogPageView() {
   const duplicates = useQuery({
     queryKey: ['catalog', 'duplicates'],
     queryFn: ({ signal }) => apiRequest('catalog.duplicates', { signal }),
+    // duplicates of offline stores come with the sync (ADR-0014)
+    enabled: isApiRouteAvailable('catalog.duplicates'),
   });
-  const filtered = Boolean(q || categoryId || form || flag);
+  const filtered = Boolean(
+    q || categoryId || form || flag || status === 'archived',
+  );
   const reset = () => {
     setQ('');
     setCategoryId('');
     setForm('');
     setFlag('');
+    setStatus('active');
     setOffset(0);
   };
 
@@ -171,7 +179,7 @@ function CatalogPageView() {
       numeric: true,
       nowrap: true,
       cell: (row) =>
-        row.retailPriceMinor > 0
+        row.retailPriceMinor !== null
           ? formatMoney(row.retailPriceMinor, { withSign: false })
           : '—',
     },
@@ -304,6 +312,19 @@ function CatalogPageView() {
                         })),
                       ]}
                     />
+                    <Select
+                      label={t('statusFilter.label')}
+                      hideLabel
+                      value={status}
+                      onChange={(event) => {
+                        setStatus(event.target.value as CatalogStatus);
+                        setOffset(0);
+                      }}
+                      options={STATUSES.map((value) => ({
+                        value,
+                        label: t(`statusFilter.${value}`),
+                      }))}
+                    />
                   </div>
                 </div>
                 <DataTable
@@ -430,7 +451,6 @@ function NewProductDialog({
   const tDocs = useTranslations('stockDocs');
   const router = useRouter();
   const queryClient = useQueryClient();
-  const suppliers = useSupplierOptions();
   const [draft, setDraft] = useState<ProductDraft>(() => emptyDraft(refs));
   const [touched, setTouched] = useState(false);
   const create = useMutation({
@@ -440,7 +460,11 @@ function NewProductDialog({
       router.push(routes.product(product.id));
     },
   });
-  const error = useApiErrorMessage(create.error);
+  const fieldErrors = apiFieldErrors(create.error);
+  // a rejected field is shown at the field itself
+  const error = useApiErrorMessage(
+    shownAtFields(fieldErrors) ? null : create.error,
+  );
   const problems = draftProblems(draft);
   const valid =
     !problems.nameRu && !problems.piecesPerPack && !problems.maxPrice;
@@ -480,9 +504,9 @@ function NewProductDialog({
           draft={draft}
           onChange={setDraft}
           refs={refs}
-          suppliers={suppliers.data ?? []}
           touched={touched}
           disabled={false}
+          fieldErrors={fieldErrors}
         />
         <Alert tone="info">{t('priceFromReceipt')}</Alert>
       </div>

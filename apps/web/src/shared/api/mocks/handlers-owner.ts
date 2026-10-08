@@ -47,6 +47,10 @@ type OwnerRoute = Extract<
 >;
 
 const owner = () => mockDb().owner;
+const activeCategories = () =>
+  mockDb()
+    .catalog.categories.filter((c) => c.status === 'active')
+    .map((c) => ({ id: c.id, name: c.nameRu }));
 const today = () => toAppDate();
 const PRICE_PER_STORE_MINOR = 40_000;
 
@@ -1040,10 +1044,10 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
   },
   'settings.markups': ({ correlationId }) => {
     context(correlationId, 'settings:view');
-    return categories.map((c) => ({
+    return activeCategories().map((c) => ({
       categoryId: c.id,
       categoryName: c.name,
-      markupPercent: mockDb().stock.markup[c.id] ?? 40,
+      markupPercent: mockDb().stock.markup[c.id] ?? null,
       products: mockDb().pos.products.filter((p) => p.categoryId === c.id)
         .length,
     }));
@@ -1053,13 +1057,13 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       write: true,
     });
     for (const markup of body.markups) {
-      if (!categories.some((c) => c.id === markup.categoryId)) {
+      if (!activeCategories().some((c) => c.id === markup.categoryId)) {
         throw validation(correlationId, 'categoryId', 'unknown');
       }
       if (
         !Number.isInteger(markup.markupPercent) ||
         markup.markupPercent < 0 ||
-        markup.markupPercent > 500
+        markup.markupPercent > 1000
       ) {
         throw validation(correlationId, 'markupPercent', 'range');
       }

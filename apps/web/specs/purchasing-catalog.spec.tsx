@@ -313,7 +313,8 @@ describe('CatalogPage and ProductPage', () => {
     searchParams = new URLSearchParams({ id: 'p-paracetamol' });
     renderWithProviders(<ProductPage />);
     await screen.findByRole('heading', { name: 'Розничные цены по точкам' });
-    expect(screen.getByText('Выше предельной')).toBeTruthy();
+    // the prices come from GET /prices/{id}, after the card itself
+    expect(await screen.findByText('Выше предельной')).toBeTruthy();
     expect(screen.getByText(`Предельная цена: ${money(500)}`)).toBeTruthy();
     const nameTj = (await screen.findByRole('textbox', {
       name: /Наименование \(TJ\)/,

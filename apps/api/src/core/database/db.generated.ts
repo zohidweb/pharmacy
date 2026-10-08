@@ -41,6 +41,60 @@ export interface AuditLog {
   terminalId: string | null;
 }
 
+export interface Categories {
+  archivedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  id: string;
+  markupBp: number | null;
+  name: Json;
+  posSortOrder: Generated<number>;
+  status: Generated<string>;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface DictionaryValues {
+  archivedAt: Timestamp | null;
+  code: string | null;
+  createdAt: Generated<Timestamp>;
+  id: string;
+  isSystem: Generated<boolean>;
+  kind: string;
+  name: Json;
+  status: Generated<string>;
+  tenantId: string;
+}
+
+export interface DiscountRules {
+  archivedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  id: string;
+  level: string;
+  name: Json;
+  status: Generated<string>;
+  storeScope: string;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
+  validFrom: string | null;
+  validTo: string | null;
+}
+
+export interface DiscountRuleStores {
+  createdAt: Generated<Timestamp>;
+  ruleId: string;
+  storeId: string;
+  tenantId: string;
+}
+
+export interface DiscountRuleTiers {
+  createdAt: Generated<Timestamp>;
+  minTotalDirams: bigint;
+  percentBp: number;
+  ruleId: string;
+  tenantId: string;
+}
+
 export interface EmployeeCredentials {
   createdAt: Generated<Timestamp>;
   employeeId: string;
@@ -136,6 +190,39 @@ export interface PlatformAuditLog {
   tenantId: string | null;
 }
 
+export interface ProductBarcodes {
+  barcode: string;
+  createdAt: Generated<Timestamp>;
+  productId: string;
+  tenantId: string;
+}
+
+export interface Products {
+  archivedAt: Timestamp | null;
+  article: string | null;
+  categoryId: string;
+  country: string | null;
+  createdAt: Generated<Timestamp>;
+  defaultMinStockPieces: number | null;
+  dosage: string | null;
+  dosageForm: string | null;
+  id: string;
+  inn: Json | null;
+  isControlled: Generated<boolean>;
+  isPrescription: Generated<boolean>;
+  isPriceRegulated: Generated<boolean>;
+  manufacturer: string | null;
+  markupBp: number | null;
+  maxRetailPricePerPackDirams: bigint | null;
+  name: Json;
+  piecesPerPack: Generated<number>;
+  soldByPiece: Generated<boolean>;
+  status: Generated<string>;
+  tenantId: string;
+  unit: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface RolePermissions {
   createdAt: Generated<Timestamp>;
   permission: string;
@@ -172,6 +259,20 @@ export interface Sessions {
   tenantId: string;
   terminalCredentialHash: string | null;
   terminalId: string | null;
+}
+
+export interface StoreProducts {
+  createdAt: Generated<Timestamp>;
+  priceChangedAt: Timestamp | null;
+  priceChangedBy: string | null;
+  priceSource: Generated<string>;
+  priceVersion: Generated<number>;
+  productId: string;
+  retailPricePerPackDirams: bigint | null;
+  retailPricePerPieceDirams: bigint | null;
+  storeId: string;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface Stores {
@@ -249,6 +350,11 @@ export interface Terminals {
 
 export interface DB {
   auditLog: AuditLog;
+  categories: Categories;
+  dictionaryValues: DictionaryValues;
+  discountRules: DiscountRules;
+  discountRuleStores: DiscountRuleStores;
+  discountRuleTiers: DiscountRuleTiers;
   employeeCredentials: EmployeeCredentials;
   employees: Employees;
   employeeStores: EmployeeStores;
@@ -256,9 +362,12 @@ export interface DB {
   operatorCredentials: OperatorCredentials;
   operators: Operators;
   platformAuditLog: PlatformAuditLog;
+  productBarcodes: ProductBarcodes;
+  products: Products;
   rolePermissions: RolePermissions;
   roles: Roles;
   sessions: Sessions;
+  storeProducts: StoreProducts;
   stores: Stores;
   tenants: Tenants;
   tenantSettings: TenantSettings;

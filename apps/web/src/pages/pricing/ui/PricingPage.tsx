@@ -192,7 +192,8 @@ function PricesTab() {
               key: 'markup',
               header: t('columns.markup'),
               numeric: true,
-              cell: (row) => `${row.markupPercent} %`,
+              cell: (row) =>
+                row.markupPercent === null ? '—' : `${row.markupPercent} %`,
             },
             ...data.stores.map((store, index) => ({
               key: store.id,
@@ -209,7 +210,9 @@ function PricesTab() {
                         <Icon name="triangle-alert" size="sm" />
                       </span>
                     )}
-                    {formatMoney(price.priceMinor, { withSign: false })}
+                    {price.priceMinor === null
+                      ? t('notSold')
+                      : formatMoney(price.priceMinor, { withSign: false })}
                     {price.warnings.length > 0 && (
                       <span className="ph-visually-hidden">
                         {price.warnings

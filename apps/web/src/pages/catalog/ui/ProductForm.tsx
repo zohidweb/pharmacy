@@ -6,7 +6,6 @@ import type {
   CatalogReferences,
   PrescriptionKind,
   ProductUnit,
-  SupplierOption,
 } from '@pharmacy/shared-dto';
 import { formatMoney, parseMoneyToMinor } from '@pharmacy/shared-util';
 import {
@@ -63,10 +62,7 @@ export function draftOf(product: CatalogProduct): ProductDraft {
     unit: product.unit,
     piecesPerPack: product.piecesPerPack,
     divisible: product.divisible,
-    barcodes: product.barcodes.map(({ code, supplierId }) => ({
-      code,
-      supplierId,
-    })),
+    barcodes: product.barcodes.map(({ code }) => ({ code })),
     prescription: product.prescription,
     maxPriceMinor: product.maxPriceMinor,
     markupPercent: product.markupPercent,
@@ -97,6 +93,27 @@ export function inputOf(draft: ProductDraft): CatalogProductInput {
 }
 
 const UNITS: ProductUnit[] = ['pack', 'piece', 'ml'];
+
+/** Fields of the form that show an `errors[]` entry of the API next to themselves. */
+const FIELDS_WITH_ERRORS = new Set([
+  'nameRu',
+  'nameTj',
+  'categoryId',
+  'form',
+  'countryCode',
+  'piecesPerPack',
+  'barcodes',
+]);
+
+/** True when the form shows every rejected field itself (no general alert is needed). */
+export function shownAtFields(
+  errors: ReadonlyArray<{ field: string }>,
+): boolean {
+  return (
+    errors.length > 0 &&
+    errors.every((error) => FIELDS_WITH_ERRORS.has(error.field))
+  );
+}
 const PRESCRIPTIONS: PrescriptionKind[] = ['none', 'rx', 'controlled'];
 const BARCODE = /^\d{8,14}$/;
 
@@ -108,22 +125,29 @@ export function ProductForm({
   draft,
   onChange,
   refs,
-  suppliers,
   touched,
   disabled,
+  fieldErrors = [],
 }: {
   draft: ProductDraft;
   onChange: (change: (draft: ProductDraft) => ProductDraft) => void;
   refs: CatalogReferences;
-  suppliers: SupplierOption[];
   touched: boolean;
   disabled: boolean;
+  /** `errors[]` of the last rejected save, laid onto the fields. */
+  fieldErrors?: ReadonlyArray<{ field: string; code: string }>;
 }) {
   const t = useTranslations('products.form');
   const id = useId();
   const [code, setCode] = useState('');
-  const [codeSupplier, setCodeSupplier] = useState('');
   const problems = draftProblems(draft);
+  const serverError = (field: string) => {
+    const code = fieldErrors.find((error) => error.field === field)?.code;
+    if (code === undefined) return undefined;
+    if (code === 'required') return t('nameRequired');
+    if (code === 'barcode_taken') return t('barcodeTaken');
+    return t('invalidValue');
+  };
   const set = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) =>
     onChange((current) => ({ ...current, [key]: value }));
   const codeError =
@@ -138,15 +162,10 @@ export function ProductForm({
     if (!code || codeError) return;
     onChange((current) => ({
       ...current,
-      barcodes: [
-        ...current.barcodes,
-        { code, supplierId: codeSupplier || null },
-      ],
+      barcodes: [...current.barcodes, { code }],
     }));
     setCode('');
   };
-  const supplierName = (supplierId: string | null) =>
-    suppliers.find((s) => s.id === supplierId)?.name;
 
   return (
     <div className="flex flex-col gap-5">
@@ -156,7 +175,11 @@ export function ProductForm({
           required
           disabled={disabled}
           value={draft.nameRu}
-          error={touched && problems.nameRu ? t('nameRequired') : undefined}
+          error={
+            touched && problems.nameRu
+              ? t('nameRequired')
+              : serverError('nameRu')
+          }
           onChange={(event) => set('nameRu', event.target.value)}
         />
         <TextField
@@ -164,6 +187,7 @@ export function ProductForm({
           lang="tg"
           disabled={disabled}
           value={draft.nameTj}
+          error={serverError('nameTj')}
           onChange={(event) => set('nameTj', event.target.value)}
         />
         <TextField
@@ -178,6 +202,7 @@ export function ProductForm({
           label={t('category')}
           disabled={disabled}
           value={draft.categoryId}
+          error={serverError('categoryId')}
           onChange={(event) => set('categoryId', event.target.value)}
           options={refs.categories.map((c) => ({ value: c.id, label: c.name }))}
         />
@@ -185,6 +210,7 @@ export function ProductForm({
           label={t('formField')}
           disabled={disabled}
           value={draft.form}
+          error={serverError('form')}
           onChange={(event) => set('form', event.target.value)}
           options={refs.forms.map((value) => ({ value, label: value }))}
         />
@@ -206,6 +232,7 @@ export function ProductForm({
           label={t('country')}
           disabled={disabled}
           value={draft.countryCode}
+          error={serverError('countryCode')}
           onChange={(event) => set('countryCode', event.target.value)}
           options={refs.countries.map((c) => ({
             value: c.code,
@@ -227,7 +254,11 @@ export function ProductForm({
           inputMode="numeric"
           disabled={disabled}
           value={String(draft.piecesPerPack)}
-          error={touched && problems.piecesPerPack ? t('positive') : undefined}
+          error={
+            touched && problems.piecesPerPack
+              ? t('positive')
+              : serverError('piecesPerPack')
+          }
           onChange={(event) =>
             set(
               'piecesPerPack',
@@ -270,11 +301,6 @@ export function ProductForm({
               >
                 <Icon name="scan-barcode" size="sm" />
                 <span className="tabular-nums">{barcode.code}</span>
-                {supplierName(barcode.supplierId) && (
-                  <span className="text-xs text-fg-subtle">
-                    · {supplierName(barcode.supplierId)}
-                  </span>
-                )}
                 {!disabled && (
                   <IconButton
                     icon="x"
@@ -294,7 +320,7 @@ export function ProductForm({
           </ul>
         )}
         {!disabled && (
-          <div className="grid grid-cols-(--ph-search-columns-2) items-start gap-3">
+          <div className="grid grid-cols-(--ph-search-columns) items-start gap-3">
             <TextField
               label={t('scanBarcode')}
               hideLabel
@@ -313,16 +339,6 @@ export function ProductForm({
                 }
               }}
             />
-            <Select
-              label={t('barcodeSupplier')}
-              hideLabel
-              value={codeSupplier}
-              onChange={(event) => setCodeSupplier(event.target.value)}
-              options={[
-                { value: '', label: t('manufacturerCode') },
-                ...suppliers.map((s) => ({ value: s.id, label: s.name })),
-              ]}
-            />
             <Button
               variant="secondary"
               iconStart="plus"
@@ -335,6 +351,11 @@ export function ProductForm({
         )}
         {draft.barcodes.length === 0 && (
           <p className="text-xs text-fg-subtle">{t('noBarcodeHint')}</p>
+        )}
+        {serverError('barcodes') && (
+          <p role="alert" className="text-sm text-danger">
+            {serverError('barcodes')}
+          </p>
         )}
       </section>
 

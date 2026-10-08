@@ -97,7 +97,7 @@ npx nx affected -t build test lint fsd   # только затронутое и�
 npx nx fsd web / admin               # Steiger — слои FSD (ADR-0017)
 npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
-npx nx run web:dev-api               # то же, но готовые маршруты (вход, точки, сотрудники, роли) — в apps/api
+npx nx run web:dev-api               # то же, но готовые маршруты (вход, точки, сотрудники, роли, каталог, цены, скидки) — в apps/api
 npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
 npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети) — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
@@ -278,10 +278,11 @@ npm run prod:build / prod:up / prod:down
   `node --env-file=.env apps/api/scripts/create-operator.mjs --login … --name "…"`.
 - Офлайн-точка (часть 4 аутентификации): `STORE_MODE=offline` и `OFFLINE_TENANT_ID=<сеть точки>`,
   Redis не нужен — сессии в таблице `sessions` PostgreSQL точки, лимиты попыток в памяти процесса,
-  маршрутов оператора нет. Ключи JWT и pepper точки генерируются на её ПК:
-  `node scripts/generate-store-secrets.mjs --env-file <env-файл точки>` (значения не печатает,
-  существующие не перезаписывает; бэкап pepper — отдельно от бэкапа БД). Дистрибутив точки
-  (ADR-0005) — отдельной задачей.
+  маршрутов оператора нет; модули `stores`, `staff`, `catalog`, `pricing` пока регистрируются только в
+  облаке (синхронизация на точку — ADR-0014, отдельной задачей). Ключи JWT и pepper точки
+  генерируются на её ПК: `node scripts/generate-store-secrets.mjs --env-file <env-файл точки>`
+  (значения не печатает, существующие не перезаписывает; бэкап pepper — отдельно от бэкапа БД).
+  Дистрибутив точки (ADR-0005) — отдельной задачей.
 - Порты в compose публикуются только на `127.0.0.1`.
 
 ## Local development secrets

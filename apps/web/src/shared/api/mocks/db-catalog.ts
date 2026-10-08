@@ -6,11 +6,12 @@
  */
 import type {
   CatalogDuplicate,
+  CatalogStatus,
   DocumentAuthor,
   PriceConflict,
   ProductUnit,
 } from '@pharmacy/shared-dto';
-import { DAY_MS, dateIn } from './fixtures-pos';
+import { DAY_MS, categories, dateIn } from './fixtures-pos';
 
 export interface ProductExtras {
   nameTj: string;
@@ -19,8 +20,14 @@ export interface ProductExtras {
   unit: ProductUnit;
   maxPriceMinor: number | null;
   markupPercent: number | null;
-  /** Barcode → supplier whose packs carry it. */
-  barcodeSuppliers: Record<string, string>;
+}
+
+/** A category of the network as the catalog keeps it (the POS reads the active ones). */
+export interface CategoryRecord {
+  id: string;
+  nameRu: string;
+  nameTj: string;
+  status: CatalogStatus;
 }
 
 export interface DiscountRuleRecord {
@@ -34,12 +41,15 @@ export interface DiscountRuleRecord {
 
 export interface CatalogMockDb {
   extras: Record<string, ProductExtras>;
+  categories: CategoryRecord[];
+  /** Ids of archived products. */
+  archived: string[];
   /** storeId → productId → price of a pack; absent — the network price. */
   storePrices: Record<string, Record<string, number>>;
   priceConflicts: PriceConflict[];
   duplicates: CatalogDuplicate[];
   discountRules: DiscountRuleRecord[];
-  counters: { product: number; rule: number };
+  counters: { product: number; rule: number; category: number };
 }
 
 const daysAgo = (days: number) =>
@@ -61,7 +71,6 @@ const extras = (
   unit: 'pack',
   maxPriceMinor: null,
   markupPercent: null,
-  barcodeSuppliers: {},
   ...more,
 });
 
@@ -74,7 +83,6 @@ export function createCatalogDb(): CatalogMockDb {
         '500 мг',
         {
           maxPriceMinor: 500,
-          barcodeSuppliers: { '4870001000017': 'sup-pharm-import' },
         },
       ),
       'p-amoxicillin': extras(
@@ -192,6 +200,13 @@ export function createCatalogDb(): CatalogMockDb {
         author: { ...author('Фируз А.', 125), role: 'Владелец' },
       },
     ],
-    counters: { product: 1, rule: 1 },
+    categories: categories.map((category) => ({
+      id: category.id,
+      nameRu: category.name,
+      nameTj: '',
+      status: 'active',
+    })),
+    archived: [],
+    counters: { product: 1, rule: 1, category: 1 },
   };
 }

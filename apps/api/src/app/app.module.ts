@@ -92,11 +92,18 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       StaffModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
-    CatalogModule,
+    // Catalog and prices are kept in the cloud only (spec 2026-10-07-catalog-pricing).
+    ConditionalModule.registerWhen(
+      CatalogModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     InventoryModule,
     PosModule,
     PurchasingModule,
-    PricingModule,
+    ConditionalModule.registerWhen(
+      PricingModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     ReturnsModule,
     BillingModule,
     SyncModule,

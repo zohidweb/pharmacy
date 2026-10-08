@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { requirePrincipal } from '../../common/context/request-context';
 import type { TenantTransaction } from '../../core/database';
-import { CatalogRepository, localizedName, type ProductRow } from './catalog.repository';
+import {
+  CatalogRepository,
+  localizedName,
+  type ProductRow,
+} from './catalog.repository';
 
 /** A product as the pricing module sees it. */
 export interface PricingProduct {
@@ -45,7 +49,9 @@ export class ProductsReader {
       language,
     );
     const rows = await this.repository.findProducts(trx, tenantId, ids);
-    const byId = new Map((await this.toPricing(trx, tenantId, rows)).map((p) => [p.id, p]));
+    const byId = new Map(
+      (await this.toPricing(trx, tenantId, rows)).map((p) => [p.id, p]),
+    );
     return {
       items: ids.flatMap((id) => {
         const product = byId.get(id);
@@ -68,7 +74,9 @@ export class ProductsReader {
       status: row.status === 'archived' ? 'archived' : 'active',
       piecesPerPack: row.piecesPerPack,
       maxPriceMinor:
-        row.maxRetailPricePerPackDirams === null ? null : Number(row.maxRetailPricePerPackDirams),
+        row.maxRetailPricePerPackDirams === null
+          ? null
+          : Number(row.maxRetailPricePerPackDirams),
       markupBp: row.markupBp,
       categoryMarkupBp: row.categoryMarkupBp,
     }));

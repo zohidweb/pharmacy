@@ -76,7 +76,11 @@ export class PricingRepository {
     if (productIds.length === 0 || storeIds.length === 0) return [];
     return trx
       .selectFrom('storeProducts')
-      .select(['productId', 'storeId', 'retailPricePerPackDirams as priceDirams'])
+      .select([
+        'productId',
+        'storeId',
+        'retailPricePerPackDirams as priceDirams',
+      ])
       .where('tenantId', '=', tenantId)
       .where('productId', 'in', [...productIds])
       .where('storeId', 'in', [...storeIds])
@@ -153,7 +157,8 @@ export class PricingRepository {
       .where('tenantId', '=', tenantId)
       .where('ruleId', 'in', [...ruleIds])
       .execute();
-    for (const row of rows) map.set(row.ruleId, [...(map.get(row.ruleId) ?? []), row.storeId]);
+    for (const row of rows)
+      map.set(row.ruleId, [...(map.get(row.ruleId) ?? []), row.storeId]);
     return map;
   }
 
@@ -161,8 +166,13 @@ export class PricingRepository {
     trx: TenantTransaction,
     tenantId: string,
     ruleIds: readonly string[],
-  ): Promise<Map<string, Array<{ minTotalDirams: bigint; percentBp: number }>>> {
-    const map = new Map<string, Array<{ minTotalDirams: bigint; percentBp: number }>>();
+  ): Promise<
+    Map<string, Array<{ minTotalDirams: bigint; percentBp: number }>>
+  > {
+    const map = new Map<
+      string,
+      Array<{ minTotalDirams: bigint; percentBp: number }>
+    >();
     if (ruleIds.length === 0) return map;
     const rows = await trx
       .selectFrom('discountRuleTiers')
@@ -226,10 +236,16 @@ export class PricingRepository {
   }
 
   /** Locks the rule row so that two edits of one rule apply one after the other. */
-  async lockRule(trx: TenantTransaction, tenantId: string, id: string): Promise<boolean> {
+  async lockRule(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<boolean> {
     const result = await sql`
       select 1 from pharmacy.discount_rules
-      where tenant_id = ${tenantId} and id = ${id} and status = 'active' for update`.execute(trx);
+      where tenant_id = ${tenantId} and id = ${id} and status = 'active' for update`.execute(
+      trx,
+    );
     return result.rows.length > 0;
   }
 
@@ -263,7 +279,9 @@ export class PricingRepository {
     if (values.storeIds !== null && values.storeIds.length > 0) {
       await trx
         .insertInto('discountRuleStores')
-        .values(values.storeIds.map((storeId) => ({ tenantId, ruleId, storeId })))
+        .values(
+          values.storeIds.map((storeId) => ({ tenantId, ruleId, storeId })),
+        )
         .execute();
     }
   }

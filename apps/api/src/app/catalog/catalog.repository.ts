@@ -125,7 +125,10 @@ const BARCODE = /^[0-9]{8,14}$/;
 // tenant_id conditions keep the plans on the tenant-leading indexes.
 @Injectable()
 export class CatalogRepository {
-  async networkLanguage(trx: TenantTransaction, tenantId: string): Promise<NameLanguage> {
+  async networkLanguage(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<NameLanguage> {
     const row = await trx
       .selectFrom('tenantSettings')
       .select('defaultLanguage')
@@ -139,7 +142,10 @@ export class CatalogRepository {
     tenantId: string,
     filter: ProductFilter,
   ): Expression<SqlBool> {
-    const parts = [sql`p.tenant_id = ${tenantId}`, sql`p.status = ${filter.status}`];
+    const parts = [
+      sql`p.tenant_id = ${tenantId}`,
+      sql`p.status = ${filter.status}`,
+    ];
     const q = filter.q?.trim() ?? '';
     if (q !== '') {
       const pattern = `%${escapeLike(q.toLocaleLowerCase('ru'))}%`;
@@ -153,7 +159,8 @@ export class CatalogRepository {
           : byText,
       );
     }
-    if (filter.categoryId) parts.push(sql`p.category_id = ${filter.categoryId}`);
+    if (filter.categoryId)
+      parts.push(sql`p.category_id = ${filter.categoryId}`);
     if (filter.form) parts.push(sql`p.dosage_form = ${filter.form}`);
     switch (filter.flag) {
       case 'rx':
@@ -200,7 +207,9 @@ export class CatalogRepository {
       limit ${page.limit} offset ${page.offset}`.execute(trx);
     return {
       rows: result.rows,
-      total: Number(result.rows[0]?.total ?? (await this.count(trx, tenantId, filter))),
+      total: Number(
+        result.rows[0]?.total ?? (await this.count(trx, tenantId, filter)),
+      ),
     };
   }
 
@@ -256,7 +265,9 @@ export class CatalogRepository {
                        where b.tenant_id = p.tenant_id and b.product_id = p.id), '{}') as barcodes
       from pharmacy.products p
       join pharmacy.categories c on c.tenant_id = p.tenant_id and c.id = p.category_id
-      where p.tenant_id = ${tenantId} and p.id in (${sql.join(ids)})`.execute(trx);
+      where p.tenant_id = ${tenantId} and p.id in (${sql.join(ids)})`.execute(
+      trx,
+    );
     return result.rows;
   }
 
@@ -276,7 +287,9 @@ export class CatalogRepository {
       limit ${page.limit} offset ${page.offset}`.execute(trx);
     return {
       ids: result.rows.map((row) => row.id),
-      total: Number(result.rows[0]?.total ?? (await this.count(trx, tenantId, filter))),
+      total: Number(
+        result.rows[0]?.total ?? (await this.count(trx, tenantId, filter)),
+      ),
     };
   }
 
@@ -349,7 +362,8 @@ export class CatalogRepository {
       .select('barcode')
       .where('tenantId', '=', tenantId)
       .where('barcode', 'in', [...codes]);
-    if (exceptProductId !== null) query = query.where('productId', '<>', exceptProductId);
+    if (exceptProductId !== null)
+      query = query.where('productId', '<>', exceptProductId);
     return (await query.execute()).map((row) => row.barcode);
   }
 
@@ -364,7 +378,8 @@ export class CatalogRepository {
       .deleteFrom('productBarcodes')
       .where('tenantId', '=', tenantId)
       .where('productId', '=', productId);
-    if (codes.length > 0) removal = removal.where('barcode', 'not in', [...codes]);
+    if (codes.length > 0)
+      removal = removal.where('barcode', 'not in', [...codes]);
     await removal.execute();
     if (codes.length === 0) return;
     const kept = new Set(
@@ -386,7 +401,10 @@ export class CatalogRepository {
   }
 
   /** Active dosage forms of the network. */
-  async dosageForms(trx: TenantTransaction, tenantId: string): Promise<unknown[]> {
+  async dosageForms(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<unknown[]> {
     const rows = await trx
       .selectFrom('dictionaryValues')
       .select('name')

@@ -12,14 +12,18 @@ import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
-import { type PricingProduct, ProductsReader } from '../catalog/products-reader';
+import {
+  type PricingProduct,
+  ProductsReader,
+} from '../catalog/products-reader';
 import { PricingRepository, type StoreRef } from './pricing.repository';
 
 const notFound = () => new ProblemException(404, 'not_found');
 
 /** The session scope as store ids; null — the whole network. */
-export const scopeIds = (storeScope: 'all' | readonly string[]): readonly string[] | null =>
-  storeScope === 'all' ? null : storeScope;
+export const scopeIds = (
+  storeScope: 'all' | readonly string[],
+): readonly string[] | null => (storeScope === 'all' ? null : storeScope);
 
 const markupPercent = (product: PricingProduct): number | null => {
   const bp = product.markupBp ?? product.categoryMarkupBp;
@@ -43,7 +47,11 @@ export class PricesService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
     return this.db.tenantTransaction(async (trx) => {
-      const stores = await this.repository.activeStores(trx, tenantId, scopeIds(storeScope));
+      const stores = await this.repository.activeStores(
+        trx,
+        tenantId,
+        scopeIds(storeScope),
+      );
       const page = await this.products.listForPricing(trx, tenantId, {
         q: query.q,
         categoryId: query.categoryId,
@@ -68,14 +76,22 @@ export class PricesService {
         productId.toLowerCase(),
       ]);
       if (!product) throw notFound();
-      const stores = await this.repository.activeStores(trx, tenantId, scopeIds(storeScope));
+      const stores = await this.repository.activeStores(
+        trx,
+        tenantId,
+        scopeIds(storeScope),
+      );
       const [row] = await this.rows(trx, tenantId, [product], stores);
       return row.prices;
     });
   }
 
-  async update(productId: string, request: UpdatePricesRequest): Promise<PriceRow> {
-    const { tenantId, storeScope, permissions, employeeId } = requirePrincipal();
+  async update(
+    productId: string,
+    request: UpdatePricesRequest,
+  ): Promise<PriceRow> {
+    const { tenantId, storeScope, permissions, employeeId } =
+      requirePrincipal();
     const network = hasPermissions(permissions, 'pricing:update-network');
     if (!network && !hasPermissions(permissions, 'pricing:update-store')) {
       throw new ProblemException(403, 'forbidden');
@@ -84,19 +100,26 @@ export class PricesService {
     return this.db.tenantTransaction(async (trx) => {
       const [product] = await this.products.findForPricing(trx, tenantId, [id]);
       if (!product) throw notFound();
-      if (product.status === 'archived') throw new ProblemException(409, 'product_archived');
+      if (product.status === 'archived')
+        throw new ProblemException(409, 'product_archived');
 
       const wanted = request.prices.map((price) => ({
         storeId: price.storeId.toLowerCase(),
         priceMinor: price.priceMinor,
       }));
       const active = new Set(
-        (await this.repository.activeStores(trx, tenantId, null)).map((store) => store.id),
+        (await this.repository.activeStores(trx, tenantId, null)).map(
+          (store) => store.id,
+        ),
       );
       if (wanted.some((price) => !active.has(price.storeId))) throw notFound();
       // Nothing is written when any store of the request is outside the editor's rights.
       const scope = scopeIds(storeScope);
-      if (!network && scope !== null && wanted.some((price) => !scope.includes(price.storeId))) {
+      if (
+        !network &&
+        scope !== null &&
+        wanted.some((price) => !scope.includes(price.storeId))
+      ) {
         throw new ProblemException(403, 'store_not_in_scope');
       }
       const max = product.maxPriceMinor;
@@ -119,7 +142,14 @@ export class PricesService {
       for (const price of wanted) {
         const old = current.get(price.storeId) ?? null;
         if (old !== null && Number(old) === price.priceMinor) continue;
-        await this.repository.setPrice(trx, tenantId, id, price.storeId, price.priceMinor, employeeId);
+        await this.repository.setPrice(
+          trx,
+          tenantId,
+          id,
+          price.storeId,
+          price.priceMinor,
+          employeeId,
+        );
         await this.audit.append(trx, {
           action: 'price.changed',
           entityType: 'product',
@@ -154,7 +184,10 @@ export class PricesService {
       stores.map((store) => store.id),
     );
     const priceAt = new Map(
-      cells.map((cell) => [`${cell.productId}/${cell.storeId}`, cell.priceDirams]),
+      cells.map((cell) => [
+        `${cell.productId}/${cell.storeId}`,
+        cell.priceDirams,
+      ]),
     );
     return products.map((product) => ({
       productId: product.id,
@@ -173,7 +206,11 @@ export class PricesService {
           warnings:
             priceMinor === null
               ? []
-              : priceWarnings({ priceMinor, costMinor: null, maxPriceMinor: product.maxPriceMinor }),
+              : priceWarnings({
+                  priceMinor,
+                  costMinor: null,
+                  maxPriceMinor: product.maxPriceMinor,
+                }),
         };
       }),
     }));

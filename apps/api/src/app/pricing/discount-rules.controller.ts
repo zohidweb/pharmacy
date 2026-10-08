@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+} from '@nestjs/common';
 import type { DiscountRuleDefinition } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
 import { DiscountRulesService } from './discount-rules.service';

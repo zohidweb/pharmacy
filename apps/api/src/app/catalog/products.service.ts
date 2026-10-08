@@ -39,19 +39,28 @@ const archived = () => new ProblemException(409, 'product_archived');
 const invalid = (field: string, code: string) =>
   new FieldProblemException(400, 'validation_failed', [{ field, code }]);
 const barcodeTaken = () =>
-  new FieldProblemException(409, 'barcode_taken', [{ field: 'barcodes', code: 'barcode_taken' }]);
+  new FieldProblemException(409, 'barcode_taken', [
+    { field: 'barcodes', code: 'barcode_taken' },
+  ]);
 
 // Columns of the stock threshold are integers: packs × pieces must fit.
 const MAX_MIN_STOCK_PIECES = 2_000_000_000;
 
-function prescriptionOf(row: Pick<ProductRow, 'isPrescription' | 'isControlled'>): PrescriptionKind {
+function prescriptionOf(
+  row: Pick<ProductRow, 'isPrescription' | 'isControlled'>,
+): PrescriptionKind {
   if (row.isControlled) return 'controlled';
   return row.isPrescription ? 'rx' : 'none';
 }
 
-const percentOf = (bp: number | null): number | null => (bp === null ? null : bp / 100);
+const percentOf = (bp: number | null): number | null =>
+  bp === null ? null : bp / 100;
 
-function toProduct(row: ProductRow, locale: 'ru' | 'tg', language: NameLanguage): CatalogProduct {
+function toProduct(
+  row: ProductRow,
+  locale: 'ru' | 'tg',
+  language: NameLanguage,
+): CatalogProduct {
   return {
     id: row.id,
     nameRu: nameOf(row.name, 'ru'),
@@ -69,7 +78,9 @@ function toProduct(row: ProductRow, locale: 'ru' | 'tg', language: NameLanguage)
     barcodes: row.barcodes.map((code) => ({ code })),
     prescription: prescriptionOf(row),
     maxPriceMinor:
-      row.maxRetailPricePerPackDirams === null ? null : Number(row.maxRetailPricePerPackDirams),
+      row.maxRetailPricePerPackDirams === null
+        ? null
+        : Number(row.maxRetailPricePerPackDirams),
     markupPercent: percentOf(row.markupBp),
     minStockPacks:
       row.defaultMinStockPieces === null
@@ -80,7 +91,10 @@ function toProduct(row: ProductRow, locale: 'ru' | 'tg', language: NameLanguage)
 }
 
 /** Field names of the contract whose value differs (the audit of a product update). */
-function changedFields(before: CatalogProduct, after: CatalogProduct): string[] {
+function changedFields(
+  before: CatalogProduct,
+  after: CatalogProduct,
+): string[] {
   const keys = Object.keys(after) as Array<keyof CatalogProduct>;
   return keys.filter(
     (key) =>
@@ -140,7 +154,8 @@ export class ProductsService {
             manufacturer: row.manufacturer ?? '',
             unit: row.unit as ProductUnit,
             piecesPerPack: row.piecesPerPack,
-            retailPriceMinor: row.priceDirams === null ? null : Number(row.priceDirams),
+            retailPriceMinor:
+              row.priceDirams === null ? null : Number(row.priceDirams),
             flags,
             status: row.status as CatalogStatus,
           };
@@ -157,7 +172,11 @@ export class ProductsService {
     const { tenantId, locale } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);
-      const row = await this.repository.findProduct(trx, tenantId, id.toLowerCase());
+      const row = await this.repository.findProduct(
+        trx,
+        tenantId,
+        id.toLowerCase(),
+      );
       if (row === null) throw notFound();
       return toProduct(row, locale, language);
     });
@@ -167,15 +186,25 @@ export class ProductsService {
     const { tenantId, locale } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);
-      const categories = await this.repository.listCategories(trx, tenantId, true);
+      const categories = await this.repository.listCategories(
+        trx,
+        tenantId,
+        true,
+      );
       const forms = await this.repository.dosageForms(trx, tenantId);
-      const { manufacturers, inns } = await this.repository.suggestions(trx, tenantId);
+      const { manufacturers, inns } = await this.repository.suggestions(
+        trx,
+        tenantId,
+      );
       return {
         categories: categories.map((row) => ({
           id: row.id,
           name: localizedName(row.name, locale, language),
         })),
-        forms: forms.map((name) => nameOf(name, language) || localizedName(name, locale, language)),
+        forms: forms.map(
+          (name) =>
+            nameOf(name, language) || localizedName(name, locale, language),
+        ),
         units: [...productUnits],
         manufacturers,
         inns,
@@ -192,33 +221,63 @@ export class ProductsService {
     const id = newId();
     return this.write(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);
-      const { values, codes } = await this.values(trx, tenantId, input, language, null);
+      const { values, codes } = await this.values(
+        trx,
+        tenantId,
+        input,
+        language,
+        null,
+      );
       await this.repository.insertProduct(trx, tenantId, id, values);
       await this.repository.replaceBarcodes(trx, tenantId, id, codes);
-      const product = toProduct(await this.read(trx, tenantId, id), locale, language);
+      const product = toProduct(
+        await this.read(trx, tenantId, id),
+        locale,
+        language,
+      );
       await this.audit.append(trx, {
         action: 'product.created',
         entityType: 'product',
         entityId: id,
-        details: { name: product.nameRu || product.nameTj, barcodes: codes.length },
+        details: {
+          name: product.nameRu || product.nameTj,
+          barcodes: codes.length,
+        },
       });
       return product;
     });
   }
 
-  async update(id: string, input: CatalogProductInput): Promise<CatalogProduct> {
+  async update(
+    id: string,
+    input: CatalogProductInput,
+  ): Promise<CatalogProduct> {
     const { tenantId, locale } = requirePrincipal();
     const productId = id.toLowerCase();
     return this.write(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);
-      const current = await this.repository.findProduct(trx, tenantId, productId);
+      const current = await this.repository.findProduct(
+        trx,
+        tenantId,
+        productId,
+      );
       if (current === null) throw notFound();
       if (current.status === 'archived') throw archived();
-      const { values, codes } = await this.values(trx, tenantId, input, language, productId);
+      const { values, codes } = await this.values(
+        trx,
+        tenantId,
+        input,
+        language,
+        productId,
+      );
       await this.repository.updateProduct(trx, tenantId, productId, values);
       await this.repository.replaceBarcodes(trx, tenantId, productId, codes);
       const before = toProduct(current, locale, language);
-      const product = toProduct(await this.read(trx, tenantId, productId), locale, language);
+      const product = toProduct(
+        await this.read(trx, tenantId, productId),
+        locale,
+        language,
+      );
       await this.audit.append(trx, {
         action: 'product.updated',
         entityType: 'product',
@@ -234,10 +293,19 @@ export class ProductsService {
     const productId = id.toLowerCase();
     return this.db.tenantTransaction(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);
-      const current = await this.repository.findProduct(trx, tenantId, productId);
+      const current = await this.repository.findProduct(
+        trx,
+        tenantId,
+        productId,
+      );
       if (current === null) throw notFound();
       if (current.status !== status) {
-        await this.repository.setProductStatus(trx, tenantId, productId, status);
+        await this.repository.setProductStatus(
+          trx,
+          tenantId,
+          productId,
+          status,
+        );
         await this.audit.append(trx, {
           action: 'product.status_changed',
           entityType: 'product',
@@ -245,23 +313,35 @@ export class ProductsService {
           details: { status },
         });
       }
-      return toProduct(await this.read(trx, tenantId, productId), locale, language);
+      return toProduct(
+        await this.read(trx, tenantId, productId),
+        locale,
+        language,
+      );
     });
   }
 
   // A barcode taken by a concurrent request surfaces as the primary key of product_barcodes.
-  private async write<T>(work: (trx: TenantTransaction) => Promise<T>): Promise<T> {
+  private async write<T>(
+    work: (trx: TenantTransaction) => Promise<T>,
+  ): Promise<T> {
     try {
       return await this.db.tenantTransaction(work);
     } catch (error) {
-      if (uniqueConstraint(error) === 'product_barcodes_pkey') throw barcodeTaken();
+      if (uniqueConstraint(error) === 'product_barcodes_pkey')
+        throw barcodeTaken();
       throw error;
     }
   }
 
-  private async read(trx: TenantTransaction, tenantId: string, id: string): Promise<ProductRow> {
+  private async read(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<ProductRow> {
     const row = await this.repository.findProduct(trx, tenantId, id);
-    if (row === null) throw new Error('The product just written is not readable');
+    if (row === null)
+      throw new Error('The product just written is not readable');
     return row;
   }
 
@@ -274,9 +354,14 @@ export class ProductsService {
     productId: string | null,
   ): Promise<{ values: ProductValues; codes: string[] }> {
     const name = nameMap(input.nameRu, input.nameTj);
-    if (!name[language]) throw invalid(language === 'tj' ? 'nameTj' : 'nameRu', 'required');
+    if (!name[language])
+      throw invalid(language === 'tj' ? 'nameTj' : 'nameRu', 'required');
 
-    const category = await this.repository.lockCategory(trx, tenantId, input.categoryId);
+    const category = await this.repository.lockCategory(
+      trx,
+      tenantId,
+      input.categoryId,
+    );
     if (category === null || category.status !== 'active') {
       throw invalid('categoryId', 'unknown_category');
     }
@@ -289,13 +374,19 @@ export class ProductsService {
     if (input.countryCode !== '' && !isCountryCode(input.countryCode)) {
       throw invalid('countryCode', 'unknown_country');
     }
-    if (input.divisible && input.piecesPerPack < 2) throw invalid('divisible', 'not_divisible');
+    if (input.divisible && input.piecesPerPack < 2)
+      throw invalid('divisible', 'not_divisible');
     const minStockPieces = input.minStockPacks * input.piecesPerPack;
-    if (minStockPieces > MAX_MIN_STOCK_PIECES) throw invalid('minStockPacks', 'max');
+    if (minStockPieces > MAX_MIN_STOCK_PIECES)
+      throw invalid('minStockPacks', 'max');
 
     const codes = input.barcodes.map((barcode) => barcode.code);
-    if (new Set(codes).size !== codes.length) throw invalid('barcodes', 'duplicate');
-    if ((await this.repository.takenBarcodes(trx, tenantId, codes, productId)).length > 0) {
+    if (new Set(codes).size !== codes.length)
+      throw invalid('barcodes', 'duplicate');
+    if (
+      (await this.repository.takenBarcodes(trx, tenantId, codes, productId))
+        .length > 0
+    ) {
       throw barcodeTaken();
     }
 
@@ -316,7 +407,8 @@ export class ProductsService {
         isPriceRegulated: input.maxPriceMinor !== null,
         maxRetailPricePerPackDirams: input.maxPriceMinor,
         categoryId: input.categoryId,
-        markupBp: input.markupPercent === null ? null : input.markupPercent * 100,
+        markupBp:
+          input.markupPercent === null ? null : input.markupPercent * 100,
         defaultMinStockPieces: minStockPieces,
       },
     };

@@ -1,8 +1,22 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+} from '@nestjs/common';
 import type { Category, CategoryMarkup } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
 import { CategoriesService } from './categories.service';
-import { CatalogStatusDto, CategoryInputDto, UpdateMarkupsDto } from './dto/catalog.dto';
+import {
+  CatalogStatusDto,
+  CategoryInputDto,
+  UpdateMarkupsDto,
+} from './dto/catalog.dto';
 
 // Categories of the network (spec 2026-10-07-catalog-pricing, section 5).
 @Controller({ path: 'catalog/categories', version: '1' })
@@ -34,6 +48,7 @@ export class CategoriesController {
 
   /** Archive or restore; 409 `category_in_use` while it has active products. */
   @RequirePermission('catalog:update')
+  @HttpCode(HttpStatus.OK)
   @Post(':id/status')
   setStatus(
     @Param('id', new ParseUUIDPipe()) id: string,

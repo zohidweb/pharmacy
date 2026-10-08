@@ -9,7 +9,11 @@ import type {
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
-import { newId, TenantDatabase, type TenantTransaction } from '../../core/database';
+import {
+  newId,
+  TenantDatabase,
+  type TenantTransaction,
+} from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 import {
   CatalogRepository,
@@ -21,7 +25,8 @@ import {
 } from './catalog.repository';
 
 const notFound = () => new ProblemException(404, 'not_found');
-const fieldOf = (language: NameLanguage) => (language === 'tj' ? 'nameTj' : 'nameRu');
+const fieldOf = (language: NameLanguage) =>
+  language === 'tj' ? 'nameTj' : 'nameRu';
 
 function toCategory(row: CategoryRow): Category {
   return {
@@ -72,7 +77,9 @@ export class CategoriesService {
     const { tenantId } = requirePrincipal();
     const categoryId = id.toLowerCase();
     return this.db.tenantTransaction(async (trx) => {
-      if ((await this.repository.findCategory(trx, tenantId, categoryId)) === null) {
+      if (
+        (await this.repository.findCategory(trx, tenantId, categoryId)) === null
+      ) {
         throw notFound();
       }
       const name = await this.checkedName(trx, tenantId, input, categoryId);
@@ -92,7 +99,9 @@ export class CategoriesService {
     const categoryId = id.toLowerCase();
     return this.db.tenantTransaction(async (trx) => {
       // The lock orders this archive against a product written into the category meanwhile.
-      if ((await this.repository.lockCategory(trx, tenantId, categoryId)) === null) {
+      if (
+        (await this.repository.lockCategory(trx, tenantId, categoryId)) === null
+      ) {
         throw notFound();
       }
       const current = await this.read(trx, tenantId, categoryId);
@@ -100,7 +109,12 @@ export class CategoriesService {
         if (status === 'archived' && current.products > 0) {
           throw new ProblemException(409, 'category_in_use');
         }
-        await this.repository.setCategoryStatus(trx, tenantId, categoryId, status);
+        await this.repository.setCategoryStatus(
+          trx,
+          tenantId,
+          categoryId,
+          status,
+        );
         await this.audit.append(trx, {
           action: 'category.status_changed',
           entityType: 'category',
@@ -126,11 +140,15 @@ export class CategoriesService {
     });
   }
 
-  async updateMarkups(request: UpdateMarkupsRequest): Promise<CategoryMarkup[]> {
+  async updateMarkups(
+    request: UpdateMarkupsRequest,
+  ): Promise<CategoryMarkup[]> {
     const { tenantId } = requirePrincipal();
     await this.db.tenantTransaction(async (trx) => {
       const active = new Set(
-        (await this.repository.listCategories(trx, tenantId, true)).map((row) => row.id),
+        (await this.repository.listCategories(trx, tenantId, true)).map(
+          (row) => row.id,
+        ),
       );
       const unknown = request.markups.findIndex(
         (markup) => !active.has(markup.categoryId.toLowerCase()),
@@ -149,16 +167,24 @@ export class CategoriesService {
         action: 'markups.updated',
         entityType: 'category',
         details: {
-          markups: markups.map((m) => ({ categoryId: m.categoryId, percent: m.markupBp / 100 })),
+          markups: markups.map((m) => ({
+            categoryId: m.categoryId,
+            percent: m.markupBp / 100,
+          })),
         },
       });
     });
     return this.markups();
   }
 
-  private async read(trx: TenantTransaction, tenantId: string, id: string): Promise<CategoryRow> {
+  private async read(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<CategoryRow> {
     const row = await this.repository.findCategory(trx, tenantId, id);
-    if (row === null) throw new Error('The category just written is not readable');
+    if (row === null)
+      throw new Error('The category just written is not readable');
     return row;
   }
 
@@ -176,14 +202,17 @@ export class CategoriesService {
         { field: fieldOf(language), code: 'required' },
       ]);
     }
-    const wanted = Object.values(name).map((value) => value.toLocaleLowerCase('ru'));
+    const wanted = Object.values(name).map((value) =>
+      value.toLocaleLowerCase('ru'),
+    );
     const rows = await this.repository.listCategories(trx, tenantId, false);
     const taken = rows.some(
       (row) =>
         row.id !== exceptId &&
         Object.values((row.name ?? {}) as Record<string, unknown>).some(
           (value) =>
-            typeof value === 'string' && wanted.includes(value.toLocaleLowerCase('ru')),
+            typeof value === 'string' &&
+            wanted.includes(value.toLocaleLowerCase('ru')),
         ),
     );
     if (taken) {

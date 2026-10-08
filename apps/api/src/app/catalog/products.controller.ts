@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import type {
   CatalogListResponse,
   CatalogProduct,
@@ -48,6 +59,7 @@ export class ProductsController {
 
   /** Archive or restore; 200 with the product. */
   @RequirePermission('catalog:delete')
+  @HttpCode(HttpStatus.OK)
   @Post('products/:id/status')
   setStatus(
     @Param('id', new ParseUUIDPipe()) id: string,

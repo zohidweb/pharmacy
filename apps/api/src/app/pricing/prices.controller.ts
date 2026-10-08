@@ -1,5 +1,17 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Put, Query } from '@nestjs/common';
-import type { PriceListResponse, PriceRow, StorePrice } from '@pharmacy/shared-dto';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Put,
+  Query,
+} from '@nestjs/common';
+import type {
+  PriceListResponse,
+  PriceRow,
+  StorePrice,
+} from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
 import { PriceListQueryDto, UpdatePricesDto } from './dto/pricing.dto';
 import { PricesService } from './prices.service';
@@ -17,7 +29,9 @@ export class PricesController {
 
   @RequirePermission('pricing:view')
   @Get(':productId')
-  ofProduct(@Param('productId', new ParseUUIDPipe()) productId: string): Promise<StorePrice[]> {
+  ofProduct(
+    @Param('productId', new ParseUUIDPipe()) productId: string,
+  ): Promise<StorePrice[]> {
     return this.prices.ofProduct(productId);
   }
 

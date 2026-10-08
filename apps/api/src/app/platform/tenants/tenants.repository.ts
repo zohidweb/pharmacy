@@ -36,6 +36,11 @@ export interface ProvisionInput {
     name: { ru: string; tj: string };
     permissions: readonly string[];
   }>;
+  /** Starter categories and dosage forms (spec 2026-10-07-catalog-pricing, section 4). */
+  catalogDefaults: {
+    categories: ReadonlyArray<{ id: string; name: { ru: string; tj: string } }>;
+    dosageForms: ReadonlyArray<{ id: string; code: string; name: { ru: string; tj: string } }>;
+  };
 }
 
 type TenantRow = {
@@ -241,7 +246,8 @@ export class TenantsRepository {
       ${input.ownerEmployeeId}::uuid, ${input.ownerRoleId}::uuid, ${JSON.stringify(input.ownerRoleName)}::jsonb,
       ${input.owner.fullName}, ${input.owner.login}, ${input.owner.phone}, ${input.owner.email},
       ${input.codeHash}, ${input.codeExpiresAt.toISOString()}::timestamptz,
-      ${JSON.stringify(input.defaultRoles)}::jsonb
+      ${JSON.stringify(input.defaultRoles)}::jsonb,
+      ${JSON.stringify(input.catalogDefaults)}::jsonb
     )`.execute(trx);
   }
 

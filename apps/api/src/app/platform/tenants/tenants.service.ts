@@ -15,7 +15,7 @@ import {
 } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
-import { roleTemplates } from '@pharmacy/shared-domain';
+import { catalogDefaults, roleTemplates } from '@pharmacy/shared-domain';
 import { newId, uniqueConstraint } from '../../../core/database';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { SessionStore } from '../../../core/sessions';
@@ -133,6 +133,17 @@ export class TenantsService {
               name: role.name,
               permissions: [...roleTemplates[role.key].permissions],
             })),
+            catalogDefaults: {
+              categories: catalogDefaults.categories.map((category) => ({
+                id: newId(),
+                name: category.name,
+              })),
+              dosageForms: catalogDefaults.dosageForms.map((form) => ({
+                id: newId(),
+                code: form.code,
+                name: form.name,
+              })),
+            },
             owner,
             codeHash: hashActivationCode(code),
             codeExpiresAt,

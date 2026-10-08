@@ -5,7 +5,11 @@
  * changed both in the cloud and on an offline store is decided by the owner in the cloud; a
  * duplicate product created on an offline store is decided by that store — the cloud only shows it.
  */
-import type { DiscountRuleStatus, PriceWarning } from '@pharmacy/shared-domain';
+import type {
+  DiscountRuleStatus,
+  PriceWarning,
+  ProductUnit,
+} from '@pharmacy/shared-domain';
 import type { Page } from './platform-tenants.js';
 import type { DocumentAuthor } from './tenant-inventory.js';
 import type { PosCategory, PrescriptionKind } from './tenant-pos.js';
@@ -19,7 +23,7 @@ export interface ProductBarcode {
   supplierName: string | null;
 }
 
-export type ProductUnit = 'pack' | 'piece' | 'ml';
+export type { ProductUnit };
 
 export interface CatalogProduct {
   id: string;

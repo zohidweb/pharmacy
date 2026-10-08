@@ -93,6 +93,27 @@ export function inputOf(draft: ProductDraft): CatalogProductInput {
 }
 
 const UNITS: ProductUnit[] = ['pack', 'piece', 'ml'];
+
+/** Fields of the form that show an `errors[]` entry of the API next to themselves. */
+const FIELDS_WITH_ERRORS = new Set([
+  'nameRu',
+  'nameTj',
+  'categoryId',
+  'form',
+  'countryCode',
+  'piecesPerPack',
+  'barcodes',
+]);
+
+/** True when the form shows every rejected field itself (no general alert is needed). */
+export function shownAtFields(
+  errors: ReadonlyArray<{ field: string }>,
+): boolean {
+  return (
+    errors.length > 0 &&
+    errors.every((error) => FIELDS_WITH_ERRORS.has(error.field))
+  );
+}
 const PRESCRIPTIONS: PrescriptionKind[] = ['none', 'rx', 'controlled'];
 const BARCODE = /^\d{8,14}$/;
 

@@ -200,10 +200,13 @@ export class DiscountRulesService {
     tenantId: string,
     id: string,
   ): Promise<DiscountRuleDefinition> {
+    // An editor with discounts:manage-network may write a rule outside the own scope: read it back
+    // unfiltered.
     const [rule] = await this.visible(
       trx,
       tenantId,
       await this.repository.rules(trx, tenantId, id),
+      false,
     );
     if (!rule)
       throw new Error('The discount rule just written is not readable');
@@ -215,6 +218,7 @@ export class DiscountRulesService {
     trx: TenantTransaction,
     tenantId: string,
     rows: readonly RuleRow[],
+    inScopeOnly = true,
   ): Promise<DiscountRuleDefinition[]> {
     const { locale, storeScope } = requirePrincipal();
     const { language, timezone } = await this.repository.settings(
@@ -236,6 +240,7 @@ export class DiscountRulesService {
       const storeIds =
         row.level === 'network' ? null : (storesOf.get(row.id) ?? []);
       if (
+        inScopeOnly &&
         storeIds !== null &&
         scope !== null &&
         !storeIds.some((id) => scope.includes(id))

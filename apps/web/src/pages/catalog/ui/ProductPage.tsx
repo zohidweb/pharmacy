@@ -31,6 +31,7 @@ import {
   draftOf,
   draftProblems,
   inputOf,
+  shownAtFields,
   type ProductDraft,
 } from './ProductForm';
 import { WithMessages } from '@/shared/i18n';
@@ -106,7 +107,9 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
   const fieldErrors = apiFieldErrors(save.error);
   // a rejected field is shown at the field itself
   const error = useApiErrorMessage(
-    fieldErrors.length > 0 ? setStatus.error : (save.error ?? setStatus.error),
+    shownAtFields(fieldErrors)
+      ? setStatus.error
+      : (save.error ?? setStatus.error),
   );
   const problems = draftProblems(draft);
   const valid =

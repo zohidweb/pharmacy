@@ -44,6 +44,7 @@ import {
   draftProblems,
   emptyDraft,
   inputOf,
+  shownAtFields,
   type ProductDraft,
 } from './ProductForm';
 import { WithMessages } from '@/shared/i18n';
@@ -461,7 +462,9 @@ function NewProductDialog({
   });
   const fieldErrors = apiFieldErrors(create.error);
   // a rejected field is shown at the field itself
-  const error = useApiErrorMessage(fieldErrors.length > 0 ? null : create.error);
+  const error = useApiErrorMessage(
+    shownAtFields(fieldErrors) ? null : create.error,
+  );
   const problems = draftProblems(draft);
   const valid =
     !problems.nameRu && !problems.piecesPerPack && !problems.maxPrice;

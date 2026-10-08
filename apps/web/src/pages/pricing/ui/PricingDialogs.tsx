@@ -97,7 +97,10 @@ export function PriceDialog({
             disabled={
               changed.length === 0 ||
               (aboveMax && !confirmed) ||
-              row.prices.some((p) => value(p.storeId) <= 0)
+              // a price is not removed here: an existing one cannot be cleared
+              row.prices.some(
+                (p) => p.priceMinor !== null && value(p.storeId) <= 0,
+              )
             }
             onClick={() => save.mutate()}
           >

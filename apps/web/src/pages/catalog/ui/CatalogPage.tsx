@@ -69,13 +69,6 @@ export function useCatalogReferences() {
   });
 }
 
-export function useSupplierOptions() {
-  return useQuery({
-    queryKey: ['suppliers', 'options'],
-    queryFn: ({ signal }) => apiRequest('suppliers.options', { signal }),
-  });
-}
-
 /** Catalog of products (UI mockup «Каталог товаров»). */
 function CatalogPageView() {
   const t = useTranslations('products');
@@ -171,7 +164,7 @@ function CatalogPageView() {
       numeric: true,
       nowrap: true,
       cell: (row) =>
-        row.retailPriceMinor > 0
+        row.retailPriceMinor !== null
           ? formatMoney(row.retailPriceMinor, { withSign: false })
           : '—',
     },
@@ -430,7 +423,6 @@ function NewProductDialog({
   const tDocs = useTranslations('stockDocs');
   const router = useRouter();
   const queryClient = useQueryClient();
-  const suppliers = useSupplierOptions();
   const [draft, setDraft] = useState<ProductDraft>(() => emptyDraft(refs));
   const [touched, setTouched] = useState(false);
   const create = useMutation({
@@ -480,7 +472,6 @@ function NewProductDialog({
           draft={draft}
           onChange={setDraft}
           refs={refs}
-          suppliers={suppliers.data ?? []}
           touched={touched}
           disabled={false}
         />

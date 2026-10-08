@@ -11,11 +11,17 @@ import {
   priceWarnings,
   type Permission,
 } from '@pharmacy/shared-domain';
+import {
+  productUnits,
+} from '@pharmacy/shared-domain';
 import type {
   CatalogFlag,
   CatalogListItem,
   CatalogProduct,
   CatalogProductInput,
+  CatalogStatus,
+  Category,
+  CategoryInput,
   DiscountRuleDefinition,
   DiscountRuleInput,
   EmployeeSession,
@@ -29,15 +35,15 @@ import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
 import type { DiscountRuleRecord, ProductExtras } from './db-catalog';
 import { stores } from './fixtures';
-import { categories } from './fixtures-pos';
-import { context, findDoc, page, stockAt, storeName } from './handlers-stock';
+import { context, findDoc, page, storeName } from './handlers-stock';
 import { piecePrice, setStorePrice, storePrice } from './pricing';
 import { authorize } from './session';
 import type { MockHandlers } from './types';
 
 type CatalogRoute = Extract<
   ApiRouteKey,
-  | `catalog.${'list' | 'get' | 'create' | 'update' | 'references' | 'duplicates'}`
+  | `catalog.${'list' | 'get' | 'create' | 'update' | 'status' | 'references' | 'duplicates'}`
+  | `catalog.${'categories' | 'createCategory' | 'updateCategory' | 'categoryStatus'}`
   | `prices.${string}`
   | `priceConflicts.${string}`
   | `discountRules.${string}`
@@ -47,7 +53,9 @@ const catalog = () => mockDb().catalog;
 const products = () => mockDb().pos.products;
 
 const validation = (correlationId: string, field: string, code: string) =>
-  new ApiError(422, 'validation_failed', correlationId, [{ field, code }]);
+  new ApiError(400, 'validation_failed', correlationId, [{ field, code }]);
+const conflict = (correlationId: string, code: string, field?: string) =>
+  new ApiError(409, code, correlationId, field ? [{ field, code }] : []);
 
 export const COUNTRIES = [
   { code: 'TJ', name: 'Таджикистан' },
@@ -79,14 +87,13 @@ const extrasOf = (product: PosProduct): ProductExtras =>
     unit: 'pack',
     maxPriceMinor: null,
     markupPercent: null,
-    barcodeSuppliers: {},
   });
 
+const categoryRecords = () => catalog().categories;
 const categoryName = (id: string) =>
-  categories.find((c) => c.id === id)?.name ?? '—';
-
-const supplierName = (id: string | null) =>
-  id ? (mockDb().stock.suppliers.find((s) => s.id === id)?.name ?? null) : null;
+  categoryRecords().find((c) => c.id === id)?.nameRu ?? '—';
+const statusOf = (product: PosProduct): CatalogStatus =>
+  catalog().archived.includes(product.id) ? 'archived' : 'active';
 
 function toCatalogProduct(product: PosProduct): CatalogProduct {
   const extras = extrasOf(product);
@@ -104,15 +111,12 @@ function toCatalogProduct(product: PosProduct): CatalogProduct {
     unit: extras.unit,
     piecesPerPack: product.piecesPerPack,
     divisible: product.divisible,
-    barcodes: product.barcodes.map((code) => {
-      const supplierId = extras.barcodeSuppliers[code] ?? null;
-      return { code, supplierId, supplierName: supplierName(supplierId) };
-    }),
+    barcodes: product.barcodes.map((code) => ({ code })),
     prescription: product.prescription,
     maxPriceMinor: extras.maxPriceMinor,
     markupPercent: extras.markupPercent,
     minStockPacks: mockDb().stock.minPacks[product.id] ?? 0,
-    retailPriceMinor: product.priceMinor,
+    status: statusOf(product),
   };
 }
 
@@ -168,8 +172,15 @@ function productInput(
 ) {
   if (!body.nameRu.trim())
     throw validation(correlationId, 'nameRu', 'required');
-  if (!categories.some((c) => c.id === body.categoryId)) {
+  if (
+    !categoryRecords().some(
+      (c) => c.id === body.categoryId && c.status === 'active',
+    )
+  ) {
     throw validation(correlationId, 'categoryId', 'required');
+  }
+  if (body.divisible && body.piecesPerPack < 2) {
+    throw validation(correlationId, 'divisible', 'invalid');
   }
   if (!Number.isInteger(body.piecesPerPack) || body.piecesPerPack < 1) {
     throw validation(correlationId, 'piecesPerPack', 'positive');
@@ -181,7 +192,7 @@ function productInput(
   const taken = products().find(
     (p) => p.id !== exceptId && p.barcodes.some((code) => codes.includes(code)),
   );
-  if (taken) throw validation(correlationId, 'barcodes', 'taken');
+  if (taken) throw conflict(correlationId, 'barcode_taken', 'barcodes');
   if (body.maxPriceMinor !== null && body.maxPriceMinor <= 0) {
     throw validation(correlationId, 'maxPriceMinor', 'positive');
   }
@@ -219,14 +230,50 @@ function applyProduct(
     unit: body.unit,
     maxPriceMinor: body.maxPriceMinor,
     markupPercent: body.markupPercent,
-    barcodeSuppliers: Object.fromEntries(
-      body.barcodes
-        .filter((b) => b.supplierId && codes.includes(b.code.trim()))
-        .map((b) => [b.code.trim(), b.supplierId as string]),
-    ),
   };
   mockDb().stock.minPacks[product.id] = body.minStockPacks;
   mockDb().pos.catalogVersion += 1;
+}
+
+/* ---------------- categories ---------------- */
+
+const activeProductsOf = (categoryId: string) =>
+  products().filter(
+    (p) => p.categoryId === categoryId && statusOf(p) === 'active',
+  ).length;
+
+function toCategory(record: {
+  id: string;
+  nameRu: string;
+  nameTj: string;
+  status: CatalogStatus;
+}): Category {
+  const markup = mockDb().stock.markup[record.id];
+  return {
+    ...record,
+    markupPercent: markup ?? null,
+    products: activeProductsOf(record.id),
+  };
+}
+
+function categoryInput(
+  body: CategoryInput,
+  correlationId: string,
+  exceptId?: string,
+): CategoryInput {
+  const nameRu = body.nameRu.trim();
+  if (!nameRu || nameRu.length > 100) {
+    throw validation(correlationId, 'nameRu', 'required');
+  }
+  const key = nameRu.toLocaleLowerCase('ru');
+  if (
+    categoryRecords().some(
+      (c) => c.id !== exceptId && c.nameRu.toLocaleLowerCase('ru') === key,
+    )
+  ) {
+    throw conflict(correlationId, 'category_name_taken', 'nameRu');
+  }
+  return { nameRu, nameTj: body.nameTj.trim() };
 }
 
 /* ---------------- discount rules ---------------- */
@@ -295,7 +342,8 @@ function ruleInput(
 
 export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
   'catalog.list': ({ query, correlationId }) => {
-    context(correlationId, 'catalog:view');
+    const { session } = context(correlationId, 'catalog:view');
+    const status = query?.status ?? 'active';
     const needle = (query?.q ?? '').trim().toLocaleLowerCase('ru');
     const all = products()
       .filter(
@@ -308,7 +356,9 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
       .filter((p) => !query?.categoryId || p.categoryId === query.categoryId)
       .filter((p) => !query?.form || extrasOf(p).form === query.form)
       .filter((p) => !query?.flag || flagsOf(p).includes(query.flag))
+      .filter((p) => statusOf(p) === status)
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const active = products().filter((p) => statusOf(p) === 'active');
     return {
       ...page(
         all.map((p): CatalogListItem => ({
@@ -321,38 +371,26 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
           manufacturer: p.manufacturer,
           unit: extrasOf(p).unit,
           piecesPerPack: p.piecesPerPack,
-          retailPriceMinor: p.priceMinor,
+          // the price of the current store of the session (mocks fall back to the network price)
+          retailPriceMinor: session.currentStoreId
+            ? storePrice(session.currentStoreId, p) || null
+            : null,
           flags: flagsOf(p),
+          status: statusOf(p),
         })),
         { limit: query?.limit ?? 20, offset: query?.offset },
       ),
       kpi: {
-        products: products().length,
-        withoutBarcode: products().filter((p) => p.barcodes.length === 0)
-          .length,
+        products: active.length,
+        withoutBarcode: active.filter((p) => p.barcodes.length === 0).length,
         duplicates: catalog().duplicates.filter((d) => d.status === 'pending')
           .length,
       },
     };
   },
   'catalog.get': ({ params, correlationId }) => {
-    const { session, canSeeCost } = context(correlationId, 'catalog:view');
-    const product = findDoc(products(), params.id, correlationId);
-    return {
-      ...toCatalogProduct(product),
-      prices: pricesOf(product, session, canSeeCost),
-      batches: session.stores.flatMap((store) =>
-        product.batches
-          .map((b) => ({
-            storeId: store.id,
-            storeName: store.name,
-            batchNumber: b.number,
-            expiresOn: b.expiresOn,
-            quantityPieces: stockAt(store.id)[b.id] ?? 0,
-          }))
-          .filter((b) => b.quantityPieces !== 0),
-      ),
-    };
+    context(correlationId, 'catalog:view');
+    return toCatalogProduct(findDoc(products(), params.id, correlationId));
   },
   'catalog.create': ({ body, correlationId }) => {
     context(correlationId, 'catalog:create', { write: true });
@@ -381,10 +419,51 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
   'catalog.update': ({ params, body, correlationId }) => {
     context(correlationId, 'catalog:update', { write: true });
     const product = findDoc(products(), params.id, correlationId);
+    if (statusOf(product) === 'archived') {
+      throw conflict(correlationId, 'product_archived');
+    }
     const codes = productInput(body, correlationId, product.id);
     applyProduct(product, body, codes);
     product.piecePriceMinor = piecePrice(product, product.priceMinor);
     return toCatalogProduct(product);
+  },
+  'catalog.status': ({ params, body, correlationId }) => {
+    context(correlationId, 'catalog:delete', { write: true });
+    const product = findDoc(products(), params.id, correlationId);
+    catalog().archived = catalog().archived.filter((id) => id !== product.id);
+    if (body.status === 'archived') catalog().archived.push(product.id);
+    mockDb().pos.catalogVersion += 1;
+    return toCatalogProduct(product);
+  },
+  'catalog.categories': ({ correlationId }) => {
+    context(correlationId, 'catalog:view');
+    return categoryRecords().map(toCategory);
+  },
+  'catalog.createCategory': ({ body, correlationId }) => {
+    context(correlationId, 'catalog:update', { write: true });
+    const input = categoryInput(body, correlationId);
+    const record = {
+      id: `cat-new-${catalog().counters.category++}`,
+      ...input,
+      status: 'active' as const,
+    };
+    categoryRecords().push(record);
+    return toCategory(record);
+  },
+  'catalog.updateCategory': ({ params, body, correlationId }) => {
+    context(correlationId, 'catalog:update', { write: true });
+    const record = findDoc(categoryRecords(), params.id, correlationId);
+    Object.assign(record, categoryInput(body, correlationId, record.id));
+    return toCategory(record);
+  },
+  'catalog.categoryStatus': ({ params, body, correlationId }) => {
+    context(correlationId, 'catalog:update', { write: true });
+    const record = findDoc(categoryRecords(), params.id, correlationId);
+    if (body.status === 'archived' && activeProductsOf(record.id) > 0) {
+      throw conflict(correlationId, 'category_in_use');
+    }
+    record.status = body.status;
+    return toCategory(record);
   },
   'catalog.references': ({ correlationId }) => {
     context(correlationId, 'catalog:view');
@@ -393,8 +472,11 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
         a.localeCompare(b, 'ru'),
       );
     return {
-      categories,
+      categories: categoryRecords()
+        .filter((c) => c.status === 'active')
+        .map((c) => ({ id: c.id, name: c.nameRu })),
       forms: unique([...FORMS, ...products().map((p) => extrasOf(p).form)]),
+      units: [...productUnits],
       manufacturers: unique(products().map((p) => p.manufacturer)),
       inns: unique(products().map((p) => p.inn ?? '')),
       countries: COUNTRIES,
@@ -409,6 +491,7 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
     const { session, canSeeCost } = context(correlationId, 'pricing:view');
     const needle = (query?.q ?? '').trim().toLocaleLowerCase('ru');
     const rows = products()
+      .filter((p) => statusOf(p) === 'active')
       .filter(
         (p) =>
           !needle ||
@@ -434,11 +517,19 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
       stores: session.stores.map((s) => ({ id: s.id, name: s.name })),
     };
   },
+  'prices.get': ({ params, correlationId }) => {
+    const { session, canSeeCost } = context(correlationId, 'pricing:view');
+    const product = findDoc(products(), params.productId, correlationId);
+    return pricesOf(product, session, canSeeCost);
+  },
   'prices.update': ({ params, body, correlationId }) => {
     const { session, canSeeCost } = context(correlationId, 'pricing:view', {
       write: true,
     });
     const product = findDoc(products(), params.productId, correlationId);
+    if (statusOf(product) === 'archived') {
+      throw conflict(correlationId, 'product_archived');
+    }
     const network = hasPermissions(
       session.permissions,
       'pricing:update-network',
@@ -461,7 +552,9 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
       max !== null &&
       body.prices.some((p) => p.priceMinor > max)
     ) {
-      throw validation(correlationId, 'priceMinor', 'above_max_price');
+      throw new ApiError(422, 'above_max_price', correlationId, [
+        { field: 'prices', code: 'above_max_price' },
+      ]);
     }
     for (const price of body.prices) {
       setStorePrice(price.storeId, product.id, price.priceMinor);

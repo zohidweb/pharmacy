@@ -16,12 +16,13 @@ import type { PosCategory, PrescriptionKind } from './tenant-pos.js';
 
 export type { DiscountRuleStatus, PriceWarning };
 
+/** A barcode of a product, unique in the network (8–14 digits). */
 export interface ProductBarcode {
   code: string;
-  /** Supplier whose packs carry this code; null — the manufacturer's code. */
-  supplierId: string | null;
-  supplierName: string | null;
 }
+
+/** A product or a category is archived, never deleted (data model). */
+export type CatalogStatus = 'active' | 'archived';
 
 export type { ProductUnit };
 
@@ -48,17 +49,23 @@ export interface CatalogProduct {
   /** Markup of the product, whole percent; null — the markup of the category. */
   markupPercent: number | null;
   minStockPacks: number;
-  /** Network retail price of a pack (stores may override it, «Цены и скидки»). */
-  retailPriceMinor: number;
+  status: CatalogStatus;
 }
 
-/** POST /api/v1/catalog/products, PUT /api/v1/catalog/products/{id} */
+/**
+ * POST /api/v1/catalog/products (`catalog:create`), PUT /api/v1/catalog/products/{id}
+ * (`catalog:update`). The name in the default language of the network is required. 400
+ * `validation_failed`; 409 `barcode_taken` (field `barcodes`), `product_archived`.
+ */
 export type CatalogProductInput = Omit<
   CatalogProduct,
-  'id' | 'categoryName' | 'barcodes' | 'retailPriceMinor'
-> & {
-  barcodes: Array<Pick<ProductBarcode, 'code' | 'supplierId'>>;
-};
+  'id' | 'categoryName' | 'status'
+>;
+
+/** POST /api/v1/catalog/products/{id}/status (`catalog:delete`) — archive or restore. */
+export interface UpdateCatalogStatusRequest {
+  status: CatalogStatus;
+}
 
 export type CatalogFlag = 'rx' | 'controlled' | 'regulated' | 'no_barcode';
 
@@ -67,6 +74,8 @@ export interface CatalogListQuery {
   categoryId?: string;
   form?: string;
   flag?: CatalogFlag;
+  /** Default `active`. */
+  status?: CatalogStatus;
   limit?: number;
   offset?: number;
 }
@@ -82,11 +91,16 @@ export interface CatalogListItem {
   manufacturer: string;
   unit: ProductUnit;
   piecesPerPack: number;
-  retailPriceMinor: number;
+  /** Price of a pack at the current store of the session; null — no store or no price. */
+  retailPriceMinor: number | null;
   flags: CatalogFlag[];
+  status: CatalogStatus;
 }
 
-/** GET /api/v1/catalog/products?q=&categoryId=&form=&flag=&limit=&offset= */
+/**
+ * GET /api/v1/catalog/products?q=&categoryId=&form=&flag=&status=&limit=&offset= — `q` matches the
+ * name (RU/TJ) or the INN; 8–14 digits also match a barcode. `duplicates` is 0 until the sync.
+ */
 export interface CatalogListResponse extends Page<CatalogListItem> {
   kpi: { products: number; withoutBarcode: number; duplicates: number };
 }
@@ -94,7 +108,9 @@ export interface CatalogListResponse extends Page<CatalogListItem> {
 /** GET /api/v1/catalog/references — values for the selects of the product card. */
 export interface CatalogReferences {
   categories: PosCategory[];
+  /** Names in the default language of the network. */
   forms: string[];
+  units: ProductUnit[];
   manufacturers: string[];
   inns: string[];
   countries: Array<{ code: string; name: string }>;
@@ -117,27 +133,43 @@ export interface CatalogDuplicate {
   status: DuplicateStatus;
 }
 
-/** Batch of a product at a store, for the card (cost omitted without `finance:view-cost`). */
-export interface ProductBatchRow {
-  storeId: string;
-  storeName: string;
-  batchNumber: string;
-  expiresOn: string;
-  quantityPieces: number;
+/**
+ * GET /api/v1/catalog/products/{id}. Prices of the card come from GET /api/v1/prices/{id}; batches
+ * come with the stock module.
+ */
+export type CatalogProductCard = CatalogProduct;
+
+/** GET /api/v1/catalog/categories (`catalog:view`) — active and archived categories. */
+export interface Category {
+  id: string;
+  nameRu: string;
+  nameTj: string;
+  /** null — no markup of the category. */
+  markupPercent: number | null;
+  status: CatalogStatus;
+  /** Active products of the category. */
+  products: number;
 }
 
-/** GET /api/v1/catalog/products/{id} */
-export interface CatalogProductCard extends CatalogProduct {
-  prices: StorePrice[];
-  batches: ProductBatchRow[];
+/**
+ * POST /api/v1/catalog/categories, PUT /api/v1/catalog/categories/{id} (`catalog:update`). 409
+ * `category_name_taken` (field of the default language).
+ */
+export interface CategoryInput {
+  nameRu: string;
+  nameTj: string;
 }
+
+/** POST /api/v1/catalog/categories/{id}/status (`catalog:update`). 409 `category_in_use`. */
+export type UpdateCategoryStatusRequest = UpdateCatalogStatusRequest;
 
 /* ---------------- prices ---------------- */
 
 export interface StorePrice {
   storeId: string;
   storeName: string;
-  priceMinor: number;
+  /** Price of a pack; null — the product is not sold at the store. */
+  priceMinor: number | null;
   warnings: PriceWarning[];
 }
 
@@ -151,16 +183,19 @@ export interface PriceListQuery {
 export interface PriceRow {
   productId: string;
   productName: string;
-  /** Last purchase price of a pack; only with `finance:view-cost`. */
-  costMinor?: number;
-  /** Markup of the product or its category, whole percent. */
-  markupPercent: number;
+  /** Last purchase price of a pack; only with `finance:view-cost`, null — no purchase yet. */
+  costMinor?: number | null;
+  /** Markup of the product, else of its category, whole percent; null — none. */
+  markupPercent: number | null;
   maxPriceMinor: number | null;
   /** Prices of the stores in the employee scope, in the order of `stores`. */
   prices: StorePrice[];
 }
 
-/** GET /api/v1/prices?q=&categoryId=&limit=&offset= */
+/**
+ * GET /api/v1/prices?q=&categoryId=&limit=&offset= — active products × active stores of the scope.
+ * GET /api/v1/prices/{productId} returns the `StorePrice[]` of one product for the product card.
+ */
 export interface PriceListResponse extends Page<PriceRow> {
   stores: Array<{ id: string; name: string }>;
 }
@@ -168,7 +203,8 @@ export interface PriceListResponse extends Page<PriceRow> {
 /**
  * PUT /api/v1/prices/{productId} — new prices by store. A price above the regulated maximum needs
  * `confirmAboveMax` (soft warning, ТЗ), else 422 `above_max_price`. Stores outside the scope of
- * `pricing:update-store` need `pricing:update-network`. Every change goes to the audit log.
+ * `pricing:update-store` need `pricing:update-network` (403 `store_not_in_scope`). Every change goes to the audit log;
+ * 409 `product_archived`.
  */
 export interface UpdatePricesRequest {
   prices: Array<{ storeId: string; priceMinor: number }>;

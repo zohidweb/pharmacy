@@ -190,17 +190,20 @@ function MarkupsCard({
   const tSettings = useTranslations('settings');
   const toast = useToast();
   const queryClient = useQueryClient();
-  const [values, setValues] = useState(() =>
+  const [values, setValues] = useState<Record<string, number | null>>(() =>
     Object.fromEntries(markups.map((m) => [m.categoryId, m.markupPercent])),
   );
   const save = useMutation({
     mutationFn: () =>
       apiRequest('settings.updateMarkups', {
         body: {
-          markups: markups.map((m) => ({
-            categoryId: m.categoryId,
-            markupPercent: values[m.categoryId] ?? m.markupPercent,
-          })),
+          // a category without a markup stays without one until a value is typed
+          markups: markups.flatMap((m) => {
+            const markupPercent = values[m.categoryId] ?? null;
+            return markupPercent === null
+              ? []
+              : [{ categoryId: m.categoryId, markupPercent }];
+          }),
         },
       }),
     onSuccess: (saved) => {
@@ -210,7 +213,7 @@ function MarkupsCard({
     },
   });
   const error = useApiErrorMessage(save.error);
-  const invalid = Object.values(values).some((v) => v > 500);
+  const invalid = Object.values(values).some((v) => v !== null && v > 1000);
   return (
     <Card className="flex flex-col gap-4">
       <CardHeader title={t('title')} description={t('hint')} />
@@ -248,16 +251,17 @@ function MarkupsCard({
                   disabled={!editable}
                   value={String(values[m.categoryId] ?? '')}
                   error={
-                    (values[m.categoryId] ?? 0) > 500
+                    (values[m.categoryId] ?? 0) > 1000
                       ? tSettings('outOfRange')
                       : undefined
                   }
                   onChange={(event) =>
                     setValues((current) => ({
                       ...current,
-                      [m.categoryId]: Number(
-                        event.target.value.replace(/\D/g, '') || 0,
-                      ),
+                      [m.categoryId]:
+                        event.target.value.replace(/\D/g, '') === ''
+                          ? null
+                          : Number(event.target.value.replace(/\D/g, '')),
                     }))
                   }
                 />

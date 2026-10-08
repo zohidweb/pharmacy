@@ -220,8 +220,6 @@
       "divisibleHint": "Касса может продавать часть упаковки (блистер, ампулу)",
       "barcodes": "Штрихкоды",
       "scanBarcode": "Отсканируйте или введите штрихкод",
-      "barcodeSupplier": "Чей штрихкод",
-      "manufacturerCode": "Код производителя",
       "addBarcode": "Добавить",
       "barcodeFormat": "Штрихкод — от 8 до 14 цифр",
       "barcodeDuplicate": "Этот штрихкод уже добавлен",
@@ -261,10 +259,7 @@
       "prices": "Розничные цены по точкам",
       "maxPrice": "Предельная цена: {price}",
       "toPricing": "Изменить цены",
-      "batches": "Партии",
-      "noBatches": "Остатков нет",
-      "expires": "годен до {date}",
-      "quantity": "{pieces, plural, =0 {{packs} уп.} other {{packs} уп. {pieces} шт.}}"
+      "notSold": "не продаётся"
     }
   },
   "pricing": {
@@ -368,6 +363,7 @@
       "keepLocalOf": "Оставить цену точки: {product}",
       "ownerDecides": "Решает владелец",
       "empty": "Конфликтов цен нет"
-    }
+    },
+    "notSold": "не продаётся"
   }
 }

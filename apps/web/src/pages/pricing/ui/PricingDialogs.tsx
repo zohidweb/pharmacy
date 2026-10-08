@@ -55,7 +55,10 @@ export function PriceDialog({
   const aboveMax = row.prices.some((p) =>
     warningsOf(p.storeId).includes('above_max'),
   );
-  const changed = row.prices.filter((p) => value(p.storeId) !== p.priceMinor);
+  // a store without a price stays without one until a price is typed
+  const changed = row.prices.filter(
+    (p) => value(p.storeId) > 0 && value(p.storeId) !== p.priceMinor,
+  );
   const save = useMutation({
     mutationFn: () =>
       apiRequest('prices.update', {
@@ -114,9 +117,12 @@ export function PriceDialog({
             [
               [
                 'cost',
-                row.costMinor !== undefined ? formatMoney(row.costMinor) : '—',
+                row.costMinor != null ? formatMoney(row.costMinor) : '—',
               ],
-              ['markup', `${row.markupPercent} %`],
+              [
+                'markup',
+                row.markupPercent === null ? '—' : `${row.markupPercent} %`,
+              ],
               [
                 'maxPrice',
                 row.maxPriceMinor !== null
@@ -167,7 +173,9 @@ export function PriceDialog({
               <tr key={price.storeId} className="border-b border-border">
                 <td className="px-2 py-2">{price.storeName}</td>
                 <td className="px-2 py-2 text-end tabular-nums">
-                  {formatMoney(price.priceMinor, { withSign: false })}
+                  {price.priceMinor === null
+                    ? tPricing('notSold')
+                    : formatMoney(price.priceMinor, { withSign: false })}
                 </td>
                 <td className="w-cell-md px-2 py-2">
                   {!same || index === 0 ? (

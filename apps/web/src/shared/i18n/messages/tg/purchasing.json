@@ -220,8 +220,6 @@
       "divisibleHint": "Хазина метавонад қисми қуттиро фурӯшад (блистер, ампула)",
       "barcodes": "Штрихкодҳо",
       "scanBarcode": "Штрихкодро скан кунед ё ворид кунед",
-      "barcodeSupplier": "Штрихкоди кӣ",
-      "manufacturerCode": "Рамзи истеҳсолкунанда",
       "addBarcode": "Илова кардан",
       "barcodeFormat": "Штрихкод — аз 8 то 14 рақам",
       "barcodeDuplicate": "Ин штрихкод аллакай илова шудааст",
@@ -261,10 +259,7 @@
       "prices": "Нархҳои чакана аз рӯи нуқтаҳо",
       "maxPrice": "Нархи ниҳоӣ: {price}",
       "toPricing": "Тағйир додани нархҳо",
-      "batches": "Партияҳо",
-      "noBatches": "Бақия нест",
-      "expires": "эътибор то {date}",
-      "quantity": "{pieces, plural, =0 {{packs} қут.} other {{packs} қут. {pieces} дона}}"
+      "notSold": "фурӯхта намешавад"
     }
   },
   "pricing": {
@@ -368,6 +363,7 @@
       "keepLocalOf": "Нархи нуқтаро нигоҳ доштан: {product}",
       "ownerDecides": "Соҳиб қарор медиҳад",
       "empty": "Ихтилофи нарх нест"
-    }
+    },
+    "notSold": "фурӯхта намешавад"
   }
 }

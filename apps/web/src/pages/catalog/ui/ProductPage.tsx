@@ -1,7 +1,7 @@
 'use client';
 
 import type { CatalogProductCard } from '@pharmacy/shared-dto';
-import { formatDateOnly, formatMoney, toAppDate } from '@pharmacy/shared-util';
+import { formatMoney } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -16,12 +16,12 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { canWrite, useSession } from '@/entities/session';
+import { can, canWrite, useSession } from '@/entities/session';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
-import { useCatalogReferences, useSupplierOptions } from './CatalogPage';
+import { useCatalogReferences } from './CatalogPage';
 import {
   ProductForm,
   draftOf,
@@ -65,15 +65,11 @@ function ProductView() {
 
 function ProductCardBody({ card }: { card: CatalogProductCard }) {
   const t = useTranslations('products.card');
-  const tPricing = useTranslations('pricing');
-  const tBatch = useTranslations('catalog.batchState');
-  const today = toAppDate();
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const canEdit = canWrite(session, 'catalog:update');
   const refs = useCatalogReferences();
-  const suppliers = useSupplierOptions();
   const [draft, setDraft] = useState<ProductDraft>(() => draftOf(card));
   const [touched, setTouched] = useState(false);
   const save = useMutation({
@@ -91,7 +87,6 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
   const problems = draftProblems(draft);
   const valid =
     !problems.nameRu && !problems.piecesPerPack && !problems.maxPrice;
-  const warned = card.prices.some((p) => p.warnings.length > 0);
 
   return (
     <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">
@@ -106,7 +101,6 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
             draft={draft}
             onChange={setDraft}
             refs={refs.data}
-            suppliers={suppliers.data ?? []}
             touched={touched}
             disabled={!canEdit}
           />
@@ -136,11 +130,29 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
           {t('tagPending')}
         </p>
       </Card>
-      <div className="flex flex-col gap-4">
-        <Card padding="none">
-          <CardHeader title={t('prices')} inset />
+      {can(session, 'pricing:view') && <ProductPrices card={card} />}
+    </div>
+  );
+}
+
+/** Prices of the product at the stores of the scope (GET /prices/{id}); batches come with stock. */
+function ProductPrices({ card }: { card: CatalogProductCard }) {
+  const t = useTranslations('products.card');
+  const tPricing = useTranslations('pricing');
+  const prices = useQuery({
+    queryKey: ['prices', 'product', card.id],
+    queryFn: ({ signal }) =>
+      apiRequest('prices.get', { params: { productId: card.id }, signal }),
+  });
+  const warned = prices.data?.some((p) => p.warnings.length > 0) ?? false;
+
+  return (
+    <Card padding="none">
+      <CardHeader title={t('prices')} inset />
+      <QueryState query={prices}>
+        {(rows) => (
           <ul className="flex flex-col">
-            {card.prices.map((price) => (
+            {rows.map((price) => (
               <li
                 key={price.storeId}
                 className="flex items-center justify-between gap-3 border-t border-border px-(--ph-card-padding) py-3 text-sm"
@@ -152,66 +164,32 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
                       {tPricing(`warnings.${w}`)}
                     </StatusPill>
                   ))}
-                  <b className="tabular-nums">
-                    {formatMoney(price.priceMinor)}
-                  </b>
+                  {price.priceMinor === null ? (
+                    <span className="text-fg-muted">{t('notSold')}</span>
+                  ) : (
+                    <b className="tabular-nums">
+                      {formatMoney(price.priceMinor)}
+                    </b>
+                  )}
                 </span>
               </li>
             ))}
           </ul>
-          {card.maxPriceMinor !== null && (
-            <p className="border-t border-border px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
-              {t('maxPrice', { price: formatMoney(card.maxPriceMinor) })}
-            </p>
-          )}
-          {warned && (
-            <p className="px-(--ph-card-padding) pb-3 text-xs text-fg-subtle">
-              <Link href={routes.pricing()} className="text-primary underline">
-                {t('toPricing')}
-              </Link>
-            </p>
-          )}
-        </Card>
-        <Card padding="none">
-          <CardHeader title={t('batches')} inset />
-          {card.batches.length === 0 ? (
-            <p className="px-(--ph-card-padding) pb-4 text-sm text-fg-muted">
-              {t('noBatches')}
-            </p>
-          ) : (
-            <ul className="flex flex-col">
-              {card.batches.map((batch) => (
-                <li
-                  key={`${batch.storeId}-${batch.batchNumber}`}
-                  className="flex items-center justify-between gap-3 border-t border-border px-(--ph-card-padding) py-3 text-sm"
-                >
-                  <span className="flex flex-col">
-                    <span className="font-medium">{batch.batchNumber}</span>
-                    <span className="text-xs text-fg-subtle">
-                      {batch.storeName} ·{' '}
-                      {t('expires', { date: formatDateOnly(batch.expiresOn) })}
-                    </span>
-                  </span>
-                  <span className="flex flex-col items-end gap-1">
-                    <b className="whitespace-nowrap tabular-nums">
-                      {t('quantity', {
-                        packs: Math.trunc(
-                          batch.quantityPieces / card.piecesPerPack,
-                        ),
-                        pieces: batch.quantityPieces % card.piecesPerPack,
-                      })}
-                    </b>
-                    {batch.expiresOn < today && (
-                      <StatusPill tone="danger">{tBatch('expired')}</StatusPill>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-    </div>
+        )}
+      </QueryState>
+      {card.maxPriceMinor !== null && (
+        <p className="border-t border-border px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
+          {t('maxPrice', { price: formatMoney(card.maxPriceMinor) })}
+        </p>
+      )}
+      {warned && (
+        <p className="px-(--ph-card-padding) pb-3 text-xs text-fg-subtle">
+          <Link href={routes.pricing()} className="text-primary underline">
+            {t('toPricing')}
+          </Link>
+        </p>
+      )}
+    </Card>
   );
 }
 

@@ -50,12 +50,15 @@ import type {
   CatalogProductCard,
   CatalogProductInput,
   CatalogReferences,
+  Category,
+  CategoryInput,
   DeficitLine,
   DiscountRuleDefinition,
   DiscountRuleInput,
   PriceConflict,
   PriceListQuery,
   PriceListResponse,
+  StorePrice,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderListQuery,
@@ -67,6 +70,8 @@ import type {
   SupplierListResponse,
   SupplierLedgerEntry,
   SupplierPaymentRequest,
+  UpdateCatalogStatusRequest,
+  UpdateCategoryStatusRequest,
   UpdatePricesRequest,
   AcceptTransferRequest,
   DiscrepancyResolution,
@@ -362,6 +367,25 @@ export const apiRoutes = {
     'PUT',
     (p) => `/catalog/products/${id(p)}`,
   ),
+  'catalog.status': route<
+    CatalogProduct,
+    UpdateCatalogStatusRequest,
+    { id: string }
+  >('POST', (p) => `/catalog/products/${id(p)}/status`),
+  'catalog.categories': route<Category[]>('GET', () => '/catalog/categories'),
+  'catalog.createCategory': route<Category, CategoryInput>(
+    'POST',
+    () => '/catalog/categories',
+  ),
+  'catalog.updateCategory': route<Category, CategoryInput, { id: string }>(
+    'PUT',
+    (p) => `/catalog/categories/${id(p)}`,
+  ),
+  'catalog.categoryStatus': route<
+    Category,
+    UpdateCategoryStatusRequest,
+    { id: string }
+  >('POST', (p) => `/catalog/categories/${id(p)}/status`),
   'catalog.references': route<CatalogReferences>(
     'GET',
     () => '/catalog/references',
@@ -374,6 +398,10 @@ export const apiRoutes = {
   'prices.list': route<PriceListResponse, undefined, undefined, PriceListQuery>(
     'GET',
     () => '/prices',
+  ),
+  'prices.get': route<StorePrice[], undefined, { productId: string }>(
+    'GET',
+    (p) => `/prices/${encodeURIComponent(p.productId)}`,
   ),
   'prices.update': route<
     PriceListResponse['items'][number],

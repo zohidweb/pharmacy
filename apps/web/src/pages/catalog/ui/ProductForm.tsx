@@ -6,7 +6,6 @@ import type {
   CatalogReferences,
   PrescriptionKind,
   ProductUnit,
-  SupplierOption,
 } from '@pharmacy/shared-dto';
 import { formatMoney, parseMoneyToMinor } from '@pharmacy/shared-util';
 import {
@@ -63,10 +62,7 @@ export function draftOf(product: CatalogProduct): ProductDraft {
     unit: product.unit,
     piecesPerPack: product.piecesPerPack,
     divisible: product.divisible,
-    barcodes: product.barcodes.map(({ code, supplierId }) => ({
-      code,
-      supplierId,
-    })),
+    barcodes: product.barcodes.map(({ code }) => ({ code })),
     prescription: product.prescription,
     maxPriceMinor: product.maxPriceMinor,
     markupPercent: product.markupPercent,
@@ -108,21 +104,18 @@ export function ProductForm({
   draft,
   onChange,
   refs,
-  suppliers,
   touched,
   disabled,
 }: {
   draft: ProductDraft;
   onChange: (change: (draft: ProductDraft) => ProductDraft) => void;
   refs: CatalogReferences;
-  suppliers: SupplierOption[];
   touched: boolean;
   disabled: boolean;
 }) {
   const t = useTranslations('products.form');
   const id = useId();
   const [code, setCode] = useState('');
-  const [codeSupplier, setCodeSupplier] = useState('');
   const problems = draftProblems(draft);
   const set = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) =>
     onChange((current) => ({ ...current, [key]: value }));
@@ -138,15 +131,10 @@ export function ProductForm({
     if (!code || codeError) return;
     onChange((current) => ({
       ...current,
-      barcodes: [
-        ...current.barcodes,
-        { code, supplierId: codeSupplier || null },
-      ],
+      barcodes: [...current.barcodes, { code }],
     }));
     setCode('');
   };
-  const supplierName = (supplierId: string | null) =>
-    suppliers.find((s) => s.id === supplierId)?.name;
 
   return (
     <div className="flex flex-col gap-5">
@@ -270,11 +258,6 @@ export function ProductForm({
               >
                 <Icon name="scan-barcode" size="sm" />
                 <span className="tabular-nums">{barcode.code}</span>
-                {supplierName(barcode.supplierId) && (
-                  <span className="text-xs text-fg-subtle">
-                    · {supplierName(barcode.supplierId)}
-                  </span>
-                )}
                 {!disabled && (
                   <IconButton
                     icon="x"
@@ -294,7 +277,7 @@ export function ProductForm({
           </ul>
         )}
         {!disabled && (
-          <div className="grid grid-cols-(--ph-search-columns-2) items-start gap-3">
+          <div className="grid grid-cols-(--ph-search-columns) items-start gap-3">
             <TextField
               label={t('scanBarcode')}
               hideLabel
@@ -312,16 +295,6 @@ export function ProductForm({
                   addCode();
                 }
               }}
-            />
-            <Select
-              label={t('barcodeSupplier')}
-              hideLabel
-              value={codeSupplier}
-              onChange={(event) => setCodeSupplier(event.target.value)}
-              options={[
-                { value: '', label: t('manufacturerCode') },
-                ...suppliers.map((s) => ({ value: s.id, label: s.name })),
-              ]}
             />
             <Button
               variant="secondary"

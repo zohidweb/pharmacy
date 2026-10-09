@@ -30,6 +30,18 @@ export interface ReceiptRow {
   storeId: string;
   storeName: string;
   totalDirams: bigint;
+  /** Payments allocated to the receipt. */
+  allocatedDirams: bigint;
+}
+
+export interface PaymentRow {
+  id: string;
+  supplierId: string;
+  legalEntityId: string;
+  amountDirams: bigint;
+  paidOn: string;
+  method: string;
+  comment: string | null;
 }
 
 export interface LedgerRow {
@@ -40,6 +52,8 @@ export interface LedgerRow {
   sourceId: string;
   recordedAt: Date;
   documentNumber: string | null;
+  paymentMethod: string | null;
+  paymentComment: string | null;
 }
 
 export interface LedgerEntryValues {
@@ -167,7 +181,10 @@ export class PurchasingRepository {
     const result = await sql<ReceiptRow>`
       select d.id, d.supplier_id, d.number, d.document_date::text as document_date,
              d.payment_due_date::text as due_date, d.store_id, s.name as store_name,
-             d.total_dirams
+             d.total_dirams,
+             coalesce((select sum(a.amount_dirams) from pharmacy.supplier_payment_allocations a
+                       where a.tenant_id = d.tenant_id and a.goods_receipt_document_id = d.id), 0)::bigint
+               as allocated_dirams
       from pharmacy.documents d
       join pharmacy.stores s on s.tenant_id = d.tenant_id and s.id = d.store_id
       where d.tenant_id = ${tenantId} and d.type = 'goods_receipt' and d.status = 'posted'
@@ -184,13 +201,160 @@ export class PurchasingRepository {
   ): Promise<LedgerRow[]> {
     const result = await sql<LedgerRow>`
       select l.kind, l.amount_dirams, l.business_date::text as business_date, l.source_type,
-             l.source_id, l.recorded_at, d.number as document_number
+             l.source_id, l.recorded_at, d.number as document_number,
+             p.method as payment_method, p.comment as payment_comment
       from pharmacy.supplier_ledger_entries l
       left join pharmacy.documents d
         on d.tenant_id = l.tenant_id and l.source_type = 'document' and d.id = l.source_id
+      left join pharmacy.supplier_payments p
+        on p.tenant_id = l.tenant_id and l.source_type = 'payment' and p.id = l.source_id
       where l.tenant_id = ${tenantId} and l.supplier_id = ${supplierId}
       order by l.recorded_at, l.id`.execute(trx);
     return result.rows;
+  }
+
+  /** Active legal entities of the network. */
+  async activeLegalEntities(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<string[]> {
+    const rows = await trx
+      .selectFrom('legalEntities')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('status', '=', 'active')
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  async findPayment(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<PaymentRow | null> {
+    const result = await sql<PaymentRow>`
+      select id, supplier_id, legal_entity_id, amount_dirams, paid_on::text as paid_on, method,
+             comment
+      from pharmacy.supplier_payments
+      where tenant_id = ${tenantId} and id = ${id}`.execute(trx);
+    return result.rows[0] ?? null;
+  }
+
+  /** Inserts the payment; false when its id (the idempotency key) is already taken. */
+  async insertPayment(
+    trx: TenantTransaction,
+    tenantId: string,
+    payment: {
+      id: string;
+      supplierId: string;
+      legalEntityId: string;
+      amountDirams: number;
+      paidOn: string;
+      method: string;
+      comment: string | null;
+      createdBy: string;
+    },
+  ): Promise<boolean> {
+    const result = await sql<{ id: string }>`
+      insert into pharmacy.supplier_payments
+        (tenant_id, id, supplier_id, legal_entity_id, amount_dirams, paid_on, method, comment,
+         created_by)
+      values (${tenantId}, ${payment.id}, ${payment.supplierId}, ${payment.legalEntityId},
+              ${BigInt(payment.amountDirams)}, ${payment.paidOn}::date, ${payment.method},
+              ${payment.comment}, ${payment.createdBy})
+      on conflict (tenant_id, id) do nothing
+      returning id`.execute(trx);
+    return result.rows.length > 0;
+  }
+
+  /** Serialises the allocation of one supplier × legal entity (two payments, a payment and a receipt). */
+  async lockSettlement(
+    trx: TenantTransaction,
+    tenantId: string,
+    supplierId: string,
+    legalEntityId: string,
+  ): Promise<void> {
+    await sql`select pg_advisory_xact_lock(
+      hashtextextended(${`settlement:${tenantId}:${supplierId}:${legalEntityId}`}, 0))`.execute(trx);
+  }
+
+  /**
+   * Posted goods receipts of the supplier owed by the legal entity (by their ledger entries), with
+   * a remainder after the allocations, the earliest due date first.
+   */
+  async openReceipts(
+    trx: TenantTransaction,
+    tenantId: string,
+    supplierId: string,
+    legalEntityId: string,
+  ): Promise<Array<{ documentId: string; remainingDirams: bigint }>> {
+    const result = await sql<{ documentId: string; remainingDirams: bigint }>`
+      select d.id as document_id,
+             (l.owed - coalesce(a.allocated, 0))::bigint as remaining_dirams
+      from pharmacy.documents d
+      join (select source_id, sum(amount_dirams) as owed
+            from pharmacy.supplier_ledger_entries
+            where tenant_id = ${tenantId} and supplier_id = ${supplierId}
+              and legal_entity_id = ${legalEntityId} and source_type = 'document'
+            group by source_id) l on l.source_id = d.id
+      left join (select goods_receipt_document_id, sum(amount_dirams) as allocated
+                 from pharmacy.supplier_payment_allocations
+                 where tenant_id = ${tenantId}
+                 group by goods_receipt_document_id) a on a.goods_receipt_document_id = d.id
+      where d.tenant_id = ${tenantId} and d.type = 'goods_receipt' and d.status = 'posted'
+        and l.owed - coalesce(a.allocated, 0) > 0
+      order by d.payment_due_date nulls last, d.document_date, d.number`.execute(trx);
+    return result.rows;
+  }
+
+  /** Payments of the supplier by the legal entity with an unallocated rest, the oldest first. */
+  async paymentsWithRest(
+    trx: TenantTransaction,
+    tenantId: string,
+    supplierId: string,
+    legalEntityId: string,
+  ): Promise<Array<{ paymentId: string; restDirams: bigint }>> {
+    const result = await sql<{ paymentId: string; restDirams: bigint }>`
+      select p.id as payment_id,
+             (p.amount_dirams - coalesce(sum(a.amount_dirams), 0))::bigint as rest_dirams
+      from pharmacy.supplier_payments p
+      left join pharmacy.supplier_payment_allocations a
+        on a.tenant_id = p.tenant_id and a.payment_id = p.id
+      where p.tenant_id = ${tenantId} and p.supplier_id = ${supplierId}
+        and p.legal_entity_id = ${legalEntityId}
+      group by p.id, p.amount_dirams, p.paid_on, p.created_at
+      having p.amount_dirams - coalesce(sum(a.amount_dirams), 0) > 0
+      order by p.paid_on, p.created_at, p.id`.execute(trx);
+    return result.rows;
+  }
+
+  async addAllocation(
+    trx: TenantTransaction,
+    tenantId: string,
+    paymentId: string,
+    documentId: string,
+    amountDirams: bigint,
+  ): Promise<void> {
+    await sql`
+      insert into pharmacy.supplier_payment_allocations
+        (tenant_id, payment_id, goods_receipt_document_id, amount_dirams)
+      values (${tenantId}, ${paymentId}, ${documentId}, ${amountDirams})
+      on conflict (tenant_id, payment_id, goods_receipt_document_id)
+        do update set amount_dirams = pharmacy.supplier_payment_allocations.amount_dirams
+                                      + excluded.amount_dirams`.execute(trx);
+  }
+
+  /** Removes the allocations of a receipt; the total returned to the payments. */
+  async releaseAllocations(
+    trx: TenantTransaction,
+    tenantId: string,
+    documentId: string,
+  ): Promise<number> {
+    const result = await sql<{ amountDirams: bigint }>`
+      delete from pharmacy.supplier_payment_allocations
+      where tenant_id = ${tenantId} and goods_receipt_document_id = ${documentId}
+      returning amount_dirams`.execute(trx);
+    return result.rows.reduce((sum, r) => sum + Number(r.amountDirams), 0);
   }
 
   /** What a document left in the ledger, per supplier and legal entity. */

@@ -303,7 +303,7 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
     });
     const order = findDoc(db().orders, params.id, correlationId);
     if (order.status !== 'draft') {
-      throw new ApiError(409, 'order_confirmed', correlationId);
+      throw new ApiError(409, 'order_not_editable', correlationId);
     }
     inScope(session, body.storeId, correlationId);
     Object.assign(order, buildOrder(body, order, correlationId));
@@ -316,7 +316,7 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
     const order = findDoc(db().orders, params.id, correlationId);
     inScope(session, order.storeId, correlationId);
     if (order.status !== 'draft') {
-      throw new ApiError(409, 'order_confirmed', correlationId);
+      throw new ApiError(409, 'order_not_editable', correlationId);
     }
     if (order.lines.length === 0) {
       throw validation(correlationId, 'lines', 'required');

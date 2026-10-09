@@ -305,7 +305,7 @@ export function OrderEditor({
           />
           <Select
             label={t('store')}
-            disabled={!editable}
+            disabled={!editable || doc !== null}
             value={draft.storeId}
             onChange={(event) =>
               setDraft((current) => ({

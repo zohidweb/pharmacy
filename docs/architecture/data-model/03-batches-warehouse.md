@@ -2,6 +2,21 @@
 
 Соглашения — в [README](README.md). `tenant_id`, `(tenant_id, id)` и `created_at` в списках колонок не повторяются. Все количества — в штуках (`_pieces`), деньги — в дирамах.
 
+> **Введено миграцией `inventory-core` (2026-10-09, спецификация `docs/superpowers/specs/2026-10-09-inventory-purchasing-design.md`):**
+> `document_counters`, `documents` (типы `goods_receipt`, `opening_balance`), `batches` (`origin` — те же два),
+> `goods_receipt_lines`, `opening_balance_lines`, `stock_movements` (виды `goods_receipt`, `opening_balance`,
+> `reversal`, `sale`). Остальные типы документов, строки и колонки (`source_batch_id`, `negative_flagged_at`,
+> перемещения, списания, инвентаризация, возвраты поставщику, `purchase_order_*`) добавят миграции своих модулей.
+> Решения при реализации:
+> - **розница из прихода применяется при проведении** (поправка модели, утверждена архитектором 2026-10-09):
+>   `goods_receipt_lines.retail_price_draft_dirams` — цена, которая при проведении становится ценой точки
+>   (права на цены, предельная цена, `price.changed`); черновых цен `store_products.draft_*` нет;
+> - у `opening_balance_lines` есть `lot_number` и необязательная розница `retail_price_draft_dirams`;
+> - секции `stock_movements` созданы до 2028-12, дальше — плановая задача;
+> - строка черновика, не изменённая после отмены проведения (товар, срок, серия, цена), сохраняет партию;
+> - сторно (`reversal`) несёт дату документа как `business_date`;
+> - закрытый период юрлица (`legal_entities.closed_until`) проверяется при проведении (422 `period_closed`).
+
 ```mermaid
 erDiagram
   stores ||--o{ batches : "own batches (D2)"

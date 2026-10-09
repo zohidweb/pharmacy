@@ -54,6 +54,10 @@ api, web, admin). Доменные типы и каталог прав — `libs
   Образец — `ProductsReader` модуля `catalog` (`exports: [ProductsReader]`): методы принимают
   транзакцию вызывающего (`trx`, `tenantId`) и отдают узкий тип (`PricingProduct`), а `pricing`
   импортирует `CatalogModule` и читает товары только через него.
+- Склад: остаток — сумма `stock_movements` партии, движения только добавляются (сторно — `reversal` с
+  `reverses_movement_id`). Перед проверкой остатка партии блокируются `FOR UPDATE` одним оператором, подсчёт — следующим
+  (`DocumentsRepository.lockBatches`, затем `foreignMovements` / `batchStock`). Документ и его движения — одна
+  транзакция; шапка документа блокируется `FOR UPDATE` до проверки статуса (`DocumentPosting`).
 - Поиск подстрокой (`LIKE`) — по выражению с индексом `pg_trgm` (`lower(name ->> 'ru')`), ввод
   пользователя экранируется (`%`, `_`, `\` — `escapeLike` в `catalog.repository.ts`).
 - Контроллер — только HTTP: DTO на входе, вызов сервиса, DTO на выходе. Бизнес-логика — в сервисе.

@@ -6,6 +6,7 @@ import type {
   PurchaseOrderListQuery,
   PurchaseOrderListResponse,
   PurchaseOrderOption,
+  SupplierCard,
 } from '@pharmacy/shared-dto';
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
@@ -234,6 +235,29 @@ export class PurchaseOrdersService {
         await this.read(trx, tenantId, order.id),
       );
     });
+  }
+
+  /** The latest orders of a supplier in the stores of the scope, for the supplier card. */
+  async ofSupplier(
+    trx: TenantTransaction,
+    tenantId: string,
+    supplierId: string,
+  ): Promise<SupplierCard['orders']> {
+    const { rows } = await this.repository.list(
+      trx,
+      tenantId,
+      { storeIds: this.scope(), supplierId },
+      { limit: 50, offset: 0 },
+    );
+    const views = await this.lineViews(trx, tenantId, rows);
+    return rows.map((row) => ({
+      id: row.id,
+      number: row.number,
+      date: row.orderDate,
+      storeName: row.storeName,
+      totalMinor: totalOf(views.get(row.id) ?? []),
+      status: row.status,
+    }));
   }
 
   /* ---------------- helpers ---------------- */

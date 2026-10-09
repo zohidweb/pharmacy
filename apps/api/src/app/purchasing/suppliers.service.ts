@@ -18,6 +18,7 @@ import {
   uniqueConstraint,
 } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
+import { PurchaseOrdersService } from './purchase-orders.service';
 import {
   type LedgerRow,
   PurchasingRepository,
@@ -122,6 +123,7 @@ export class SuppliersService {
     private readonly db: TenantDatabase,
     private readonly repository: PurchasingRepository,
     private readonly audit: AuditService,
+    private readonly orders: PurchaseOrdersService,
   ) {}
 
   async options(): Promise<SupplierOption[]> {
@@ -204,7 +206,7 @@ export class SuppliersService {
       const scope = scopeIds(storeScope);
       return {
         ...debtOf(supplier, receipts, today, true),
-        orders: [],
+        orders: await this.orders.ofSupplier(trx, tenantId, supplierId),
         receipts: receipts
           .filter((r) => scope === null || scope.includes(r.storeId))
           .map((r) => ({

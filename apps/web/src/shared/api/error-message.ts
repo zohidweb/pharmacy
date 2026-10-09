@@ -47,6 +47,9 @@ const knownCodes = [
   'category_in_use',
   'category_name_taken',
   'above_max_price',
+  'document_not_posted',
+  'period_closed',
+  'supplier_name_taken',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

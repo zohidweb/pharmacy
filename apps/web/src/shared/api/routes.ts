@@ -79,6 +79,10 @@ import type {
   GoodsReceipt,
   GoodsReceiptInput,
   GoodsReceiptListResponse,
+  OpeningBalance,
+  OpeningBalanceInput,
+  OpeningBalanceListResponse,
+  ProductBatchRow,
   PurchaseOrderOption,
   RejectionReason,
   SaveStockCountRequest,
@@ -284,6 +288,11 @@ export const apiRoutes = {
     { storeId: string },
     { query?: string; limit?: number }
   >('GET', (p) => `/stores/${encodeURIComponent(p.storeId)}/stock-products`),
+  'stock.productBatches': route<
+    ProductBatchRow[],
+    undefined,
+    { productId: string }
+  >('GET', (p) => `/stock/products/${encodeURIComponent(p.productId)}/batches`),
   'suppliers.options': route<SupplierOption[]>(
     'GET',
     () => '/suppliers/options',
@@ -571,6 +580,33 @@ export const apiRoutes = {
     { kind: StockDocumentKind; id: string }
   >('GET', (p) => `/stock-documents/${p.kind}/${id(p)}/unposting-check`),
 
+  'openingBalances.list': route<
+    OpeningBalanceListResponse,
+    undefined,
+    undefined,
+    DocumentListQuery
+  >('GET', () => '/opening-balances'),
+  'openingBalances.get': route<OpeningBalance, undefined, { id: string }>(
+    'GET',
+    (p) => `/opening-balances/${id(p)}`,
+  ),
+  'openingBalances.create': route<OpeningBalance, OpeningBalanceInput>(
+    'POST',
+    () => '/opening-balances',
+  ),
+  'openingBalances.update': route<
+    OpeningBalance,
+    OpeningBalanceInput,
+    { id: string }
+  >('PUT', (p) => `/opening-balances/${id(p)}`),
+  'openingBalances.post': route<OpeningBalance, undefined, { id: string }>(
+    'POST',
+    (p) => `/opening-balances/${id(p)}/posting`,
+  ),
+  'openingBalances.unpost': route<OpeningBalance, undefined, { id: string }>(
+    'POST',
+    (p) => `/opening-balances/${id(p)}/unposting`,
+  ),
   'goodsReceipts.list': route<
     GoodsReceiptListResponse,
     undefined,

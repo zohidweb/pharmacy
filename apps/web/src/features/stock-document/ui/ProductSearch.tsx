@@ -83,7 +83,9 @@ export function ProductSearch({
                   >
                     <span className="font-medium">{product.name}</span>
                     <span className="text-xs text-fg-subtle">
-                      {formatMoney(product.retailPriceMinor)}
+                      {product.retailPriceMinor === null
+                        ? '—'
+                        : formatMoney(product.retailPriceMinor)}
                     </span>
                   </button>
                 </li>

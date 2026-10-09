@@ -11,12 +11,12 @@ import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
-import { AuditService } from '../audit/audit.service';
 import {
   type PricingProduct,
   ProductsReader,
 } from '../catalog/products-reader';
 import { PricingRepository, type StoreRef } from './pricing.repository';
+import { StorePriceWriter } from './store-price-writer';
 
 const notFound = () => new ProblemException(404, 'not_found');
 
@@ -39,7 +39,7 @@ export class PricesService {
     private readonly db: TenantDatabase,
     private readonly repository: PricingRepository,
     private readonly products: ProductsReader,
-    private readonly audit: AuditService,
+    private readonly writer: StorePriceWriter,
   ) {}
 
   async list(query: PriceListQuery): Promise<PriceListResponse> {
@@ -90,8 +90,7 @@ export class PricesService {
     productId: string,
     request: UpdatePricesRequest,
   ): Promise<PriceRow> {
-    const { tenantId, storeScope, permissions, employeeId } =
-      requirePrincipal();
+    const { tenantId, storeScope, permissions } = requirePrincipal();
     const network = hasPermissions(permissions, 'pricing:update-network');
     if (!network && !hasPermissions(permissions, 'pricing:update-store')) {
       throw new ProblemException(403, 'forbidden');
@@ -133,33 +132,16 @@ export class PricesService {
         ]);
       }
 
-      const current = await this.repository.lockPrices(
-        trx,
-        tenantId,
-        id,
-        wanted.map((price) => price.storeId),
-      );
       for (const price of wanted) {
-        const old = current.get(price.storeId) ?? null;
-        if (old !== null && Number(old) === price.priceMinor) continue;
-        await this.repository.setPrice(
-          trx,
+        await this.writer.set(trx, {
           tenantId,
-          id,
-          price.storeId,
-          price.priceMinor,
-          employeeId,
-        );
-        await this.audit.append(trx, {
-          action: 'price.changed',
-          entityType: 'product',
-          entityId: id,
+          productId: id,
           storeId: price.storeId,
-          details: {
-            storeId: price.storeId,
-            oldPriceMinor: old === null ? null : Number(old),
-            newPriceMinor: price.priceMinor,
-          },
+          priceMinor: price.priceMinor,
+          maxPriceMinor: max,
+          confirmAboveMax: request.confirmAboveMax,
+          field: 'prices',
+          source: 'prices',
         });
       }
       const stores = await this.repository.activeStores(trx, tenantId, scope);

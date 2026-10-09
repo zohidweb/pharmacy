@@ -14,6 +14,11 @@ erDiagram
   documents ||--o{ supplier_payment_allocations : "goods receipt"
 ```
 
+> **Введено миграцией `inventory-core` (2026-10-09):** `suppliers`, `supplier_ledger_entries` (виды `goods_receipt`,
+> `payment`, `reversal`; источник — `document` / `payment`). Проведение прихода пишет `goods_receipt`, отмена —
+> `reversal`. Оплаты, распределения и заказы — миграцией `purchasing` (PR-2 той же спецификации). Расчёт
+> «заполнить по дефициту» отдаёт модуль `inventory`: он владеет остатками, а `purchasing` от склада не зависит.
+
 Владение данными офлайн-точки: `suppliers` — облако → точка. Заказы, оплаты и журнал расчётов ведутся **только в облаке**. Приход, проведённый на офлайн-точке, приходит `document.posted`, и облако заводит по нему долг (уточнить в ADR-0014).
 
 ## `suppliers` (класс `tenant`)

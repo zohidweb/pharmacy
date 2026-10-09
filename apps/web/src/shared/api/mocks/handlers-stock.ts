@@ -33,6 +33,9 @@ import type {
   TransferListItem,
   UnpostCheck,
   WriteOff,
+  OpeningBalance,
+  OpeningBalanceInput,
+  ProductBatchRow,
 } from '@pharmacy/shared-dto';
 import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
@@ -52,6 +55,7 @@ type StockRoute = Extract<
   | 'purchaseOrders.open'
   | 'documents.unpostCheck'
   | `goodsReceipts.${string}`
+  | `openingBalances.${string}`
   | `writeOffs.${string}`
   | `supplierReturns.${string}`
   | `stockCounts.${string}`
@@ -255,6 +259,34 @@ function requireDraft(status: string, correlationId: string) {
   }
 }
 
+/* ---------------- opening balances ---------------- */
+
+function openingBatchId(line: OpeningBalance['lines'][number]) {
+  return `b-${line.productId}-${line.batchNumber || 'start'}`;
+}
+
+function buildOpeningBalance(
+  input: OpeningBalanceInput,
+  base: Pick<
+    OpeningBalance,
+    'id' | 'number' | 'status' | 'createdBy' | 'postedBy'
+  >,
+  correlationId: string,
+): OpeningBalance {
+  const lines = input.lines.map((line) => ({
+    ...line,
+    productName: productOf(line.productId, correlationId).name,
+  }));
+  return {
+    ...base,
+    ...input,
+    comment: input.comment.trim(),
+    storeName: storeName(input.storeId),
+    lines,
+    totalMinor: lines.reduce((sum, l) => sum + l.quantity * l.costMinor, 0),
+  };
+}
+
 /* ---------------- goods receipts ---------------- */
 
 function receiptBatchId(line: GoodsReceipt['lines'][number]) {
@@ -423,7 +455,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         : key === 'quantity'
           ? r.quantityPieces
           : key === 'price'
-            ? r.retailPriceMinor
+            ? (r.retailPriceMinor ?? 0)
             : r.productName;
     filtered.sort((a, b) => {
       const l = value(a);
@@ -466,6 +498,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
           mockDb().catalog.extras[p.id]?.markupPercent ??
           db().markup[p.categoryId] ??
           40,
+        maxPriceMinor: mockDb().catalog.extras[p.id]?.maxPriceMinor ?? null,
         minStockPacks: db().minPacks[p.id] ?? 0,
         batches: p.batches.map((b) => {
           const batch = {
@@ -475,6 +508,28 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
           return canSeeCost ? batch : hideCost(batch, false);
         }),
       }));
+  },
+
+  'stock.productBatches': ({ params, correlationId }) => {
+    const { session, canSeeCost } = context(correlationId, 'inventory:view');
+    const product = productOf(params.productId, correlationId);
+    return session.stores.flatMap((store) =>
+      product.batches
+        .map(
+          (b): ProductBatchRow => ({
+            storeId: store.id,
+            storeName: store.name,
+            batchId: b.id,
+            batchNumber: b.number,
+            expiresOn: b.expiresOn,
+            quantityPieces: stockAt(store.id)[b.id] ?? 0,
+            ...(canSeeCost && b.costMinor !== undefined
+              ? { costMinor: b.costMinor }
+              : {}),
+          }),
+        )
+        .filter((b) => b.quantityPieces !== 0),
+    );
   },
 
   'suppliers.options': ({ correlationId }) => {
@@ -514,6 +569,19 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
                 .find((p) => p.id === l.productId)
                 ?.batches.find((b) => b.number === l.batchNumber)?.id ??
               receiptBatchId(l),
+            productName: l.productName,
+            batchNumber: l.batchNumber,
+          })),
+          doc.postedBy,
+        );
+      }
+      case 'opening-balances': {
+        const doc = findDoc(db().openingBalances, params.id, correlationId);
+        return unpostCheck(
+          doc.number,
+          doc.storeId,
+          doc.lines.map((l) => ({
+            batchId: openingBatchId(l),
             productName: l.productName,
             batchNumber: l.batchNumber,
           })),
@@ -686,6 +754,133 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         );
     }
     receiveOnOrder(doc, -1);
+    doc.status = 'draft';
+    doc.postedBy = null;
+    mockDb().pos.catalogVersion += 1;
+    return doc;
+  },
+
+  /* opening balances */
+  'openingBalances.list': ({ query, correlationId }) => {
+    const { session, canSeeCost } = context(correlationId, 'inventory:view');
+    const all = visible(session, db().openingBalances)
+      .filter((d) => !query?.storeId || d.storeId === query.storeId)
+      .filter((d) => !query?.status || d.status === query.status)
+      .sort(
+        (a, b) =>
+          b.date.localeCompare(a.date) || b.number.localeCompare(a.number),
+      );
+    return page(
+      all.map((d) =>
+        hideCost(
+          {
+            id: d.id,
+            number: d.number,
+            date: d.date,
+            storeName: d.storeName,
+            positions: d.lines.length,
+            totalMinor: d.totalMinor,
+            status: d.status,
+          },
+          canSeeCost,
+        ),
+      ),
+      query,
+    );
+  },
+  'openingBalances.get': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:view');
+    authorize(correlationId, 'finance:view-cost');
+    const doc = findDoc(db().openingBalances, params.id, correlationId);
+    inScope(session, doc.storeId, correlationId);
+    return doc;
+  },
+  'openingBalances.create': ({ body, correlationId }) => {
+    const { session, author } = context(correlationId, 'inventory:create', {
+      write: true,
+    });
+    writable(session, body.storeId, correlationId);
+    const doc = buildOpeningBalance(
+      body,
+      {
+        id: `no-${Date.now()}`,
+        number: number('НО', 'no'),
+        status: 'draft',
+        createdBy: author(),
+        postedBy: null,
+      },
+      correlationId,
+    );
+    db().openingBalances.unshift(doc);
+    return doc;
+  },
+  'openingBalances.update': ({ params, body, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:update', {
+      write: true,
+    });
+    const doc = findDoc(db().openingBalances, params.id, correlationId);
+    requireDraft(doc.status, correlationId);
+    writable(session, body.storeId, correlationId);
+    Object.assign(doc, buildOpeningBalance(body, doc, correlationId));
+    return doc;
+  },
+  'openingBalances.post': ({ params, correlationId }) => {
+    const { session, author } = context(correlationId, 'inventory:post', {
+      write: true,
+    });
+    const doc = findDoc(db().openingBalances, params.id, correlationId);
+    requireDraft(doc.status, correlationId);
+    writable(session, doc.storeId, correlationId);
+    if (doc.lines.length === 0) {
+      throw new ApiError(422, 'validation_failed', correlationId, [
+        { field: 'lines', code: 'required' },
+      ]);
+    }
+    for (const line of doc.lines) {
+      const product = productOf(line.productId, correlationId);
+      const id = openingBatchId(line);
+      if (!product.batches.some((b) => b.id === id)) {
+        product.batches.push({
+          id,
+          number: line.batchNumber,
+          expiresOn: line.expiresOn,
+          quantityPieces: 0,
+          costMinor: line.costMinor,
+        });
+      }
+      move(doc.storeId, id, doc.number, line.quantity * product.piecesPerPack);
+      if (line.retailPriceMinor !== null) {
+        setStorePrice(doc.storeId, product.id, line.retailPriceMinor);
+      }
+    }
+    doc.status = 'posted';
+    doc.postedBy = author();
+    mockDb().pos.catalogVersion += 1;
+    return doc;
+  },
+  'openingBalances.unpost': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:unpost', {
+      write: true,
+    });
+    const doc = findDoc(db().openingBalances, params.id, correlationId);
+    writable(session, doc.storeId, correlationId);
+    const check = stockHandlers['documents.unpostCheck']({
+      params: { kind: 'opening-balances', id: doc.id },
+      query: undefined,
+      body: undefined,
+      correlationId,
+    });
+    if (!check.allowed)
+      throw new ApiError(409, 'unpost_blocked', correlationId);
+    for (const line of doc.lines) {
+      const product = productOf(line.productId, correlationId);
+      move(
+        doc.storeId,
+        openingBatchId(line),
+        `${doc.number} отмена`,
+        -line.quantity * product.piecesPerPack,
+      );
+    }
     doc.status = 'draft';
     doc.postedBy = null;
     mockDb().pos.catalogVersion += 1;

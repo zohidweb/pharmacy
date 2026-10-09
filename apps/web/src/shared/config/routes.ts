@@ -14,6 +14,7 @@ export const routes = {
 
   stock: () => '/stock',
   goodsReceipts: () => '/goods-receipts',
+  openingBalances: () => '/opening-balances',
   transfers: () => '/transfers',
   writeOffs: () => '/write-offs',
   supplierReturns: () => '/supplier-returns',

@@ -41,6 +41,22 @@ export interface AuditLog {
   terminalId: string | null;
 }
 
+export interface Batches {
+  costPerPieceDirams: bigint;
+  createdAt: Generated<Timestamp>;
+  expiryDate: string;
+  id: string;
+  isStarting: Generated<boolean>;
+  lotNumber: string | null;
+  origin: string;
+  productId: string;
+  purchasePricePerPackDirams: bigint;
+  sourceDocumentId: string;
+  storeId: string;
+  supplierId: string | null;
+  tenantId: string;
+}
+
 export interface Categories {
   archivedAt: Timestamp | null;
   createdAt: Generated<Timestamp>;
@@ -95,6 +111,38 @@ export interface DiscountRuleTiers {
   tenantId: string;
 }
 
+export interface DocumentCounters {
+  createdAt: Generated<Timestamp>;
+  kind: string;
+  lastNumber: bigint;
+  storeId: string;
+  tenantId: string;
+  year: number;
+}
+
+export interface Documents {
+  comment: string | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  documentDate: string;
+  id: string;
+  number: string;
+  paymentDueDate: string | null;
+  postedAt: Timestamp | null;
+  postedBy: string | null;
+  status: Generated<string>;
+  storeId: string;
+  supplierId: string | null;
+  supplierInvoiceDate: string | null;
+  supplierInvoiceNumber: string | null;
+  tenantId: string;
+  totalDirams: bigint | null;
+  type: string;
+  unpostedAt: Timestamp | null;
+  unpostedBy: string | null;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface EmployeeCredentials {
   createdAt: Generated<Timestamp>;
   employeeId: string;
@@ -137,6 +185,21 @@ export interface EmployeeStores {
   tenantId: string;
 }
 
+export interface GoodsReceiptLines {
+  batchId: string | null;
+  createdAt: Generated<Timestamp>;
+  documentId: string;
+  expiryDate: string;
+  id: string;
+  lineNo: number;
+  lotNumber: string | null;
+  productId: string;
+  purchasePricePerPackDirams: bigint;
+  qtyPieces: number;
+  retailPriceDraftDirams: bigint;
+  tenantId: string;
+}
+
 export interface LegalEntities {
   archivedAt: Timestamp | null;
   bankDetails: string | null;
@@ -153,6 +216,23 @@ export interface LegalEntities {
   taxId: string;
   tenantId: string;
   updatedAt: Generated<Timestamp>;
+}
+
+export interface OpeningBalanceLines {
+  batchId: string | null;
+  createdAt: Generated<Timestamp>;
+  documentId: string;
+  expiryDate: string;
+  id: string;
+  isStarting: Generated<boolean>;
+  lineNo: number;
+  lotNumber: string | null;
+  productId: string;
+  purchasePricePerPackDirams: bigint;
+  qtyPieces: number;
+  retailPriceDraftDirams: bigint | null;
+  supplierId: string | null;
+  tenantId: string;
 }
 
 export interface OperatorCredentials {
@@ -261,6 +341,22 @@ export interface Sessions {
   terminalId: string | null;
 }
 
+export interface StockMovements {
+  batchId: string;
+  businessDate: string;
+  id: string;
+  kind: string;
+  origin: Generated<string>;
+  qtyDeltaPieces: number;
+  recordedAt: Generated<Timestamp>;
+  reversesMovementId: string | null;
+  sourceId: string;
+  sourceLineId: string | null;
+  sourceType: string;
+  storeId: string;
+  tenantId: string;
+}
+
 export interface StoreProducts {
   createdAt: Generated<Timestamp>;
   priceChangedAt: Timestamp | null;
@@ -288,6 +384,37 @@ export interface Stores {
   name: string;
   printReceiptDefault: Generated<boolean>;
   status: Generated<string>;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface SupplierLedgerEntries {
+  amountDirams: bigint;
+  businessDate: string;
+  dueDate: string | null;
+  id: string;
+  kind: string;
+  legalEntityId: string;
+  recordedAt: Generated<Timestamp>;
+  recordedBy: string;
+  sourceId: string;
+  sourceType: string;
+  supplierId: string;
+  tenantId: string;
+}
+
+export interface Suppliers {
+  address: string | null;
+  archivedAt: Timestamp | null;
+  bankDetails: string | null;
+  createdAt: Generated<Timestamp>;
+  email: string | null;
+  id: string;
+  name: string;
+  paymentTermDays: Generated<number>;
+  phone: string | null;
+  status: Generated<string>;
+  taxId: string | null;
   tenantId: string;
   updatedAt: Generated<Timestamp>;
 }
@@ -350,15 +477,20 @@ export interface Terminals {
 
 export interface DB {
   auditLog: AuditLog;
+  batches: Batches;
   categories: Categories;
   dictionaryValues: DictionaryValues;
   discountRules: DiscountRules;
   discountRuleStores: DiscountRuleStores;
   discountRuleTiers: DiscountRuleTiers;
+  documentCounters: DocumentCounters;
+  documents: Documents;
   employeeCredentials: EmployeeCredentials;
   employees: Employees;
   employeeStores: EmployeeStores;
+  goodsReceiptLines: GoodsReceiptLines;
   legalEntities: LegalEntities;
+  openingBalanceLines: OpeningBalanceLines;
   operatorCredentials: OperatorCredentials;
   operators: Operators;
   platformAuditLog: PlatformAuditLog;
@@ -367,8 +499,11 @@ export interface DB {
   rolePermissions: RolePermissions;
   roles: Roles;
   sessions: Sessions;
+  stockMovements: StockMovements;
   storeProducts: StoreProducts;
   stores: Stores;
+  supplierLedgerEntries: SupplierLedgerEntries;
+  suppliers: Suppliers;
   tenants: Tenants;
   tenantSettings: TenantSettings;
   terminals: Terminals;

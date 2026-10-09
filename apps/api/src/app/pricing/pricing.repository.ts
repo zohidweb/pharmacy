@@ -87,6 +87,26 @@ export class PricingRepository {
       .execute();
   }
 
+  /** Every price set at the stores. */
+  async pricesOfStores(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeIds: readonly string[],
+  ): Promise<PriceCell[]> {
+    if (storeIds.length === 0) return [];
+    return trx
+      .selectFrom('storeProducts')
+      .select([
+        'productId',
+        'storeId',
+        'retailPricePerPackDirams as priceDirams',
+      ])
+      .where('tenantId', '=', tenantId)
+      .where('storeId', 'in', [...storeIds])
+      .where('retailPricePerPackDirams', 'is not', null)
+      .execute();
+  }
+
   /** The current prices of one product at the stores, locked until the transaction ends. */
   async lockPrices(
     trx: TenantTransaction,

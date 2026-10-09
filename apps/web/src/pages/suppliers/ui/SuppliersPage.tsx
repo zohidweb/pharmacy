@@ -18,7 +18,7 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DebtStatePill } from '@/entities/purchasing';
 import { can, canWrite, useSession } from '@/entities/session';
-import { apiRequest } from '@/shared/api';
+import { apiRequest, sameTransport } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import {
@@ -38,7 +38,11 @@ function SuppliersPageView() {
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
   const canSeeCost = can(session, 'finance:view-cost');
-  const canPay = canWrite(session, 'purchasing:post') && canSeeCost;
+  // a supplier of apps/api is unknown to the payments of the mocks (partial mode)
+  const canPay =
+    canWrite(session, 'purchasing:post') &&
+    canSeeCost &&
+    sameTransport('suppliers.pay', 'suppliers.get');
   const canCreate = canWrite(session, 'purchasing:create');
   const canEdit = canWrite(session, 'purchasing:update');
   const [offset, setOffset] = useState(0);

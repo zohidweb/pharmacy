@@ -97,9 +97,15 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       CatalogModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
-    InventoryModule,
+    ConditionalModule.registerWhen(
+      InventoryModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     PosModule,
-    PurchasingModule,
+    ConditionalModule.registerWhen(
+      PurchasingModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     ConditionalModule.registerWhen(
       PricingModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',

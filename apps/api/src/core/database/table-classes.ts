@@ -28,6 +28,14 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     discount_rules: 'tenant',
     discount_rule_tiers: 'tenant',
     discount_rule_stores: 'tenant',
+    suppliers: 'tenant',
+    document_counters: 'tenant',
+    documents: 'tenant',
+    batches: 'tenant',
+    goods_receipt_lines: 'tenant',
+    opening_balance_lines: 'tenant',
+    stock_movements: 'tenant',
+    supplier_ledger_entries: 'tenant',
     audit_log: 'tenant',
     sessions: 'tenant',
     operators: 'platform',
@@ -39,6 +47,8 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
 // and truncate). pharmacy_app has exactly SELECT, INSERT on them instead of full DML.
 export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
   'audit_log',
+  'stock_movements',
+  'supplier_ledger_entries',
 ]);
 
 // SECURITY DEFINER resolver functions owned by pharmacy_resolver (ADR-0013 p. 3 and its

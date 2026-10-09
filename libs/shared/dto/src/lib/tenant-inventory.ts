@@ -47,10 +47,14 @@ export interface StockProductOption {
   piecesPerPack: number;
   divisible: boolean;
   prescription: PrescriptionKind;
-  retailPriceMinor: number;
-  /** Markup of the product or its category, whole percent. */
-  markupPercent: number;
+  /** Price of a pack at the store; null — not sold there yet. */
+  retailPriceMinor: number | null;
+  /** Markup of the product or its category, whole percent; null — none. */
+  markupPercent: number | null;
+  /** Regulated maximum retail price of a pack; null — not regulated. */
+  maxPriceMinor: number | null;
   minStockPacks: number;
+  /** Batches of the store with stock, earliest expiry first (FEFO). */
   batches: StockBatch[];
 }
 
@@ -87,7 +91,8 @@ export interface StockRow {
   piecesPerPack: number;
   minPieces: number;
   costMinor?: number;
-  retailPriceMinor: number;
+  /** Price of a pack at the store; null — not sold there. */
+  retailPriceMinor: number | null;
   state: StockState;
 }
 
@@ -132,7 +137,25 @@ export interface UnpostCheck {
 }
 
 export type StockDocumentKind =
-  'goods-receipts' | 'write-offs' | 'supplier-returns' | 'stock-counts';
+  | 'goods-receipts'
+  | 'opening-balances'
+  | 'write-offs'
+  | 'supplier-returns'
+  | 'stock-counts';
+
+/** GET /api/v1/stock/products/{productId}/batches — batches with stock in the stores of the scope. */
+export interface ProductBatchRow {
+  storeId: string;
+  storeName: string;
+  batchId: string;
+  /** Lot number of the batch; empty without one. */
+  batchNumber: string;
+  /** YYYY-MM-DD */
+  expiresOn: string;
+  quantityPieces: number;
+  /** Purchase price of a pack; only with `finance:view-cost`. */
+  costMinor?: number;
+}
 
 /* ---------------- Goods receipt (ПР) ---------------- */
 
@@ -151,7 +174,13 @@ export interface GoodsReceiptLine {
   retailPriceMinor: number;
 }
 
-/** One goods receipt = one supplier and one invoice (ТЗ). */
+/**
+ * One goods receipt = one supplier and one invoice (ТЗ). Posting writes the batches, the stock
+ * movements, the prices of the store (`pricing:update-store`/`update-network`) and the debt to the
+ * supplier in one transaction. 403 `forbidden` / `store_not_in_scope`; 409 `document_posted`,
+ * `unpost_blocked`, `offline_store_read_only`, `product_archived`; 422 `validation_failed`,
+ * `period_closed`, `above_max_price` (fields `lines.<i>.<field>`, `date`).
+ */
 export interface GoodsReceipt {
   id: string;
   number: string;
@@ -201,6 +230,64 @@ export interface GoodsReceiptListResponse extends Page<GoodsReceiptListItem> {
     drafts: number;
   };
 }
+
+/* ---------------- Opening balance (НО) ---------------- */
+
+/**
+ * A line of the opening balance: stock that was on the shelf before the system. The retail price
+ * is optional — null keeps the price of the store as it is.
+ */
+export interface OpeningBalanceLine {
+  productId: string;
+  productName: string;
+  batchNumber: string;
+  /** YYYY-MM-DD */
+  expiresOn: string;
+  /** Packs. */
+  quantity: number;
+  /** Purchase price per pack. */
+  costMinor: number;
+  retailPriceMinor: number | null;
+  /** «Стартовая партия» without a split by lots (ТЗ КП 3.4). */
+  starting: boolean;
+}
+
+/**
+ * GET/POST/PUT /api/v1/opening-balances, POST …/{id}/posting, …/unposting — like a goods receipt,
+ * without a supplier, an invoice and a debt. Errors as for goods receipts.
+ */
+export interface OpeningBalance {
+  id: string;
+  number: string;
+  status: DocumentStatus;
+  /** YYYY-MM-DD */
+  date: string;
+  storeId: string;
+  storeName: string;
+  comment: string;
+  lines: OpeningBalanceLine[];
+  totalMinor: number;
+  createdBy: DocumentAuthor;
+  postedBy: DocumentAuthor | null;
+}
+
+export type OpeningBalanceInput = Pick<
+  OpeningBalance,
+  'date' | 'storeId' | 'comment'
+> & { lines: Array<Omit<OpeningBalanceLine, 'productName'>> };
+
+export interface OpeningBalanceListItem {
+  id: string;
+  number: string;
+  date: string;
+  storeName: string;
+  positions: number;
+  totalMinor?: number;
+  status: DocumentStatus;
+}
+
+/** GET /api/v1/opening-balances?storeId=&status=&limit=&offset= */
+export type OpeningBalanceListResponse = Page<OpeningBalanceListItem>;
 
 /* ---------------- Write-off (СП) ---------------- */
 

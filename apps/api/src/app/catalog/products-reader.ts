@@ -21,6 +21,7 @@ export interface StockProduct {
   status: 'active' | 'archived';
   markupBp: number | null;
   categoryMarkupBp: number | null;
+  maxPriceMinor: number | null;
 }
 
 /** A product as the pricing module sees it. */
@@ -101,6 +102,10 @@ export class ProductsReader {
       status: row.status === 'archived' ? 'archived' : 'active',
       markupBp: row.markupBp,
       categoryMarkupBp: row.categoryMarkupBp,
+      maxPriceMinor:
+        row.maxRetailPricePerPackDirams === null
+          ? null
+          : Number(row.maxRetailPricePerPackDirams),
     }));
   }
 

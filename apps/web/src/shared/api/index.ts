@@ -1,4 +1,4 @@
-import { REAL_API_ROUTES } from './client';
+import { REAL_API_ROUTES, REAL_API_WHEN } from './client';
 import type { ApiRouteKey } from './routes';
 
 export {
@@ -53,7 +53,20 @@ export function isApiRouteAvailable(route: ApiRouteKey): boolean {
   return (
     apiMocksMode === 'all' ||
     process.env.NODE_ENV === 'test' ||
-    REAL_API_ROUTES.has(route)
+    REAL_API_ROUTES.has(route) ||
+    route in REAL_API_WHEN
+  );
+}
+
+/**
+ * Whether two routes answer from the same place (both apps/api or both mocks). In the `partial`
+ * mode a screen offers a step that connects them only then: an id from the mocks is unknown to
+ * apps/api (a purchase order of a real goods receipt, a payment of a real supplier).
+ */
+export function sameTransport(a: ApiRouteKey, b: ApiRouteKey): boolean {
+  return (
+    apiMocksMode !== 'partial' ||
+    REAL_API_ROUTES.has(a) === REAL_API_ROUTES.has(b)
   );
 }
 

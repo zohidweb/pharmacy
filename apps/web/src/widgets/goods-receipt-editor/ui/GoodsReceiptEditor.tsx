@@ -32,7 +32,13 @@ import {
   UnpostDialog,
   type StockAccess,
 } from '@/features/stock-document';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiFieldErrors,
+  apiRequest,
+  isApiRouteAvailable,
+  sameTransport,
+  useApiErrorMessage,
+} from '@/shared/api';
 
 type Line = GoodsReceiptInput['lines'][number] & {
   key: string;
@@ -44,9 +50,6 @@ type Line = GoodsReceiptInput['lines'][number] & {
 interface Draft extends Omit<GoodsReceiptInput, 'lines'> {
   lines: Line[];
 }
-
-const plusDays = (days: number) =>
-  toAppDate(new Date(Date.now() + days * 86_400_000));
 
 function fromDocument(doc: GoodsReceipt): Draft {
   return {
@@ -110,7 +113,8 @@ export function GoodsReceiptEditor({
           storeId: prefill?.storeId ?? access.writableStores[0]?.id ?? '',
           orderId: prefill?.orderId ?? null,
           invoiceNumber: '',
-          paymentDueOn: plusDays(30),
+          // empty — the API takes the payment delay of the supplier
+          paymentDueOn: null,
           lines: [],
         },
   );
@@ -123,6 +127,10 @@ export function GoodsReceiptEditor({
     queryKey: ['suppliers', 'options'],
     queryFn: ({ signal }) => apiRequest('suppliers.options', { signal }),
   });
+  // an order of the mocks is unknown to a receipt of apps/api (partial mode until purchasing)
+  const ordersAvailable =
+    isApiRouteAvailable('purchaseOrders.open') &&
+    sameTransport('purchaseOrders.open', 'goodsReceipts.create');
   const orders = useQuery({
     queryKey: ['purchase-orders', 'open', draft.supplierId],
     queryFn: ({ signal }) =>
@@ -130,7 +138,7 @@ export function GoodsReceiptEditor({
         query: { supplierId: draft.supplierId },
         signal,
       }),
-    enabled: Boolean(draft.supplierId),
+    enabled: Boolean(draft.supplierId) && ordersAvailable,
   });
   const productList = useQuery({
     queryKey: ['stock-products', draft.storeId, 'all'],
@@ -183,6 +191,8 @@ export function GoodsReceiptEditor({
             body: input(),
           })
         : await apiRequest('goodsReceipts.create', { body: input() });
+      // a rejected posting leaves the saved draft: a retry updates it, not a new one
+      setDoc(saved);
       return apiRequest('goodsReceipts.post', { params: { id: saved.id } });
     },
     onSuccess: (posted) => {
@@ -200,6 +210,18 @@ export function GoodsReceiptEditor({
       void invalidate();
     },
   });
+  const fieldErrors = apiFieldErrors(post.error ?? save.error);
+  /** Text of a rejected field of the last save or posting, at the field itself. */
+  const serverError = (field: string) => {
+    const code = fieldErrors.find((e) => e.field === field)?.code;
+    if (code === undefined) return undefined;
+    if (code === 'period_closed') return t('periodClosed');
+    if (code === 'future') return t('dateFuture');
+    if (code === 'too_old') return t('dateTooOld');
+    if (code === 'above_max_price') return t('aboveMax');
+    if (code === 'product_archived') return t('productArchived');
+    return tDocs('checkValue');
+  };
   const error = useApiErrorMessage(save.error ?? post.error);
 
   // without a markup the proposal is the current price of the store, else the cost itself
@@ -406,6 +428,7 @@ export function GoodsReceiptEditor({
               max={today}
               disabled={!editable}
               value={draft.date}
+              error={serverError('date')}
               onChange={(event) =>
                 setDraft((current) => ({
                   ...current,
@@ -413,24 +436,26 @@ export function GoodsReceiptEditor({
                 }))
               }
             />
-            <Select
-              label={t('order')}
-              disabled={!editable || !draft.supplierId}
-              value={draft.orderId ?? ''}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  orderId: event.target.value || null,
-                }))
-              }
-              options={[
-                { value: '', label: t('noOrder') },
-                ...(orders.data ?? []).map((o) => ({
-                  value: o.id,
-                  label: `${o.number}${o.status === 'partially_received' ? ` (${t('partial')})` : ''}`,
-                })),
-              ]}
-            />
+            {ordersAvailable && (
+              <Select
+                label={t('order')}
+                disabled={!editable || !draft.supplierId}
+                value={draft.orderId ?? ''}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    orderId: event.target.value || null,
+                  }))
+                }
+                options={[
+                  { value: '', label: t('noOrder') },
+                  ...(orders.data ?? []).map((o) => ({
+                    value: o.id,
+                    label: `${o.number}${o.status === 'partially_received' ? ` (${t('partial')})` : ''}`,
+                  })),
+                ]}
+              />
+            )}
             <TextField
               label={t('invoice')}
               required
@@ -550,6 +575,14 @@ export function GoodsReceiptEditor({
                             <span className="font-medium">
                               {line.productName}
                             </span>
+                            {serverError(`lines.${index}.productId`) && (
+                              <span
+                                role="alert"
+                                className="block text-xs text-danger"
+                              >
+                                {serverError(`lines.${index}.productId`)}
+                              </span>
+                            )}
                             {deviation !== null && deviation !== 0 && (
                               <span className="mt-1 flex items-center gap-1 text-xs text-warning">
                                 {t('priceDiff', {
@@ -665,6 +698,20 @@ export function GoodsReceiptEditor({
                             {markup !== null && (
                               <span className="text-xs text-fg-subtle">
                                 {t('markup', { percent: markup })}
+                              </span>
+                            )}
+                            {(serverError(`lines.${index}.retailPriceMinor`) ??
+                              (product?.maxPriceMinor != null &&
+                              line.retailPriceMinor > product.maxPriceMinor
+                                ? t('aboveMax')
+                                : undefined)) && (
+                              <span
+                                role="alert"
+                                className="block text-xs text-warning"
+                              >
+                                {serverError(
+                                  `lines.${index}.retailPriceMinor`,
+                                ) ?? t('aboveMax')}
                               </span>
                             )}
                           </td>

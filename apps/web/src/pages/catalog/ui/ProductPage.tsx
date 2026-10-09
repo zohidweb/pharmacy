@@ -1,7 +1,7 @@
 'use client';
 
 import type { CatalogProductCard } from '@pharmacy/shared-dto';
-import { formatMoney } from '@pharmacy/shared-util';
+import { formatDateOnly, formatMoney, toAppDate } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -169,12 +169,76 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
           {t('tagPending')}
         </p>
       </Card>
-      {can(session, 'pricing:view') && <ProductPrices card={card} />}
+      <div className="flex flex-col gap-4">
+        {can(session, 'pricing:view') && <ProductPrices card={card} />}
+        {can(session, 'inventory:view') && <ProductBatches card={card} />}
+      </div>
     </div>
   );
 }
 
 /** Prices of the product at the stores of the scope (GET /prices/{id}); batches come with stock. */
+/** Batches of the product with stock in the stores of the scope (GET /stock/products/{id}/batches). */
+function ProductBatches({ card }: { card: CatalogProductCard }) {
+  const t = useTranslations('products.card');
+  const tBatch = useTranslations('catalog.batchState');
+  const today = toAppDate();
+  const batches = useQuery({
+    queryKey: ['stock', 'product-batches', card.id],
+    queryFn: ({ signal }) =>
+      apiRequest('stock.productBatches', {
+        params: { productId: card.id },
+        signal,
+      }),
+  });
+  return (
+    <Card padding="none">
+      <CardHeader title={t('batches')} inset />
+      <QueryState query={batches}>
+        {(rows) =>
+          rows.length === 0 ? (
+            <p className="px-(--ph-card-padding) pb-4 text-sm text-fg-muted">
+              {t('noBatches')}
+            </p>
+          ) : (
+            <ul className="flex flex-col">
+              {rows.map((batch) => (
+                <li
+                  key={batch.batchId}
+                  className="flex items-center justify-between gap-3 border-t border-border px-(--ph-card-padding) py-3 text-sm"
+                >
+                  <span className="flex flex-col">
+                    <span className="font-medium">
+                      {batch.batchNumber || '—'}
+                    </span>
+                    <span className="text-xs text-fg-subtle">
+                      {batch.storeName} ·{' '}
+                      {t('expires', { date: formatDateOnly(batch.expiresOn) })}
+                    </span>
+                  </span>
+                  <span className="flex flex-col items-end gap-1">
+                    <b className="whitespace-nowrap tabular-nums">
+                      {t('quantity', {
+                        packs: Math.trunc(
+                          batch.quantityPieces / card.piecesPerPack,
+                        ),
+                        pieces: batch.quantityPieces % card.piecesPerPack,
+                      })}
+                    </b>
+                    {batch.expiresOn < today && (
+                      <StatusPill tone="danger">{tBatch('expired')}</StatusPill>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </QueryState>
+    </Card>
+  );
+}
+
 function ProductPrices({ card }: { card: CatalogProductCard }) {
   const t = useTranslations('products.card');
   const tPricing = useTranslations('pricing');

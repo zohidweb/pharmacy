@@ -266,7 +266,11 @@
       "restore": "Восстановить",
       "archivedNotice": "Товар в архиве: он не продаётся и не редактируется. Восстановите его, чтобы изменить.",
       "archivedToast": "Товар перенесён в архив",
-      "restoredToast": "Товар восстановлен"
+      "restoredToast": "Товар восстановлен",
+      "batches": "Партии",
+      "noBatches": "Остатков нет",
+      "expires": "годен до {date}",
+      "quantity": "{pieces, plural, =0 {{packs} уп.} other {{packs} уп. {pieces} шт.}}"
     },
     "statusFilter": {
       "label": "Статус",

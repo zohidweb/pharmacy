@@ -232,6 +232,7 @@ export class StockService {
             prescription: product.prescription,
             retailPriceMinor: prices.get(`${id}/${product.id}`) ?? null,
             markupPercent: markupOf(product),
+            maxPriceMinor: product.maxPriceMinor,
             minStockPacks: Math.floor(
               product.minStockPieces / product.piecesPerPack,
             ),

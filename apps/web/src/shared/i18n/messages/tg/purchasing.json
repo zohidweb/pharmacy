@@ -266,7 +266,11 @@
       "restore": "Барқарор кардан",
       "archivedNotice": "Мол дар бойгонӣ аст: фурӯхта намешавад ва таҳрир намешавад. Барои тағйир онро барқарор кунед.",
       "archivedToast": "Мол ба бойгонӣ гузаронида шуд",
-      "restoredToast": "Мол барқарор шуд"
+      "restoredToast": "Мол барқарор шуд",
+      "batches": "Партияҳо",
+      "noBatches": "Бақия нест",
+      "expires": "то {date} эътибор дорад",
+      "quantity": "{pieces, plural, =0 {{packs} қут.} other {{packs} қут. {pieces} дона}}"
     },
     "statusFilter": {
       "label": "Ҳолат",

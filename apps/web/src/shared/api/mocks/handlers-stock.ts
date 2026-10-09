@@ -498,6 +498,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
           mockDb().catalog.extras[p.id]?.markupPercent ??
           db().markup[p.categoryId] ??
           40,
+        maxPriceMinor: mockDb().catalog.extras[p.id]?.maxPriceMinor ?? null,
         minStockPacks: db().minPacks[p.id] ?? 0,
         batches: p.batches.map((b) => {
           const batch = {

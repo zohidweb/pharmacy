@@ -51,6 +51,8 @@ export interface StockProductOption {
   retailPriceMinor: number | null;
   /** Markup of the product or its category, whole percent; null — none. */
   markupPercent: number | null;
+  /** Regulated maximum retail price of a pack; null — not regulated. */
+  maxPriceMinor: number | null;
   minStockPacks: number;
   /** Batches of the store with stock, earliest expiry first (FEFO). */
   batches: StockBatch[];

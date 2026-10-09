@@ -83,6 +83,12 @@ export const navigation: NavSection[] = [
         ready: true,
       },
       {
+        route: 'openingBalances',
+        icon: 'clipboard-list',
+        permission: 'inventory:view',
+        ready: true,
+      },
+      {
         route: 'transfers',
         icon: 'arrow-left-right',
         permission: 'inventory:view',

@@ -16,8 +16,13 @@ erDiagram
 
 > **Введено миграцией `inventory-core` (2026-10-09):** `suppliers`, `supplier_ledger_entries` (виды `goods_receipt`,
 > `payment`, `reversal`; источник — `document` / `payment`). Проведение прихода пишет `goods_receipt`, отмена —
-> `reversal`. Оплаты, распределения и заказы — миграцией `purchasing` (PR-2 той же спецификации). Расчёт
-> «заполнить по дефициту» отдаёт модуль `inventory`: он владеет остатками, а `purchasing` от склада не зависит.
+> `reversal`.
+>
+> **Введено миграцией `purchasing` (2026-10-09, PR-2 той же спецификации):** `supplier_payments`,
+> `supplier_payment_allocations`, `purchase_orders`, `purchase_order_lines`; `documents.purchase_order_id`,
+> `goods_receipt_lines.purchase_order_line_id` и `order_price_per_pack_dirams` (цена заказа в строке прихода). Расчёт
+> «заполнить по дефициту» (`GET /purchase-orders/deficit`) отдаёт модуль `inventory`: он владеет остатками, а
+> `purchasing` от склада не зависит — приход связывается с заказом через экспорт `OrderReceiving`.
 
 Владение данными офлайн-точки: `suppliers` — облако → точка. Заказы, оплаты и журнал расчётов ведутся **только в облаке**. Приход, проведённый на офлайн-точке, приходит `document.posted`, и облако заводит по нему долг (уточнить в ADR-0014).
 
@@ -37,14 +42,15 @@ erDiagram
 
 **`purchase_orders`:**
 - `store_id` — точка-получатель, `supplier_id`;
-- `number` — счётчик `purchase_order`;
+- `number` — `ЗК-<код точки>-<год>-<6 цифр>`, счётчик `document_counters` вида `purchase_order` (точка заказа не
+  меняется: её код — в номере);
 - `order_date`, `expected_date null`;
 - `status` — `draft` → `confirmed` → `partially_received` → `closed`;
 - `created_by`, `confirmed_by`, `confirmed_at`, `comment`.
 
 Отдельная таблица, не тип `documents`: у заказа нет движений и свой набор статусов. «Отправить поставщику» (макет) — только печать или файл: канала отправки нет в закрытом списке интеграций.
 
-**`purchase_order_lines`:** `product_id`, `qty_ordered_pieces > 0`, `price_per_pack_dirams`. Сколько получено, не хранится: считается по `goods_receipt_lines.purchase_order_line_id` проведённых приходов. Статус заказа обновляется при проведении прихода. «Заполнить по дефициту» — расчёт приложения по `store_products.min_stock_pieces` и расходу за 30 дней.
+**`purchase_order_lines`:** `product_id`, `qty_ordered_pieces > 0`, `price_per_pack_dirams`. Сколько получено, не хранится: считается по `goods_receipt_lines.purchase_order_line_id` проведённых приходов. Статус заказа пересчитывается (`orderStatusAfterReceipt`) при проведении и при отмене проведения прихода по нему. Приход по заказу — только по заказу `confirmed` / `partially_received` того же поставщика и точки; строка прихода связывается со строкой заказа по товару. Правка — только черновика. «Заполнить по дефициту» — расчёт приложения по `products.default_min_stock_pieces` (переопределение точки — вне объёма), движениям `sale` за 30 дней по бизнес-дате и последней цене закупки у поставщика, иначе у любого.
 
 ## `supplier_ledger_entries` — расчёты с поставщиком (класс `tenant`, только добавление)
 
@@ -68,17 +74,20 @@ erDiagram
 ## `supplier_payments`, `supplier_payment_allocations` (класс `tenant`)
 
 **`supplier_payments`:**
-- `supplier_id`, `legal_entity_id`;
-- `amount_dirams > 0`, `paid_on date`;
+- `id` — ключ идемпотентности клиента (UUIDv7): повтор с тем же телом возвращает ту же оплату, с другим — 409
+  `idempotency_conflict`;
+- `supplier_id`, `legal_entity_id` — юрлицо-плательщик: обязательно, если в сети несколько активных юрлиц, иначе
+  единственное;
+- `amount_dirams > 0` (не ограничена долгом), `paid_on date` (не в будущем);
 - `method text` — `cash` / `bank_transfer`. Платит только бухгалтерия, не касса точки: связи со сменой и изъятием из кассы нет (решение 2026-10-01);
 - `comment`, `created_by`.
 
 Оплата создаёт запись `payment` в журнале.
 
-**`supplier_payment_allocations`:** ключ `(tenant_id, payment_id, goods_receipt_document_id)`, `amount_dirams > 0`. Записывается в момент оплаты: по умолчанию — на самые ранние по сроку неоплаченные приходы, можно выбрать вручную. Нераспределённый остаток оплаты — предоплата: она автоматически распределяется на следующий проведённый приход этого поставщика и юрлица (решение 2026-10-01).
+**`supplier_payment_allocations`:** ключ `(tenant_id, payment_id, goods_receipt_document_id)`, `amount_dirams > 0`. Записывается в момент оплаты на проведённые приходы этого «поставщик × юрлицо» с остатком > 0: по `payment_due_date` (пустой — в конец), затем `document_date`, затем `number`; ручное распределение — вне объёма. Нераспределённый остаток оплаты — предоплата: проведённый приход сначала забирает предоплаты этого поставщика и юрлица, старые оплаты первыми (решение 2026-10-01). Отмена проведения прихода удаляет его распределения (аудит `payment.allocations_released`), и освобождённые оплаты покрывают другие открытые приходы. Распределения одной пары «поставщик × юрлицо» сериализуются advisory-блокировкой транзакции.
 
 **Отчёты:**
-- остаток по приходу = сумма прихода − распределённые оплаты − возвраты по нему;
+- остаток по приходу = сумма прихода − распределённые оплаты − возвраты по нему; долг поставщика — сумма остатков (предоплата не делает долг отрицательным);
 - «просрочено» — остаток > 0 и `due_date` < сегодня (бизнес-дата сети);
 - напоминание — за `tenant_settings.supplier_payment_reminder_days`;
 - автоблокировок нет (КП 4).

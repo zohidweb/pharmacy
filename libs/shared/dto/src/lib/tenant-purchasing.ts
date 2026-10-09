@@ -167,10 +167,15 @@ export type SupplierPaymentMethod = 'cash' | 'bank';
 
 /**
  * POST /api/v1/suppliers/{id}/payments — a financial operation: `id` (UUIDv7) is the idempotency
- * key, a repeat with the same id returns the same payment (CLAUDE.md «Integrations»).
+ * key, a repeat with the same id returns the same payment, another body with it — 409
+ * `idempotency_conflict` (CLAUDE.md «Integrations»). The payment covers the posted receipts of the
+ * supplier and the legal entity from the earliest due date; the rest is a prepayment that the next
+ * posted receipt takes (no limit by the debt).
  */
 export interface SupplierPaymentRequest {
   id: string;
+  /** The legal entity that pays; may be omitted when the network has one active legal entity. */
+  legalEntityId?: string;
   amountMinor: number;
   /** YYYY-MM-DD */
   date: string;

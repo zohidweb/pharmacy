@@ -213,6 +213,7 @@ export class StockDocumentsService {
   /* ---------------- writes ---------------- */
 
   async createReceipt(input: GoodsReceiptInput): Promise<GoodsReceipt> {
+    this.requireCost();
     const { tenantId } = requirePrincipal();
     const id = newId();
     return this.db.tenantTransaction(async (trx) => {
@@ -229,6 +230,7 @@ export class StockDocumentsService {
     id: string,
     input: GoodsReceiptInput,
   ): Promise<GoodsReceipt> {
+    this.requireCost();
     const { tenantId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.lockedDraft(trx, tenantId, 'goods_receipt', id);
@@ -244,6 +246,7 @@ export class StockDocumentsService {
   async createOpeningBalance(
     input: OpeningBalanceInput,
   ): Promise<OpeningBalance> {
+    this.requireCost();
     const { tenantId } = requirePrincipal();
     const id = newId();
     return this.db.tenantTransaction(async (trx) => {
@@ -260,6 +263,7 @@ export class StockDocumentsService {
     id: string,
     input: OpeningBalanceInput,
   ): Promise<OpeningBalance> {
+    this.requireCost();
     const { tenantId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.lockedDraft(trx, tenantId, 'opening_balance', id);
@@ -276,6 +280,7 @@ export class StockDocumentsService {
     type: StockDocumentType,
     id: string,
   ): Promise<GoodsReceipt | OpeningBalance> {
+    this.requireCost();
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.lockedDraft(trx, tenantId, type, id);
@@ -293,6 +298,7 @@ export class StockDocumentsService {
     type: StockDocumentType,
     id: string,
   ): Promise<GoodsReceipt | OpeningBalance> {
+    this.requireCost();
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.visible(trx, tenantId, type, id, true);

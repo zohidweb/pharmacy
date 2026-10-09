@@ -193,6 +193,12 @@ export class DocumentPosting {
     const { tenantId, employeeId } = ctx;
     if (doc.status !== 'posted')
       throw new ProblemException(409, 'document_not_posted');
+    // the reversal is dated by the document: a closed period stays closed (spec 4.1)
+    if (store.closedUntil !== null && doc.documentDate <= store.closedUntil) {
+      throw new FieldProblemException(422, 'period_closed', [
+        { field: 'date', code: 'period_closed' },
+      ]);
+    }
     const lines = await this.documents.lines(trx, tenantId, doc.type, doc.id);
     const blockers = await this.blockersOf(trx, tenantId, doc, lines, true);
     if (blockers.length > 0) throw new ProblemException(409, 'unpost_blocked');
@@ -227,10 +233,7 @@ export class DocumentPosting {
     if (doc.type === 'goods_receipt' && doc.supplierId !== null) {
       await this.ledger.receiptUnposted(trx, {
         tenantId,
-        supplierId: doc.supplierId,
-        legalEntityId: store.legalEntityId,
         documentId: doc.id,
-        amountDirams: total,
         businessDate: doc.documentDate,
         employeeId,
       });

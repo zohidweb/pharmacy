@@ -193,6 +193,30 @@ export class PurchasingRepository {
     return result.rows;
   }
 
+  /** What a document left in the ledger, per supplier and legal entity. */
+  async balancesOfSource(
+    trx: TenantTransaction,
+    tenantId: string,
+    sourceId: string,
+  ): Promise<
+    Array<{ supplierId: string; legalEntityId: string; amountDirams: number }>
+  > {
+    const result = await sql<{
+      supplierId: string;
+      legalEntityId: string;
+      amountDirams: bigint;
+    }>`
+      select supplier_id, legal_entity_id, sum(amount_dirams)::bigint as amount_dirams
+      from pharmacy.supplier_ledger_entries
+      where tenant_id = ${tenantId} and source_type = 'document' and source_id = ${sourceId}
+      group by supplier_id, legal_entity_id`.execute(trx);
+    return result.rows.map((r) => ({
+      supplierId: r.supplierId,
+      legalEntityId: r.legalEntityId,
+      amountDirams: Number(r.amountDirams),
+    }));
+  }
+
   async appendLedger(
     trx: TenantTransaction,
     tenantId: string,

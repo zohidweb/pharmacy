@@ -15,6 +15,7 @@ import {
   newId,
   TenantDatabase,
   type TenantTransaction,
+  uniqueConstraint,
 } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -188,7 +189,7 @@ export class SuppliersService {
   async create(input: SupplierInput): Promise<SupplierListItem> {
     const { tenantId } = requirePrincipal();
     const id = newId();
-    return this.db.tenantTransaction(async (trx) => {
+    return this.write(async (trx) => {
       const values = valuesOf(input);
       await this.checkName(trx, tenantId, values.name, null);
       await this.repository.insertSupplier(trx, tenantId, id, values);
@@ -205,7 +206,7 @@ export class SuppliersService {
   async update(id: string, input: SupplierInput): Promise<SupplierListItem> {
     const { tenantId } = requirePrincipal();
     const supplierId = id.toLowerCase();
-    return this.db.tenantTransaction(async (trx) => {
+    return this.write(async (trx) => {
       if (
         (await this.repository.findSupplier(trx, tenantId, supplierId)) === null
       ) {
@@ -222,6 +223,22 @@ export class SuppliersService {
       });
       return this.item(trx, tenantId, supplierId);
     });
+  }
+
+  // The unique index catches a name taken by a concurrent write.
+  private async write<T>(
+    work: (trx: TenantTransaction) => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await this.db.tenantTransaction(work);
+    } catch (error) {
+      if (uniqueConstraint(error) === 'suppliers_name_uq') {
+        throw new FieldProblemException(409, 'supplier_name_taken', [
+          { field: 'name', code: 'supplier_name_taken' },
+        ]);
+      }
+      throw error;
+    }
   }
 
   private async item(

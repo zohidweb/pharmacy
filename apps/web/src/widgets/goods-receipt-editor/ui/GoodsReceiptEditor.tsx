@@ -202,8 +202,11 @@ export function GoodsReceiptEditor({
   });
   const error = useApiErrorMessage(save.error ?? post.error);
 
+  // without a markup the proposal is the current price of the store, else the cost itself
   const retailOf = (product: StockProductOption | undefined, cost: number) =>
-    product ? suggestRetail(cost, product.markupPercent) : cost;
+    product && product.markupPercent !== null
+      ? suggestRetail(cost, product.markupPercent)
+      : (product?.retailPriceMinor ?? cost);
 
   const setLine = (key: string, change: (line: Line) => Line) =>
     setDraft((current) => ({
@@ -237,7 +240,7 @@ export function GoodsReceiptEditor({
           costMinor: lastCost,
           retailPriceMinor: lastCost
             ? retailOf(product, lastCost)
-            : product.retailPriceMinor,
+            : (product.retailPriceMinor ?? 0),
           retailTouched: false,
         },
       ],

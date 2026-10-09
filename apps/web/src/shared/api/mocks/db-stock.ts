@@ -6,6 +6,7 @@
 import type {
   DocumentAuthor,
   GoodsReceipt,
+  OpeningBalance,
   PosProduct,
   PurchaseOrder,
   StockCount,
@@ -46,12 +47,16 @@ export interface StockMockDb {
   sales30Packs: Record<string, number>;
   orders: PurchaseOrder[];
   goodsReceipts: GoodsReceipt[];
+  openingBalances: OpeningBalance[];
   writeOffs: WriteOff[];
   supplierReturns: SupplierReturn[];
   stockCounts: StockCount[];
   transferRequests: TransferRequest[];
   transfers: Transfer[];
-  counters: Record<'pr' | 'sp' | 'vp' | 'in' | 'zp' | 'pm' | 'zk', number>;
+  counters: Record<
+    'pr' | 'no' | 'sp' | 'vp' | 'in' | 'zp' | 'pm' | 'zk',
+    number
+  >;
 }
 
 export interface SupplierPaymentRecord {
@@ -851,6 +856,7 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         discrepancy: null,
       },
     ],
-    counters: { pr: 125, sp: 21, vp: 13, in: 8, zp: 10, pm: 16, zk: 89 },
+    openingBalances: [],
+    counters: { pr: 125, no: 1, sp: 21, vp: 13, in: 8, zp: 10, pm: 16, zk: 89 },
   };
 }

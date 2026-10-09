@@ -213,7 +213,10 @@ function StockPageView() {
       sortable: true,
       numeric: true,
       nowrap: true,
-      cell: (row) => formatMoney(row.retailPriceMinor, { withSign: false }),
+      cell: (row) =>
+        row.retailPriceMinor === null
+          ? '—'
+          : formatMoney(row.retailPriceMinor, { withSign: false }),
     },
     {
       key: 'state',

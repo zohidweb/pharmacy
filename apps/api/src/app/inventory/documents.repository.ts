@@ -26,6 +26,7 @@ export interface DocumentRow {
   supplierId: string | null;
   supplierInvoiceNumber: string | null;
   paymentDueDate: string | null;
+  purchaseOrderId: string | null;
 }
 
 export interface LineRow {
@@ -40,6 +41,9 @@ export interface LineRow {
   batchId: string | null;
   /** Opening balances only; false for a goods receipt. */
   isStarting: boolean;
+  /** Goods receipts by an order only. */
+  purchaseOrderLineId: string | null;
+  orderPricePerPackDirams: bigint | null;
 }
 
 export interface LineValues {
@@ -51,6 +55,8 @@ export interface LineValues {
   retailPriceDraftDirams: number | null;
   batchId: string | null;
   isStarting: boolean;
+  purchaseOrderLineId: string | null;
+  orderPricePerPackDirams: number | null;
 }
 
 export interface HeaderValues {
@@ -61,6 +67,7 @@ export interface HeaderValues {
   supplierId: string | null;
   supplierInvoiceNumber: string | null;
   paymentDueDate: string | null;
+  purchaseOrderId: string | null;
 }
 
 export interface MovementRow {
@@ -84,7 +91,8 @@ export interface ForeignMovementRow {
 
 const HEADER = sql`d.id, d.store_id, d.type, d.number, d.document_date::text as document_date,
   d.status, d.created_by, d.created_at, d.posted_by, d.posted_at, d.comment, d.total_dirams,
-  d.supplier_id, d.supplier_invoice_number, d.payment_due_date::text as payment_due_date`;
+  d.supplier_id, d.supplier_invoice_number, d.payment_due_date::text as payment_due_date,
+  d.purchase_order_id`;
 
 // Stock documents, their lines, batches and movements (data model 03). The header and its lines
 // are one aggregate; movements are append-only.
@@ -226,7 +234,12 @@ export class DocumentsRepository {
     const result = await sql<LineRow>`
       select id, line_no, product_id, qty_pieces, expiry_date::text as expiry_date, lot_number,
              purchase_price_per_pack_dirams, retail_price_draft_dirams, batch_id,
-             ${type === 'opening_balance' ? sql`is_starting` : sql`false`} as is_starting
+             ${
+               type === 'opening_balance'
+                 ? sql`is_starting, null::uuid as purchase_order_line_id,
+                       null::bigint as order_price_per_pack_dirams`
+                 : sql`false as is_starting, purchase_order_line_id, order_price_per_pack_dirams`
+             }
       from ${LINES[type]}
       where tenant_id = ${tenantId} and document_id = ${documentId}
       order by line_no`.execute(trx);
@@ -259,8 +272,10 @@ export class DocumentsRepository {
             values (${common}, ${line.isStarting})`
           : sql`insert into pharmacy.goods_receipt_lines
             (tenant_id, id, document_id, line_no, product_id, qty_pieces, expiry_date, lot_number,
-             purchase_price_per_pack_dirams, retail_price_draft_dirams, batch_id)
-            values (${common})`
+             purchase_price_per_pack_dirams, retail_price_draft_dirams, batch_id,
+             purchase_order_line_id, order_price_per_pack_dirams)
+            values (${common}, ${line.purchaseOrderLineId},
+              ${line.orderPricePerPackDirams === null ? null : BigInt(line.orderPricePerPackDirams)})`
       ).execute(trx);
     }
   }

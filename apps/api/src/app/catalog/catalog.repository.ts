@@ -247,6 +247,21 @@ export class CatalogRepository {
     return rows[0] ?? null;
   }
 
+  /** Active products with a default minimum stock. */
+  async minStockProductIds(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<string[]> {
+    const rows = await trx
+      .selectFrom('products')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('status', '=', 'active')
+      .where('defaultMinStockPieces', '>', 0)
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
   async findProducts(
     trx: TenantTransaction,
     tenantId: string,

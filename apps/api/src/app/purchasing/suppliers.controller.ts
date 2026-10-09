@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -77,7 +78,7 @@ export class SuppliersController {
    */
   @RequirePermission('purchasing:post')
   @Post(':id/payments')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   pay(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() body: SupplierPaymentDto,

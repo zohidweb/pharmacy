@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { hasPermissions, type StockState } from '@pharmacy/shared-domain';
+import {
+  deficitQuantity,
+  hasPermissions,
+  type StockState,
+} from '@pharmacy/shared-domain';
 import type {
+  DeficitLine,
   ProductBatchRow,
   StockListQuery,
   StockListResponse,
@@ -52,7 +57,8 @@ const markupOf = (product: StockProduct): number | null => {
 
 // Stock of the stores (spec 2026-10-09-inventory-purchasing, section 4.2): batches with their stock
 // from movements, products with a price but no stock, the options of document lines and the batches
-// of the product card. Purchase prices only with `finance:view-cost`.
+// of the product card, the deficit of a purchase order. Purchase prices only with
+// `finance:view-cost`.
 @Injectable()
 export class StockService {
   constructor(
@@ -280,6 +286,85 @@ export class StockService {
           ? { costMinor: Number(b.purchasePricePerPackDirams) }
           : {}),
       }));
+    });
+  }
+
+  /**
+   * Products of the store below their minimum stock with the packs to order (spec 4.2): the
+   * minimum plus the sales of 30 days minus the stock (`deficitQuantity`), the last purchase price
+   * from the supplier, else from anyone, else 0.
+   */
+  async deficit(query: {
+    storeId: string;
+    supplierId?: string;
+  }): Promise<DeficitLine[]> {
+    const { tenantId, storeScope, permissions } = requirePrincipal();
+    // the lines carry purchase prices (ADR-0018, п. 6)
+    if (!hasPermissions(permissions, 'finance:view-cost')) {
+      throw new ProblemException(403, 'forbidden');
+    }
+    const storeId = query.storeId.toLowerCase();
+    if (storeScope !== 'all' && !storeScope.includes(storeId)) {
+      throw new ProblemException(403, 'store_not_in_scope');
+    }
+    return this.db.tenantTransaction(async (trx) => {
+      const settings = await this.inventory.settings(trx, tenantId);
+      const products = await this.products.withMinStock(trx, tenantId);
+      const ids = products.map((p) => p.id);
+      const stock = new Map<string, number>();
+      for (const b of await this.stock.batchStock(
+        trx,
+        tenantId,
+        [storeId],
+        ids,
+      )) {
+        stock.set(b.productId, (stock.get(b.productId) ?? 0) + b.qty);
+      }
+      const after = new Date(
+        Date.parse(`${settings.today}T00:00:00Z`) - 30 * DAY_MS,
+      )
+        .toISOString()
+        .slice(0, 10);
+      const sold = await this.stock.soldPieces(
+        trx,
+        tenantId,
+        storeId,
+        ids,
+        after,
+      );
+      const lines = products.flatMap((product) => {
+        const ppp = product.piecesPerPack;
+        const stockPieces = stock.get(product.id) ?? 0;
+        const minPacks = product.minStockPieces / ppp;
+        const sales30Packs = (sold.get(product.id) ?? 0) / ppp;
+        const quantity = deficitQuantity({
+          stockPieces,
+          piecesPerPack: ppp,
+          minPacks,
+          sales30Packs,
+        });
+        return quantity === 0
+          ? []
+          : [
+              {
+                productId: product.id,
+                productName: product.name,
+                stockPacks: Math.floor(stockPieces / ppp),
+                minPacks: Math.ceil(minPacks),
+                sales30Packs: Math.ceil(sales30Packs),
+                quantity,
+              },
+            ];
+      });
+      const prices = await this.stock.lastPurchasePrices(
+        trx,
+        tenantId,
+        lines.map((l) => l.productId),
+        query.supplierId?.toLowerCase() ?? null,
+      );
+      return lines
+        .map((l) => ({ ...l, priceMinor: prices.get(l.productId) ?? 0 }))
+        .sort((a, b) => a.productName.localeCompare(b.productName, 'ru'));
     });
   }
 }

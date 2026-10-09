@@ -9,6 +9,7 @@ import {
   ProductsReader,
 } from '../catalog/products-reader';
 import { StorePriceWriter } from '../pricing/store-price-writer';
+import { OrderReceiving } from '../purchasing/order-receiving';
 import { SupplierLedger } from '../purchasing/supplier-ledger';
 import {
   type DocumentRow,
@@ -62,6 +63,7 @@ export class DocumentPosting {
     private readonly products: ProductsReader,
     private readonly prices: StorePriceWriter,
     private readonly ledger: SupplierLedger,
+    private readonly orders: OrderReceiving,
     private readonly audit: AuditService,
   ) {}
 
@@ -170,6 +172,9 @@ export class DocumentPosting {
       });
     }
     await this.documents.markPosted(trx, tenantId, doc.id, employeeId, total);
+    if (doc.purchaseOrderId !== null) {
+      await this.orders.refreshStatus(trx, tenantId, doc.purchaseOrderId);
+    }
     await this.audit.append(trx, {
       action: 'document.posted',
       entityType: 'document',
@@ -239,6 +244,9 @@ export class DocumentPosting {
       });
     }
     await this.documents.markUnposted(trx, tenantId, doc.id, employeeId);
+    if (doc.purchaseOrderId !== null) {
+      await this.orders.refreshStatus(trx, tenantId, doc.purchaseOrderId);
+    }
     await this.audit.append(trx, {
       action: 'document.unposted',
       entityType: 'document',

@@ -87,7 +87,8 @@ export interface ProductFilter {
   categoryId?: string;
   form?: string;
   flag?: CatalogFlag;
-  status: CatalogStatus;
+  /** Without it — every status (the stock still lists archived products with stock). */
+  status?: CatalogStatus;
 }
 
 /** Columns of a product as written by the catalog (barcodes are written separately). */
@@ -142,10 +143,8 @@ export class CatalogRepository {
     tenantId: string,
     filter: ProductFilter,
   ): Expression<SqlBool> {
-    const parts = [
-      sql`p.tenant_id = ${tenantId}`,
-      sql`p.status = ${filter.status}`,
-    ];
+    const parts = [sql`p.tenant_id = ${tenantId}`];
+    if (filter.status) parts.push(sql`p.status = ${filter.status}`);
     const q = filter.q?.trim() ?? '';
     if (q !== '') {
       const pattern = `%${escapeLike(q.toLocaleLowerCase('ru'))}%`;

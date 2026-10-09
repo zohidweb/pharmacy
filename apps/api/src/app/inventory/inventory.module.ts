@@ -10,6 +10,9 @@ import { Numbering } from './numbering';
 import { OpeningBalancesController } from './opening-balances.controller';
 import { DocumentPosting } from './posting';
 import { StockDocumentsService } from './stock-documents.service';
+import { StockController } from './stock.controller';
+import { StockRepository } from './stock.repository';
+import { StockService } from './stock.service';
 import { UnpostingCheckController } from './unposting-check.controller';
 
 // The stock (spec 2026-10-09-inventory-purchasing, section 4): batches, documents and movements.
@@ -21,6 +24,7 @@ import { UnpostingCheckController } from './unposting-check.controller';
     GoodsReceiptsController,
     OpeningBalancesController,
     UnpostingCheckController,
+    StockController,
   ],
   providers: [
     InventoryRepository,
@@ -28,6 +32,8 @@ import { UnpostingCheckController } from './unposting-check.controller';
     Numbering,
     DocumentPosting,
     StockDocumentsService,
+    StockRepository,
+    StockService,
   ],
 })
 export class InventoryModule {}

@@ -95,6 +95,18 @@ export class StorePriceWriter {
     return 'changed';
   }
 
+  /** Every product with a price at the stores: key `${storeId}/${productId}` → price of a pack. */
+  async pricedAt(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeIds: readonly string[],
+  ): Promise<Map<string, number>> {
+    const cells = await this.repository.pricesOfStores(trx, tenantId, storeIds);
+    return new Map(
+      cells.map((c) => [`${c.storeId}/${c.productId}`, Number(c.priceDirams)]),
+    );
+  }
+
   /** Prices of packs at the stores; no key `${storeId}/${productId}` — not sold there. */
   async pricesAt(
     trx: TenantTransaction,

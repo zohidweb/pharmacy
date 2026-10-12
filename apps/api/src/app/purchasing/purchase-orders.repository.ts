@@ -58,6 +58,7 @@ const FROM = sql`pharmacy.purchase_orders o
 // order line is read from their lines, as the supplier ledger reads posted receipts.
 @Injectable()
 export class PurchaseOrdersRepository {
+  /** `lock` — FOR NO KEY UPDATE: a goods receipt saved by the order meanwhile only checks its key. */
   async find(
     trx: TenantTransaction,
     tenantId: string,
@@ -67,7 +68,7 @@ export class PurchaseOrdersRepository {
     const result = await sql<OrderRow>`
       select ${HEADER} from ${FROM}
       where o.tenant_id = ${tenantId} and o.id = ${id}
-      ${lock ? sql`for update of o` : sql``}`.execute(trx);
+      ${lock ? sql`for no key update of o` : sql``}`.execute(trx);
     return result.rows[0] ?? null;
   }
 

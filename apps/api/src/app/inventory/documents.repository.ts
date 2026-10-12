@@ -139,6 +139,11 @@ export class DocumentsRepository {
       .execute();
   }
 
+  /**
+   * `lock` takes FOR NO KEY UPDATE: it serialises writes of the document, yet lets a payment add an
+   * allocation to it meanwhile (the foreign key check takes FOR KEY SHARE) — FOR UPDATE would
+   * deadlock an unposting waiting for the settlement lock that payment holds.
+   */
   async findDocument(
     trx: TenantTransaction,
     tenantId: string,
@@ -149,7 +154,7 @@ export class DocumentsRepository {
     const result = await sql<DocumentRow>`
       select ${HEADER} from pharmacy.documents d
       where d.tenant_id = ${tenantId} and d.id = ${id} and d.type = ${type}
-      ${lock ? sql`for update` : sql``}`.execute(trx);
+      ${lock ? sql`for no key update` : sql``}`.execute(trx);
     return result.rows[0] ?? null;
   }
 

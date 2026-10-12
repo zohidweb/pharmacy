@@ -204,17 +204,24 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'purchaseOrders.confirm',
   'purchaseOrders.open',
   'purchaseOrders.deficit',
+  'writeOffs.list',
+  'writeOffs.get',
+  'writeOffs.create',
+  'writeOffs.update',
+  'writeOffs.post',
+  'writeOffs.unpost',
 ]);
 
 /**
  * Routes shared by several kinds of documents that apps/api serves only for some of them: the
- * unposting check of goods receipts and opening balances is real, of the other documents — mocks.
+ * unposting check of goods receipts, opening balances and write-offs is real, of the other
+ * documents — mocks.
  */
 export const REAL_API_WHEN: Partial<
   Record<ApiRouteKey, (params: unknown) => boolean>
 > = {
   'documents.unpostCheck': (params) =>
-    ['goods-receipts', 'opening-balances'].includes(
+    ['goods-receipts', 'opening-balances', 'write-offs'].includes(
       (params as { kind?: string } | undefined)?.kind ?? '',
     ),
 };

@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  StockProductOption,
   WriteOff,
   WriteOffInput,
   WriteOffReason,
@@ -14,8 +15,8 @@ import {
   Spinner,
   TextField,
 } from '@pharmacy/ui';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
 import {
@@ -28,7 +29,7 @@ import {
   type EditableStockLine,
   type StockAccess,
 } from '@/features/stock-document';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 
 export const WRITE_OFF_REASONS: WriteOffReason[] = [
   'expired',
@@ -67,13 +68,31 @@ export function WriteOffEditor({
   const [touched, setTouched] = useState(false);
   const [unposting, setUnposting] = useState(false);
   const products = useStoreProducts(storeId);
+  // every product with an expired batch in stock, archived ones too — not limited by the page (B4)
+  const expired = useQuery({
+    queryKey: ['stock-products', storeId, 'expired'],
+    queryFn: ({ signal }) =>
+      apiRequest('stock.products', {
+        params: { storeId },
+        query: { expired: true },
+        signal,
+      }),
+    enabled: Boolean(storeId),
+  });
+  const byId = useMemo(() => {
+    const all = new Map<string, StockProductOption>(products.byId);
+    for (const product of expired.data ?? []) {
+      if (!all.has(product.id)) all.set(product.id, product);
+    }
+    return all;
+  }, [products.byId, expired.data]);
   const editable = (!doc || doc.status === 'draft') && access.canUpdate;
 
   useEffect(() => {
-    if (loaded || !doc || products.isPending) return;
-    setLines(toEditableLines(doc.lines, products.byId));
+    if (loaded || !doc || products.isPending || expired.isPending) return;
+    setLines(toEditableLines(doc.lines, byId));
     setLoaded(true);
-  }, [doc, loaded, products.isPending, products.byId]);
+  }, [doc, loaded, products.isPending, expired.isPending, byId]);
 
   const input = (): WriteOffInput => ({
     date,
@@ -108,12 +127,18 @@ export function WriteOffEditor({
     },
   });
   const post = useMutation({
-    mutationFn: async () =>
-      apiRequest('writeOffs.post', { params: { id: (await saveDoc()).id } }),
+    mutationFn: async () => {
+      const saved = await saveDoc();
+      // the draft exists now: a rejected posting must not create another one
+      setDoc(saved);
+      return apiRequest('writeOffs.post', { params: { id: saved.id } });
+    },
     onSuccess: (posted) => {
       setDoc(posted);
       void invalidate();
     },
+    // the stock may have moved: the lines show the shortage after a refetch
+    onError: () => void invalidate(),
   });
   const unpost = useMutation({
     mutationFn: () =>
@@ -125,11 +150,14 @@ export function WriteOffEditor({
     },
   });
   const error = useApiErrorMessage(save.error ?? post.error);
+  const dateError = apiFieldErrors(post.error ?? save.error).find(
+    (e) => e.field === 'date',
+  )?.code;
 
   const addExpired = () => {
     const present = new Set(lines.map((l) => l.batchId));
     const added: EditableStockLine[] = [];
-    for (const product of products.data ?? []) {
+    for (const product of expired.data ?? []) {
       for (const batch of product.batches) {
         if (
           batch.expiresOn >= today ||
@@ -140,16 +168,16 @@ export function WriteOffEditor({
         }
         const line = lineOf(product, { batch, includeExpired: true });
         if (line) {
+          // whole packs, or every piece of a divisible product with an opened pack
+          const inPieces =
+            product.divisible &&
+            batch.quantityPieces % product.piecesPerPack !== 0;
           added.push({
             ...line,
-            quantity:
-              Math.floor(batch.quantityPieces / product.piecesPerPack) ||
-              batch.quantityPieces,
-            unit:
-              batch.quantityPieces % product.piecesPerPack === 0 ||
-              !product.divisible
-                ? 'pack'
-                : 'piece',
+            quantity: inPieces
+              ? batch.quantityPieces
+              : Math.floor(batch.quantityPieces / product.piecesPerPack),
+            unit: inPieces ? 'piece' : 'pack',
           });
         }
       }
@@ -238,6 +266,13 @@ export function WriteOffEditor({
               type="date"
               max={today}
               disabled={!editable}
+              error={
+                dateError === 'period_closed'
+                  ? t('periodClosed')
+                  : dateError
+                    ? tDocs('checkValue')
+                    : undefined
+              }
               value={date}
               onChange={(event) => setDate(event.target.value)}
             />
@@ -267,7 +302,7 @@ export function WriteOffEditor({
                 variant="secondary"
                 iconStart="clock"
                 onClick={addExpired}
-                disabled={products.isPending}
+                disabled={expired.isPending}
               >
                 {t('addExpired')}
               </Button>

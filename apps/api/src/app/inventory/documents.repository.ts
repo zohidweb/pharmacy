@@ -352,6 +352,9 @@ export class DocumentsRepository {
           tenantId,
           id: newId(),
           sourceType: 'document',
+          // the moment of the write, not the start of the transaction: a posting that waited for a
+          // batch lock must land after the unposting check of a document posted meanwhile (B2)
+          recordedAt: sql`clock_timestamp()`,
           ...m,
         })),
       )

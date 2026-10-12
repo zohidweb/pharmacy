@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -87,6 +88,11 @@ export class StockProductsQueryDto {
   )
   @IsBoolean()
   expired?: boolean;
+
+  /** Comma-separated product ids, ≤ 500: exactly these products, any status. */
+  @IsOptional()
+  @Matches(/^[0-9a-fA-F-]{36}(,[0-9a-fA-F-]{36}){0,499}$/)
+  ids?: string;
 }
 
 /** GET /api/v1/purchase-orders/deficit. */

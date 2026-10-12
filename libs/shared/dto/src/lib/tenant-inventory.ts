@@ -48,6 +48,11 @@ export interface StockProductsQuery {
    * store including archived ones; no search and no page limit («добавить просроченные партии»).
    */
   expired?: boolean;
+  /**
+   * Comma-separated ids (≤ 500): exactly these products, archived ones too, with their batches in
+   * stock — to reopen the lines of a saved document. No search and no page limit.
+   */
+  ids?: string;
 }
 
 /** GET /api/v1/stores/{storeId}/stock-products — products for document lines. */

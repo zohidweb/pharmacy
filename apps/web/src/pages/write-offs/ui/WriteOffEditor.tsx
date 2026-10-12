@@ -16,7 +16,7 @@ import {
   TextField,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
 import {
@@ -25,7 +25,6 @@ import {
   stockLineProblem,
   toEditableLines,
   UnpostDialog,
-  useStoreProducts,
   type EditableStockLine,
   type StockAccess,
 } from '@/features/stock-document';
@@ -67,7 +66,6 @@ export function WriteOffEditor({
   const [loaded, setLoaded] = useState(!document);
   const [touched, setTouched] = useState(false);
   const [unposting, setUnposting] = useState(false);
-  const products = useStoreProducts(storeId);
   // every product with an expired batch in stock, archived ones too — not limited by the page (B4)
   const expired = useQuery({
     queryKey: ['stock-products', storeId, 'expired'],
@@ -79,20 +77,58 @@ export function WriteOffEditor({
       }),
     enabled: Boolean(storeId),
   });
-  const byId = useMemo(() => {
-    const all = new Map<string, StockProductOption>(products.byId);
-    for (const product of expired.data ?? []) {
-      if (!all.has(product.id)) all.set(product.id, product);
-    }
-    return all;
-  }, [products.byId, expired.data]);
+  /** Exactly these products of the store, archived ones too, with their batches in stock. */
+  const productsById = (ids: readonly string[]) =>
+    queryClient.fetchQuery({
+      queryKey: ['stock-products', storeId, 'ids', [...ids].sort().join(',')],
+      queryFn: ({ signal }) =>
+        apiRequest('stock.products', {
+          params: { storeId },
+          query: { ids: [...new Set(ids)].join(',') },
+          signal,
+        }),
+      staleTime: 0,
+    });
   const editable = (!doc || doc.status === 'draft') && access.canUpdate;
 
+  // a saved document reopens with its own products, whatever the page of the store list (I2)
   useEffect(() => {
-    if (loaded || !doc || products.isPending || expired.isPending) return;
-    setLines(toEditableLines(doc.lines, byId));
-    setLoaded(true);
-  }, [doc, loaded, products.isPending, expired.isPending, byId]);
+    if (loaded || !doc) return;
+    let cancelled = false;
+    void productsById(doc.lines.map((l) => l.productId)).then((found) => {
+      if (cancelled) return;
+      setLines(
+        toEditableLines(
+          doc.lines,
+          new Map<string, StockProductOption>(found.map((p) => [p.id, p])),
+        ),
+      );
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [doc, loaded]);
+
+  /** After a rejected posting: the lines take the current stock, so a short row shows at itself. */
+  const refreshBatches = async () => {
+    const fresh = new Map(
+      (await productsById(lines.map((l) => l.productId))).map((p) => [p.id, p]),
+    );
+    setLines((current) =>
+      current.map((line) => {
+        const product = fresh.get(line.productId);
+        return product
+          ? {
+              ...line,
+              batches: product.batches.filter(
+                (b) => b.quantityPieces > 0 || b.id === line.batchId,
+              ),
+            }
+          : line;
+      }),
+    );
+  };
 
   const input = (): WriteOffInput => ({
     date,
@@ -137,8 +173,15 @@ export function WriteOffEditor({
       setDoc(posted);
       void invalidate();
     },
-    // the stock may have moved: the lines show the shortage after a refetch
-    onError: () => void invalidate(),
+    // the stock may have moved: the short lines show it at themselves (I3)
+    onError: (failure) => {
+      void invalidate();
+      if (
+        apiFieldErrors(failure).some((e) => e.code === 'stock_insufficient')
+      ) {
+        void refreshBatches();
+      }
+    },
   });
   const unpost = useMutation({
     mutationFn: () =>

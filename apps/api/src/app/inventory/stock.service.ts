@@ -205,7 +205,7 @@ export class StockService {
 
   async productOptions(
     storeId: string,
-    query: { query?: string; limit?: number; expired?: boolean },
+    query: { query?: string; limit?: number; expired?: boolean; ids?: string },
   ): Promise<StockProductOption[]> {
     const { tenantId, storeScope, permissions } = requirePrincipal();
     const canSeeCost = hasPermissions(permissions, 'finance:view-cost');
@@ -218,21 +218,23 @@ export class StockService {
       const today = query.expired
         ? (await this.inventory.settings(trx, tenantId)).today
         : '';
-      const ids = query.expired
-        ? [
-            ...new Set(
-              (await this.stock.batchStock(trx, tenantId, [id], null))
-                .filter((b) => b.qty > 0 && b.expiryDate < today)
-                .map((b) => b.productId),
-            ),
-          ]
-        : (
-            await this.products.listForPricing(trx, tenantId, {
-              q: query.query,
-              limit: query.limit ?? 20,
-              offset: 0,
-            })
-          ).items.map((p) => p.id);
+      const ids = query.ids
+        ? [...new Set(query.ids.toLowerCase().split(','))]
+        : query.expired
+          ? [
+              ...new Set(
+                (await this.stock.batchStock(trx, tenantId, [id], null))
+                  .filter((b) => b.qty > 0 && b.expiryDate < today)
+                  .map((b) => b.productId),
+              ),
+            ]
+          : (
+              await this.products.listForPricing(trx, tenantId, {
+                q: query.query,
+                limit: query.limit ?? 20,
+                offset: 0,
+              })
+            ).items.map((p) => p.id);
       const products = await this.products.findForStock(trx, tenantId, ids);
       const byId = new Map(products.map((p) => [p.id, p]));
       const batches = (

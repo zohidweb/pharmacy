@@ -479,16 +479,19 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     // expired: only the batches with stock that expired, of every product (spec 2026-10-12, B4)
     const expired = (b: { id: string; expiresOn: string }) =>
       (stockAt(params.storeId)[b.id] ?? 0) > 0 && b.expiresOn < today();
+    const ids = query?.ids ? query.ids.split(',') : null;
     return products()
       .filter((p) =>
-        query?.expired
-          ? p.batches.some(expired)
-          : !needle ||
-            [p.name, p.inn ?? '', ...p.barcodes].some((v) =>
-              v.toLocaleLowerCase('ru').includes(needle),
-            ),
+        ids
+          ? ids.includes(p.id)
+          : query?.expired
+            ? p.batches.some(expired)
+            : !needle ||
+              [p.name, p.inn ?? '', ...p.barcodes].some((v) =>
+                v.toLocaleLowerCase('ru').includes(needle),
+              ),
       )
-      .slice(0, query?.expired ? undefined : (query?.limit ?? 20))
+      .slice(0, query?.expired || ids ? undefined : (query?.limit ?? 20))
       .map((p): StockProductOption => ({
         id: p.id,
         name: p.name,

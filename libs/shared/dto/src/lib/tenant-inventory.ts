@@ -38,7 +38,24 @@ export interface StockBatch {
   costMinor?: number;
 }
 
-/** GET /api/v1/stores/{storeId}/stock-products?query=&limit= — products for document lines. */
+/** GET /api/v1/stores/{storeId}/stock-products?query=&limit=&expired= */
+export interface StockProductsQuery {
+  query?: string;
+  /** 1–500; ignored with `expired`. */
+  limit?: number;
+  /**
+   * Only the batches with stock > 0 that expired before the business date, of every product of the
+   * store including archived ones; no search and no page limit («добавить просроченные партии»).
+   */
+  expired?: boolean;
+  /**
+   * Comma-separated ids (≤ 500): exactly these products, archived ones too, with their batches in
+   * stock — to reopen the lines of a saved document. No search and no page limit.
+   */
+  ids?: string;
+}
+
+/** GET /api/v1/stores/{storeId}/stock-products — products for document lines. */
 export interface StockProductOption {
   id: string;
   name: string;
@@ -306,6 +323,12 @@ export interface StockLine {
   costMinor?: number;
 }
 
+/**
+ * GET /api/v1/write-offs/{id}. Posting (`POST …/posting`, `inventory:post`) writes the batches off:
+ * 409 `stock_insufficient` (errors at `lines.i.quantity`), 422 `validation_failed` (date) /
+ * `period_closed`; unposting (`POST …/unposting`, `inventory:unpost`) — 409 `unpost_blocked` when a
+ * batch moved after the posting. Amounts only with `finance:view-cost`.
+ */
 export interface WriteOff {
   id: string;
   number: string;
@@ -326,12 +349,26 @@ export type StockLineInput = Pick<
   'productId' | 'batchId' | 'unit' | 'quantity'
 >;
 
+/**
+ * POST /api/v1/write-offs (`inventory:create`), PUT /api/v1/write-offs/{id} (`inventory:update`,
+ * a draft only — 409 `document_posted`); no cost right needed. 400 at `lines.i.batchId` (a batch of
+ * another store or product, a repeated batch), `lines.i.unit` (pieces of an indivisible product).
+ */
 export interface WriteOffInput {
   date: string;
   storeId: string;
   reason: WriteOffReason;
   comment: string;
   lines: StockLineInput[];
+}
+
+/** GET /api/v1/write-offs?storeId=&reason=&status=&limit=&offset= */
+export interface WriteOffListQuery {
+  storeId?: string;
+  reason?: WriteOffReason;
+  status?: DocumentStatus;
+  limit?: number;
+  offset?: number;
 }
 
 export interface WriteOffListItem {

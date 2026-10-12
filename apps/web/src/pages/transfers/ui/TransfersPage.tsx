@@ -237,7 +237,7 @@ function TransfersPageView() {
                   }
                 />
                 <p className="px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
-                  {tDocs('numberingHint')}
+                  {tDocs('numberingHint', { prefix: 'ПМ' })}
                 </p>
               </Card>
             </>

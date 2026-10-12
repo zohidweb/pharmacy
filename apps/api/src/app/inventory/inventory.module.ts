@@ -15,6 +15,10 @@ import { StockController } from './stock.controller';
 import { StockRepository } from './stock.repository';
 import { StockService } from './stock.service';
 import { UnpostingCheckController } from './unposting-check.controller';
+import { WriteOffPosting } from './write-off-posting';
+import { WriteOffsController } from './write-offs.controller';
+import { WriteOffsRepository } from './write-offs.repository';
+import { WriteOffsService } from './write-offs.service';
 
 // The stock (spec 2026-10-09-inventory-purchasing, section 4): batches, documents and movements.
 // Cloud only for now: an offline store posts its own documents (ADR-0014). Products, store prices
@@ -27,6 +31,7 @@ import { UnpostingCheckController } from './unposting-check.controller';
     UnpostingCheckController,
     StockController,
     DeficitController,
+    WriteOffsController,
   ],
   providers: [
     InventoryRepository,
@@ -36,6 +41,9 @@ import { UnpostingCheckController } from './unposting-check.controller';
     StockDocumentsService,
     StockRepository,
     StockService,
+    WriteOffsRepository,
+    WriteOffPosting,
+    WriteOffsService,
   ],
 })
 export class InventoryModule {}

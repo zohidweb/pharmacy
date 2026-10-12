@@ -30,7 +30,10 @@ const activateSchema = z
     newPassword: z
       .string()
       .max(PASSWORD_MAX_LENGTH, error('passwordPolicy'))
-      .refine((value) => passwordProblems(value).length === 0, error('passwordPolicy')),
+      .refine(
+        (value) => passwordProblems(value).length === 0,
+        error('passwordPolicy'),
+      ),
     repeat: z.string(),
   })
   .refine((values) => values.newPassword === values.repeat, {

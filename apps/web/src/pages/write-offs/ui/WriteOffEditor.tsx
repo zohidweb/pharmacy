@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  StockProductOption,
   WriteOff,
   WriteOffInput,
   WriteOffReason,
@@ -14,7 +15,7 @@ import {
   Spinner,
   TextField,
 } from '@pharmacy/ui';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
@@ -24,11 +25,10 @@ import {
   stockLineProblem,
   toEditableLines,
   UnpostDialog,
-  useStoreProducts,
   type EditableStockLine,
   type StockAccess,
 } from '@/features/stock-document';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 
 export const WRITE_OFF_REASONS: WriteOffReason[] = [
   'expired',
@@ -66,14 +66,69 @@ export function WriteOffEditor({
   const [loaded, setLoaded] = useState(!document);
   const [touched, setTouched] = useState(false);
   const [unposting, setUnposting] = useState(false);
-  const products = useStoreProducts(storeId);
+  // every product with an expired batch in stock, archived ones too — not limited by the page (B4)
+  const expired = useQuery({
+    queryKey: ['stock-products', storeId, 'expired'],
+    queryFn: ({ signal }) =>
+      apiRequest('stock.products', {
+        params: { storeId },
+        query: { expired: true },
+        signal,
+      }),
+    enabled: Boolean(storeId),
+  });
+  /** Exactly these products of the store, archived ones too, with their batches in stock. */
+  const productsById = (ids: readonly string[]) =>
+    queryClient.fetchQuery({
+      queryKey: ['stock-products', storeId, 'ids', [...ids].sort().join(',')],
+      queryFn: ({ signal }) =>
+        apiRequest('stock.products', {
+          params: { storeId },
+          query: { ids: [...new Set(ids)].join(',') },
+          signal,
+        }),
+      staleTime: 0,
+    });
   const editable = (!doc || doc.status === 'draft') && access.canUpdate;
 
+  // a saved document reopens with its own products, whatever the page of the store list (I2)
   useEffect(() => {
-    if (loaded || !doc || products.isPending) return;
-    setLines(toEditableLines(doc.lines, products.byId));
-    setLoaded(true);
-  }, [doc, loaded, products.isPending, products.byId]);
+    if (loaded || !doc) return;
+    let cancelled = false;
+    void productsById(doc.lines.map((l) => l.productId)).then((found) => {
+      if (cancelled) return;
+      setLines(
+        toEditableLines(
+          doc.lines,
+          new Map<string, StockProductOption>(found.map((p) => [p.id, p])),
+        ),
+      );
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [doc, loaded]);
+
+  /** After a rejected posting: the lines take the current stock, so a short row shows at itself. */
+  const refreshBatches = async () => {
+    const fresh = new Map(
+      (await productsById(lines.map((l) => l.productId))).map((p) => [p.id, p]),
+    );
+    setLines((current) =>
+      current.map((line) => {
+        const product = fresh.get(line.productId);
+        return product
+          ? {
+              ...line,
+              batches: product.batches.filter(
+                (b) => b.quantityPieces > 0 || b.id === line.batchId,
+              ),
+            }
+          : line;
+      }),
+    );
+  };
 
   const input = (): WriteOffInput => ({
     date,
@@ -108,11 +163,24 @@ export function WriteOffEditor({
     },
   });
   const post = useMutation({
-    mutationFn: async () =>
-      apiRequest('writeOffs.post', { params: { id: (await saveDoc()).id } }),
+    mutationFn: async () => {
+      const saved = await saveDoc();
+      // the draft exists now: a rejected posting must not create another one
+      setDoc(saved);
+      return apiRequest('writeOffs.post', { params: { id: saved.id } });
+    },
     onSuccess: (posted) => {
       setDoc(posted);
       void invalidate();
+    },
+    // the stock may have moved: the short lines show it at themselves (I3)
+    onError: (failure) => {
+      void invalidate();
+      if (
+        apiFieldErrors(failure).some((e) => e.code === 'stock_insufficient')
+      ) {
+        void refreshBatches();
+      }
     },
   });
   const unpost = useMutation({
@@ -125,11 +193,14 @@ export function WriteOffEditor({
     },
   });
   const error = useApiErrorMessage(save.error ?? post.error);
+  const dateError = apiFieldErrors(post.error ?? save.error).find(
+    (e) => e.field === 'date',
+  )?.code;
 
   const addExpired = () => {
     const present = new Set(lines.map((l) => l.batchId));
     const added: EditableStockLine[] = [];
-    for (const product of products.data ?? []) {
+    for (const product of expired.data ?? []) {
       for (const batch of product.batches) {
         if (
           batch.expiresOn >= today ||
@@ -140,16 +211,16 @@ export function WriteOffEditor({
         }
         const line = lineOf(product, { batch, includeExpired: true });
         if (line) {
+          // whole packs, or every piece of a divisible product with an opened pack
+          const inPieces =
+            product.divisible &&
+            batch.quantityPieces % product.piecesPerPack !== 0;
           added.push({
             ...line,
-            quantity:
-              Math.floor(batch.quantityPieces / product.piecesPerPack) ||
-              batch.quantityPieces,
-            unit:
-              batch.quantityPieces % product.piecesPerPack === 0 ||
-              !product.divisible
-                ? 'pack'
-                : 'piece',
+            quantity: inPieces
+              ? batch.quantityPieces
+              : Math.floor(batch.quantityPieces / product.piecesPerPack),
+            unit: inPieces ? 'piece' : 'pack',
           });
         }
       }
@@ -238,6 +309,13 @@ export function WriteOffEditor({
               type="date"
               max={today}
               disabled={!editable}
+              error={
+                dateError === 'period_closed'
+                  ? t('periodClosed')
+                  : dateError
+                    ? tDocs('checkValue')
+                    : undefined
+              }
               value={date}
               onChange={(event) => setDate(event.target.value)}
             />
@@ -267,7 +345,7 @@ export function WriteOffEditor({
                 variant="secondary"
                 iconStart="clock"
                 onClick={addExpired}
-                disabled={products.isPending}
+                disabled={expired.isPending}
               >
                 {t('addExpired')}
               </Button>

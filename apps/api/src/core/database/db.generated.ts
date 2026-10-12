@@ -142,6 +142,7 @@ export interface Documents {
   unpostedAt: Timestamp | null;
   unpostedBy: string | null;
   updatedAt: Generated<Timestamp>;
+  writeOffReason: string | null;
 }
 
 export interface EmployeeCredentials {
@@ -527,6 +528,18 @@ export interface Terminals {
   tenantId: string;
 }
 
+export interface WriteOffLines {
+  batchId: string;
+  createdAt: Generated<Timestamp>;
+  documentId: string;
+  id: string;
+  lineNo: number;
+  productId: string;
+  qtyPieces: number;
+  tenantId: string;
+  unit: string;
+}
+
 export interface DB {
   auditLog: AuditLog;
   batches: Batches;
@@ -563,4 +576,5 @@ export interface DB {
   tenants: Tenants;
   tenantSettings: TenantSettings;
   terminals: Terminals;
+  writeOffLines: WriteOffLines;
 }

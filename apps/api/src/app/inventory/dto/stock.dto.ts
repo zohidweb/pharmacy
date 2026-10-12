@@ -5,11 +5,13 @@ import type {
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -78,6 +80,19 @@ export class StockProductsQueryDto {
   @Min(1)
   @Max(500)
   limit?: number;
+
+  /** Only the expired batches with stock, of every product of the store (spec 2026-10-12, B4). */
+  @IsOptional()
+  @Transform(
+    ({ value }: { value: unknown }) => value === true || value === 'true',
+  )
+  @IsBoolean()
+  expired?: boolean;
+
+  /** Comma-separated product ids, ≤ 500: exactly these products, any status. */
+  @IsOptional()
+  @Matches(/^[0-9a-fA-F-]{36}(,[0-9a-fA-F-]{36}){0,499}$/)
+  ids?: string;
 }
 
 /** GET /api/v1/purchase-orders/deficit. */

@@ -220,7 +220,7 @@ function SupplierReturnsPageView() {
                   empty={<EmptyState icon="undo-2" title={t('empty')} />}
                 />
                 <p className="px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
-                  {tDocs('numberingHint')}
+                  {tDocs('numberingHint', { prefix: 'ВП' })}
                 </p>
                 {data.total > PAGE && (
                   <Pagination

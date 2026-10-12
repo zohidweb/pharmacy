@@ -230,7 +230,8 @@ function GoodsReceiptsPageView() {
                   empty={<EmptyState icon="inbox" title={t('empty')} />}
                 />
                 <p className="px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
-                  {t('oneSupplierHint')} {tDocs('numberingHint')}
+                  {t('oneSupplierHint')}{' '}
+                  {tDocs('numberingHint', { prefix: 'ПР' })}
                 </p>
                 {data.total > PAGE && (
                   <Pagination

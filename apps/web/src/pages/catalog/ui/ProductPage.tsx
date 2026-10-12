@@ -17,11 +17,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
-import {
-  apiFieldErrors,
-  apiRequest,
-  useApiErrorMessage,
-} from '@/shared/api';
+import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';

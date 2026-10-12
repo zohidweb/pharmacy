@@ -83,4 +83,21 @@ export class StockRepository {
                b.created_at desc, b.id desc`.execute(trx);
     return new Map(result.rows.map((r) => [r.productId, Number(r.price)]));
   }
+
+  /** The stock of batches of a store, pieces (absent — no movements). */
+  async stockOfBatches(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    batchIds: readonly string[],
+  ): Promise<Map<string, number>> {
+    if (batchIds.length === 0) return new Map();
+    const result = await sql<{ batchId: string; qty: number }>`
+      select m.batch_id, sum(m.qty_delta_pieces)::integer as qty
+      from pharmacy.stock_movements m
+      where m.tenant_id = ${tenantId} and m.store_id = ${storeId}
+        and m.batch_id in (${sql.join([...batchIds])})
+      group by m.batch_id`.execute(trx);
+    return new Map(result.rows.map((r) => [r.batchId, r.qty]));
+  }
 }

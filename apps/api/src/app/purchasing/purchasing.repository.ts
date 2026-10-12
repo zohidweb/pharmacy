@@ -30,8 +30,17 @@ export interface ReceiptRow {
   storeId: string;
   storeName: string;
   totalDirams: bigint;
-  /** Payments allocated to the receipt. */
+  /** Payments and credits of supplier returns allocated to the receipt. */
   allocatedDirams: bigint;
+}
+
+/** A payment or a posted supplier return with a rest to allocate (a credit of the supplier). */
+export interface CreditRest {
+  id: string;
+  /** Payment date or business date of the return, YYYY-MM-DD. */
+  date: string;
+  at: Date;
+  restDirams: bigint;
 }
 
 export interface PaymentRow {
@@ -52,6 +61,8 @@ export interface LedgerRow {
   sourceId: string;
   recordedAt: Date;
   documentNumber: string | null;
+  /** Type of the source document (`goods_receipt`, `supplier_return`); null for a payment. */
+  documentType: string | null;
   paymentMethod: string | null;
   paymentComment: string | null;
 }
@@ -59,7 +70,7 @@ export interface LedgerRow {
 export interface LedgerEntryValues {
   supplierId: string;
   legalEntityId: string;
-  kind: 'goods_receipt' | 'payment' | 'reversal';
+  kind: 'goods_receipt' | 'payment' | 'supplier_return' | 'reversal';
   amountDirams: number;
   dueDate: string | null;
   sourceType: 'document' | 'payment';
@@ -182,9 +193,11 @@ export class PurchasingRepository {
       select d.id, d.supplier_id, d.number, d.document_date::text as document_date,
              d.payment_due_date::text as due_date, d.store_id, s.name as store_name,
              d.total_dirams,
-             coalesce((select sum(a.amount_dirams) from pharmacy.supplier_payment_allocations a
-                       where a.tenant_id = d.tenant_id and a.goods_receipt_document_id = d.id), 0)::bigint
-               as allocated_dirams
+             (coalesce((select sum(a.amount_dirams) from pharmacy.supplier_payment_allocations a
+                        where a.tenant_id = d.tenant_id and a.goods_receipt_document_id = d.id), 0)
+              + coalesce((select sum(r.amount_dirams) from pharmacy.supplier_return_allocations r
+                          where r.tenant_id = d.tenant_id and r.goods_receipt_document_id = d.id), 0)
+             )::bigint as allocated_dirams
       from pharmacy.documents d
       join pharmacy.stores s on s.tenant_id = d.tenant_id and s.id = d.store_id
       where d.tenant_id = ${tenantId} and d.type = 'goods_receipt' and d.status = 'posted'
@@ -201,7 +214,7 @@ export class PurchasingRepository {
   ): Promise<LedgerRow[]> {
     const result = await sql<LedgerRow>`
       select l.kind, l.amount_dirams, l.business_date::text as business_date, l.source_type,
-             l.source_id, l.recorded_at, d.number as document_number,
+             l.source_id, l.recorded_at, d.number as document_number, d.type as document_type,
              p.method as payment_method, p.comment as payment_comment
       from pharmacy.supplier_ledger_entries l
       left join pharmacy.documents d
@@ -275,12 +288,14 @@ export class PurchasingRepository {
     legalEntityId: string,
   ): Promise<void> {
     await sql`select pg_advisory_xact_lock(
-      hashtextextended(${`settlement:${tenantId}:${supplierId}:${legalEntityId}`}, 0))`.execute(trx);
+      hashtextextended(${`settlement:${tenantId}:${supplierId}:${legalEntityId}`}, 0))`.execute(
+      trx,
+    );
   }
 
   /**
    * Posted goods receipts of the supplier owed by the legal entity (by their ledger entries), with
-   * a remainder after the allocations, the earliest due date first.
+   * a remainder after the allocations of payments and returns, the earliest due date first.
    */
   async openReceipts(
     trx: TenantTransaction,
@@ -290,7 +305,8 @@ export class PurchasingRepository {
   ): Promise<Array<{ documentId: string; remainingDirams: bigint }>> {
     const result = await sql<{ documentId: string; remainingDirams: bigint }>`
       select d.id as document_id,
-             (l.owed - coalesce(a.allocated, 0))::bigint as remaining_dirams
+             (l.owed - coalesce(a.allocated, 0) - coalesce(r.allocated, 0))::bigint
+               as remaining_dirams
       from pharmacy.documents d
       join (select source_id, sum(amount_dirams) as owed
             from pharmacy.supplier_ledger_entries
@@ -301,9 +317,15 @@ export class PurchasingRepository {
                  from pharmacy.supplier_payment_allocations
                  where tenant_id = ${tenantId}
                  group by goods_receipt_document_id) a on a.goods_receipt_document_id = d.id
+      left join (select goods_receipt_document_id, sum(amount_dirams) as allocated
+                 from pharmacy.supplier_return_allocations
+                 where tenant_id = ${tenantId}
+                 group by goods_receipt_document_id) r on r.goods_receipt_document_id = d.id
       where d.tenant_id = ${tenantId} and d.type = 'goods_receipt' and d.status = 'posted'
-        and l.owed - coalesce(a.allocated, 0) > 0
-      order by d.payment_due_date nulls last, d.document_date, d.number`.execute(trx);
+        and l.owed - coalesce(a.allocated, 0) - coalesce(r.allocated, 0) > 0
+      order by d.payment_due_date nulls last, d.document_date, d.number`.execute(
+      trx,
+    );
     return result.rows;
   }
 
@@ -313,9 +335,9 @@ export class PurchasingRepository {
     tenantId: string,
     supplierId: string,
     legalEntityId: string,
-  ): Promise<Array<{ paymentId: string; restDirams: bigint }>> {
-    const result = await sql<{ paymentId: string; restDirams: bigint }>`
-      select p.id as payment_id,
+  ): Promise<CreditRest[]> {
+    const result = await sql<CreditRest>`
+      select p.id, p.paid_on::text as date, p.created_at as at,
              (p.amount_dirams - coalesce(sum(a.amount_dirams), 0))::bigint as rest_dirams
       from pharmacy.supplier_payments p
       left join pharmacy.supplier_payment_allocations a
@@ -325,6 +347,41 @@ export class PurchasingRepository {
       group by p.id, p.amount_dirams, p.paid_on, p.created_at
       having p.amount_dirams - coalesce(sum(a.amount_dirams), 0) > 0
       order by p.paid_on, p.created_at, p.id`.execute(trx);
+    return result.rows;
+  }
+
+  /**
+   * Posted supplier returns with a credit in the supplier × legal entity not allocated yet, the
+   * oldest first. The credit of a return in a pair is minus its ledger entries there; it is
+   * allocated only to receipts of that pair (those the pair still owes by their entries).
+   */
+  async returnsWithRest(
+    trx: TenantTransaction,
+    tenantId: string,
+    supplierId: string,
+    legalEntityId: string,
+  ): Promise<CreditRest[]> {
+    const result = await sql<CreditRest>`
+      select c.id, c.date, c.at, (c.credit - coalesce(a.allocated, 0))::bigint as rest_dirams
+      from (select l.source_id as id, min(l.business_date)::text as date, min(l.recorded_at) as at,
+                   -sum(l.amount_dirams) as credit
+            from pharmacy.supplier_ledger_entries l
+            join pharmacy.documents d
+              on d.tenant_id = l.tenant_id and d.id = l.source_id and d.type = 'supplier_return'
+            where l.tenant_id = ${tenantId} and l.supplier_id = ${supplierId}
+              and l.legal_entity_id = ${legalEntityId} and l.source_type = 'document'
+            group by l.source_id) c
+      left join (select ra.return_document_id, sum(ra.amount_dirams) as allocated
+                 from pharmacy.supplier_return_allocations ra
+                 where ra.tenant_id = ${tenantId}
+                   and (select sum(e.amount_dirams) from pharmacy.supplier_ledger_entries e
+                        where e.tenant_id = ra.tenant_id and e.source_type = 'document'
+                          and e.source_id = ra.goods_receipt_document_id
+                          and e.supplier_id = ${supplierId}
+                          and e.legal_entity_id = ${legalEntityId}) > 0
+                 group by ra.return_document_id) a on a.return_document_id = c.id
+      where c.credit - coalesce(a.allocated, 0) > 0
+      order by c.date, c.at, c.id`.execute(trx);
     return result.rows;
   }
 
@@ -342,6 +399,36 @@ export class PurchasingRepository {
       on conflict (tenant_id, payment_id, goods_receipt_document_id)
         do update set amount_dirams = pharmacy.supplier_payment_allocations.amount_dirams
                                       + excluded.amount_dirams`.execute(trx);
+  }
+
+  async addReturnAllocation(
+    trx: TenantTransaction,
+    tenantId: string,
+    returnId: string,
+    documentId: string,
+    amountDirams: bigint,
+  ): Promise<void> {
+    await sql`
+      insert into pharmacy.supplier_return_allocations
+        (tenant_id, return_document_id, goods_receipt_document_id, amount_dirams)
+      values (${tenantId}, ${returnId}, ${documentId}, ${amountDirams})
+      on conflict (tenant_id, return_document_id, goods_receipt_document_id)
+        do update set amount_dirams = pharmacy.supplier_return_allocations.amount_dirams
+                                      + excluded.amount_dirams`.execute(trx);
+  }
+
+  /** Removes the credit allocations of a return, or those to a receipt; the total released. */
+  async releaseReturnAllocations(
+    trx: TenantTransaction,
+    tenantId: string,
+    by: { returnId: string } | { receiptId: string },
+  ): Promise<number> {
+    const result = await sql<{ amountDirams: bigint }>`
+      delete from pharmacy.supplier_return_allocations
+      where tenant_id = ${tenantId}
+        and ${'returnId' in by ? sql`return_document_id = ${by.returnId}` : sql`goods_receipt_document_id = ${by.receiptId}`}
+      returning amount_dirams`.execute(trx);
+    return result.rows.reduce((sum, r) => sum + Number(r.amountDirams), 0);
   }
 
   /** Removes the allocations of a receipt; the total returned to the payments. */

@@ -16,6 +16,17 @@
 > - строка черновика, не изменённая после отмены проведения (товар, срок, серия, цена), сохраняет партию;
 > - сторно (`reversal`) несёт дату документа как `business_date`;
 > - закрытый период юрлица (`legal_entities.closed_until`) проверяется при проведении (422 `period_closed`).
+>
+> **Введено миграцией `write-offs` (2026-10-12, спецификация `docs/superpowers/specs/2026-10-12-write-offs-stock-counts-design.md`):**
+> тип `write_off`, `documents.write_off_reason`, `write_off_lines`, движение `write_off`. Поправки модели
+> (утверждены архитектором 2026-10-12, раздел 2.1 спецификации):
+> - **причина списания — одна на документ** (`documents.write_off_reason`: `expired`, `broken`, `defect`,
+>   `misgrade`, `transfer_discrepancy`); справочник `write_off_reason` в `dictionary_values` не вводится;
+> - `write_off_lines.unit` (`pack` / `piece`) — в чём ввели количество; остаток — в штуках;
+> - списание и инвентаризация принимают остатки архивного товара; проверка «товар активен» — только у прихода и
+>   начальных остатков;
+> - отмену проведения блокируют только движения по партиям документа, записанные **после** его последнего
+>   проведения.
 
 ```mermaid
 erDiagram
@@ -78,6 +89,7 @@ erDiagram
 | `source_document_id` | uuid null | Возврат поставщику → исходный приход (необязательно) |
 | `claim_text` | text null | Претензия поставщику |
 | **Списание** | | |
+| `write_off_reason` | text null | Причина, одна на документ; обязательна для `write_off` (поправка 2026-10-12) |
 | `source_customer_return_id` | uuid null | Автоматическое списание просроченного товара, возвращённого покупателем ([04](04-pos.md)) |
 | **Перемещение, заявка** | | |
 | `destination_store_id` | uuid null | Обязателен для `transfer`, `transfer_request`; ≠ `store_id` |
@@ -106,7 +118,7 @@ erDiagram
 | `opening_balance_lines` | `product_id`, `qty_pieces > 0`, `expiry_date`, `purchase_price_per_pack_dirams`, `supplier_id null`, `batch_id`, `is_starting` |
 | `transfer_lines` | `source_batch_id`, `qty_sent_pieces > 0`, `qty_received_pieces null` (при приёмке), `target_batch_id null` (партия получателя, D2), `discrepancy_resolution null` — `write_off` / `resend` |
 | `transfer_request_lines` | `product_id`, `qty_requested_pieces > 0`. Выполненное количество — по связанным перемещениям |
-| `write_off_lines` | `batch_id`, `qty_pieces > 0`, `reason_code` (из `dictionary_values`, `write_off_reason`) |
+| `write_off_lines` | `batch_id` (партия точки документа, не повторяется), `product_id`, `qty_pieces > 0`, `unit` (`pack` / `piece`, как ввели) |
 | `inventory_lines` | `product_id`, `batch_id null` (пусто — найден товар без учётной партии), `book_qty_pieces` (на момент начала), `counted_qty_pieces`, `sold_since_start_pieces` (при проведении), `surplus_expiry_date null`, `surplus_purchase_price_per_pack_dirams null`, `surplus_batch_id null`. Расхождение по строке с партией — движение `inventory_gain` / `inventory_loss` по этой партии. Строка без партии — новая партия `inventory_surplus`; срок и закупочную цену **вводит сотрудник** при проведении, без них документ не проводится (решение 2026-09-30) |
 | `supplier_return_lines` | `batch_id`, `qty_pieces > 0`, `amount_dirams` |
 
@@ -132,7 +144,7 @@ erDiagram
 - **Операция и её движения** — одна транзакция.
 - **Блокировка отдельно от подсчёта:** партии блокируются `FOR UPDATE` одним оператором, остаток считается следующим (ADR-0006 п. 2).
 - **Минус запрещён** при продаже, отправке, списании и возврате поставщику. Исключение — факты офлайн-точки: облако их принимает и помечает партию `negative_flagged_at`.
-- **Отмена проведения** — движения `reversal` с противоположным знаком. Отмена запрещена, если по партиям документа есть движения позже его проведения (БЛ 6.2).
+- **Отмена проведения** — движения `reversal` с противоположным знаком. Отмена запрещена, если по партиям, которые документ двигал, есть движения, записанные позже его последнего проведения (БЛ 6.2; уточнение 2026-10-12).
 
 ## `document_counters` — нумерация (класс `tenant`)
 

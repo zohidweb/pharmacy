@@ -32,7 +32,6 @@ import {
   StockCountsRepository,
 } from './stock-counts.repository';
 import { StockFreeze } from './stock-freeze';
-import { StockRepository } from './stock.repository';
 import { StoreAccess } from './store-access';
 
 const notFound = () => new ProblemException(404, 'not_found');
@@ -56,7 +55,6 @@ export class StockCountsService {
     private readonly documents: DocumentsRepository,
     private readonly counts: StockCountsRepository,
     private readonly inventory: InventoryRepository,
-    private readonly stock: StockRepository,
     private readonly numbering: Numbering,
     private readonly products: ProductsReader,
     private readonly freeze: StockFreeze,
@@ -178,17 +176,6 @@ export class StockCountsService {
           categoryId = category.id;
           productIds = category.productIds;
         }
-        const batches =
-          productIds !== null && productIds.length === 0
-            ? []
-            : (
-                await this.stock.batchStock(
-                  trx,
-                  tenantId,
-                  [storeId],
-                  productIds,
-                )
-              ).filter((b) => b.qty > 0);
         const settings = await this.inventory.settings(trx, tenantId);
         const number = await this.numbering.next(
           trx,
@@ -218,16 +205,16 @@ export class StockCountsService {
             inventoryStartedAt: new Date(),
           },
         );
-        await this.counts.insertLines(
-          trx,
-          tenantId,
-          id,
-          batches.map((b) => ({
-            productId: b.productId,
-            batchId: b.batchId,
-            bookQtyPieces: b.qty,
-          })),
-        );
+        const lines =
+          productIds !== null && productIds.length === 0
+            ? 0
+            : await this.counts.snapshot(
+                trx,
+                tenantId,
+                id,
+                storeId,
+                productIds,
+              );
         await this.audit.append(trx, {
           action: 'stock_count.started',
           entityType: 'document',
@@ -237,7 +224,7 @@ export class StockCountsService {
             number,
             scope: input.scope,
             categoryId,
-            lines: batches.length,
+            lines,
           },
         });
         return this.toDto(trx, tenantId, await this.read(trx, tenantId, id));
@@ -517,9 +504,8 @@ export class StockCountsService {
     doc: DocumentRow,
     lineId: string,
   ): Promise<StockCountLine> {
-    const line = (await this.toDto(trx, tenantId, doc)).lines.find(
-      (l) => l.lineId === lineId,
-    );
+    // one line only: an entry is a scanner tap on a count of thousands of lines
+    const [line] = await this.lineDtos(trx, tenantId, doc, lineId);
     if (!line) throw badField('lineId', 'unknown');
     return line;
   }
@@ -562,26 +548,10 @@ export class StockCountsService {
     tenantId: string,
     doc: DocumentRow,
   ): Promise<StockCount> {
-    const { employeeId } = requirePrincipal();
-    const canSeeCost = this.canSeeCost();
-    const lines = await this.counts.lines(trx, tenantId, doc.id);
-    const entries = await this.counts.entries(trx, tenantId, doc.id);
-    const products = new Map(
-      (
-        await this.products.findForStock(trx, tenantId, [
-          ...new Set(lines.map((l) => l.productId)),
-        ])
-      ).map((p) => [p.id, p]),
-    );
-    const byLine = new Map<string, CountEntryRow[]>();
-    for (const entry of entries) {
-      byLine.set(entry.lineId, [...(byLine.get(entry.lineId) ?? []), entry]);
-    }
     const stores = await this.inventory.storeNames(trx, tenantId, [
       doc.storeId,
     ]);
     const categories = await this.categoryNames(trx, tenantId, [doc]);
-    const posted = doc.status === 'posted';
     return {
       id: doc.id,
       number: doc.number,
@@ -593,60 +563,7 @@ export class StockCountsService {
       categoryId: doc.inventoryCategoryId,
       categoryName: categories.get(doc.inventoryCategoryId ?? '') ?? null,
       comment: doc.comment ?? '',
-      lines: lines.map((line): StockCountLine => {
-        const product = products.get(line.productId);
-        const ppp = product?.piecesPerPack ?? 1;
-        const own = byLine.get(line.id) ?? [];
-        const counted = posted
-          ? line.countedQtyPieces !== null
-          : own.length > 0;
-        const fact = posted
-          ? line.countedQtyPieces
-          : counted
-            ? own.reduce((sum, e) => sum + e.qtyPieces, 0)
-            : null;
-        // sold since the start: the book stock minus the current one (only the POS moves the
-        // frozen batches); fixed at the posting
-        const sold = line.isFound
-          ? 0
-          : posted
-            ? (line.soldSinceStartPieces ?? 0)
-            : line.bookQtyPieces - line.stockPieces;
-        const surplusPrice =
-          line.surplusPurchasePricePerPackDirams === null
-            ? null
-            : Number(line.surplusPurchasePricePerPackDirams);
-        const pieceCost =
-          line.costPerPieceDirams !== null
-            ? Number(line.costPerPieceDirams)
-            : surplusPrice === null
-              ? 0
-              : Math.ceil(surplusPrice / ppp);
-        return {
-          lineId: line.id,
-          productId: line.productId,
-          productName: product?.name ?? '',
-          barcodes: product?.barcodes ?? [],
-          isFound: line.isFound,
-          batchId: line.batchId ?? line.surplusBatchId,
-          batchNumber: line.lotNumber ?? '',
-          expiresOn: line.expiryDate,
-          piecesPerPack: ppp,
-          bookPieces: line.bookQtyPieces,
-          soldSincePieces: sold,
-          counted,
-          factPieces: fact,
-          entries: own.map((e) => ({
-            id: e.id,
-            pieces: e.qtyPieces,
-            byName: e.enteredByName,
-            mine: e.enteredBy === employeeId,
-            at: e.enteredAt.toISOString(),
-          })),
-          ...(canSeeCost ? { pieceCostMinor: pieceCost } : {}),
-          ...(canSeeCost && line.isFound ? { costMinor: surplusPrice } : {}),
-        };
-      }),
+      lines: await this.lineDtos(trx, tenantId, doc),
       createdBy: (await this.author(
         trx,
         tenantId,
@@ -661,5 +578,82 @@ export class StockCountsService {
         doc.cancelledAt,
       ),
     };
+  }
+
+  /** The lines of the count as the employee sees them; `lineId` — that line only. */
+  private async lineDtos(
+    trx: TenantTransaction,
+    tenantId: string,
+    doc: DocumentRow,
+    lineId?: string,
+  ): Promise<StockCountLine[]> {
+    const { employeeId } = requirePrincipal();
+    const canSeeCost = this.canSeeCost();
+    const lines = await this.counts.lines(trx, tenantId, doc.id, lineId);
+    const entries = await this.counts.entries(trx, tenantId, doc.id, lineId);
+    const products = new Map(
+      (
+        await this.products.findForStock(trx, tenantId, [
+          ...new Set(lines.map((l) => l.productId)),
+        ])
+      ).map((p) => [p.id, p]),
+    );
+    const byLine = new Map<string, CountEntryRow[]>();
+    for (const entry of entries) {
+      byLine.set(entry.lineId, [...(byLine.get(entry.lineId) ?? []), entry]);
+    }
+    const posted = doc.status === 'posted';
+    return lines.map((line): StockCountLine => {
+      const product = products.get(line.productId);
+      const ppp = product?.piecesPerPack ?? 1;
+      const own = byLine.get(line.id) ?? [];
+      const counted = posted ? line.countedQtyPieces !== null : own.length > 0;
+      const fact = posted
+        ? line.countedQtyPieces
+        : counted
+          ? own.reduce((sum, e) => sum + e.qtyPieces, 0)
+          : null;
+      // sold since the start: the book stock minus the current one (only the POS moves the
+      // frozen batches); fixed at the posting
+      const sold = line.isFound
+        ? 0
+        : posted
+          ? (line.soldSinceStartPieces ?? 0)
+          : line.bookQtyPieces - line.stockPieces;
+      const surplusPrice =
+        line.surplusPurchasePricePerPackDirams === null
+          ? null
+          : Number(line.surplusPurchasePricePerPackDirams);
+      const pieceCost =
+        line.costPerPieceDirams !== null
+          ? Number(line.costPerPieceDirams)
+          : surplusPrice === null
+            ? 0
+            : Math.ceil(surplusPrice / ppp);
+      return {
+        lineId: line.id,
+        productId: line.productId,
+        productName: product?.name ?? '',
+        barcodes: product?.barcodes ?? [],
+        isFound: line.isFound,
+        batchId: line.batchId ?? line.surplusBatchId,
+        batchNumber: line.lotNumber ?? '',
+        expiresOn: line.expiryDate,
+        piecesPerPack: ppp,
+        bookPieces: line.bookQtyPieces,
+        soldSincePieces: sold,
+        counted,
+        factPieces: fact,
+        entries: own.map((e) => ({
+          id: e.id,
+          pieces: e.qtyPieces,
+          byName: e.enteredByName,
+          mine: e.enteredBy === employeeId,
+          at: e.enteredAt.toISOString(),
+        })),
+        ...(canSeeCost ? { pieceCostMinor: pieceCost } : {}),
+        ...(canSeeCost && line.isFound ? { costMinor: surplusPrice } : {}),
+      };
+    });
   }
 }

@@ -100,9 +100,20 @@ export class StockCountPosting {
       const fact = facts.get(line.id) ?? 0;
       if (line.isFound) {
         let batchId = line.surplusBatchId;
+        const price = Number(line.surplusPurchasePricePerPackDirams ?? 0n);
+        if (fact > 0 && batchId !== null) {
+          // a repost after an unposting: the batch was reversed to zero and did not move since
+          // (else the unposting is blocked), so it takes the expiry, lot and price edited meanwhile
+          const ppp = products.get(line.productId)?.piecesPerPack ?? 1;
+          await this.counts.refreshSurplusBatch(trx, tenantId, batchId, {
+            lotNumber: line.surplusLotNumber,
+            expiryDate: line.surplusExpiryDate as string,
+            purchasePricePerPackDirams: price,
+            costPerPieceDirams: Math.ceil(price / ppp),
+          });
+        }
         if (fact > 0 && batchId === null) {
           // a new batch of the found product; the cost of a piece is rounded up (ТЗ)
-          const price = Number(line.surplusPurchasePricePerPackDirams ?? 0n);
           const ppp = products.get(line.productId)?.piecesPerPack ?? 1;
           batchId = newId();
           await this.documents.insertBatch(trx, tenantId, {

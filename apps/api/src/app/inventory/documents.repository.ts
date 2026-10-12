@@ -354,6 +354,21 @@ export class DocumentsRepository {
       reversesMovementId: string | null;
     }>,
   ): Promise<void> {
+    // ≤ 1 000 rows per statement: PostgreSQL takes at most 65 535 bind parameters
+    for (let from = 0; from < movements.length; from += 1_000) {
+      await this.insertMovementRows(
+        trx,
+        tenantId,
+        movements.slice(from, from + 1_000),
+      );
+    }
+  }
+
+  private async insertMovementRows(
+    trx: TenantTransaction,
+    tenantId: string,
+    movements: Parameters<DocumentsRepository['insertMovements']>[2],
+  ): Promise<void> {
     if (movements.length === 0) return;
     await trx
       .insertInto('stockMovements')

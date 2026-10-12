@@ -64,35 +64,47 @@ export class StockCountsRepository {
     );
   }
 
-  async insertLines(
+  /**
+   * The snapshot of a start: a line per batch of the store with stock > 0 (of the products, or
+   * every one), in one statement — a store may hold tens of thousands of batches. The number of
+   * lines.
+   */
+  async snapshot(
     trx: TenantTransaction,
     tenantId: string,
     documentId: string,
-    lines: ReadonlyArray<{
-      productId: string;
-      batchId: string;
-      bookQtyPieces: number;
-    }>,
-  ): Promise<void> {
-    if (lines.length === 0) return;
-    await trx
-      .insertInto('inventoryLines')
-      .values(
-        lines.map((line, index) => ({
-          tenantId,
-          id: newId(),
-          documentId,
-          lineNo: index + 1,
-          ...line,
-        })),
+    storeId: string,
+    productIds: readonly string[] | null,
+  ): Promise<number> {
+    const result = await sql<{ n: number }>`
+      with stock as (
+        select b.id as batch_id, b.product_id, b.expiry_date, s.qty
+        from pharmacy.batches b
+        join lateral (
+          select sum(m.qty_delta_pieces)::integer as qty
+          from pharmacy.stock_movements m
+          where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
+        ) s on true
+        where b.tenant_id = ${tenantId} and b.store_id = ${storeId}
+          ${productIds === null ? sql`` : sql`and b.product_id = any(${[...productIds]}::uuid[])`}
+          and s.qty > 0
+      ), inserted as (
+        insert into pharmacy.inventory_lines
+          (tenant_id, id, document_id, line_no, product_id, batch_id, book_qty_pieces)
+        select ${tenantId}, gen_random_uuid(), ${documentId},
+               row_number() over (order by expiry_date, batch_id), product_id, batch_id, qty
+        from stock
+        returning 1
       )
-      .execute();
+      select count(*)::integer as n from inserted`.execute(trx);
+    return result.rows[0].n;
   }
 
   async lines(
     trx: TenantTransaction,
     tenantId: string,
     documentId: string,
+    lineId?: string,
   ): Promise<CountLineRow[]> {
     const result = await sql<CountLineRow>`
       select l.id, l.line_no, l.product_id, l.batch_id, l.is_found, l.book_qty_pieces,
@@ -112,6 +124,7 @@ export class StockCountsRepository {
         where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
       ) s on true
       where l.tenant_id = ${tenantId} and l.document_id = ${documentId}
+        ${lineId ? sql`and l.id = ${lineId}` : sql``}
       order by l.line_no`.execute(trx);
     return result.rows;
   }
@@ -120,6 +133,7 @@ export class StockCountsRepository {
     trx: TenantTransaction,
     tenantId: string,
     documentId: string,
+    lineId?: string,
   ): Promise<CountEntryRow[]> {
     const result = await sql<CountEntryRow>`
       select e.id, e.document_id, e.line_id, e.qty_pieces, e.entered_by,
@@ -127,6 +141,7 @@ export class StockCountsRepository {
       from pharmacy.inventory_count_entries e
       join pharmacy.employees emp on emp.tenant_id = e.tenant_id and emp.id = e.entered_by
       where e.tenant_id = ${tenantId} and e.document_id = ${documentId}
+        ${lineId ? sql`and e.line_id = ${lineId}` : sql``}
       order by e.entered_at, e.id`.execute(trx);
     return result.rows;
   }
@@ -163,6 +178,32 @@ export class StockCountsRepository {
       .set(result)
       .where('tenantId', '=', tenantId)
       .where('id', '=', lineId)
+      .execute();
+  }
+
+  /** The batch of a found product takes the values of its line again (a repost). */
+  async refreshSurplusBatch(
+    trx: TenantTransaction,
+    tenantId: string,
+    batchId: string,
+    values: {
+      lotNumber: string | null;
+      expiryDate: string;
+      purchasePricePerPackDirams: number;
+      costPerPieceDirams: number;
+    },
+  ): Promise<void> {
+    await trx
+      .updateTable('batches')
+      .set({
+        lotNumber: values.lotNumber,
+        expiryDate: values.expiryDate,
+        purchasePricePerPackDirams: BigInt(values.purchasePricePerPackDirams),
+        costPerPieceDirams: BigInt(values.costPerPieceDirams),
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', batchId)
+      .where('origin', '=', 'inventory_surplus')
       .execute();
   }
 

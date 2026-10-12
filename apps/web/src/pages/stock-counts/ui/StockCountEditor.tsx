@@ -153,12 +153,25 @@ export function StockCountEditor({
       query.state.data?.status === 'in_progress' ? 10_000 : false,
   });
   const doc = current.data;
-  const setDoc = (next: StockCount) => queryClient.setQueryData(queryKey, next);
-  const setLine = (line: StockCountLine) =>
-    setDoc({
-      ...doc,
-      lines: doc.lines.map((l) => (l.lineId === line.lineId ? line : l)),
-    });
+  // a poll in flight must not overwrite a fresh answer: an entry that disappears for a few
+  // seconds would be entered again and counted twice
+  const setDoc = (next: StockCount) => {
+    void queryClient.cancelQueries({ queryKey });
+    queryClient.setQueryData(queryKey, next);
+  };
+  const setLine = (line: StockCountLine) => {
+    void queryClient.cancelQueries({ queryKey });
+    queryClient.setQueryData<StockCount>(queryKey, (current) =>
+      current
+        ? {
+            ...current,
+            lines: current.lines.map((l) =>
+              l.lineId === line.lineId ? line : l,
+            ),
+          }
+        : current,
+    );
+  };
 
   const [comment, setComment] = useState(document.comment);
   const [onlyDiff, setOnlyDiff] = useState(false);

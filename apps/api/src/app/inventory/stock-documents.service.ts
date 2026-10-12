@@ -24,6 +24,7 @@ import {
   type PricingProduct,
   ProductsReader,
 } from '../catalog/products-reader';
+import { OrderReceiving } from '../purchasing/order-receiving';
 import { SuppliersReader } from '../purchasing/suppliers-reader';
 import {
   type DocumentRow,
@@ -75,6 +76,7 @@ export class StockDocumentsService {
     private readonly posting: DocumentPosting,
     private readonly products: ProductsReader,
     private readonly suppliers: SuppliersReader,
+    private readonly orders: OrderReceiving,
     private readonly audit: AuditService,
   ) {}
 
@@ -102,6 +104,11 @@ export class StockDocumentsService {
         tenantId,
         rows.map((r) => r.storeId),
       );
+      const orders = await this.orders.numbers(
+        trx,
+        tenantId,
+        rows.flatMap((r) => (r.purchaseOrderId ? [r.purchaseOrderId] : [])),
+      );
       const settings = await this.inventory.settings(trx, tenantId);
       const kpi = await this.documents.kpi(
         trx,
@@ -116,7 +123,7 @@ export class StockDocumentsService {
           number: r.number,
           date: r.documentDate,
           supplierName: suppliers.get(r.supplierId ?? '') ?? '—',
-          orderNumber: null,
+          orderNumber: orders.get(r.purchaseOrderId ?? '') ?? null,
           storeName: stores.get(r.storeId) ?? '—',
           positions: r.positions,
           ...(canSeeCost ? { totalMinor: Number(r.totalDirams ?? 0n) } : {}),
@@ -434,9 +441,13 @@ export class StockDocumentsService {
     let supplierId: string | null = null;
     let invoiceNumber: string | null = null;
     let dueDate: string | null = null;
+    let orderId: string | null = null;
+    let orderLines = new Map<
+      string,
+      { lineId: string; pricePerPackDirams: number }
+    >();
     if (type === 'goods_receipt') {
       const receipt = input as GoodsReceiptInput;
-      if (receipt.orderId !== null) throw badField('orderId', 'not_supported');
       const supplier = await this.suppliers.findActive(
         trx,
         tenantId,
@@ -444,6 +455,17 @@ export class StockDocumentsService {
       );
       if (supplier === null) throw badField('supplierId', 'unknown_supplier');
       supplierId = supplier.id;
+      if (receipt.orderId !== null) {
+        // the lines are linked to the order lines by product, with the price of the order
+        orderId = receipt.orderId.toLowerCase();
+        orderLines = await this.orders.linesFor(
+          trx,
+          tenantId,
+          orderId,
+          supplier.id,
+          storeId,
+        );
+      }
       invoiceNumber = receipt.invoiceNumber.trim() || null;
       dueDate =
         receipt.paymentDueOn ??
@@ -475,6 +497,9 @@ export class StockDocumentsService {
         retailPriceDraftDirams: line.retailPriceMinor,
         batchId: null,
         isStarting: type === 'opening_balance' && line.starting === true,
+        purchaseOrderLineId: orderLines.get(product.id)?.lineId ?? null,
+        orderPricePerPackDirams:
+          orderLines.get(product.id)?.pricePerPackDirams ?? null,
       };
     });
     // a line unchanged since an unposting keeps its batch (spec 4.1)
@@ -509,6 +534,7 @@ export class StockDocumentsService {
       supplierId,
       supplierInvoiceNumber: invoiceNumber,
       paymentDueDate: dueDate,
+      purchaseOrderId: orderId,
     };
     if (current === null) {
       const kind =
@@ -613,6 +639,11 @@ export class StockDocumentsService {
       tenantId,
       doc.supplierId ? [doc.supplierId] : [],
     );
+    const orders = await this.orders.numbers(
+      trx,
+      tenantId,
+      doc.purchaseOrderId ? [doc.purchaseOrderId] : [],
+    );
     return {
       id: doc.id,
       number: doc.number,
@@ -622,8 +653,8 @@ export class StockDocumentsService {
       supplierName: suppliers.get(doc.supplierId ?? '') ?? '—',
       storeId: doc.storeId,
       storeName: c.storeName,
-      orderId: null,
-      orderNumber: null,
+      orderId: doc.purchaseOrderId,
+      orderNumber: orders.get(doc.purchaseOrderId ?? '') ?? null,
       invoiceNumber: doc.supplierInvoiceNumber ?? '',
       paymentDueOn: doc.paymentDueDate,
       lines: c.lines.map((line) => ({
@@ -632,7 +663,10 @@ export class StockDocumentsService {
         batchNumber: line.lotNumber ?? '',
         expiresOn: line.expiryDate,
         quantity: packsOf(line, c.ppp(line.productId)),
-        orderPriceMinor: null,
+        orderPriceMinor:
+          line.orderPricePerPackDirams === null
+            ? null
+            : Number(line.orderPricePerPackDirams),
         costMinor: Number(line.purchasePricePerPackDirams),
         retailPriceMinor: Number(line.retailPriceDraftDirams ?? 0n),
       })),

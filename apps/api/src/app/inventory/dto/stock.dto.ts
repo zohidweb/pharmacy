@@ -79,3 +79,13 @@ export class StockProductsQueryDto {
   @Max(500)
   limit?: number;
 }
+
+/** GET /api/v1/purchase-orders/deficit. */
+export class DeficitQueryDto {
+  @IsUUID()
+  storeId!: string;
+
+  @IsOptional()
+  @IsUUID()
+  supplierId?: string;
+}

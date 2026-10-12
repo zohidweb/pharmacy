@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -10,18 +12,27 @@ import {
 } from '@nestjs/common';
 import type {
   SupplierCard,
+  SupplierLedgerEntry,
   SupplierListItem,
   SupplierListResponse,
   SupplierOption,
 } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
-import { SupplierInputDto, SupplierListQueryDto } from './dto/purchasing.dto';
+import {
+  SupplierInputDto,
+  SupplierListQueryDto,
+  SupplierPaymentDto,
+} from './dto/purchasing.dto';
+import { PaymentsService } from './payments.service';
 import { SuppliersService } from './suppliers.service';
 
-// Suppliers of the network (spec 2026-10-09-inventory-purchasing, section 5.1).
+// Suppliers of the network and payments to them (spec 2026-10-09-inventory-purchasing, 5.1–5.2).
 @Controller({ path: 'suppliers', version: '1' })
 export class SuppliersController {
-  constructor(private readonly suppliers: SuppliersService) {}
+  constructor(
+    private readonly suppliers: SuppliersService,
+    private readonly payments: PaymentsService,
+  ) {}
 
   /** Active suppliers for the documents of the stock. */
   @RequirePermission('inventory:view')
@@ -58,5 +69,20 @@ export class SuppliersController {
     @Body() body: SupplierInputDto,
   ): Promise<SupplierListItem> {
     return this.suppliers.update(id, body);
+  }
+
+  /**
+   * The ledger entry of the payment; needs `finance:view-cost` as well. A repeat of the same `id`
+   * with the same body returns the same entry. 400 (`legalEntityId` required when the network has
+   * several active legal entities, `date` in the future), 404, 409 `idempotency_conflict`.
+   */
+  @RequirePermission('purchasing:post')
+  @Post(':id/payments')
+  @HttpCode(HttpStatus.OK)
+  pay(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: SupplierPaymentDto,
+  ): Promise<SupplierLedgerEntry> {
+    return this.payments.pay(id, body);
   }
 }

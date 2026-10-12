@@ -18,7 +18,9 @@ import {
   uniqueConstraint,
 } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
+import { PurchaseOrdersService } from './purchase-orders.service';
 import {
+  type LedgerRow,
   PurchasingRepository,
   type ReceiptRow,
   type SupplierRow,
@@ -40,23 +42,56 @@ function valuesOf(input: SupplierInput): SupplierValues {
 }
 
 /**
- * Debt fields of a supplier: the posted receipts minus the credits, covered FIFO by due date
- * (`supplierDebt`). In this iteration there are no payments, so the credits are 0.
+ * The ledger in the shape of the card, oldest first, with the running debt; each entry keeps its
+ * source for the answer of a payment.
+ */
+export function ledgerEntries(rows: readonly LedgerRow[]): Array<{
+  sourceType: string;
+  sourceId: string;
+  entry: SupplierLedgerEntry;
+}> {
+  let balance = 0;
+  return rows.map((row) => {
+    const amount = Number(row.amountDirams);
+    balance += amount;
+    const payment = row.kind === 'payment';
+    return {
+      sourceType: row.sourceType,
+      sourceId: row.sourceId,
+      entry: {
+        date: row.businessDate,
+        kind: payment ? 'payment' : 'receipt',
+        document: row.documentNumber ?? '',
+        comment: row.paymentComment ?? '',
+        ...(payment
+          ? { method: row.paymentMethod === 'cash' ? 'cash' : 'bank' }
+          : {}),
+        amountMinor: amount,
+        balanceMinor: balance,
+      },
+    };
+  });
+}
+
+/**
+ * Debt fields of a supplier: what the payments allocated to the posted receipts leave unpaid, by
+ * due date (`supplierDebt`). A prepayment is not a negative debt.
  */
 function debtOf(
   supplier: SupplierRow,
   receipts: readonly ReceiptRow[],
-  creditsMinor: number,
   today: string,
   canSeeCost: boolean,
 ): SupplierListItem {
   const debt = supplierDebt(
-    receipts.map((r) => ({
-      document: r.number,
-      dueOn: r.dueDate ?? r.documentDate,
-      amountMinor: Number(r.totalDirams),
-    })),
-    creditsMinor,
+    receipts
+      .map((r) => ({
+        document: r.number,
+        dueOn: r.dueDate ?? r.documentDate,
+        amountMinor: Number(r.totalDirams) - Number(r.allocatedDirams),
+      }))
+      .filter((r) => r.amountMinor > 0),
+    0,
     today,
   );
   return {
@@ -88,6 +123,7 @@ export class SuppliersService {
     private readonly db: TenantDatabase,
     private readonly repository: PurchasingRepository,
     private readonly audit: AuditService,
+    private readonly orders: PurchaseOrdersService,
   ) {}
 
   async options(): Promise<SupplierOption[]> {
@@ -120,7 +156,6 @@ export class SuppliersService {
         debtOf(
           s,
           receipts.filter((r) => r.supplierId === s.id),
-          0,
           today,
           canSeeCost,
         ),
@@ -170,8 +205,8 @@ export class SuppliersService {
       );
       const scope = scopeIds(storeScope);
       return {
-        ...debtOf(supplier, receipts, 0, today, true),
-        orders: [],
+        ...debtOf(supplier, receipts, today, true),
+        orders: await this.orders.ofSupplier(trx, tenantId, supplierId),
         receipts: receipts
           .filter((r) => scope === null || scope.includes(r.storeId))
           .map((r) => ({
@@ -255,7 +290,6 @@ export class SuppliersService {
     return debtOf(
       supplier,
       receipts,
-      0,
       today,
       hasPermissions(permissions, 'finance:view-cost'),
     );
@@ -274,26 +308,15 @@ export class SuppliersService {
     }
   }
 
-  /** The ledger in the shape of the card: newest first, with the running debt. */
+  /** The ledger of the card: newest first. */
   private async ledger(
     trx: TenantTransaction,
     tenantId: string,
     supplierId: string,
   ): Promise<SupplierLedgerEntry[]> {
     const rows = await this.repository.ledger(trx, tenantId, supplierId);
-    let balance = 0;
-    const entries = rows.map((row): SupplierLedgerEntry => {
-      const amount = Number(row.amountDirams);
-      balance += amount;
-      return {
-        date: row.businessDate,
-        kind: row.kind === 'payment' ? 'payment' : 'receipt',
-        document: row.documentNumber ?? '',
-        comment: '',
-        amountMinor: amount,
-        balanceMinor: balance,
-      };
-    });
-    return entries.reverse();
+    return ledgerEntries(rows)
+      .map((e) => e.entry)
+      .reverse();
   }
 }

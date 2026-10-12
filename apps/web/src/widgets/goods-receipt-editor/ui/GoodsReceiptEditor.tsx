@@ -127,7 +127,7 @@ export function GoodsReceiptEditor({
     queryKey: ['suppliers', 'options'],
     queryFn: ({ signal }) => apiRequest('suppliers.options', { signal }),
   });
-  // an order of the mocks is unknown to a receipt of apps/api (partial mode until purchasing)
+  // an order of the mocks is unknown to a receipt of apps/api (partial mode)
   const ordersAvailable =
     isApiRouteAvailable('purchaseOrders.open') &&
     sameTransport('purchaseOrders.open', 'goodsReceipts.create');
@@ -220,6 +220,9 @@ export function GoodsReceiptEditor({
     if (code === 'too_old') return t('dateTooOld');
     if (code === 'above_max_price') return t('aboveMax');
     if (code === 'product_archived') return t('productArchived');
+    if (code.startsWith('order_') || code === 'unknown_order') {
+      return t('orderUnavailable');
+    }
     return tDocs('checkValue');
   };
   const error = useApiErrorMessage(save.error ?? post.error);
@@ -440,6 +443,7 @@ export function GoodsReceiptEditor({
               <Select
                 label={t('order')}
                 disabled={!editable || !draft.supplierId}
+                error={serverError('orderId')}
                 value={draft.orderId ?? ''}
                 onChange={(event) =>
                   setDraft((current) => ({

@@ -109,6 +109,18 @@ export class ProductsReader {
     }));
   }
 
+  /** Active products with a default minimum stock (the deficit of a purchase order). */
+  async withMinStock(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<StockProduct[]> {
+    return this.findForStock(
+      trx,
+      tenantId,
+      await this.repository.minStockProductIds(trx, tenantId),
+    );
+  }
+
   /** Ids of the products the catalog search finds (any status); null — no search. */
   async searchIds(
     trx: TenantTransaction,

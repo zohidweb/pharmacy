@@ -3,6 +3,7 @@ import { AuditModule } from '../audit/audit.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { PurchasingModule } from '../purchasing/purchasing.module';
+import { DeficitController } from './deficit.controller';
 import { DocumentsRepository } from './documents.repository';
 import { GoodsReceiptsController } from './goods-receipts.controller';
 import { InventoryRepository } from './inventory.repository';
@@ -25,6 +26,7 @@ import { UnpostingCheckController } from './unposting-check.controller';
     OpeningBalancesController,
     UnpostingCheckController,
     StockController,
+    DeficitController,
   ],
   providers: [
     InventoryRepository,

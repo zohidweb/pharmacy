@@ -130,6 +130,7 @@ export interface Documents {
   paymentDueDate: string | null;
   postedAt: Timestamp | null;
   postedBy: string | null;
+  purchaseOrderId: string | null;
   status: Generated<string>;
   storeId: string;
   supplierId: string | null;
@@ -193,7 +194,9 @@ export interface GoodsReceiptLines {
   id: string;
   lineNo: number;
   lotNumber: string | null;
+  orderPricePerPackDirams: bigint | null;
   productId: string;
+  purchaseOrderLineId: string | null;
   purchasePricePerPackDirams: bigint;
   qtyPieces: number;
   retailPriceDraftDirams: bigint;
@@ -303,6 +306,34 @@ export interface Products {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface PurchaseOrderLines {
+  createdAt: Generated<Timestamp>;
+  id: string;
+  lineNo: number;
+  orderId: string;
+  pricePerPackDirams: bigint;
+  productId: string;
+  qtyOrderedPieces: number;
+  tenantId: string;
+}
+
+export interface PurchaseOrders {
+  comment: string | null;
+  confirmedAt: Timestamp | null;
+  confirmedBy: string | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  expectedDate: string | null;
+  id: string;
+  number: string;
+  orderDate: string;
+  status: Generated<string>;
+  storeId: string;
+  supplierId: string;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface RolePermissions {
   createdAt: Generated<Timestamp>;
   permission: string;
@@ -403,6 +434,27 @@ export interface SupplierLedgerEntries {
   tenantId: string;
 }
 
+export interface SupplierPaymentAllocations {
+  amountDirams: bigint;
+  createdAt: Generated<Timestamp>;
+  goodsReceiptDocumentId: string;
+  paymentId: string;
+  tenantId: string;
+}
+
+export interface SupplierPayments {
+  amountDirams: bigint;
+  comment: string | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  id: string;
+  legalEntityId: string;
+  method: string;
+  paidOn: string;
+  supplierId: string;
+  tenantId: string;
+}
+
 export interface Suppliers {
   address: string | null;
   archivedAt: Timestamp | null;
@@ -496,6 +548,8 @@ export interface DB {
   platformAuditLog: PlatformAuditLog;
   productBarcodes: ProductBarcodes;
   products: Products;
+  purchaseOrderLines: PurchaseOrderLines;
+  purchaseOrders: PurchaseOrders;
   rolePermissions: RolePermissions;
   roles: Roles;
   sessions: Sessions;
@@ -503,6 +557,8 @@ export interface DB {
   storeProducts: StoreProducts;
   stores: Stores;
   supplierLedgerEntries: SupplierLedgerEntries;
+  supplierPaymentAllocations: SupplierPaymentAllocations;
+  supplierPayments: SupplierPayments;
   suppliers: Suppliers;
   tenants: Tenants;
   tenantSettings: TenantSettings;

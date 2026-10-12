@@ -45,4 +45,42 @@ export class StockRepository {
       order by b.expiry_date, b.id`.execute(trx);
     return result.rows;
   }
+
+  /** Pieces sold at the store by product since a business date (exclusive). */
+  async soldPieces(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    productIds: readonly string[],
+    after: string,
+  ): Promise<Map<string, number>> {
+    if (productIds.length === 0) return new Map();
+    const result = await sql<{ productId: string; pieces: number }>`
+      select b.product_id, (-sum(m.qty_delta_pieces))::integer as pieces
+      from pharmacy.stock_movements m
+      join pharmacy.batches b on b.tenant_id = m.tenant_id and b.id = m.batch_id
+      where m.tenant_id = ${tenantId} and m.store_id = ${storeId} and m.kind = 'sale'
+        and m.business_date > ${after}::date
+        and b.product_id in (${sql.join([...productIds])})
+      group by b.product_id`.execute(trx);
+    return new Map(result.rows.map((r) => [r.productId, r.pieces]));
+  }
+
+  /** The purchase price of a pack in the last goods receipt: of the supplier first, else any. */
+  async lastPurchasePrices(
+    trx: TenantTransaction,
+    tenantId: string,
+    productIds: readonly string[],
+    supplierId: string | null,
+  ): Promise<Map<string, number>> {
+    if (productIds.length === 0) return new Map();
+    const result = await sql<{ productId: string; price: bigint }>`
+      select distinct on (b.product_id) b.product_id, b.purchase_price_per_pack_dirams as price
+      from pharmacy.batches b
+      where b.tenant_id = ${tenantId} and b.origin = 'goods_receipt'
+        and b.product_id in (${sql.join([...productIds])})
+      order by b.product_id, (b.supplier_id is not distinct from ${supplierId}::uuid) desc,
+               b.created_at desc, b.id desc`.execute(trx);
+    return new Map(result.rows.map((r) => [r.productId, Number(r.price)]));
+  }
 }

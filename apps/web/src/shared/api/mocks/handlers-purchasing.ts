@@ -303,7 +303,7 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
     });
     const order = findDoc(db().orders, params.id, correlationId);
     if (order.status !== 'draft') {
-      throw new ApiError(409, 'order_confirmed', correlationId);
+      throw new ApiError(409, 'order_not_editable', correlationId);
     }
     inScope(session, body.storeId, correlationId);
     Object.assign(order, buildOrder(body, order, correlationId));
@@ -316,7 +316,7 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
     const order = findDoc(db().orders, params.id, correlationId);
     inScope(session, order.storeId, correlationId);
     if (order.status !== 'draft') {
-      throw new ApiError(409, 'order_confirmed', correlationId);
+      throw new ApiError(409, 'order_not_editable', correlationId);
     }
     if (order.lines.length === 0) {
       throw validation(correlationId, 'lines', 'required');
@@ -445,9 +445,7 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
     if (!Number.isInteger(body.amountMinor) || body.amountMinor <= 0) {
       throw validation(correlationId, 'amountMinor', 'positive');
     }
-    if (body.amountMinor > debtOf(supplier.id).debtMinor) {
-      throw validation(correlationId, 'amountMinor', 'above_debt');
-    }
+    // a payment above the debt is a prepayment (data model 05, decision 2026-10-01)
     db().payments.push({
       id: body.id,
       supplierId: supplier.id,

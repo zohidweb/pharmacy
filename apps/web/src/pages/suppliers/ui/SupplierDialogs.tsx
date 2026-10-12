@@ -268,7 +268,8 @@ export function SupplierCardDialog({
                 {t('edit')}
               </Button>
             )}
-            {canPay && (card.data.debtMinor ?? 0) > 0 && (
+            {/* without a debt a payment is a prepayment */}
+            {canPay && (
               <Button
                 iconStart="wallet"
                 onClick={() => card.data && onPay(card.data)}
@@ -377,7 +378,8 @@ export function SupplierCardDialog({
 
 /**
  * Payment to a supplier — a financial operation: one idempotency key per dialog, so a retry after
- * a lost answer does not pay twice (CLAUDE.md «Integrations»).
+ * a lost answer does not pay twice (CLAUDE.md «Integrations»). A network with several legal
+ * entities names the payer; an amount above the debt is a prepayment that the next receipt takes.
  */
 export function PaymentDialog({
   supplier,
@@ -398,13 +400,18 @@ export function PaymentDialog({
   const [date, setDate] = useState(toAppDate());
   const [method, setMethod] = useState<SupplierPaymentMethod>('bank');
   const [comment, setComment] = useState('');
+  const [legalEntityId, setLegalEntityId] = useState('');
+  // without the right to see the legal entities the server takes the only one of the network
+  const entities = useQuery({
+    queryKey: ['legal-entities'],
+    queryFn: ({ signal }) => apiRequest('legalEntities.list', { signal }),
+    retry: false,
+  });
+  const payers = entities.data?.items ?? [];
+  const choosePayer = payers.length > 1;
   const amount = parseMoneyToMinor(amountText);
   const amountError =
-    amount === null || amount <= 0
-      ? t('amountInvalid')
-      : amount > debt
-        ? t('amountAboveDebt')
-        : null;
+    amount === null || amount <= 0 ? t('amountInvalid') : null;
   const pay = useMutation({
     mutationFn: () =>
       apiRequest('suppliers.pay', {
@@ -415,6 +422,7 @@ export function PaymentDialog({
           date,
           method,
           comment,
+          ...(choosePayer ? { legalEntityId } : {}),
         },
         idempotencyKey: key,
       }),
@@ -442,7 +450,7 @@ export function PaymentDialog({
           <Button
             iconStart="wallet"
             loading={pay.isPending}
-            disabled={amountError !== null}
+            disabled={amountError !== null || (choosePayer && !legalEntityId)}
             onClick={() => pay.mutate()}
           >
             {t('confirm')}
@@ -460,11 +468,30 @@ export function PaymentDialog({
           <span className="text-fg-muted">{t('debt')}</span>
           <b className="tabular-nums">{formatMoney(debt)}</b>
         </p>
+        {choosePayer && (
+          <Select
+            label={t('payer')}
+            value={legalEntityId}
+            placeholder={t('payerPlaceholder')}
+            onChange={(event) => setLegalEntityId(event.target.value)}
+            options={payers.map((entity) => ({
+              value: entity.id,
+              label: entity.name,
+            }))}
+          />
+        )}
         <TextField
           label={t('amount')}
           inputMode="decimal"
           value={amountText}
           error={amountError ?? undefined}
+          hint={
+            amount !== null && amount > debt
+              ? t('prepaymentHint', {
+                  amount: formatMoney(amount - debt),
+                })
+              : undefined
+          }
           onChange={(event) => setAmountText(event.target.value)}
         />
         <div className="grid grid-cols-2 gap-4">

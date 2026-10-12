@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { hasPermissions } from '@pharmacy/shared-domain';
 import type {
   DocumentAuthor,
+  DocumentStatus,
   UnpostCheck,
   WriteOff,
   WriteOffInput,
@@ -20,12 +21,10 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { ProductsReader } from '../catalog/products-reader';
 import { type DocumentRow, DocumentsRepository } from './documents.repository';
-import {
-  InventoryRepository,
-  type StoreForWrite,
-} from './inventory.repository';
+import { InventoryRepository } from './inventory.repository';
 import { Numbering } from './numbering';
 import { StockRepository } from './stock.repository';
+import { StoreAccess } from './store-access';
 import { totalOf, WriteOffPosting } from './write-off-posting';
 import {
   type WriteOffLineValues,
@@ -52,14 +51,15 @@ export class WriteOffsService {
     private readonly posting: WriteOffPosting,
     private readonly products: ProductsReader,
     private readonly audit: AuditService,
+    private readonly stores: StoreAccess,
   ) {}
 
   async list(query: WriteOffListQuery): Promise<WriteOffListResponse> {
     const { tenantId } = requirePrincipal();
     const canSeeCost = this.canSeeCost();
-    const scope = this.scope();
+    const scope = this.stores.scope();
     const storeId = query.storeId?.toLowerCase();
-    if (storeId) this.inScope(storeId);
+    if (storeId) this.stores.inScope(storeId);
     const storeIds = storeId ? [storeId] : scope;
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
@@ -111,7 +111,8 @@ export class WriteOffsService {
           positions: r.positions,
           ...(canSeeCost ? { totalMinor: Number(r.totalDirams ?? 0n) } : {}),
           postedByName: r.postedBy ? (authors.get(r.postedBy) ?? '—') : null,
-          status: r.status,
+          // only a stock count is ever cancelled (documents_cancelled_type_check)
+          status: r.status as DocumentStatus,
         })),
         total,
         limit,
@@ -161,7 +162,7 @@ export class WriteOffsService {
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.lockedDraft(trx, tenantId, id);
-      const store = await this.writableStore(trx, tenantId, doc.storeId);
+      const store = await this.stores.writableStore(trx, tenantId, doc.storeId);
       await this.posting.post(trx, { tenantId, employeeId }, doc, store);
       return this.toDto(trx, tenantId, await this.read(trx, tenantId, doc.id));
     });
@@ -171,7 +172,7 @@ export class WriteOffsService {
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.visible(trx, tenantId, id, true);
-      const store = await this.writableStore(trx, tenantId, doc.storeId);
+      const store = await this.stores.writableStore(trx, tenantId, doc.storeId);
       await this.posting.unpost(trx, { tenantId, employeeId }, doc, store);
       return this.toDto(trx, tenantId, await this.read(trx, tenantId, doc.id));
     });
@@ -199,18 +200,6 @@ export class WriteOffsService {
     return hasPermissions(requirePrincipal().permissions, 'finance:view-cost');
   }
 
-  private scope(): readonly string[] | null {
-    const { storeScope } = requirePrincipal();
-    return storeScope === 'all' ? null : storeScope;
-  }
-
-  private inScope(storeId: string): void {
-    const scope = this.scope();
-    if (scope !== null && !scope.includes(storeId)) {
-      throw new ProblemException(403, 'store_not_in_scope');
-    }
-  }
-
   private async visible(
     trx: TenantTransaction,
     tenantId: string,
@@ -225,7 +214,7 @@ export class WriteOffsService {
       lock,
     );
     if (doc === null) throw notFound();
-    this.inScope(doc.storeId);
+    this.stores.inScope(doc.storeId);
     return doc;
   }
 
@@ -256,20 +245,6 @@ export class WriteOffsService {
     return doc;
   }
 
-  /** The store of a write: in the scope, active and a cloud store (ADR-0014). */
-  private async writableStore(
-    trx: TenantTransaction,
-    tenantId: string,
-    storeId: string,
-  ): Promise<StoreForWrite> {
-    this.inScope(storeId);
-    const store = await this.inventory.store(trx, tenantId, storeId);
-    if (store === null || store.status !== 'active') throw notFound();
-    if (store.mode !== 'online')
-      throw new ProblemException(409, 'offline_store_read_only');
-    return store;
-  }
-
   private async save(
     trx: TenantTransaction,
     tenantId: string,
@@ -282,7 +257,7 @@ export class WriteOffsService {
     if (current !== null && current.storeId !== storeId) {
       throw badLine('storeId', 'immutable');
     }
-    const store = await this.writableStore(trx, tenantId, storeId);
+    const store = await this.stores.writableStore(trx, tenantId, storeId);
     const batchIds = input.lines.map((l) => l.batchId.toLowerCase());
     const batches = await this.lines.batches(trx, tenantId, batchIds);
     // any status: the leftovers of an archived product are written off as well (B1)
@@ -403,7 +378,7 @@ export class WriteOffsService {
     return {
       id: doc.id,
       number: doc.number,
-      status: doc.status,
+      status: doc.status as DocumentStatus,
       date: doc.documentDate,
       storeId: doc.storeId,
       storeName: stores.get(doc.storeId) ?? '—',

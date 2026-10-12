@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { hasPermissions } from '@pharmacy/shared-domain';
 import type {
   DocumentAuthor,
+  DocumentStatus,
   DocumentListQuery,
   GoodsReceipt,
   GoodsReceiptInput,
@@ -34,11 +35,9 @@ import {
   type LineValues,
   type StockDocumentType,
 } from './documents.repository';
-import {
-  InventoryRepository,
-  type StoreForWrite,
-} from './inventory.repository';
+import { InventoryRepository } from './inventory.repository';
 import { Numbering } from './numbering';
+import { StoreAccess } from './store-access';
 import { DocumentPosting, linesTotal, packsOf } from './posting';
 
 const DAY_MS = 86_400_000;
@@ -78,6 +77,7 @@ export class StockDocumentsService {
     private readonly suppliers: SuppliersReader,
     private readonly orders: OrderReceiving,
     private readonly audit: AuditService,
+    private readonly stores: StoreAccess,
   ) {}
 
   /* ---------------- reads ---------------- */
@@ -127,7 +127,8 @@ export class StockDocumentsService {
           storeName: stores.get(r.storeId) ?? '—',
           positions: r.positions,
           ...(canSeeCost ? { totalMinor: Number(r.totalDirams ?? 0n) } : {}),
-          status: r.status,
+          // only a stock count is ever cancelled (documents_cancelled_type_check)
+          status: r.status as DocumentStatus,
         })),
         total,
         limit,
@@ -168,7 +169,8 @@ export class StockDocumentsService {
           storeName: stores.get(r.storeId) ?? '—',
           positions: r.positions,
           ...(canSeeCost ? { totalMinor: Number(r.totalDirams ?? 0n) } : {}),
-          status: r.status,
+          // only a stock count is ever cancelled (documents_cancelled_type_check)
+          status: r.status as DocumentStatus,
         })),
         total,
         limit,
@@ -291,7 +293,7 @@ export class StockDocumentsService {
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.lockedDraft(trx, tenantId, type, id);
-      const store = await this.writableStore(trx, tenantId, doc.storeId);
+      const store = await this.stores.writableStore(trx, tenantId, doc.storeId);
       await this.posting.post(trx, { tenantId, employeeId }, doc, store);
       return this.toDto(
         trx,
@@ -309,7 +311,7 @@ export class StockDocumentsService {
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.visible(trx, tenantId, type, id, true);
-      const store = await this.writableStore(trx, tenantId, doc.storeId);
+      const store = await this.stores.writableStore(trx, tenantId, doc.storeId);
       await this.posting.unpost(trx, { tenantId, employeeId }, doc, store);
       return this.toDto(
         trx,
@@ -329,26 +331,14 @@ export class StockDocumentsService {
     }
   }
 
-  private scope(): readonly string[] | null {
-    const { storeScope } = requirePrincipal();
-    return storeScope === 'all' ? null : storeScope;
-  }
-
-  private inScope(storeId: string): void {
-    const scope = this.scope();
-    if (scope !== null && !scope.includes(storeId)) {
-      throw new ProblemException(403, 'store_not_in_scope');
-    }
-  }
-
   private async list(
     trx: TenantTransaction,
     tenantId: string,
     type: StockDocumentType,
     query: DocumentListQuery,
   ) {
-    const scope = this.scope();
-    if (query.storeId) this.inScope(query.storeId.toLowerCase());
+    const scope = this.stores.scope();
+    if (query.storeId) this.stores.inScope(query.storeId.toLowerCase());
     const storeIds = query.storeId ? [query.storeId.toLowerCase()] : scope;
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
@@ -381,7 +371,7 @@ export class StockDocumentsService {
       lock,
     );
     if (doc === null) throw notFound();
-    this.inScope(doc.storeId);
+    this.stores.inScope(doc.storeId);
     return doc;
   }
 
@@ -409,20 +399,6 @@ export class StockDocumentsService {
     return doc;
   }
 
-  /** The store of a write: in the scope, active and a cloud store (ADR-0014). */
-  private async writableStore(
-    trx: TenantTransaction,
-    tenantId: string,
-    storeId: string,
-  ): Promise<StoreForWrite> {
-    this.inScope(storeId);
-    const store = await this.inventory.store(trx, tenantId, storeId);
-    if (store === null || store.status !== 'active') throw notFound();
-    if (store.mode !== 'online')
-      throw new ProblemException(409, 'offline_store_read_only');
-    return store;
-  }
-
   private async save(
     trx: TenantTransaction,
     tenantId: string,
@@ -436,7 +412,7 @@ export class StockDocumentsService {
     if (current !== null && current.storeId !== storeId) {
       throw badField('storeId', 'immutable');
     }
-    const store = await this.writableStore(trx, tenantId, storeId);
+    const store = await this.stores.writableStore(trx, tenantId, storeId);
 
     let supplierId: string | null = null;
     let invoiceNumber: string | null = null;
@@ -647,7 +623,7 @@ export class StockDocumentsService {
     return {
       id: doc.id,
       number: doc.number,
-      status: doc.status,
+      status: doc.status as DocumentStatus,
       date: doc.documentDate,
       supplierId: doc.supplierId ?? '',
       supplierName: suppliers.get(doc.supplierId ?? '') ?? '—',
@@ -685,7 +661,7 @@ export class StockDocumentsService {
     return {
       id: doc.id,
       number: doc.number,
-      status: doc.status,
+      status: doc.status as DocumentStatus,
       date: doc.documentDate,
       storeId: doc.storeId,
       storeName: c.storeName,

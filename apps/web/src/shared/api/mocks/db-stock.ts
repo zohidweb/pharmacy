@@ -578,7 +578,7 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         receiptId: 'gr-78',
         receiptNumber: 'ПР-000078',
         reason: 'defect',
-        claim: 'draft',
+        comment: 'Претензия: замена или зачёт в следующую поставку',
         lines: [
           {
             productId: 'p-ibufen',
@@ -608,7 +608,7 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         receiptId: null,
         receiptNumber: null,
         reason: 'expired',
-        claim: 'sent',
+        comment: '',
         lines: [
           {
             productId: 'p-nurofen',

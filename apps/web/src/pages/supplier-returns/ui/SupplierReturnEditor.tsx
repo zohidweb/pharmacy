@@ -12,13 +12,12 @@ import {
   Dialog,
   Select,
   Spinner,
-  Switch,
   TextField,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { ClaimStatusPill, DocumentStatusPill } from '@/entities/stock-document';
+import { DocumentStatusPill } from '@/entities/stock-document';
 import {
   lineOf,
   StockLinesEditor,
@@ -64,9 +63,7 @@ export function SupplierReturnEditor({
   const [reason, setReason] = useState<SupplierReturnReason>(
     document?.reason ?? 'defect',
   );
-  const [createClaim, setCreateClaim] = useState(
-    document ? document.claim !== 'none' : true,
-  );
+  const [comment, setComment] = useState(document?.comment ?? '');
   const [lines, setLines] = useState<EditableStockLine[]>([]);
   const [loaded, setLoaded] = useState(!document);
   const [touched, setTouched] = useState(false);
@@ -125,7 +122,7 @@ export function SupplierReturnEditor({
     storeId,
     receiptId,
     reason,
-    createClaim,
+    comment: comment.trim(),
     lines: lines.map((l) => ({
       productId: l.productId,
       batchId: l.batchId,
@@ -191,14 +188,6 @@ export function SupplierReturnEditor({
         size="xl"
         footer={
           <>
-            <Button
-              variant="secondary"
-              iconStart="printer"
-              disabled
-              title={tDocs('soonHint')}
-            >
-              {t('printClaim')}
-            </Button>
             {doc?.status === 'posted' && access.canUnpost && (
               <Button
                 variant="secondary"
@@ -241,7 +230,6 @@ export function SupplierReturnEditor({
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <DocumentStatusPill status={doc?.status ?? 'draft'} />
-            {doc && <ClaimStatusPill claim={doc.claim} />}
           </div>
           {error && (
             <Alert tone="danger" live="assertive">
@@ -308,12 +296,13 @@ export function SupplierReturnEditor({
                 label: tReasons(value),
               }))}
             />
-            <Switch
-              label={t('claim')}
-              description={t('claimHint')}
+            <TextField
+              label={t('comment')}
+              placeholder={t('commentPlaceholder')}
+              maxLength={500}
               disabled={!editable}
-              checked={createClaim}
-              onCheckedChange={setCreateClaim}
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
             />
           </div>
           {editable && receiptId && (

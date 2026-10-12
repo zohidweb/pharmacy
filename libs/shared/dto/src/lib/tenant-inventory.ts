@@ -53,6 +53,11 @@ export interface StockProductsQuery {
    * stock — to reopen the lines of a saved document. No search and no page limit.
    */
   ids?: string;
+  /**
+   * Only the batches of this supplier; products without them are left out. Combines with `query` /
+   * `limit` and with `ids` (the lines of a supplier return).
+   */
+  supplierId?: string;
 }
 
 /** GET /api/v1/stores/{storeId}/stock-products — products for document lines. */
@@ -395,14 +400,21 @@ export interface WriteOffListResponse extends Page<WriteOffListItem> {
 /* ---------------- Supplier return (ВП) ---------------- */
 
 export type SupplierReturnReason = 'defect' | 'expired' | 'broken';
-export type ClaimStatus = 'none' | 'draft' | 'sent' | 'accepted';
 
 export interface SupplierReturnLine extends StockLine {
   /** Why this line goes back (e.g. «повреждена упаковка»). */
   note: string;
 }
 
-/** Posting writes the stock off and lowers the debt to the supplier by the amount (ТЗ). */
+/**
+ * GET /api/v1/supplier-returns/{id}. Posting (`POST …/posting`, `inventory:post`) takes the batches
+ * off the stock and credits the supplier with their purchase cost: the credit covers the receipts
+ * of the batches first, then the other open receipts; the rest goes to the next receipt. 409
+ * `stock_insufficient` (errors at `lines.i.quantity`) / `stock_count_in_progress`, 422
+ * `validation_failed` (date) / `period_closed`. Unposting (`POST …/unposting`, `inventory:unpost`) —
+ * 409 `unpost_blocked` when a batch moved after the posting. Amounts only with `finance:view-cost`;
+ * the claim to the supplier is the comment (spec 2026-10-12-supplier-returns-transfers, R7).
+ */
 export interface SupplierReturn {
   id: string;
   number: string;
@@ -415,21 +427,38 @@ export interface SupplierReturn {
   receiptId: string | null;
   receiptNumber: string | null;
   reason: SupplierReturnReason;
-  claim: ClaimStatus;
+  comment: string;
   lines: SupplierReturnLine[];
   totalMinor?: number;
   createdBy: DocumentAuthor;
   postedBy: DocumentAuthor | null;
 }
 
+/**
+ * POST / PUT /api/v1/supplier-returns — a draft (`inventory:create` / `inventory:update`): 400 at
+ * `lines.i.batchId` (`wrong_supplier` — a batch of another supplier), `receiptId` (not a posted
+ * receipt of the supplier at the store); 409 `supplier_archived` / `document_posted`.
+ */
 export interface SupplierReturnInput {
   date: string;
   supplierId: string;
   storeId: string;
+  /** A posted goods receipt of the supplier at the store, to fill the lines from; optional. */
   receiptId: string | null;
   reason: SupplierReturnReason;
-  createClaim: boolean;
+  /** ≤ 500; the claim to the supplier. */
+  comment: string;
+  /** `note` ≤ 200. */
   lines: Array<StockLineInput & { note: string }>;
+}
+
+export interface SupplierReturnListQuery {
+  storeId?: string;
+  supplierId?: string;
+  reason?: SupplierReturnReason;
+  status?: DocumentStatus;
+  limit?: number;
+  offset?: number;
 }
 
 export interface SupplierReturnListItem {
@@ -441,7 +470,6 @@ export interface SupplierReturnListItem {
   storeName: string;
   reason: SupplierReturnReason;
   totalMinor?: number;
-  claim: ClaimStatus;
   status: DocumentStatus;
 }
 
@@ -449,7 +477,6 @@ export interface SupplierReturnListResponse extends Page<SupplierReturnListItem>
   kpi: {
     documentsThisMonth: number;
     returnedThisMonthMinor?: number;
-    openClaims: number;
   };
 }
 

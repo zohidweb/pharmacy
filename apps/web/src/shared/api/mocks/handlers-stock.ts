@@ -564,6 +564,17 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const expired = (b: { id: string; expiresOn: string }) =>
       (stockAt(params.storeId)[b.id] ?? 0) > 0 && b.expiresOn < today();
     const ids = query?.ids ? query.ids.split(',') : null;
+    // supplierId: only the batches of the supplier — the one of the mock receipt with the batch
+    // number; a batch outside the mock receipts counts as any supplier's
+    const supplierOf = new Map(
+      db().goodsReceipts.flatMap((r) =>
+        r.lines.map((l) => [`${l.productId}/${l.batchNumber}`, r.supplierId]),
+      ),
+    );
+    const ofSupplier = (productId: string, b: { number: string }) =>
+      !query?.supplierId ||
+      (supplierOf.get(`${productId}/${b.number}`) ?? query.supplierId) ===
+        query.supplierId;
     return products()
       .filter((p) =>
         ids
@@ -592,7 +603,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         maxPriceMinor: mockDb().catalog.extras[p.id]?.maxPriceMinor ?? null,
         minStockPacks: db().minPacks[p.id] ?? 0,
         batches: p.batches
-          .filter((b) => !query?.expired || expired(b))
+          .filter((b) => (!query?.expired || expired(b)) && ofSupplier(p.id, b))
           .map((b) => {
             const batch = {
               ...b,
@@ -600,7 +611,8 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
             };
             return canSeeCost ? batch : hideCost(batch, false);
           }),
-      }));
+      }))
+      .filter((p) => !query?.supplierId || p.batches.length > 0);
   },
 
   'stock.productBatches': ({ params, correlationId }) => {
@@ -1191,7 +1203,6 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
               storeName: d.storeName,
               reason: d.reason,
               totalMinor: d.totalMinor,
-              claim: d.claim,
               status: d.status,
             },
             canSeeCost,
@@ -1207,7 +1218,6 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
             0,
           ),
         }),
-        openClaims: all.filter((d) => d.claim === 'sent').length,
       },
     };
   },
@@ -1275,7 +1285,6 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       );
     }
     // the debt to the supplier goes down by the posted return (derived, «Поставщики и долги»)
-    if (doc.claim === 'draft') doc.claim = 'sent';
     doc.status = 'posted';
     doc.postedBy = author();
     mockDb().pos.catalogVersion += 1;
@@ -1908,9 +1917,7 @@ function buildSupplierReturn(
   base: Pick<
     SupplierReturn,
     'id' | 'number' | 'status' | 'createdBy' | 'postedBy'
-  > & {
-    claim?: SupplierReturn['claim'];
-  },
+  >,
   correlationId: string,
 ): SupplierReturn {
   const supplier = db().suppliers.find((s) => s.id === input.supplierId);
@@ -1939,7 +1946,7 @@ function buildSupplierReturn(
     receiptId: receiptDoc?.id ?? null,
     receiptNumber: receiptDoc?.number ?? null,
     reason: input.reason,
-    claim: input.createClaim ? 'draft' : 'none',
+    comment: input.comment,
     lines,
     totalMinor: linesTotal(lines),
   };

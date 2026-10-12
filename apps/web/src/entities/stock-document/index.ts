@@ -1,5 +1,4 @@
 export {
-  ClaimStatusPill,
   DocumentStatusPill,
   RequestStatusPill,
   StockStatePill,

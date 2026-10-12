@@ -21,7 +21,7 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { ClaimStatusPill, DocumentStatusPill } from '@/entities/stock-document';
+import { DocumentStatusPill } from '@/entities/stock-document';
 import { StockNotices, useStockAccess } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
@@ -114,11 +114,6 @@ function SupplierReturnsPageView() {
         ]
       : []),
     {
-      key: 'claim',
-      header: t('claimHeader'),
-      cell: (row) => <ClaimStatusPill claim={row.claim} />,
-    },
-    {
       key: 'status',
       header: tDocs('statusHeader'),
       cell: (row) => <DocumentStatusPill status={row.status} />,
@@ -161,12 +156,6 @@ function SupplierReturnsPageView() {
                     count: data.kpi.documentsThisMonth,
                   })}
                   icon="undo-2"
-                />
-                <KpiTile
-                  label={t('kpi.claims')}
-                  value={data.kpi.openClaims}
-                  hint={t('kpi.claimsHint')}
-                  icon="file-text"
                 />
               </div>
               <Card padding="none">

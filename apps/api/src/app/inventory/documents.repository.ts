@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { type RawBuilder, sql } from 'kysely';
 import { newId, type TenantTransaction } from '../../core/database';
 
-export type StockDocumentType = 'goods_receipt' | 'opening_balance';
+export type StockDocumentType =
+  'goods_receipt' | 'opening_balance' | 'write_off';
 
 // The line table of each document type (constants: never user input).
 const LINES: Record<StockDocumentType, RawBuilder<unknown>> = {
   goods_receipt: sql.raw('pharmacy.goods_receipt_lines'),
   opening_balance: sql.raw('pharmacy.opening_balance_lines'),
+  write_off: sql.raw('pharmacy.write_off_lines'),
 };
 
 export interface DocumentRow {
@@ -27,6 +29,7 @@ export interface DocumentRow {
   supplierInvoiceNumber: string | null;
   paymentDueDate: string | null;
   purchaseOrderId: string | null;
+  writeOffReason: string | null;
 }
 
 export interface LineRow {
@@ -68,6 +71,7 @@ export interface HeaderValues {
   supplierInvoiceNumber: string | null;
   paymentDueDate: string | null;
   purchaseOrderId: string | null;
+  writeOffReason?: string | null;
 }
 
 export interface MovementRow {
@@ -92,7 +96,7 @@ export interface ForeignMovementRow {
 const HEADER = sql`d.id, d.store_id, d.type, d.number, d.document_date::text as document_date,
   d.status, d.created_by, d.created_at, d.posted_by, d.posted_at, d.comment, d.total_dirams,
   d.supplier_id, d.supplier_invoice_number, d.payment_due_date::text as payment_due_date,
-  d.purchase_order_id`;
+  d.purchase_order_id, d.write_off_reason`;
 
 // Stock documents, their lines, batches and movements (data model 03). The header and its lines
 // are one aggregate; movements are append-only.
@@ -166,6 +170,7 @@ export class DocumentsRepository {
       storeIds: readonly string[] | null;
       status?: string;
       supplierId?: string;
+      writeOffReason?: string;
     },
     page: { limit: number; offset: number },
   ): Promise<{
@@ -187,6 +192,7 @@ export class DocumentsRepository {
         ${filter.storeIds === null ? sql`` : sql`and d.store_id in (${sql.join([...filter.storeIds])})`}
         ${filter.status ? sql`and d.status = ${filter.status}` : sql``}
         ${filter.supplierId ? sql`and d.supplier_id = ${filter.supplierId}` : sql``}
+        ${filter.writeOffReason ? sql`and d.write_off_reason = ${filter.writeOffReason}` : sql``}
       order by d.document_date desc, d.number desc
       limit ${page.limit} offset ${page.offset}`.execute(trx);
     return {
@@ -352,6 +358,37 @@ export class DocumentsRepository {
       .execute();
   }
 
+  /** Reverses the movements of the document not reversed yet: `reversal` with the opposite sign. */
+  async reverseMovements(
+    trx: TenantTransaction,
+    tenantId: string,
+    documentId: string,
+    businessDate: string,
+  ): Promise<void> {
+    const movements = await this.documentMovements(trx, tenantId, documentId);
+    const reversed = new Set(
+      movements.flatMap((m) =>
+        m.reversesMovementId ? [m.reversesMovementId] : [],
+      ),
+    );
+    await this.insertMovements(
+      trx,
+      tenantId,
+      movements
+        .filter((m) => m.kind !== 'reversal' && !reversed.has(m.id))
+        .map((m) => ({
+          storeId: m.storeId,
+          batchId: m.batchId,
+          qtyDeltaPieces: -m.qtyDeltaPieces,
+          kind: 'reversal',
+          sourceId: documentId,
+          sourceLineId: m.sourceLineId,
+          businessDate,
+          reversesMovementId: m.id,
+        })),
+    );
+  }
+
   /** Movements written by this document, oldest first. */
   async documentMovements(
     trx: TenantTransaction,
@@ -389,12 +426,16 @@ export class DocumentsRepository {
       order by id for update`.execute(trx);
   }
 
-  /** Movements of the batches written by anything but this document. */
+  /**
+   * Movements of the batches written by anything but this document after `after` (its last
+   * posting): only they block an unposting (spec 2026-10-12, B2).
+   */
   async foreignMovements(
     trx: TenantTransaction,
     tenantId: string,
     batchIds: readonly string[],
     documentId: string,
+    after: Date,
   ): Promise<ForeignMovementRow[]> {
     if (batchIds.length === 0) return [];
     const result = await sql<ForeignMovementRow>`
@@ -402,7 +443,9 @@ export class DocumentsRepository {
       from pharmacy.stock_movements m
       left join pharmacy.documents d on d.tenant_id = m.tenant_id and d.id = m.source_id
       where m.tenant_id = ${tenantId} and m.batch_id in (${sql.join([...batchIds])})
-        and m.source_id <> ${documentId}`.execute(trx);
+        and m.source_id <> ${documentId} and m.recorded_at > ${after}`.execute(
+      trx,
+    );
     return result.rows;
   }
 

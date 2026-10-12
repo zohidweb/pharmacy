@@ -5,6 +5,7 @@ import type {
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -78,6 +79,14 @@ export class StockProductsQueryDto {
   @Min(1)
   @Max(500)
   limit?: number;
+
+  /** Only the expired batches with stock, of every product of the store (spec 2026-10-12, B4). */
+  @IsOptional()
+  @Transform(
+    ({ value }: { value: unknown }) => value === true || value === 'true',
+  )
+  @IsBoolean()
+  expired?: boolean;
 }
 
 /** GET /api/v1/purchase-orders/deficit. */

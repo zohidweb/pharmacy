@@ -205,7 +205,7 @@ export class StockService {
 
   async productOptions(
     storeId: string,
-    query: { query?: string; limit?: number },
+    query: { query?: string; limit?: number; expired?: boolean },
   ): Promise<StockProductOption[]> {
     const { tenantId, storeScope, permissions } = requirePrincipal();
     const canSeeCost = hasPermissions(permissions, 'finance:view-cost');
@@ -214,15 +214,30 @@ export class StockService {
       throw new ProblemException(403, 'store_not_in_scope');
     }
     return this.db.tenantTransaction(async (trx) => {
-      const page = await this.products.listForPricing(trx, tenantId, {
-        q: query.query,
-        limit: query.limit ?? 20,
-        offset: 0,
-      });
-      const ids = page.items.map((p) => p.id);
+      // expired: every product of the store with an expired batch in stock, archived ones too (B4)
+      const today = query.expired
+        ? (await this.inventory.settings(trx, tenantId)).today
+        : '';
+      const ids = query.expired
+        ? [
+            ...new Set(
+              (await this.stock.batchStock(trx, tenantId, [id], null))
+                .filter((b) => b.qty > 0 && b.expiryDate < today)
+                .map((b) => b.productId),
+            ),
+          ]
+        : (
+            await this.products.listForPricing(trx, tenantId, {
+              q: query.query,
+              limit: query.limit ?? 20,
+              offset: 0,
+            })
+          ).items.map((p) => p.id);
       const products = await this.products.findForStock(trx, tenantId, ids);
       const byId = new Map(products.map((p) => [p.id, p]));
-      const batches = await this.stock.batchStock(trx, tenantId, [id], ids);
+      const batches = (
+        await this.stock.batchStock(trx, tenantId, [id], ids)
+      ).filter((b) => !query.expired || b.expiryDate < today);
       const prices = await this.prices.pricesAt(trx, tenantId, [id], ids);
       return ids.flatMap((productId): StockProductOption[] => {
         const product = byId.get(productId);

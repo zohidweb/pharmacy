@@ -18,6 +18,7 @@ import {
 } from './documents.repository';
 import {
   InventoryRepository,
+  type StockSettings,
   type StoreForWrite,
 } from './inventory.repository';
 
@@ -52,6 +53,30 @@ function shiftDays(date: string, days: number): string {
 const invalid = (field: string, code: string) =>
   new FieldProblemException(422, 'validation_failed', [{ field, code }]);
 
+/**
+ * The date rules of a stock document (spec 2026-10-09, 4.1; 2026-10-12, B3): not in the future and
+ * not older than the backdating window (`backdating`), never in the closed period of the legal
+ * entity of the store. 422 `validation_failed` at `date` / `period_closed`.
+ */
+export function checkDocumentDate(
+  settings: StockSettings,
+  store: StoreForWrite,
+  date: string,
+  opts: { backdating: boolean },
+): void {
+  if (opts.backdating) {
+    if (date > settings.today) throw invalid('date', 'future');
+    if (date < shiftDays(settings.today, -settings.backdatingMaxDays)) {
+      throw invalid('date', 'too_old');
+    }
+  }
+  if (store.closedUntil !== null && date <= store.closedUntil) {
+    throw new FieldProblemException(422, 'period_closed', [
+      { field: 'date', code: 'period_closed' },
+    ]);
+  }
+}
+
 // Posting and unposting of a stock document (spec 2026-10-09-inventory-purchasing, section 4.1):
 // batches, movements, store prices, the supplier debt and the status in one transaction of the
 // caller; unposting reverses the movements and the debt unless the batches moved since.
@@ -80,17 +105,7 @@ export class DocumentPosting {
       throw invalid('invoiceNumber', 'required');
     }
     const settings = await this.inventory.settings(trx, tenantId);
-    if (doc.documentDate > settings.today) throw invalid('date', 'future');
-    if (
-      doc.documentDate < shiftDays(settings.today, -settings.backdatingMaxDays)
-    ) {
-      throw invalid('date', 'too_old');
-    }
-    if (store.closedUntil !== null && doc.documentDate <= store.closedUntil) {
-      throw new FieldProblemException(422, 'period_closed', [
-        { field: 'date', code: 'period_closed' },
-      ]);
-    }
+    checkDocumentDate(settings, store, doc.documentDate, { backdating: true });
     const products = await this.productMap(trx, tenantId, lines);
     for (const [i, line] of lines.entries()) {
       if (products.get(line.productId)?.status !== 'active') {
@@ -199,40 +214,21 @@ export class DocumentPosting {
     if (doc.status !== 'posted')
       throw new ProblemException(409, 'document_not_posted');
     // the reversal is dated by the document: a closed period stays closed (spec 4.1)
-    if (store.closedUntil !== null && doc.documentDate <= store.closedUntil) {
-      throw new FieldProblemException(422, 'period_closed', [
-        { field: 'date', code: 'period_closed' },
-      ]);
-    }
+    checkDocumentDate(
+      await this.inventory.settings(trx, tenantId),
+      store,
+      doc.documentDate,
+      { backdating: false },
+    );
     const lines = await this.documents.lines(trx, tenantId, doc.type, doc.id);
     const blockers = await this.blockersOf(trx, tenantId, doc, lines, true);
     if (blockers.length > 0) throw new ProblemException(409, 'unpost_blocked');
 
-    const movements = await this.documents.documentMovements(
+    await this.documents.reverseMovements(
       trx,
       tenantId,
       doc.id,
-    );
-    const reversed = new Set(
-      movements.flatMap((m) =>
-        m.reversesMovementId ? [m.reversesMovementId] : [],
-      ),
-    );
-    await this.documents.insertMovements(
-      trx,
-      tenantId,
-      movements
-        .filter((m) => m.kind !== 'reversal' && !reversed.has(m.id))
-        .map((m) => ({
-          storeId: m.storeId,
-          batchId: m.batchId,
-          qtyDeltaPieces: -m.qtyDeltaPieces,
-          kind: 'reversal',
-          sourceId: doc.id,
-          sourceLineId: m.sourceLineId,
-          businessDate: doc.documentDate,
-          reversesMovementId: m.id,
-        })),
+      doc.documentDate,
     );
     const total = Number(doc.totalDirams ?? 0n);
     if (doc.type === 'goods_receipt' && doc.supplierId !== null) {
@@ -277,11 +273,13 @@ export class DocumentPosting {
       ...new Set(lines.flatMap((l) => (l.batchId ? [l.batchId] : []))),
     ];
     if (lock) await this.documents.lockBatches(trx, tenantId, batchIds);
+    if (doc.postedAt === null) return [];
     const foreign = await this.documents.foreignMovements(
       trx,
       tenantId,
       batchIds,
       doc.id,
+      doc.postedAt,
     );
     if (foreign.length === 0) return [];
     const products = await this.productMap(trx, tenantId, lines);

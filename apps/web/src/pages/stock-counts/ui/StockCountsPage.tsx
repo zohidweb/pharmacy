@@ -19,11 +19,8 @@ import {
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useTranslations } from 'use-intl';
-import { useCatalog } from '@/entities/catalog';
-import { useSession } from '@/entities/session';
+import { useLocale, useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
-import { useTerminalRuntime } from '@/entities/terminal';
 import { StockNotices, useStockAccess } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
@@ -36,11 +33,20 @@ function StockCountsPageView() {
   const t = useTranslations('stockCounts');
   const tDocs = useTranslations('stockDocs');
   const queryClient = useQueryClient();
-  const { data: session } = useSession();
+  const locale = useLocale();
   const access = useStockAccess();
-  const categories =
-    useCatalog(useTerminalRuntime(), session?.currentStoreId ?? null).data
-      ?.snapshot.categories ?? [];
+  // the categories of the catalog (the scope of a count is checked by the server)
+  const categories = (
+    useQuery({
+      queryKey: ['catalog', 'categories'],
+      queryFn: ({ signal }) => apiRequest('catalog.categories', { signal }),
+    }).data ?? []
+  )
+    .filter((c) => c.status === 'active')
+    .map((c) => ({
+      id: c.id,
+      name: (locale === 'tg' && c.nameTj) || c.nameRu,
+    }));
   const [editing, setEditing] = useState<StockCount | null>(null);
   const [starting, setStarting] = useState(false);
   const [storeId, setStoreId] = useState(access.writableStores[0]?.id ?? '');
@@ -144,7 +150,8 @@ function StockCountsPageView() {
         actions={
           <Button
             iconStart="plus"
-            disabled={!access.canCreate}
+            // the start freezes the stock of the scope: a manager's step (spec 2026-10-12, R1)
+            disabled={!access.canPost}
             onClick={() => setStarting(true)}
           >
             {t('start')}

@@ -12,6 +12,8 @@ export interface StockAccess {
   canUpdate: boolean;
   canPost: boolean;
   canUnpost: boolean;
+  /** Cancels a running stock count (spec 2026-10-12, S6). */
+  canDelete: boolean;
   canReceive: boolean;
   canSeeCost: boolean;
   /** Why documents of the store are read-only, or null. */
@@ -40,6 +42,7 @@ export function useStockAccess(storeId?: string | null): StockAccess {
     canUpdate: write('inventory:update'),
     canPost: write('inventory:post'),
     canUnpost: write('inventory:unpost'),
+    canDelete: write('inventory:delete'),
     canReceive:
       canWrite(session, 'inventory:receive') && readOnly !== 'offline',
     canSeeCost: can(session, 'finance:view-cost'),

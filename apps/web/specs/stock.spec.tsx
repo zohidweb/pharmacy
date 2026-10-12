@@ -204,15 +204,21 @@ describe('StockCountsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'ИН-000007' }));
     const editor = await dialog('Инвентаризация ИН-000007');
     fireEvent.click(within(editor).getByRole('button', { name: 'Провести' }));
-    expect(within(editor).getByText(/не заполнено: 1/)).toBeTruthy();
+    const incomplete = await dialog('Провести инвентаризацию?');
+    expect(within(incomplete).getByText(/не заполнено: 1/)).toBeTruthy();
+    fireEvent.click(within(incomplete).getByRole('button', { name: 'Отмена' }));
+    // the counted packs go as an entry of this employee
+    const row = within(editor)
+      .getByLabelText('Посчитано: Ибупрофен 200 мг, таб. №20, партия I-3301')
+      .closest('tr') as HTMLElement;
     fireEvent.change(
-      within(editor).getByLabelText(
-        'Факт: Ибупрофен 200 мг, таб. №20, партия I-3301',
+      within(row).getByLabelText(
+        'Посчитано: Ибупрофен 200 мг, таб. №20, партия I-3301',
       ),
-      {
-        target: { value: '440' },
-      },
+      { target: { value: '22' } },
     );
+    fireEvent.click(within(row).getByRole('button', { name: 'Добавить' }));
+    expect(await within(row).findByText(/440 · /)).toBeTruthy();
     fireEvent.click(within(editor).getByRole('button', { name: 'Провести' }));
     const confirm = await dialog('Провести инвентаризацию?');
     fireEvent.click(within(confirm).getByRole('button', { name: 'Провести' }));

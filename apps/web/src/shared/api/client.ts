@@ -210,20 +210,35 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'writeOffs.update',
   'writeOffs.post',
   'writeOffs.unpost',
+  'stockCounts.list',
+  'stockCounts.get',
+  'stockCounts.start',
+  'stockCounts.save',
+  'stockCounts.addEntry',
+  'stockCounts.deleteEntry',
+  'stockCounts.addFoundLine',
+  'stockCounts.updateFoundLine',
+  'stockCounts.deleteFoundLine',
+  'stockCounts.post',
+  'stockCounts.unpost',
+  'stockCounts.cancel',
 ]);
 
 /**
  * Routes shared by several kinds of documents that apps/api serves only for some of them: the
- * unposting check of goods receipts, opening balances and write-offs is real, of the other
- * documents — mocks.
+ * unposting check of goods receipts, opening balances, write-offs and stock counts is real, of
+ * the other documents — mocks.
  */
 export const REAL_API_WHEN: Partial<
   Record<ApiRouteKey, (params: unknown) => boolean>
 > = {
   'documents.unpostCheck': (params) =>
-    ['goods-receipts', 'opening-balances', 'write-offs'].includes(
-      (params as { kind?: string } | undefined)?.kind ?? '',
-    ),
+    [
+      'goods-receipts',
+      'opening-balances',
+      'write-offs',
+      'stock-counts',
+    ].includes((params as { kind?: string } | undefined)?.kind ?? ''),
 };
 
 /** Whether a request of the route goes to apps/api in the `partial` mode. */

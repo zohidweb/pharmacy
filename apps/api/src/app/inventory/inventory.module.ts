@@ -12,6 +12,7 @@ import { OpeningBalancesController } from './opening-balances.controller';
 import { DocumentPosting } from './posting';
 import { StockDocumentsService } from './stock-documents.service';
 import { StockController } from './stock.controller';
+import { StockFreeze } from './stock-freeze';
 import { StockRepository } from './stock.repository';
 import { StockService } from './stock.service';
 import { UnpostingCheckController } from './unposting-check.controller';
@@ -41,6 +42,7 @@ import { WriteOffsService } from './write-offs.service';
     StockDocumentsService,
     StockRepository,
     StockService,
+    StockFreeze,
     WriteOffsRepository,
     WriteOffPosting,
     WriteOffsService,

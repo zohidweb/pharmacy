@@ -21,6 +21,7 @@ import {
   type StockSettings,
   type StoreForWrite,
 } from './inventory.repository';
+import { StockFreeze } from './stock-freeze';
 
 const DAY_MS = 86_400_000;
 
@@ -90,6 +91,7 @@ export class DocumentPosting {
     private readonly ledger: SupplierLedger,
     private readonly orders: OrderReceiving,
     private readonly audit: AuditService,
+    private readonly freeze: StockFreeze,
   ) {}
 
   async post(
@@ -101,6 +103,13 @@ export class DocumentPosting {
     const { tenantId, employeeId } = ctx;
     const lines = await this.documents.lines(trx, tenantId, doc.type, doc.id);
     if (lines.length === 0) throw invalid('lines', 'required');
+    // the products of a running stock count of the store are frozen (spec 2026-10-12, 5.3)
+    await this.freeze.guard(
+      trx,
+      tenantId,
+      doc.storeId,
+      lines.map((l) => l.productId),
+    );
     if (doc.type === 'goods_receipt' && !doc.supplierInvoiceNumber) {
       throw invalid('invoiceNumber', 'required');
     }
@@ -221,6 +230,12 @@ export class DocumentPosting {
       { backdating: false },
     );
     const lines = await this.documents.lines(trx, tenantId, doc.type, doc.id);
+    await this.freeze.guard(
+      trx,
+      tenantId,
+      doc.storeId,
+      lines.map((l) => l.productId),
+    );
     const blockers = await this.blockersOf(trx, tenantId, doc, lines, true);
     if (blockers.length > 0) throw new ProblemException(409, 'unpost_blocked');
 

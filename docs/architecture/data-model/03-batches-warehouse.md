@@ -27,6 +27,23 @@
 >   начальных остатков;
 > - отмену проведения блокируют только движения по партиям документа, записанные **после** его последнего
 >   проведения.
+>
+> **Введено миграцией `stock-counts` (2026-10-12, та же спецификация):** тип `inventory`, статус `cancelled`
+> (только у инвентаризации; `cancelled_by`, `cancelled_at`), `inventory_lines`, `inventory_count_entries`, партия
+> `inventory_surplus`, движения `inventory_gain` / `inventory_loss`. Поправки модели (утверждены 2026-10-12):
+> - **факт строки — сумма записей пересчёта** (`inventory_count_entries`: «посчитал N штук» сотрудника; `id` —
+>   ключ идемпотентности планшета; запись может быть 0 и отрицательной — поправка); при проведении сумма
+>   фиксируется в `counted_qty_pieces`;
+> - охват — `all` / `category` (без «выборочно»); на точке одна идущая инвентаризация (уникальный индекс);
+> - **заморозка:** пока на точке идёт инвентаризация, товары её охвата не проводятся и не отменяются в приходе,
+>   начальных остатках и списании (409 `stock_count_in_progress`); касса работает. Старт, проведение и отмена
+>   инвентаризации берут исключительную advisory-блокировку склада точки, проведение документов — разделяемую;
+> - ожидаемый остаток строки при проведении — текущий остаток партии (учёт на старте минус касса за время
+>   пересчёта); `sold_since_start_pieces` = учёт на старте − ожидаемый;
+> - при проведении и отмене проведения проверяется только закрытый период, без окна «задним числом»;
+> - отмену проведения блокируют движения партий, которые инвентаризация двигала (строки с расхождением и
+>   партии излишков);
+> - движения записываются со временем записи (`clock_timestamp()`), а не начала транзакции.
 
 ```mermaid
 erDiagram
@@ -105,6 +122,7 @@ erDiagram
 
 **Статусы:**
 - **Обычный документ** (`goods_receipt`, `opening_balance`, `write_off`, `inventory`, `supplier_return`): `draft` → `posted`; отмена проведения — снова `draft`.
+- **Инвентаризация** дополнительно: `draft` → `cancelled` (конечный, без движений; поправка 2026-10-12).
 - **Перемещение:** `draft` → `in_transit` (отправлено: у отправителя сразу −N) → `received` (у получателя + факт).
 - **Заявка:** `draft` → `sent` → `in_progress` → `partial` / `done` / `rejected`. На остатки не влияет.
 
@@ -119,7 +137,8 @@ erDiagram
 | `transfer_lines` | `source_batch_id`, `qty_sent_pieces > 0`, `qty_received_pieces null` (при приёмке), `target_batch_id null` (партия получателя, D2), `discrepancy_resolution null` — `write_off` / `resend` |
 | `transfer_request_lines` | `product_id`, `qty_requested_pieces > 0`. Выполненное количество — по связанным перемещениям |
 | `write_off_lines` | `batch_id` (партия точки документа, не повторяется), `product_id`, `qty_pieces > 0`, `unit` (`pack` / `piece`, как ввели) |
-| `inventory_lines` | `product_id`, `batch_id null` (пусто — найден товар без учётной партии), `book_qty_pieces` (на момент начала), `counted_qty_pieces`, `sold_since_start_pieces` (при проведении), `surplus_expiry_date null`, `surplus_purchase_price_per_pack_dirams null`, `surplus_batch_id null`. Расхождение по строке с партией — движение `inventory_gain` / `inventory_loss` по этой партии. Строка без партии — новая партия `inventory_surplus`; срок и закупочную цену **вводит сотрудник** при проведении, без них документ не проводится (решение 2026-09-30) |
+| `inventory_lines` | `product_id`, `batch_id null` (пусто — найден товар без учётной партии, `is_found`), `book_qty_pieces` (на момент начала), `counted_qty_pieces` (сумма записей, при проведении), `sold_since_start_pieces` (при проведении), `surplus_lot_number null`, `surplus_expiry_date null`, `surplus_purchase_price_per_pack_dirams null`, `surplus_batch_id null`. Расхождение по строке с партией — движение `inventory_gain` / `inventory_loss` по этой партии. Строка без партии — новая партия `inventory_surplus`; срок и закупочную цену **вводит сотрудник** при проведении, без них документ не проводится (решение 2026-09-30) |
+| `inventory_count_entries` | `line_id`, `qty_pieces` (может быть 0 и отрицательным), `entered_by`, `entered_at`; `id` — ключ идемпотентности планшета. Факт строки — сумма записей (поправка 2026-10-12) |
 | `supplier_return_lines` | `batch_id`, `qty_pieces > 0`, `amount_dirams` |
 
 ## `stock_movements` — движение остатка (класс `tenant`, только добавление)

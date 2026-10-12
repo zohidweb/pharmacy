@@ -24,6 +24,9 @@ const cashier: Permission[] = [
   'returns:view',
   'returns:create',
   'inventory:view',
+  // drafts of write-offs and the quantities of a stock count (spec 2026-10-12, R1)
+  'inventory:create',
+  'inventory:update',
   'catalog:view',
   'pricing:view',
 ];
@@ -33,8 +36,6 @@ const manager: Permission[] = [
   'pos:sell-controlled',
   'pos:choose-batch',
   'returns:without-receipt',
-  'inventory:create',
-  'inventory:update',
   'inventory:post',
   'inventory:unpost',
   'inventory:delete',
@@ -87,25 +88,24 @@ const accountant: Permission[] = [
   'audit:export',
 ];
 
-export const roleTemplates: Readonly<Record<RoleTemplateKey, RoleTemplate>> =
-  {
-    owner: { key: 'owner', scope: 'network', system: true, permissions },
-    manager: {
-      key: 'manager',
-      scope: 'stores',
-      system: false,
-      permissions: manager,
-    },
-    cashier: {
-      key: 'cashier',
-      scope: 'stores',
-      system: false,
-      permissions: cashier,
-    },
-    accountant: {
-      key: 'accountant',
-      scope: 'network',
-      system: false,
-      permissions: accountant,
-    },
-  };
+export const roleTemplates: Readonly<Record<RoleTemplateKey, RoleTemplate>> = {
+  owner: { key: 'owner', scope: 'network', system: true, permissions },
+  manager: {
+    key: 'manager',
+    scope: 'stores',
+    system: false,
+    permissions: manager,
+  },
+  cashier: {
+    key: 'cashier',
+    scope: 'stores',
+    system: false,
+    permissions: cashier,
+  },
+  accountant: {
+    key: 'accountant',
+    scope: 'network',
+    system: false,
+    permissions: accountant,
+  },
+};

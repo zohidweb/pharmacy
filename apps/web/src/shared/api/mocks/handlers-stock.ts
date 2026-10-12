@@ -476,15 +476,19 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const { session, canSeeCost } = context(correlationId, 'inventory:view');
     inScope(session, params.storeId, correlationId);
     const needle = (query?.query ?? '').trim().toLocaleLowerCase('ru');
+    // expired: only the batches with stock that expired, of every product (spec 2026-10-12, B4)
+    const expired = (b: { id: string; expiresOn: string }) =>
+      (stockAt(params.storeId)[b.id] ?? 0) > 0 && b.expiresOn < today();
     return products()
-      .filter(
-        (p) =>
-          !needle ||
-          [p.name, p.inn ?? '', ...p.barcodes].some((v) =>
-            v.toLocaleLowerCase('ru').includes(needle),
-          ),
+      .filter((p) =>
+        query?.expired
+          ? p.batches.some(expired)
+          : !needle ||
+            [p.name, p.inn ?? '', ...p.barcodes].some((v) =>
+              v.toLocaleLowerCase('ru').includes(needle),
+            ),
       )
-      .slice(0, query?.limit ?? 20)
+      .slice(0, query?.expired ? undefined : (query?.limit ?? 20))
       .map((p): StockProductOption => ({
         id: p.id,
         name: p.name,
@@ -500,13 +504,15 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
           40,
         maxPriceMinor: mockDb().catalog.extras[p.id]?.maxPriceMinor ?? null,
         minStockPacks: db().minPacks[p.id] ?? 0,
-        batches: p.batches.map((b) => {
-          const batch = {
-            ...b,
-            quantityPieces: stockAt(params.storeId)[b.id] ?? 0,
-          };
-          return canSeeCost ? batch : hideCost(batch, false);
-        }),
+        batches: p.batches
+          .filter((b) => !query?.expired || expired(b))
+          .map((b) => {
+            const batch = {
+              ...b,
+              quantityPieces: stockAt(params.storeId)[b.id] ?? 0,
+            };
+            return canSeeCost ? batch : hideCost(batch, false);
+          }),
       }));
   },
 
@@ -515,19 +521,17 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const product = productOf(params.productId, correlationId);
     return session.stores.flatMap((store) =>
       product.batches
-        .map(
-          (b): ProductBatchRow => ({
-            storeId: store.id,
-            storeName: store.name,
-            batchId: b.id,
-            batchNumber: b.number,
-            expiresOn: b.expiresOn,
-            quantityPieces: stockAt(store.id)[b.id] ?? 0,
-            ...(canSeeCost && b.costMinor !== undefined
-              ? { costMinor: b.costMinor }
-              : {}),
-          }),
-        )
+        .map((b): ProductBatchRow => ({
+          storeId: store.id,
+          storeName: store.name,
+          batchId: b.id,
+          batchNumber: b.number,
+          expiresOn: b.expiresOn,
+          quantityPieces: stockAt(store.id)[b.id] ?? 0,
+          ...(canSeeCost && b.costMinor !== undefined
+            ? { costMinor: b.costMinor }
+            : {}),
+        }))
         .filter((b) => b.quantityPieces !== 0),
     );
   },

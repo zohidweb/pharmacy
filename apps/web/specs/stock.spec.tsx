@@ -66,7 +66,8 @@ describe('StockPage', () => {
     expect(within(table).getByText('-2 уп.')).toBeTruthy();
   });
 
-  it('hides purchase prices and writes from a role without them', async () => {
+  it('hides purchase prices from a role without the cost right', async () => {
+    // the pharmacist drafts write-offs (spec 2026-10-12, R1), so the stock is not read-only for them
     await signInByPin('emp-cashier', '2580');
     renderWithProviders(<StockPage />);
     const table = await screen.findByRole('table', {
@@ -78,6 +79,13 @@ describe('StockPage', () => {
     expect(
       screen.getByText('Закупочные цены и маржа скрыты для вашей роли.'),
     ).toBeTruthy();
+    expect(screen.queryByText(/только для просмотра/)).toBeNull();
+  });
+
+  it('shows the stock read-only to a role without stock writes', async () => {
+    await signInAs('nargis');
+    renderWithProviders(<StockPage />);
+    await screen.findByRole('table', { name: 'Остатки по партиям' });
     expect(screen.getByText(/только для просмотра/)).toBeTruthy();
   });
 

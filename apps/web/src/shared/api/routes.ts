@@ -93,6 +93,7 @@ import type {
   StockListQuery,
   StockListResponse,
   StockProductOption,
+  StockProductsQuery,
   SupplierOption,
   SupplierReturn,
   SupplierReturnInput,
@@ -105,6 +106,7 @@ import type {
   UnpostCheck,
   WriteOff,
   WriteOffInput,
+  WriteOffListQuery,
   WriteOffListResponse,
   BoundTerminal,
   CashMovementRequest,
@@ -286,7 +288,7 @@ export const apiRoutes = {
     StockProductOption[],
     undefined,
     { storeId: string },
-    { query?: string; limit?: number }
+    StockProductsQuery
   >('GET', (p) => `/stores/${encodeURIComponent(p.storeId)}/stock-products`),
   'stock.productBatches': route<
     ProductBatchRow[],
@@ -639,7 +641,7 @@ export const apiRoutes = {
     WriteOffListResponse,
     undefined,
     undefined,
-    DocumentListQuery
+    WriteOffListQuery
   >('GET', () => '/write-offs'),
   'writeOffs.get': route<WriteOff, undefined, { id: string }>(
     'GET',

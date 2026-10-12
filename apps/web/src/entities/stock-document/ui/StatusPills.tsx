@@ -14,11 +14,15 @@ import { useTranslations } from 'use-intl';
 export function DocumentStatusPill({
   status,
 }: {
-  status: DocumentStatus | 'in_progress';
+  status: DocumentStatus | 'in_progress' | 'cancelled';
 }) {
   const t = useTranslations('stockDocs.status');
   return status === 'posted' ? (
     <StatusPill tone="success">{t('posted')}</StatusPill>
+  ) : status === 'cancelled' ? (
+    <StatusPill tone="neutral" icon="x">
+      {t('cancelled')}
+    </StatusPill>
   ) : (
     <StatusPill tone="neutral" icon="pencil">
       {t(status)}

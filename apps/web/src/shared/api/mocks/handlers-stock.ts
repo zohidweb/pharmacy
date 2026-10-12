@@ -23,6 +23,7 @@ import type {
   PurchaseOrderOption,
   SaleUnit,
   StockCount,
+  StockCountLine,
   StockLine,
   StockLineInput,
   StockProductOption,
@@ -251,6 +252,89 @@ function unpostCheck(
     .filter((b) => b.count > 0)
     .map(({ count: _count, ...rest }) => rest);
   return { allowed: blockers.length === 0, postedBy, blockers };
+}
+
+/* ---------------- stock counts ---------------- */
+
+/** Difference of a counted line: fact − (book − sold since the start). */
+const countDiff = (line: StockCountLine) =>
+  (line.factPieces ?? 0) - (line.bookPieces - line.soldSincePieces);
+
+function recount(line: StockCountLine) {
+  line.counted = line.entries.length > 0;
+  line.factPieces = line.counted
+    ? line.entries.reduce((sum, e) => sum + e.pieces, 0)
+    : null;
+}
+
+function runningCount(id: string, correlationId: string): StockCount {
+  const doc = findDoc(db().stockCounts, id, correlationId);
+  if (doc.status === 'posted') {
+    throw new ApiError(409, 'document_posted', correlationId);
+  }
+  if (doc.status === 'cancelled') {
+    throw new ApiError(409, 'document_cancelled', correlationId);
+  }
+  return doc;
+}
+
+/** The batches a posted count moved: lines with a difference and batches of found products. */
+const countBatches = (doc: StockCount) =>
+  doc.lines
+    .filter((l) => l.batchId !== null && (l.isFound || countDiff(l) !== 0))
+    .map((l) => ({
+      batchId: l.batchId as string,
+      productName: l.productName,
+      batchNumber: l.batchNumber,
+    }));
+
+/** The count as one employee sees it: their own entries, costs only with the right. */
+function countView(
+  doc: StockCount,
+  canSeeCost: boolean,
+  me: string,
+): StockCount {
+  return {
+    ...doc,
+    lines: doc.lines.map(
+      ({ pieceCostMinor, costMinor, ...line }): StockCountLine => ({
+        ...line,
+        entries: line.entries.map((e) => ({ ...e, mine: e.byName === me })),
+        ...(canSeeCost ? { pieceCostMinor, costMinor } : {}),
+      }),
+    ),
+  };
+}
+
+function lineView(
+  doc: StockCount,
+  lineId: string,
+  canSeeCost: boolean,
+  me: string,
+): StockCountLine {
+  return countView(doc, canSeeCost, me).lines.find(
+    (l) => l.lineId === lineId,
+  ) as StockCountLine;
+}
+
+/** A running count of the store freezes the products of its scope for stock documents (5.3). */
+function assertNotFrozen(
+  storeId: string,
+  productIds: readonly string[],
+  correlationId: string,
+) {
+  const count = db().stockCounts.find(
+    (c) => c.storeId === storeId && c.status === 'in_progress',
+  );
+  if (!count) return;
+  const frozen = productIds.some(
+    (id) =>
+      count.scope === 'all' ||
+      products().find((p) => p.id === id)?.categoryId === count.categoryId,
+  );
+  if (frozen) {
+    throw new ApiError(409, 'stock_count_in_progress', correlationId);
+  }
 }
 
 function requireDraft(status: string, correlationId: string) {
@@ -605,7 +689,12 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       }
       case 'stock-counts': {
         const doc = findDoc(db().stockCounts, params.id, correlationId);
-        return unpostCheck(doc.number, doc.storeId, doc.lines, doc.postedBy);
+        return unpostCheck(
+          doc.number,
+          doc.storeId,
+          countBatches(doc),
+          doc.postedBy,
+        );
       }
     }
   },
@@ -698,6 +787,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = findDoc(db().goodsReceipts, params.id, correlationId);
     requireDraft(doc.status, correlationId);
     writable(session, doc.storeId, correlationId);
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     if (doc.lines.length === 0 || !doc.invoiceNumber.trim()) {
       throw new ApiError(422, 'validation_failed', correlationId, [
         {
@@ -741,6 +835,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     });
     const doc = findDoc(db().goodsReceipts, params.id, correlationId);
     writable(session, doc.storeId, correlationId);
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     const check = stockHandlers['documents.unpostCheck']({
       params: { kind: 'goods-receipts', id: doc.id },
       query: undefined,
@@ -838,6 +937,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = findDoc(db().openingBalances, params.id, correlationId);
     requireDraft(doc.status, correlationId);
     writable(session, doc.storeId, correlationId);
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     if (doc.lines.length === 0) {
       throw new ApiError(422, 'validation_failed', correlationId, [
         { field: 'lines', code: 'required' },
@@ -871,6 +975,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     });
     const doc = findDoc(db().openingBalances, params.id, correlationId);
     writable(session, doc.storeId, correlationId);
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     const check = stockHandlers['documents.unpostCheck']({
       params: { kind: 'opening-balances', id: doc.id },
       query: undefined,
@@ -1003,6 +1112,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     requireDraft(doc.status, correlationId);
     writable(session, doc.storeId, correlationId);
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     for (const line of doc.lines) {
       const product = productOf(line.productId, correlationId);
       const pieces = piecesOf(product, line.unit, line.quantity);
@@ -1030,6 +1144,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     });
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     writable(session, doc.storeId, correlationId);
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     const check = unpostCheck(doc.number, doc.storeId, doc.lines, doc.postedBy);
     if (!check.allowed)
       throw new ApiError(409, 'unpost_blocked', correlationId);
@@ -1191,15 +1310,13 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const { session, canSeeCost } = context(correlationId, 'inventory:view');
     const all = visible(session, db().stockCounts)
       .filter((d) => !query?.storeId || d.storeId === query.storeId)
+      .filter((d) => !query?.status || d.status === query.status)
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
     return page(
       all.map((d) => {
         const diffs = d.lines
           .filter((l) => l.factPieces !== null)
-          .map((l) => ({
-            diff: (l.factPieces ?? 0) - (l.bookPieces - l.soldSincePieces),
-            cost: l.pieceCostMinor ?? 0,
-          }));
+          .map((l) => ({ diff: countDiff(l), cost: l.pieceCostMinor ?? 0 }));
         return {
           id: d.id,
           number: d.number,
@@ -1220,42 +1337,52 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     );
   },
   'stockCounts.get': ({ params, correlationId }) => {
-    const { session, canSeeCost } = context(correlationId, 'inventory:view');
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:view',
+    );
     const doc = findDoc(db().stockCounts, params.id, correlationId);
     inScope(session, doc.storeId, correlationId);
-    if (canSeeCost) return doc;
-    return {
-      ...doc,
-      lines: doc.lines.map(({ pieceCostMinor: _c, ...rest }) => rest),
-    };
+    return countView(doc, canSeeCost, author().name);
   },
   'stockCounts.start': ({ body, correlationId }) => {
-    const { session, author } = context(correlationId, 'inventory:create', {
-      write: true,
-    });
+    // the start freezes the stock of the scope: a manager's step (spec 2026-10-12, R1)
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:post',
+      { write: true },
+    );
     writable(session, body.storeId, correlationId);
+    if (
+      db().stockCounts.some(
+        (c) => c.storeId === body.storeId && c.status === 'in_progress',
+      )
+    ) {
+      throw new ApiError(409, 'stock_count_in_progress', correlationId);
+    }
     const category = categories.find((c) => c.id === body.categoryId) ?? null;
     const lines = products()
       .filter((p) =>
-        body.scope === 'category'
-          ? p.categoryId === body.categoryId
-          : body.scope === 'selected'
-            ? body.productIds.includes(p.id)
-            : true,
+        body.scope === 'category' ? p.categoryId === body.categoryId : true,
       )
       .flatMap((p) =>
         p.batches
           .filter((b) => (stockAt(body.storeId)[b.id] ?? 0) > 0)
-          .map((b) => ({
+          .map((b): StockCountLine => ({
+            lineId: `scl-${Date.now()}-${b.id}`,
             productId: p.id,
             productName: p.name,
+            barcodes: p.barcodes,
+            isFound: false,
             batchId: b.id,
             batchNumber: b.number,
             expiresOn: b.expiresOn,
             piecesPerPack: p.piecesPerPack,
             bookPieces: stockAt(body.storeId)[b.id] ?? 0,
             soldSincePieces: 0,
+            counted: false,
             factPieces: null,
+            entries: [],
             pieceCostMinor: pieceCost(b.costMinor ?? 0, p.piecesPerPack),
           })),
       );
@@ -1273,66 +1400,244 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       lines,
       createdBy: author(),
       postedBy: null,
+      cancelledBy: null,
     };
     db().stockCounts.unshift(doc);
-    return doc;
+    return countView(doc, canSeeCost, author().name);
   },
   'stockCounts.save': ({ params, body, correlationId }) => {
-    const { session } = context(correlationId, 'inventory:update', {
-      write: true,
-    });
-    const doc = findDoc(db().stockCounts, params.id, correlationId);
-    requireDraft(doc.status, correlationId);
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:update',
+      { write: true },
+    );
+    const doc = runningCount(params.id, correlationId);
     writable(session, doc.storeId, correlationId);
     doc.comment = body.comment;
-    for (const fact of body.facts) {
-      const line = doc.lines.find((l) => l.batchId === fact.batchId);
-      if (line) line.factPieces = fact.factPieces;
-    }
-    return doc;
+    return countView(doc, canSeeCost, author().name);
   },
-  'stockCounts.post': ({ params, correlationId }) => {
-    const { session, author } = context(correlationId, 'inventory:post', {
-      write: true,
-    });
-    const doc = findDoc(db().stockCounts, params.id, correlationId);
-    requireDraft(doc.status, correlationId);
+  'stockCounts.addEntry': ({ params, body, correlationId }) => {
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:update',
+      { write: true },
+    );
+    const doc = runningCount(params.id, correlationId);
     writable(session, doc.storeId, correlationId);
-    if (doc.lines.some((l) => l.factPieces === null)) {
-      throw new ApiError(422, 'validation_failed', correlationId, [
-        { field: 'factPieces', code: 'required' },
+    const line = doc.lines.find((l) => l.lineId === body.lineId);
+    if (!line)
+      throw new ApiError(400, 'validation_failed', correlationId, [
+        { field: 'lineId', code: 'unknown' },
+      ]);
+    const seen = doc.lines
+      .flatMap((l) => l.entries.map((entry) => ({ line: l, entry })))
+      .find((x) => x.entry.id === body.id);
+    if (seen) {
+      // a repeat of the tablet: the same answer; another body with the key — a conflict
+      if (
+        seen.line.lineId !== body.lineId ||
+        seen.entry.pieces !== body.pieces
+      ) {
+        throw new ApiError(409, 'idempotency_conflict', correlationId);
+      }
+    } else {
+      line.entries.push({
+        id: body.id,
+        pieces: body.pieces,
+        byName: author().name,
+        mine: true,
+        at: now(),
+      });
+      recount(line);
+    }
+    return lineView(doc, line.lineId, canSeeCost, author().name);
+  },
+  'stockCounts.deleteEntry': ({ params, correlationId }) => {
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:update',
+      { write: true },
+    );
+    const doc = runningCount(params.id, correlationId);
+    writable(session, doc.storeId, correlationId);
+    const line = doc.lines.find((l) =>
+      l.entries.some((e) => e.id === params.entryId),
+    );
+    if (!line) throw new ApiError(404, 'not_found', correlationId);
+    const entry = line.entries.find((e) => e.id === params.entryId);
+    if (entry && entry.byName !== author().name) {
+      authorize(correlationId, 'inventory:post');
+    }
+    line.entries = line.entries.filter((e) => e.id !== params.entryId);
+    recount(line);
+    return lineView(doc, line.lineId, canSeeCost, author().name);
+  },
+  'stockCounts.addFoundLine': ({ params, body, correlationId }) => {
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:update',
+      { write: true },
+    );
+    const doc = runningCount(params.id, correlationId);
+    writable(session, doc.storeId, correlationId);
+    const product = productOf(body.productId, correlationId);
+    const cost = canSeeCost ? body.costMinor : null;
+    doc.lines.push({
+      lineId: `scl-found-${Date.now()}`,
+      productId: product.id,
+      productName: product.name,
+      barcodes: product.barcodes,
+      isFound: true,
+      batchId: null,
+      batchNumber: body.batchNumber.trim(),
+      expiresOn: body.expiresOn,
+      piecesPerPack: product.piecesPerPack,
+      bookPieces: 0,
+      soldSincePieces: 0,
+      counted: false,
+      factPieces: null,
+      entries: [],
+      pieceCostMinor:
+        cost === null ? 0 : pieceCost(cost, product.piecesPerPack),
+      costMinor: cost,
+    });
+    return countView(doc, canSeeCost, author().name);
+  },
+  'stockCounts.updateFoundLine': ({ params, body, correlationId }) => {
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:update',
+      { write: true },
+    );
+    const doc = runningCount(params.id, correlationId);
+    writable(session, doc.storeId, correlationId);
+    const line = doc.lines.find((l) => l.lineId === params.lineId && l.isFound);
+    if (!line) throw new ApiError(404, 'not_found', correlationId);
+    line.batchNumber = body.batchNumber.trim();
+    line.expiresOn = body.expiresOn;
+    if (canSeeCost) {
+      line.costMinor = body.costMinor;
+      line.pieceCostMinor =
+        body.costMinor === null
+          ? 0
+          : pieceCost(body.costMinor, line.piecesPerPack);
+    }
+    return countView(doc, canSeeCost, author().name);
+  },
+  'stockCounts.deleteFoundLine': ({ params, correlationId }) => {
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:update',
+      { write: true },
+    );
+    const doc = runningCount(params.id, correlationId);
+    writable(session, doc.storeId, correlationId);
+    const line = doc.lines.find((l) => l.lineId === params.lineId && l.isFound);
+    if (!line) throw new ApiError(404, 'not_found', correlationId);
+    if (line.entries.length > 0) {
+      throw new ApiError(400, 'validation_failed', correlationId, [
+        { field: 'lineId', code: 'has_entries' },
       ]);
     }
-    // surplus is taken in, shortage written off (ТЗ)
+    doc.lines = doc.lines.filter((l) => l.lineId !== params.lineId);
+    return countView(doc, canSeeCost, author().name);
+  },
+  'stockCounts.post': ({ params, correlationId }) => {
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:post',
+      { write: true },
+    );
+    const doc = runningCount(params.id, correlationId);
+    writable(session, doc.storeId, correlationId);
+    const problems = doc.lines.flatMap((l, i) => [
+      ...(l.counted && (l.factPieces ?? 0) >= 0
+        ? []
+        : [{ field: `lines.${i}.counted`, code: 'required' }]),
+      ...(l.isFound && !l.expiresOn
+        ? [{ field: `lines.${i}.expiresOn`, code: 'required' }]
+        : []),
+      ...(l.isFound && (l.costMinor ?? null) === null
+        ? [{ field: `lines.${i}.costMinor`, code: 'required' }]
+        : []),
+    ]);
+    if (problems.length > 0) {
+      throw new ApiError(422, 'validation_failed', correlationId, problems);
+    }
+    // surplus is taken in, shortage written off (ТЗ); a found product gets a batch of its own
     for (const line of doc.lines) {
-      const diff =
-        (line.factPieces ?? 0) - (line.bookPieces - line.soldSincePieces);
-      if (diff !== 0) move(doc.storeId, line.batchId, doc.number, diff);
+      if (line.isFound) {
+        const batchId = line.batchId ?? `b-found-${line.lineId}`;
+        if (line.batchId === null) {
+          line.batchId = batchId;
+          productOf(line.productId, correlationId).batches.push({
+            id: batchId,
+            number: line.batchNumber,
+            expiresOn: line.expiresOn ?? today(),
+            costMinor: line.costMinor ?? 0,
+          } as PosBatch);
+        }
+        move(doc.storeId, batchId, doc.number, line.factPieces ?? 0);
+        continue;
+      }
+      const diff = countDiff(line);
+      if (diff !== 0 && line.batchId) {
+        move(doc.storeId, line.batchId, doc.number, diff);
+      }
     }
     doc.status = 'posted';
     doc.postedBy = author();
     mockDb().pos.catalogVersion += 1;
-    return doc;
+    return countView(doc, canSeeCost, author().name);
   },
   'stockCounts.unpost': ({ params, correlationId }) => {
-    const { session } = context(correlationId, 'inventory:unpost', {
-      write: true,
-    });
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:unpost',
+      { write: true },
+    );
     const doc = findDoc(db().stockCounts, params.id, correlationId);
     writable(session, doc.storeId, correlationId);
-    const check = unpostCheck(doc.number, doc.storeId, doc.lines, doc.postedBy);
+    const check = unpostCheck(
+      doc.number,
+      doc.storeId,
+      countBatches(doc),
+      doc.postedBy,
+    );
     if (!check.allowed)
       throw new ApiError(409, 'unpost_blocked', correlationId);
+    if (
+      db().stockCounts.some(
+        (c) =>
+          c.id !== doc.id &&
+          c.storeId === doc.storeId &&
+          c.status === 'in_progress',
+      )
+    ) {
+      throw new ApiError(409, 'stock_count_in_progress', correlationId);
+    }
     for (const line of doc.lines) {
-      const diff =
-        (line.factPieces ?? 0) - (line.bookPieces - line.soldSincePieces);
-      if (diff !== 0)
+      const diff = line.isFound ? (line.factPieces ?? 0) : countDiff(line);
+      if (diff !== 0 && line.batchId) {
         move(doc.storeId, line.batchId, `${doc.number} отмена`, -diff);
+      }
     }
     doc.status = 'in_progress';
     doc.postedBy = null;
     mockDb().pos.catalogVersion += 1;
-    return doc;
+    return countView(doc, canSeeCost, author().name);
+  },
+  'stockCounts.cancel': ({ params, correlationId }) => {
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:delete',
+      { write: true },
+    );
+    const doc = runningCount(params.id, correlationId);
+    writable(session, doc.storeId, correlationId);
+    doc.status = 'cancelled';
+    doc.cancelledBy = author();
+    return countView(doc, canSeeCost, author().name);
   },
 
   /* transfers */

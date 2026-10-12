@@ -11,9 +11,7 @@ import {
   priceWarnings,
   type Permission,
 } from '@pharmacy/shared-domain';
-import {
-  productUnits,
-} from '@pharmacy/shared-domain';
+import { productUnits } from '@pharmacy/shared-domain';
 import type {
   CatalogFlag,
   CatalogListItem,

@@ -64,7 +64,6 @@ function StockCountsPageView() {
           storeId,
           scope,
           categoryId: scope === 'category' ? categoryId || null : null,
-          productIds: [],
         },
       }),
     onSuccess: (doc) => {

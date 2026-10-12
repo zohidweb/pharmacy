@@ -198,8 +198,8 @@ describe('SupplierReturnsPage', () => {
 
 describe('StockCountsPage', () => {
   it('posts a count: shortage against book minus sold since the start', async () => {
-    await signInAs('manizha', 'store-3');
-    const before = await stockOf('store-3', 'Нурофен 200');
+    await signInAs('manizha', 'store-1');
+    const before = await stockOf('store-1', 'Нурофен 200');
     renderWithProviders(<StockCountsPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'ИН-000007' }));
     const editor = await dialog('Инвентаризация ИН-000007');
@@ -218,7 +218,7 @@ describe('StockCountsPage', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: 'Провести' }));
     expect(await within(editor).findByText('Проведён')).toBeTruthy();
     // Нурофен: book 180 − sold 10 = 170 expected, counted 150 → −20
-    expect(await stockOf('store-3', 'Нурофен 200')).toBe(before - 20);
+    expect(await stockOf('store-1', 'Нурофен 200')).toBe(before - 20);
   });
 });
 

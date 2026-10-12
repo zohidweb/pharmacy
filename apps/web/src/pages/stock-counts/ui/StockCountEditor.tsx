@@ -5,6 +5,7 @@ import {
   formatDateOnly,
   formatDateTime,
   formatMoney,
+  uuidv7,
 } from '@pharmacy/shared-util';
 import { Alert, Button, Dialog, Switch, TextField } from '@pharmacy/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -59,18 +60,33 @@ export function StockCountEditor({
   const [unposting, setUnposting] = useState(false);
   const editable = doc.status === 'in_progress' && access.canUpdate;
 
-  const body = () => ({
-    comment: comment.trim(),
-    facts: lines.map((l) => ({ batchId: l.batchId, factPieces: l.factPieces })),
-  });
+  // a changed fact goes as an entry with the difference (the counting screen comes with Task 6)
+  const persist = async () => {
+    for (const line of lines) {
+      const before =
+        doc.lines.find((l) => l.lineId === line.lineId)?.factPieces ?? null;
+      if (line.factPieces === null || line.factPieces === before) continue;
+      await apiRequest('stockCounts.addEntry', {
+        params: { id: doc.id },
+        body: {
+          id: uuidv7(),
+          lineId: line.lineId,
+          pieces: line.factPieces - (before ?? 0),
+        },
+      });
+    }
+    return apiRequest('stockCounts.save', {
+      params: { id: doc.id },
+      body: { comment: comment.trim() },
+    });
+  };
   const invalidate = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ['stock-counts'] }),
       queryClient.invalidateQueries({ queryKey: ['stock'] }),
     ]);
   const save = useMutation({
-    mutationFn: () =>
-      apiRequest('stockCounts.save', { params: { id: doc.id }, body: body() }),
+    mutationFn: persist,
     onSuccess: (saved) => {
       setDoc(saved);
       void invalidate();
@@ -79,10 +95,7 @@ export function StockCountEditor({
   });
   const post = useMutation({
     mutationFn: async () => {
-      await apiRequest('stockCounts.save', {
-        params: { id: doc.id },
-        body: body(),
-      });
+      await persist();
       return apiRequest('stockCounts.post', { params: { id: doc.id } });
     },
     onSuccess: (posted) => {
@@ -223,7 +236,7 @@ export function StockCountEditor({
                   const diff = lineDiff(line);
                   return (
                     <tr
-                      key={line.batchId}
+                      key={line.lineId}
                       className="border-b border-border align-top"
                     >
                       <td className="px-2 py-2 font-medium">
@@ -232,7 +245,9 @@ export function StockCountEditor({
                       <td className="px-2 py-2">
                         {line.batchNumber}
                         <span className="block text-xs text-fg-subtle">
-                          {formatDateOnly(line.expiresOn)}
+                          {line.expiresOn
+                            ? formatDateOnly(line.expiresOn)
+                            : '—'}
                         </span>
                       </td>
                       <td className="px-2 py-2 tabular-nums">
@@ -265,7 +280,7 @@ export function StockCountEditor({
                           onChange={(value) =>
                             setLines((current) =>
                               current.map((l) =>
-                                l.batchId === line.batchId
+                                l.lineId === line.lineId
                                   ? { ...l, factPieces: value }
                                   : l,
                               ),

@@ -121,11 +121,16 @@ export interface DocumentCounters {
 }
 
 export interface Documents {
+  cancelledAt: Timestamp | null;
+  cancelledBy: string | null;
   comment: string | null;
   createdAt: Generated<Timestamp>;
   createdBy: string;
   documentDate: string;
   id: string;
+  inventoryCategoryId: string | null;
+  inventoryScope: string | null;
+  inventoryStartedAt: Timestamp | null;
   number: string;
   paymentDueDate: string | null;
   postedAt: Timestamp | null;
@@ -201,6 +206,34 @@ export interface GoodsReceiptLines {
   purchasePricePerPackDirams: bigint;
   qtyPieces: number;
   retailPriceDraftDirams: bigint;
+  tenantId: string;
+}
+
+export interface InventoryCountEntries {
+  documentId: string;
+  enteredAt: Generated<Timestamp>;
+  enteredBy: string;
+  id: string;
+  lineId: string;
+  qtyPieces: number;
+  tenantId: string;
+}
+
+export interface InventoryLines {
+  batchId: string | null;
+  bookQtyPieces: number;
+  countedQtyPieces: number | null;
+  createdAt: Generated<Timestamp>;
+  documentId: string;
+  id: string;
+  isFound: Generated<boolean>;
+  lineNo: number;
+  productId: string;
+  soldSinceStartPieces: number | null;
+  surplusBatchId: string | null;
+  surplusExpiryDate: string | null;
+  surplusLotNumber: string | null;
+  surplusPurchasePricePerPackDirams: bigint | null;
   tenantId: string;
 }
 
@@ -554,6 +587,8 @@ export interface DB {
   employees: Employees;
   employeeStores: EmployeeStores;
   goodsReceiptLines: GoodsReceiptLines;
+  inventoryCountEntries: InventoryCountEntries;
+  inventoryLines: InventoryLines;
   legalEntities: LegalEntities;
   openingBalanceLines: OpeningBalanceLines;
   operatorCredentials: OperatorCredentials;

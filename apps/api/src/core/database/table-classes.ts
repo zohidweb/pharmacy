@@ -35,6 +35,8 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     goods_receipt_lines: 'tenant',
     opening_balance_lines: 'tenant',
     write_off_lines: 'tenant',
+    inventory_lines: 'tenant',
+    inventory_count_entries: 'tenant',
     stock_movements: 'tenant',
     supplier_ledger_entries: 'tenant',
     supplier_payments: 'tenant',

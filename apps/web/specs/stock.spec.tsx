@@ -198,27 +198,33 @@ describe('SupplierReturnsPage', () => {
 
 describe('StockCountsPage', () => {
   it('posts a count: shortage against book minus sold since the start', async () => {
-    await signInAs('manizha', 'store-3');
-    const before = await stockOf('store-3', 'Нурофен 200');
+    await signInAs('manizha', 'store-1');
+    const before = await stockOf('store-1', 'Нурофен 200');
     renderWithProviders(<StockCountsPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'ИН-000007' }));
     const editor = await dialog('Инвентаризация ИН-000007');
     fireEvent.click(within(editor).getByRole('button', { name: 'Провести' }));
-    expect(within(editor).getByText(/не заполнено: 1/)).toBeTruthy();
+    const incomplete = await dialog('Провести инвентаризацию?');
+    expect(within(incomplete).getByText(/не заполнено: 1/)).toBeTruthy();
+    fireEvent.click(within(incomplete).getByRole('button', { name: 'Отмена' }));
+    // the counted packs go as an entry of this employee
+    const row = within(editor)
+      .getByLabelText('Посчитано: Ибупрофен 200 мг, таб. №20, партия I-3301')
+      .closest('tr') as HTMLElement;
     fireEvent.change(
-      within(editor).getByLabelText(
-        'Факт: Ибупрофен 200 мг, таб. №20, партия I-3301',
+      within(row).getByLabelText(
+        'Посчитано: Ибупрофен 200 мг, таб. №20, партия I-3301',
       ),
-      {
-        target: { value: '440' },
-      },
+      { target: { value: '22' } },
     );
+    fireEvent.click(within(row).getByRole('button', { name: 'Добавить' }));
+    expect(await within(row).findByText(/440 · /)).toBeTruthy();
     fireEvent.click(within(editor).getByRole('button', { name: 'Провести' }));
     const confirm = await dialog('Провести инвентаризацию?');
     fireEvent.click(within(confirm).getByRole('button', { name: 'Провести' }));
     expect(await within(editor).findByText('Проведён')).toBeTruthy();
     // Нурофен: book 180 − sold 10 = 170 expected, counted 150 → −20
-    expect(await stockOf('store-3', 'Нурофен 200')).toBe(before - 20);
+    expect(await stockOf('store-1', 'Нурофен 200')).toBe(before - 20);
   });
 });
 

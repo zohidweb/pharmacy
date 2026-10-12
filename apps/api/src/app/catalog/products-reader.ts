@@ -109,6 +109,30 @@ export class ProductsReader {
     }));
   }
 
+  /**
+   * A category of the network in the session language with the ids of its products (any
+   * status) — the scope of a stock count; null for an unknown category.
+   */
+  async category(
+    trx: TenantTransaction,
+    tenantId: string,
+    categoryId: string,
+  ): Promise<{ id: string; name: string; productIds: string[] } | null> {
+    const row = await this.repository.findCategory(trx, tenantId, categoryId);
+    if (row === null) return null;
+    const { locale } = requirePrincipal();
+    const language = await this.repository.networkLanguage(trx, tenantId);
+    return {
+      id: row.id,
+      name: localizedName(row.name, locale, language),
+      productIds: await this.repository.productIdsOfCategory(
+        trx,
+        tenantId,
+        row.id,
+      ),
+    };
+  }
+
   /** Active products with a default minimum stock (the deficit of a purchase order). */
   async withMinStock(
     trx: TenantTransaction,

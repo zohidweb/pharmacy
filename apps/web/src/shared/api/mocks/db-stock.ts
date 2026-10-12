@@ -10,6 +10,7 @@ import type {
   PosProduct,
   PurchaseOrder,
   StockCount,
+  StockCountLine,
   Supplier,
   SupplierPaymentMethod,
   SupplierReturn,
@@ -18,6 +19,40 @@ import type {
   WriteOff,
 } from '@pharmacy/shared-dto';
 import { DAY_MS, dateIn, minutesAgo } from './fixtures-pos';
+
+type CountLineSeed = Omit<
+  StockCountLine,
+  | 'lineId'
+  | 'barcodes'
+  | 'isFound'
+  | 'counted'
+  | 'entries'
+  | 'batchId'
+  | 'expiresOn'
+> & { batchId: string; expiresOn: string };
+
+/** Lines of a seeded count: a counted line has one entry with its fact. */
+function countLines(seeds: CountLineSeed[]): StockCountLine[] {
+  return seeds.map((seed) => ({
+    ...seed,
+    lineId: `scl-${seed.batchId}`,
+    barcodes: [],
+    isFound: false,
+    counted: seed.factPieces !== null,
+    entries:
+      seed.factPieces === null
+        ? []
+        : [
+            {
+              id: `sce-${seed.batchId}`,
+              pieces: seed.factPieces,
+              byName: 'Манижа К.',
+              mine: false,
+              at: minutesAgo(60),
+            },
+          ],
+  }));
+}
 
 export interface Movement {
   storeId: string;
@@ -598,13 +633,14 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         number: 'ИН-000007',
         status: 'in_progress',
         startedAt: minutesAgo(240),
-        storeId: 'store-3',
-        storeName: 'Аптека №3 · Рудаки',
+        // a running count freezes its scope: kept away from the store of the other stock samples
+        storeId: 'store-1',
+        storeName: 'Аптека №1 · Центр',
         scope: 'category',
         categoryId: 'cat-analgesics',
         categoryName: 'Анальгетики',
         comment: '',
-        lines: [
+        lines: countLines([
           {
             productId: 'p-paracetamol',
             productName: 'Парацетамол 500 мг, таб. №10',
@@ -641,9 +677,10 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
             factPieces: null,
             pieceCostMinor: 26,
           },
-        ],
+        ]),
         createdBy: author('Манижа К.', 0.2),
         postedBy: null,
+        cancelledBy: null,
       },
       {
         id: 'sc-6',
@@ -656,7 +693,7 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         categoryId: 'cat-antibiotics',
         categoryName: 'Антибиотики',
         comment: '',
-        lines: [
+        lines: countLines([
           {
             productId: 'p-amoxicillin',
             productName: 'Амоксициллин 500 мг, капс. №16',
@@ -669,9 +706,10 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
             factPieces: 336,
             pieceCostMinor: 119,
           },
-        ],
+        ]),
         createdBy: author('Манижа К.', 7),
         postedBy: author('Манижа К.', 7),
+        cancelledBy: null,
       },
     ],
     transferRequests: [

@@ -12,6 +12,12 @@ import { OpeningBalancesController } from './opening-balances.controller';
 import { DocumentPosting } from './posting';
 import { StockDocumentsService } from './stock-documents.service';
 import { StockController } from './stock.controller';
+import { StockCountPosting } from './stock-count-posting';
+import { StockCountsController } from './stock-counts.controller';
+import { StockCountsRepository } from './stock-counts.repository';
+import { StockCountsService } from './stock-counts.service';
+import { StockFreeze } from './stock-freeze';
+import { StoreAccess } from './store-access';
 import { StockRepository } from './stock.repository';
 import { StockService } from './stock.service';
 import { UnpostingCheckController } from './unposting-check.controller';
@@ -32,6 +38,7 @@ import { WriteOffsService } from './write-offs.service';
     StockController,
     DeficitController,
     WriteOffsController,
+    StockCountsController,
   ],
   providers: [
     InventoryRepository,
@@ -41,6 +48,11 @@ import { WriteOffsService } from './write-offs.service';
     StockDocumentsService,
     StockRepository,
     StockService,
+    StockFreeze,
+    StockCountsRepository,
+    StockCountPosting,
+    StockCountsService,
+    StoreAccess,
     WriteOffsRepository,
     WriteOffPosting,
     WriteOffsService,

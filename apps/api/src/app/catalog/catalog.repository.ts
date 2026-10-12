@@ -247,6 +247,21 @@ export class CatalogRepository {
     return rows[0] ?? null;
   }
 
+  /** Products of a category, any status. */
+  async productIdsOfCategory(
+    trx: TenantTransaction,
+    tenantId: string,
+    categoryId: string,
+  ): Promise<string[]> {
+    const rows = await trx
+      .selectFrom('products')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('categoryId', '=', categoryId)
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
   /** Active products with a default minimum stock. */
   async minStockProductIds(
     trx: TenantTransaction,

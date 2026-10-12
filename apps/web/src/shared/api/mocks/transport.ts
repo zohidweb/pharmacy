@@ -5,7 +5,11 @@
  * failures (ADR-0008), view-only impersonation. The mock session lives in sessionStorage to survive
  * a reload in development. Enabled only by NEXT_PUBLIC_API_MOCKS=true.
  */
-import { checkPin, isTrivialPin, passwordProblems } from '@pharmacy/shared-domain';
+import {
+  checkPin,
+  isTrivialPin,
+  passwordProblems,
+} from '@pharmacy/shared-domain';
 import type {
   DashboardPeriod,
   EmployeeMe,

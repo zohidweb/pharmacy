@@ -11,6 +11,7 @@ import {
   type StoreForWrite,
 } from './inventory.repository';
 import { checkDocumentDate } from './posting';
+import { StockFreeze } from './stock-freeze';
 import { StockRepository } from './stock.repository';
 import {
   type WriteOffLineRow,
@@ -29,6 +30,7 @@ export class WriteOffPosting {
     private readonly stock: StockRepository,
     private readonly products: ProductsReader,
     private readonly audit: AuditService,
+    private readonly freeze: StockFreeze,
   ) {}
 
   async post(
@@ -44,6 +46,13 @@ export class WriteOffPosting {
         { field: 'lines', code: 'required' },
       ]);
     }
+    // the products of a running stock count of the store are frozen (spec 2026-10-12, 5.3)
+    await this.freeze.guard(
+      trx,
+      tenantId,
+      doc.storeId,
+      lines.map((l) => l.productId),
+    );
     checkDocumentDate(
       await this.inventory.settings(trx, tenantId),
       store,
@@ -115,6 +124,12 @@ export class WriteOffPosting {
       { backdating: false },
     );
     const lines = await this.lines.lines(trx, tenantId, doc.id);
+    await this.freeze.guard(
+      trx,
+      tenantId,
+      doc.storeId,
+      lines.map((l) => l.productId),
+    );
     if ((await this.blockersOf(trx, tenantId, doc, lines, true)).length > 0) {
       throw new ProblemException(409, 'unpost_blocked');
     }

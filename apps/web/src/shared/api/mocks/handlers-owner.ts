@@ -102,10 +102,7 @@ function taxIdTaken(taxId: string, exceptId: string | null) {
 function toLegalEntity(id: string): LegalEntity {
   const entity = owner().legalEntities.find((e) => e.id === id);
   if (!entity) throw new Error(`no legal entity ${id}`);
-  const all = [
-    ...Object.values(owner().storeDetails),
-    ...owner().extraStores,
-  ];
+  const all = [...Object.values(owner().storeDetails), ...owner().extraStores];
   return {
     ...entity,
     stores: all.filter((s) => s.legalEntityId === id).length,

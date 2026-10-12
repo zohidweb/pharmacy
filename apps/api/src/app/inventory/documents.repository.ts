@@ -3,13 +3,14 @@ import { type RawBuilder, sql } from 'kysely';
 import { newId, type TenantTransaction } from '../../core/database';
 
 export type StockDocumentType =
-  'goods_receipt' | 'opening_balance' | 'write_off';
+  'goods_receipt' | 'opening_balance' | 'write_off' | 'inventory';
 
 // The line table of each document type (constants: never user input).
 const LINES: Record<StockDocumentType, RawBuilder<unknown>> = {
   goods_receipt: sql.raw('pharmacy.goods_receipt_lines'),
   opening_balance: sql.raw('pharmacy.opening_balance_lines'),
   write_off: sql.raw('pharmacy.write_off_lines'),
+  inventory: sql.raw('pharmacy.inventory_lines'),
 };
 
 export interface DocumentRow {
@@ -18,7 +19,7 @@ export interface DocumentRow {
   type: StockDocumentType;
   number: string;
   documentDate: string;
-  status: 'draft' | 'posted';
+  status: 'draft' | 'posted' | 'cancelled';
   createdBy: string;
   createdAt: Date;
   postedBy: string | null;
@@ -30,6 +31,11 @@ export interface DocumentRow {
   paymentDueDate: string | null;
   purchaseOrderId: string | null;
   writeOffReason: string | null;
+  inventoryScope: 'all' | 'category' | null;
+  inventoryCategoryId: string | null;
+  inventoryStartedAt: Date | null;
+  cancelledBy: string | null;
+  cancelledAt: Date | null;
 }
 
 export interface LineRow {
@@ -72,6 +78,9 @@ export interface HeaderValues {
   paymentDueDate: string | null;
   purchaseOrderId: string | null;
   writeOffReason?: string | null;
+  inventoryScope?: 'all' | 'category' | null;
+  inventoryCategoryId?: string | null;
+  inventoryStartedAt?: Date | null;
 }
 
 export interface MovementRow {
@@ -96,7 +105,8 @@ export interface ForeignMovementRow {
 const HEADER = sql`d.id, d.store_id, d.type, d.number, d.document_date::text as document_date,
   d.status, d.created_by, d.created_at, d.posted_by, d.posted_at, d.comment, d.total_dirams,
   d.supplier_id, d.supplier_invoice_number, d.payment_due_date::text as payment_due_date,
-  d.purchase_order_id, d.write_off_reason`;
+  d.purchase_order_id, d.write_off_reason, d.inventory_scope, d.inventory_category_id,
+  d.inventory_started_at, d.cancelled_by, d.cancelled_at`;
 
 // Stock documents, their lines, batches and movements (data model 03). The header and its lines
 // are one aggregate; movements are append-only.
@@ -314,7 +324,7 @@ export class DocumentsRepository {
       purchasePricePerPackDirams: number;
       costPerPieceDirams: number;
       supplierId: string | null;
-      origin: StockDocumentType;
+      origin: StockDocumentType | 'inventory_surplus';
       sourceDocumentId: string;
       isStarting: boolean;
     },
@@ -343,6 +353,21 @@ export class DocumentsRepository {
       businessDate: string;
       reversesMovementId: string | null;
     }>,
+  ): Promise<void> {
+    // ≤ 1 000 rows per statement: PostgreSQL takes at most 65 535 bind parameters
+    for (let from = 0; from < movements.length; from += 1_000) {
+      await this.insertMovementRows(
+        trx,
+        tenantId,
+        movements.slice(from, from + 1_000),
+      );
+    }
+  }
+
+  private async insertMovementRows(
+    trx: TenantTransaction,
+    tenantId: string,
+    movements: Parameters<DocumentsRepository['insertMovements']>[2],
   ): Promise<void> {
     if (movements.length === 0) return;
     await trx

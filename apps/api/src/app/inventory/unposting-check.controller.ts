@@ -9,6 +9,7 @@ import type { UnpostCheck } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
 import type { StockDocumentType } from './documents.repository';
 import { StockDocumentsService } from './stock-documents.service';
+import { StockCountsService } from './stock-counts.service';
 import { WriteOffsService } from './write-offs.service';
 
 const KINDS: Record<string, StockDocumentType> = {
@@ -23,6 +24,7 @@ export class UnpostingCheckController {
   constructor(
     private readonly documents: StockDocumentsService,
     private readonly writeOffs: WriteOffsService,
+    private readonly counts: StockCountsService,
   ) {}
 
   @RequirePermission('inventory:unpost')
@@ -32,6 +34,7 @@ export class UnpostingCheckController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<UnpostCheck> {
     if (kind === 'write-offs') return this.writeOffs.unpostCheck(id);
+    if (kind === 'stock-counts') return this.counts.unpostCheck(id);
     const type = KINDS[kind];
     if (!type) throw new BadRequestException();
     return this.documents.unpostCheck(type, id);

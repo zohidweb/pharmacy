@@ -94,6 +94,10 @@ import type {
   StockListResponse,
   StockProductOption,
   StockProductsQuery,
+  StockCountEntryRequest,
+  StockCountLine,
+  StockCountListQuery,
+  FoundLineInput,
   SupplierOption,
   SupplierReturn,
   SupplierReturnInput,
@@ -701,7 +705,7 @@ export const apiRoutes = {
     },
     undefined,
     undefined,
-    DocumentListQuery
+    StockCountListQuery
   >('GET', () => '/stock-counts'),
   'stockCounts.get': route<StockCount, undefined, { id: string }>(
     'GET',
@@ -722,6 +726,43 @@ export const apiRoutes = {
   'stockCounts.unpost': route<StockCount, undefined, { id: string }>(
     'POST',
     (p) => `/stock-counts/${id(p)}/unposting`,
+  ),
+  'stockCounts.cancel': route<StockCount, undefined, { id: string }>(
+    'POST',
+    (p) => `/stock-counts/${id(p)}/cancellation`,
+  ),
+  'stockCounts.addEntry': route<
+    StockCountLine,
+    StockCountEntryRequest,
+    { id: string }
+  >('POST', (p) => `/stock-counts/${id(p)}/entries`),
+  'stockCounts.deleteEntry': route<
+    StockCountLine,
+    undefined,
+    { id: string; entryId: string }
+  >(
+    'DELETE',
+    (p) => `/stock-counts/${id(p)}/entries/${encodeURIComponent(p.entryId)}`,
+  ),
+  'stockCounts.addFoundLine': route<StockCount, FoundLineInput, { id: string }>(
+    'POST',
+    (p) => `/stock-counts/${id(p)}/found-lines`,
+  ),
+  'stockCounts.updateFoundLine': route<
+    StockCount,
+    FoundLineInput,
+    { id: string; lineId: string }
+  >(
+    'PUT',
+    (p) => `/stock-counts/${id(p)}/found-lines/${encodeURIComponent(p.lineId)}`,
+  ),
+  'stockCounts.deleteFoundLine': route<
+    StockCount,
+    undefined,
+    { id: string; lineId: string }
+  >(
+    'DELETE',
+    (p) => `/stock-counts/${id(p)}/found-lines/${encodeURIComponent(p.lineId)}`,
   ),
 
   'transfers.overview': route<

@@ -455,29 +455,60 @@ export interface SupplierReturnListResponse extends Page<SupplierReturnListItem>
 
 /* ---------------- Stock count (ИН) ---------------- */
 
-export type StockCountScope = 'all' | 'category' | 'selected';
+/** «Выборочно» is out of this iteration (spec 2026-10-12, S3). */
+export type StockCountScope = 'all' | 'category';
 
-export interface StockCountLine {
-  productId: string;
-  productName: string;
-  batchId: string;
-  batchNumber: string;
-  expiresOn: string;
-  piecesPerPack: number;
-  /** Book stock at the start, pieces. */
-  bookPieces: number;
-  /** Sold since the start: the POS keeps working during the count (ТЗ). */
-  soldSincePieces: number;
-  /** Counted, pieces; null until entered. */
-  factPieces: number | null;
-  /** Cost of a piece (rounded up); only with `finance:view-cost`. */
-  pieceCostMinor?: number;
+/** «Counted N pieces» of a line by one employee; the fact of the line is the sum of its entries. */
+export interface StockCountEntry {
+  id: string;
+  /** May be 0 («counted none») or negative (a correction). */
+  pieces: number;
+  byName: string;
+  /** Entered by the current employee (they may delete it). */
+  mine: boolean;
+  at: string;
 }
 
+export interface StockCountLine {
+  lineId: string;
+  productId: string;
+  productName: string;
+  /** For the scanner. */
+  barcodes: string[];
+  /** A product found without a book batch (spec S1); a new batch is created on posting. */
+  isFound: boolean;
+  /** null for a found product. */
+  batchId: string | null;
+  batchNumber: string;
+  /** null for a found product until entered. */
+  expiresOn: string | null;
+  piecesPerPack: number;
+  /** Book stock at the start, pieces; 0 for a found product. */
+  bookPieces: number;
+  /** Sold since the start (POS sales minus returns): the POS keeps working during the count (ТЗ). */
+  soldSincePieces: number;
+  /** Has at least one entry. */
+  counted: boolean;
+  /** Sum of the entries, pieces; null until counted. */
+  factPieces: number | null;
+  entries: StockCountEntry[];
+  /** Cost of a piece (rounded up); only with `finance:view-cost`. */
+  pieceCostMinor?: number;
+  /** Purchase price of a pack of a found product; only with `finance:view-cost`. */
+  costMinor?: number | null;
+}
+
+/**
+ * GET /api/v1/stock-counts/{id}. Posting (`POST …/posting`, `inventory:post`): 422
+ * `validation_failed` at `lines.i.counted` / `lines.i.expiresOn` / `lines.i.costMinor`,
+ * `period_closed`; unposting (`POST …/unposting`, `inventory:unpost`): 409 `unpost_blocked`,
+ * `stock_count_in_progress`; cancellation (`POST …/cancellation`, `inventory:delete`): only in
+ * progress, 409 `document_posted` / `document_cancelled`.
+ */
 export interface StockCount {
   id: string;
   number: string;
-  status: 'in_progress' | 'posted';
+  status: 'in_progress' | 'posted' | 'cancelled';
   startedAt: string;
   storeId: string;
   storeName: string;
@@ -488,20 +519,56 @@ export interface StockCount {
   lines: StockCountLine[];
   createdBy: DocumentAuthor;
   postedBy: DocumentAuthor | null;
+  cancelledBy: DocumentAuthor | null;
 }
 
-/** POST /api/v1/stock-counts — the book stock is taken at this moment. */
+/**
+ * POST /api/v1/stock-counts (`inventory:post`) — the book stock is taken at this moment; the stock
+ * of the scope is frozen for stock documents of the store until posting or cancellation. 409
+ * `stock_count_in_progress` when the store already has a running count.
+ */
 export interface StartStockCountRequest {
   storeId: string;
   scope: StockCountScope;
+  /** Required for the scope `category`, null otherwise. */
   categoryId: string | null;
-  productIds: string[];
 }
 
-/** PUT /api/v1/stock-counts/{id} — counted quantities; posting: surplus in, shortage off (ТЗ). */
+/** PUT /api/v1/stock-counts/{id} (`inventory:update`) — the comment of a running count. */
 export interface SaveStockCountRequest {
   comment: string;
-  facts: Array<{ batchId: string; factPieces: number | null }>;
+}
+
+/**
+ * POST /api/v1/stock-counts/{id}/entries (`inventory:update`) — `id` (UUIDv7 of the tablet) is the
+ * idempotency key: a repeat returns the same line, another body with it — 409
+ * `idempotency_conflict`. DELETE …/entries/{entryId} — one's own entry, another one's with
+ * `inventory:post`.
+ */
+export interface StockCountEntryRequest {
+  id: string;
+  lineId: string;
+  pieces: number;
+}
+
+/**
+ * POST /api/v1/stock-counts/{id}/found-lines, PUT …/found-lines/{lineId} (`inventory:update`) — a
+ * product found without a book batch; `costMinor` (a pack) only with `finance:view-cost`. An
+ * archived product — 409 `product_archived`. DELETE — while the line has no entries.
+ */
+export interface FoundLineInput {
+  productId: string;
+  batchNumber: string;
+  expiresOn: string | null;
+  costMinor: number | null;
+}
+
+/** GET /api/v1/stock-counts?storeId=&status=&limit=&offset= */
+export interface StockCountListQuery {
+  storeId?: string;
+  status?: StockCount['status'];
+  limit?: number;
+  offset?: number;
 }
 
 export interface StockCountListItem {

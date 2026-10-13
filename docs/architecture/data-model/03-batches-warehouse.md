@@ -44,6 +44,19 @@
 > - отмену проведения блокируют движения партий, которые инвентаризация двигала (строки с расхождением и
 >   партии излишков);
 > - движения записываются со временем записи (`clock_timestamp()`), а не начала транзакции.
+>
+> **Введено миграцией `supplier-returns` (2026-10-12, спецификация
+> `docs/superpowers/specs/2026-10-12-supplier-returns-transfers-design.md`):** тип `supplier_return`,
+> `documents.supplier_return_reason`, `documents.source_document_id`, `supplier_return_lines`, движение
+> `supplier_return`; зачёт суммы возврата — в [05](05-purchasing.md). Поправки модели (утверждены архитектором
+> 2026-10-12, раздел 2.1 спецификации):
+> - **причина возврата — одна на документ** (`documents.supplier_return_reason`: `defect`, `expired`, `broken`);
+>   претензия поставщику — комментарий документа, `claim_text` в этой итерации не используется;
+> - `supplier_return_lines` дополнена `product_id`, `unit` (`pack` / `piece`, как ввели) и `note`; `amount_dirams` —
+>   закупочная стоимость строки, фиксируется при проведении: штуки × цена упаковки партии / штук в упаковке
+>   (формула суммы прихода);
+> - в строки попадают только партии поставщика документа (`batches.supplier_id`) с остатком на точке;
+> - `documents.source_document_id` у возврата — приход, из которого заполнены строки (необязательно).
 
 ```mermaid
 erDiagram

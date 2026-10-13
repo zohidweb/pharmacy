@@ -6,7 +6,10 @@ import {
   getRequestContext,
   requireOperator,
 } from '../../../common/context/request-context';
-import { ProblemException } from '../../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../../common/errors/problem.exception';
 import { PasswordHasher, SessionTokenService, sha256Hex } from '../../../core/crypto';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { OperatorSessionStore } from '../../../core/sessions';
@@ -124,7 +127,7 @@ export class OperatorSessionsService {
     // The attempt is reserved atomically before any hashing or database call.
     const key = `operator:${sha256Hex(login)}`;
     const attempt = await this.limiter.tryAcquire(key);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed) throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     const found = await this.db.platformTransaction(SIGN_IN_JOB, (trx) =>
       this.repository.findByLogin(trx, login),

@@ -1,7 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { EmployeeSession } from '@pharmacy/shared-dto';
-import { getRequestContext } from '../../common/context/request-context';
-import { ProblemException } from '../../common/errors/problem.exception';
+import {
+  getPrincipal,
+  getRequestContext,
+} from '../../common/context/request-context';
+import {
+  LockedException,
+  ProblemException,
+} from '../../common/errors/problem.exception';
 import { PasswordHasher } from '../../core/crypto';
 import { TenantDatabase } from '../../core/database';
 import { SessionStore } from '../../core/sessions';
@@ -64,7 +70,7 @@ export class TerminalSessionsService {
   ): Promise<PinLoginResult> {
     // The session this browser already holds (a password session or another cashier's PIN
     // session) ends with the sign-in.
-    const previousSessionId = getRequestContext()?.principal?.sessionId ?? null;
+    const previousSessionId = getPrincipal()?.sessionId ?? null;
 
     // Step 1: the terminal.
     const device = await this.terminals.resolveDevice(deviceSecret);
@@ -72,7 +78,7 @@ export class TerminalSessionsService {
     // Step 2: the terminal's counter, reserved before any hashing.
     const key = `terminal-pin:${device.terminalId}`;
     const attempt = await this.limiter.tryAcquire(key);
-    if (!attempt.allowed) throw new ProblemException(423, 'terminal_locked');
+    if (!attempt.allowed) throw new LockedException(423, 'terminal_locked', attempt.retryAfterSeconds);
 
     const result = await this.terminals.inTerminalTenant(device, () =>
       this.loginInTenant(device, employeeId.toLowerCase(), pin),

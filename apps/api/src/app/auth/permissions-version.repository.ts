@@ -17,6 +17,8 @@ export class PermissionsVersionRepository {
     tenantId: string,
     employeeIds: readonly string[],
   ): Promise<BumpedVersion[]> {
+    // `in ()` is not valid SQL: nothing to bump.
+    if (employeeIds.length === 0) return [];
     const rows = await trx
       .updateTable('employees')
       .set({ permissionsVersion: sql<bigint>`permissions_version + 1` })

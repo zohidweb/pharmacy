@@ -55,6 +55,9 @@ export abstract class SessionStore {
 
   abstract destroy(sessionId: string): Promise<void>;
 
+  // Ends the sessions listed for the employee at the moment of the call. A session created at the
+  // same time may escape it; the guarantee for a blocked employee or changed permissions is the
+  // permissions version, which SessionMiddleware checks on every request and which ends it there.
   abstract destroyAllFor(
     tenantId: string,
     employeeId: string,

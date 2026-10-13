@@ -60,7 +60,8 @@ export class RedisOperatorSessionStore extends OperatorSessionStore {
 
   async create(record: OperatorSessionRecord): Promise<void> {
     const ttl = lifetimeMs(record.idleTtlSeconds, record.absoluteExpiresAt);
-    if (ttl === null) return;
+    // Never silently: the caller would hand out a cookie of a session that does not exist.
+    if (ttl === null) throw new Error('The session to store has already expired');
     const setKey = operatorSessionsKey(record.operatorId);
     const absoluteMs = Math.ceil(Date.parse(record.absoluteExpiresAt) - Date.now());
     await readyMulti(this.redis)

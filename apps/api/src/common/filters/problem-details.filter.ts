@@ -12,7 +12,11 @@ import {
   getRequestContext,
   UnauthenticatedError,
 } from '../context/request-context';
-import { ProblemException } from '../errors/problem.exception';
+import { LockedException, ProblemException } from '../errors/problem.exception';
+import {
+  CORRELATION_ID_HEADER,
+  incomingCorrelationId,
+} from '../middleware/correlation-id.middleware';
 import {
   FieldProblemException,
   type FieldError,
@@ -106,11 +110,28 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const req = http.getRequest<Request>();
     const res = http.getResponse<Response>();
+    const known = req?.correlationId ?? getRequestContext()?.correlationId;
+    // Before the middleware ran, the client's own well-formed id is kept, as the middleware would.
     const correlationId =
-      req?.correlationId ?? getRequestContext()?.correlationId ?? randomUUID();
+      known ?? (req ? incomingCorrelationId(req) : null) ?? randomUUID();
 
     const body = this.toBody(error, correlationId);
     if (res.headersSent) return;
+    // An error before the correlation middleware ran (a body the parser refused, a path outside
+    // /api): the header carries the id of the body too, as on every other answer. Debug only: any
+    // stray path of a scanner lands here.
+    if (known === undefined) {
+      res.setHeader(CORRELATION_ID_HEADER, correlationId);
+      this.logger.debug(
+        `Request refused before routing (${body.status}) [correlationId=${correlationId}]`,
+      );
+    }
+    if (error instanceof LockedException) {
+      res.setHeader(
+        'Retry-After',
+        String(Math.max(1, Math.ceil(error.retryAfterSeconds))),
+      );
+    }
     res
       .status(body.status)
       .setHeader('Content-Type', PROBLEM_CONTENT_TYPE)

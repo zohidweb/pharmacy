@@ -52,10 +52,8 @@ export class SessionTokenService {
   constructor(private readonly keyRing: KeyRing) {}
 
   /** Signs the claims with the active key; the payload is exactly jti, sub, tid, aud, iss, iat, exp. */
-  sign(claims: SessionClaims, ttlSeconds: number): Promise<string> {
-    const key = this.keyRing.keys.get(this.keyRing.activeId);
-    if (!key)
-      throw new Error('The active session key is missing from the key ring');
+  async sign(claims: SessionClaims, ttlSeconds: number): Promise<string> {
+    const key = this.signingKey(ttlSeconds);
     return this.jwt.signAsync(
       { tid: claims.tid },
       {
@@ -72,10 +70,11 @@ export class SessionTokenService {
   }
 
   /** An operator token: jti, sub, aud=admin, iss, iat, exp — no tid. */
-  signOperator(claims: OperatorClaims, ttlSeconds: number): Promise<string> {
-    const key = this.keyRing.keys.get(this.keyRing.activeId);
-    if (!key)
-      throw new Error('The active session key is missing from the key ring');
+  async signOperator(
+    claims: OperatorClaims,
+    ttlSeconds: number,
+  ): Promise<string> {
+    const key = this.signingKey(ttlSeconds);
     return this.jwt.signAsync(
       {},
       {
@@ -166,5 +165,19 @@ export class SessionTokenService {
     const kid: unknown = (header as { kid?: unknown }).kid;
     if (typeof kid !== 'string') return null;
     return this.keyRing.keys.get(kid) ?? null;
+  }
+
+  // The active key, with the lifetime checked: a token without a positive whole lifetime would
+  // never expire or expire at once. Both failures are rejections of the returned promise.
+  private signingKey(ttlSeconds: number): Buffer {
+    if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds <= 0) {
+      throw new Error(
+        'The session token lifetime must be a positive whole number of seconds',
+      );
+    }
+    const key = this.keyRing.keys.get(this.keyRing.activeId);
+    if (!key)
+      throw new Error('The active session key is missing from the key ring');
+    return key;
   }
 }

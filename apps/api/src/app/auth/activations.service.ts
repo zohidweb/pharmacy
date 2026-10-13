@@ -7,7 +7,10 @@ import {
   runWithContext,
 } from '../../common/context/request-context';
 import { afterCommitBestEffort } from '../../common/errors/after-commit';
-import { ProblemException } from '../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../common/errors/problem.exception';
 import { PasswordHasher } from '../../core/crypto';
 import {
   ContextResolvers,
@@ -90,7 +93,7 @@ export class ActivationsService {
     // The attempt is reserved atomically before any hashing or database work.
     const key = activationLimiterKey(identifier.kind, identifier.value);
     const attempt = await this.limiter.tryAcquire(key);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed) throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     const resolved = await this.resolvers.resolveLogin(
       identifier.kind,

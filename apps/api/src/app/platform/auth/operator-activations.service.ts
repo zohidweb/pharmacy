@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { passwordProblems } from '@pharmacy/shared-domain';
 import { afterCommitBestEffort } from '../../../common/errors/after-commit';
-import { ProblemException } from '../../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../../common/errors/problem.exception';
 import { PasswordHasher, sha256Hex } from '../../../core/crypto';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { OperatorSessionStore } from '../../../core/sessions';
@@ -69,7 +72,7 @@ export class OperatorActivationsService {
     // Reserved atomically before hashing; never shared with the sign-in keys.
     const key = `activation:operator:${sha256Hex(login)}`;
     const attempt = await this.limiter.tryAcquire(key);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed) throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     // The same scrypt cost whether the login exists or not; no transaction held open meanwhile.
     const next = await this.hasher.hash(newPassword);

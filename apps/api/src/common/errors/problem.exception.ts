@@ -23,3 +23,18 @@ export class ProblemException extends HttpException {
     this.detail = detail;
   }
 }
+
+/**
+ * A refusal while a lock of attempts lasts (429 `login_locked`, 423 `terminal_locked`): the answer
+ * carries Retry-After with the seconds left, so a client need not guess when to try again.
+ */
+export class LockedException extends ProblemException {
+  constructor(
+    status: 423 | 429,
+    code: string,
+    readonly retryAfterSeconds: number,
+  ) {
+    super(status, code);
+    this.name = 'LockedException';
+  }
+}

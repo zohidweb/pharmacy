@@ -8,7 +8,10 @@ import {
   getRequestContext,
   requirePrincipal,
 } from '../../common/context/request-context';
-import { ProblemException } from '../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { PasswordHasher, SessionTokenService } from '../../core/crypto';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
@@ -102,7 +105,8 @@ export class MeService {
     // The attempt is reserved atomically before any hashing or database call (see LoginLimiter).
     const limiterKey = `password-change:${tenantId}:${employeeId}`;
     const attempt = await this.limiter.tryAcquire(limiterKey);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed)
+      throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),

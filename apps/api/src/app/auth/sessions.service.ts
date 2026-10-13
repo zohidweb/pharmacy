@@ -9,7 +9,10 @@ import {
   runWithContext,
 } from '../../common/context/request-context';
 import { afterCommitBestEffort } from '../../common/errors/after-commit';
-import { ProblemException } from '../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { PasswordHasher } from '../../core/crypto';
 import {
@@ -150,7 +153,7 @@ export class SessionsService {
     const key = loginLimiterKey(identifier.kind, identifier.value);
     const attempt = await this.limiter.tryAcquire(key);
     if (!attempt.allowed) {
-      throw new ProblemException(429, 'login_locked');
+      throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
     }
 
     // Step 4: the tenant of the identifier.
@@ -224,7 +227,8 @@ export class SessionsService {
     // Reserved atomically before any hashing or database call (see LoginLimiter).
     const limiterKey = `reconfirm:${tenantId}:${employeeId}`;
     const attempt = await this.limiter.tryAcquire(limiterKey);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed)
+      throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),

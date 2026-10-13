@@ -168,10 +168,17 @@ export class EmployeesService {
       const card = await this.db.tenantTransaction(async (trx) => {
         const editor = await loadEditor(this.repository, trx);
         const employee = await this.editable(trx, editor, employeeId);
-        const assigned = body.storeIds === null ? null : body.storeIds.map((s) => s.toLowerCase());
-        const changed =
-          employee.roleId !== body.roleId.toLowerCase() ||
-          !sameScope(scopeOfRow(employee), assigned);
+        const sameRole = employee.roleId === body.roleId.toLowerCase();
+        // The scope as checkAssignment would store it: the owner role always has the whole network,
+        // a list names each store once. A form repeating the stored assignment changes nothing (no
+        // audit, no version bump, no own_assignment refusal).
+        const assigned =
+          sameRole && employee.roleIsOwner
+            ? null
+            : body.storeIds === null
+              ? null
+              : [...new Set(body.storeIds.map((s) => s.toLowerCase()))];
+        const changed = !sameRole || !sameScope(scopeOfRow(employee), assigned);
         if (changed) {
           if (employee.id === principal.employeeId) {
             throw new ProblemException(403, 'own_assignment');
@@ -375,7 +382,13 @@ export class EmployeesService {
   private async card(trx: TenantTransaction, employee: EmployeeRow): Promise<EmployeeCard> {
     const { tenantId } = requirePrincipal();
     const context = await this.viewContext(trx);
-    const activity = await this.repository.activity(trx, tenantId, employee.id, ACTIVITY_LIMIT);
+    const activity = await this.repository.activity(
+      trx,
+      tenantId,
+      employee.id,
+      Object.keys(ACTIVITY_KINDS),
+      ACTIVITY_LIMIT,
+    );
     return {
       ...context.toItem(employee),
       activity: activity.flatMap((entry) => {

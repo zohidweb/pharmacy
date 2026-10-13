@@ -467,7 +467,7 @@ function NewProductDialog({
   );
   const problems = draftProblems(draft);
   const valid =
-    !problems.nameRu && !problems.piecesPerPack && !problems.maxPrice;
+    !problems.name && !problems.piecesPerPack && !problems.maxPrice;
 
   return (
     <Dialog

@@ -59,6 +59,7 @@ export class RolesService {
     return this.db.tenantTransaction(async (trx) => {
       const editor = await loadEditor(this.repository, trx);
       if (!roleWithinEditor(editor, { isOwner: false, permissions })) throw escalation();
+      await this.repository.lockRoleNames(trx, tenantId);
       if (await this.repository.roleNameTaken(trx, tenantId, input.name, null)) {
         throw nameTaken();
       }
@@ -94,6 +95,7 @@ export class RolesService {
       ) {
         throw escalation();
       }
+      await this.repository.lockRoleNames(trx, tenantId);
       if (await this.repository.roleNameTaken(trx, tenantId, input.name, roleId)) {
         throw nameTaken();
       }

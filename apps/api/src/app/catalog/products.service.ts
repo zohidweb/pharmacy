@@ -256,6 +256,11 @@ export class ProductsService {
     const productId = id.toLowerCase();
     return this.write(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);
+      // Locked before it is read: the changed fields of the audit and the archived check are those
+      // of the row this edit replaces.
+      if ((await this.repository.lockProduct(trx, tenantId, productId)) === null) {
+        throw notFound();
+      }
       const current = await this.repository.findProduct(
         trx,
         tenantId,
@@ -293,12 +298,28 @@ export class ProductsService {
     const productId = id.toLowerCase();
     return this.db.tenantTransaction(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);
+      if ((await this.repository.lockProduct(trx, tenantId, productId)) === null) {
+        throw notFound();
+      }
       const current = await this.repository.findProduct(
         trx,
         tenantId,
         productId,
       );
       if (current === null) throw notFound();
+      if (current.status !== status && status === 'active') {
+        // A product is restored only into an active category: in an archived one its card could
+        // not be saved any more.
+        const category = await this.repository.lockCategory(
+          trx,
+          tenantId,
+          current.categoryId,
+          'share',
+        );
+        if (category === null || category.status !== 'active') {
+          throw invalid('categoryId', 'unknown_category');
+        }
+      }
       if (current.status !== status) {
         await this.repository.setProductStatus(
           trx,
@@ -361,6 +382,7 @@ export class ProductsService {
       trx,
       tenantId,
       input.categoryId,
+      'share',
     );
     if (category === null || category.status !== 'active') {
       throw invalid('categoryId', 'unknown_category');

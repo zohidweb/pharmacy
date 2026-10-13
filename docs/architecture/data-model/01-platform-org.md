@@ -53,6 +53,9 @@ erDiagram
 | `default_language` | text `ru`/`tj` | `ru` | Обязательный язык названий (D6), язык чека |
 | `timezone` | text | `Asia/Dushanbe` | Бизнес-дата |
 | `return_period_days` | integer ≥ 0 | 14 | КП 7 |
+| `customer_return_otc` | boolean | true | Возврат по желанию покупателя: товары без рецепта (миграция `customer-returns`, R3) |
+| `customer_return_rx` | boolean | false | То же: рецептурные |
+| `customer_return_controlled` | boolean | false | То же: ПКУ; брак принимается всегда |
 | `cashier_session_idle_min` | integer | 15 | КП 12; ограничения — ADR-0008 |
 | `pin_min_length` | integer ≥ 4 | 4 | ADR-0008 |
 | `sync_interval_min` | integer 5…1440 | 15 | ADR-0014 |

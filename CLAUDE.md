@@ -89,6 +89,9 @@ pharmacy/
 - модули api общаются через публичные интерфейсы (`exports`) модулей, не через чужие внутренности;
   граф без циклов: `catalog` ← `pricing`; `catalog`, `pricing`, `purchasing` ← `inventory` (`ProductsReader`,
   `StorePriceWriter`, `SuppliersReader`, `SupplierLedger`).
+  `pos`, `inventory`, `catalog` ← `returns` (`SoldReceipts`, `PosShifts`, `ReturnStock`); итоги возвратов смены и
+  номера возвратов `pos` и `inventory` получают через порты `ShiftReturns`, `CustomerReturnNumbers`, которые
+  заполняет `returns`.
 
 ## Build / test / lint
 
@@ -102,7 +105,7 @@ npx nx dev web                       # http://localhost:4200 (/api/* прокс�
 npx nx run web:dev-api               # то же, но готовые маршруты (вход, точки, сотрудники, роли, каталог, цены, скидки,
                                      #   поставщики и оплаты, заказы поставщикам, приход, начальные остатки, списание,
                                      #   инвентаризация, возврат поставщику, перемещения и заявки, остатки,
-                                     #   касса и смена) — в apps/api
+                                     #   касса и смена, возвраты покупателей) — в apps/api
 npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
 npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети) — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
@@ -283,7 +286,7 @@ npm run prod:build / prod:up / prod:down
   `node --env-file=.env apps/api/scripts/create-operator.mjs --login … --name "…"`.
 - Офлайн-точка (часть 4 аутентификации): `STORE_MODE=offline` и `OFFLINE_TENANT_ID=<сеть точки>`,
   Redis не нужен — сессии в таблице `sessions` PostgreSQL точки, лимиты попыток в памяти процесса,
-  маршрутов оператора нет; модули `stores`, `staff`, `catalog`, `pricing`, `purchasing`, `inventory`, `pos` пока
+  маршрутов оператора нет; модули `stores`, `staff`, `catalog`, `pricing`, `purchasing`, `inventory`, `pos`, `returns` пока
   регистрируются только в облаке (синхронизация на точку — ADR-0014, отдельной задачей). Ключи JWT и pepper точки
   генерируются на её ПК: `node scripts/generate-store-secrets.mjs --env-file <env-файл точки>`
   (значения не печатает, существующие не перезаписывает; бэкап pepper — отдельно от бэкапа БД).

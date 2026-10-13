@@ -15,7 +15,7 @@
 | `sync_runs` | tenant | Прогон: `store_id`, `batch_id`, `started_at`, `finished_at`, принято / дублей / в карантине, результат |
 | `sync_conflicts` | tenant | `kind` `price` (решает владелец) / `duplicate_product` (решает точка), `store_id`, `entity_id`, `local_value jsonb`, `cloud_value jsonb`, `status` `open` / `resolved`, `resolution`, `resolved_by`, `resolved_at` |
 | `store_sync_status` | tenant-export | Ключ `(tenant_id, store_id)`: `last_success_at`, `queue_size`, `last_checkpoint jsonb`, `checkpoint_mismatch boolean`, `client_version`, `clock_skew_sec`. Читают владелец и оператор |
-| `idempotency_keys` | tenant | Ключ `(tenant_id, scope, key)`: `request_hash bytea`, `response jsonb`, `status_code`, `expires_at`. Для HTTP-операций буфера перебоев облачных точек; тот же ключ с другим хешем — отказ. Введена миграцией `pos-shifts-sales` (2026-10-13): области `receipt`, `shift.open`, `shift.cash`, `shift.close`, ключ — `id` операции, срок 30 дней |
+| `idempotency_keys` | tenant | Ключ `(tenant_id, scope, key)`: `request_hash bytea`, `response jsonb`, `status_code`, `expires_at`. Для HTTP-операций буфера перебоев облачных точек; тот же ключ с другим хешем — отказ. Введена миграцией `pos-shifts-sales` (2026-10-13): области `receipt`, `shift.open`, `shift.cash`, `shift.close`, ключ — `id` операции, срок 30 дней; область `return` (возврат покупателя, онлайн) — миграцией `customer-returns` |
 
 ## Аудит
 

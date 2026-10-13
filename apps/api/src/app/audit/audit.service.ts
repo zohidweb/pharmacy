@@ -16,6 +16,11 @@ export interface AuditEvent {
   entityId?: string;
   /** UUID of the store the event concerns. */
   storeId?: string;
+  /**
+   * UUID of the terminal of an event written without a principal (a PIN sign-in is audited before
+   * its session exists). A principal's own terminal wins.
+   */
+  terminalId?: string;
   /** Free-form facts about the event. Never passwords, PINs, tokens, codes or keys. */
   details?: Record<string, unknown>;
 }
@@ -56,7 +61,7 @@ export class AuditService {
           (select ts.timezone from tenant_settings ts where ts.tenant_id = ${tenantId}),
           ${DEFAULT_TIMEZONE}))::date`,
         employeeId: principal?.employeeId ?? null,
-        terminalId: principal?.terminalId ?? null,
+        terminalId: principal?.terminalId ?? event.terminalId ?? null,
         storeId: event.storeId ?? null,
         correlationId: context.correlationId,
         action: event.action,

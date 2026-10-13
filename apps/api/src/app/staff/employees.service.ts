@@ -33,6 +33,7 @@ import {
   sameScope,
   scopeWithinEditor,
 } from './assignment-rules';
+import { MissingPermissionException } from './access-denied-audit.interceptor';
 import { loadEditor } from './roles.service';
 import { type EmployeeRow, type Hash, StaffRepository } from './staff.repository';
 
@@ -184,7 +185,7 @@ export class EmployeesService {
             throw new ProblemException(403, 'own_assignment');
           }
           if (!principal.permissions.includes('employees:assign-role')) {
-            throw new ProblemException(403, 'forbidden');
+            throw new MissingPermissionException('employees:assign-role');
           }
           const { roleId, scope, isOwner } = await this.checkAssignment(trx, editor, body);
           if (
@@ -232,6 +233,9 @@ export class EmployeesService {
     });
     const hash = await this.hasher.hash(newPassword);
     await this.db.tenantTransaction(async (trx) => {
+      // Checked again where it is written: the employee may have been raised above the editor
+      // while the hash was computed.
+      await this.othersEditable(trx, await loadEditor(this.repository, trx), employeeId);
       await this.repository.setPassword(trx, tenantId, employeeId, hash);
       await this.audit.append(trx, {
         action: 'employee.password-reset',
@@ -254,6 +258,8 @@ export class EmployeesService {
     checkEmployeePin(pin, minLength, 'pin');
     const hash: Hash = await this.hasher.hash(pin);
     await this.db.tenantTransaction(async (trx) => {
+      // Checked again where it is written (see resetPassword).
+      await this.othersEditable(trx, await loadEditor(this.repository, trx), employeeId);
       await this.repository.setPin(trx, tenantId, employeeId, hash);
       await this.audit.append(trx, {
         action: 'employee.pin-set',
@@ -318,13 +324,14 @@ export class EmployeesService {
       : body.storeIds === null
         ? null
         : [...new Set(body.storeIds.map((s) => s.toLowerCase()))];
-    if (scope !== null) {
-      if (scope.length === 0) throw invalid('storeIds', 'required');
-      const active = await this.repository.activeStoreIds(trx, tenantId, scope);
-      if (active.length !== scope.length) throw invalid('storeIds', 'unknown_store');
-    }
+    if (scope !== null && scope.length === 0) throw invalid('storeIds', 'required');
+    // The scope first: a store outside the editor's own is refused before its existence is told.
     if (!scopeWithinEditor(editor, scope)) {
       throw new ProblemException(403, 'store_not_in_scope');
+    }
+    if (scope !== null) {
+      const active = await this.repository.activeStoreIds(trx, tenantId, scope);
+      if (active.length !== scope.length) throw invalid('storeIds', 'unknown_store');
     }
     return { roleId: role.id, scope, isOwner: role.isOwner };
   }

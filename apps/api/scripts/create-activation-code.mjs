@@ -4,14 +4,17 @@
 //
 // Reads DATABASE_URL (the pharmacy_app role) and, optionally, ACTIVATION_CODE_TTL_HOURS (default
 // 72) from the environment. Prints only the code and its expiry, once, to stdout; the hash and the
-// connection string are never printed. Errors go to stderr with exit code 1.
+// connection string are never printed. Errors go to stderr with exit code 1. The issue is written
+// to the network's audit_log (auth.activation-code-issued) in the same transaction, so the owner
+// sees it, as with a code issued by the operator.
 //
 // Plain Node ESM that cannot import the TypeScript sources of the API, so two small pieces are
 // duplicated and must stay in step with them: the identifier rules (apps/api/src/app/auth/
 // identifier.ts) and the code format (apps/api/src/app/auth/activation-code.ts). The integration
 // test activation-script.int-spec.ts checks both against the real implementation.
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { v7 as uuidv7 } from 'uuid';
 
 const DEFAULT_TTL_HOURS = 72;
 
@@ -27,6 +30,7 @@ const PHONE_SEPARATORS = /[\s\-()]/g;
 const DIGITS = /^\d+$/;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 const WHITESPACE = /\s/;
+const FORMAT_CHARACTER = /\p{Cf}/u;
 
 function normalizePhone(raw) {
   const compact = raw.replace(PHONE_SEPARATORS, '');
@@ -47,8 +51,8 @@ function normalizePhone(raw) {
 }
 
 function normalizeIdentifier(raw) {
-  const trimmed = raw.trim();
-  if (trimmed === '') return null;
+  const trimmed = raw.normalize('NFKC').trim();
+  if (trimmed === '' || FORMAT_CHARACTER.test(trimmed)) return null;
   if (trimmed.includes('@')) {
     const email = trimmed.toLowerCase();
     return email.length <= MAX_EMAIL_LENGTH && EMAIL.test(email)
@@ -179,6 +183,25 @@ async function main() {
            updated_at = now()
          returning one_time_code_expires_at`,
         [tenantId, employeeId, hash, hours],
+      );
+      // Today in the network's time zone, as AuditService computes it. No employee and no operator
+      // acted: the details say who did.
+      await client.query(
+        `insert into pharmacy.audit_log
+           (tenant_id, id, business_date, correlation_id, action, entity_type, entity_id, details,
+            source)
+         values ($1, $2,
+           (now() at time zone coalesce(
+             (select s.timezone from pharmacy.tenant_settings s where s.tenant_id = $1),
+             'Asia/Dushanbe'))::date,
+           $3, 'auth.activation-code-issued', 'employee', $4, '{"issuedBy":"script"}'::jsonb, $5)`,
+        [
+          tenantId,
+          uuidv7(),
+          randomUUID(),
+          employeeId,
+          process.env.STORE_MODE === 'offline' ? 'offline_store' : 'cloud',
+        ],
       );
       await client.query('commit');
       const expiresAt = stored.rows[0].one_time_code_expires_at.toISOString();

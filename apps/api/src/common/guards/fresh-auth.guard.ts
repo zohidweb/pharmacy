@@ -9,6 +9,9 @@ import { getOperator, getPrincipal } from '../context/request-context';
 import { ProblemException } from '../errors/problem.exception';
 import { REQUIRE_FRESH_AUTH_KEY } from './decorators';
 
+// How far ahead of this instance's clock another instance may have stamped a sign-in.
+const MAX_CLOCK_SKEW_MS = 60_000;
+
 // Step-up guard, last in the chain (auth design 2026-10-02, section 7, guard 5): a
 // @RequireFreshAuth() route (terminal binding, employees and roles, own password and PIN) needs a
 // session opened with a password no longer than STEP_UP_MAX_AGE_SECONDS ago. A PIN session never
@@ -41,9 +44,10 @@ export class FreshAuthGuard implements CanActivate {
     const byPassword = principal ? principal.auth === 'password' : true;
 
     // NaN (an unparseable timestamp) fails the comparison and is rejected. A timestamp slightly
-    // in the future (clock skew between API instances) counts as fresh.
+    // in the future (clock skew between API instances) counts as fresh; further ahead it does not:
+    // a session cannot have been confirmed in the future.
     const age = Date.now() - Date.parse(authenticatedAt);
-    if (!byPassword || !(age <= this.maxAgeMs)) {
+    if (!byPassword || !(age >= -MAX_CLOCK_SKEW_MS && age <= this.maxAgeMs)) {
       throw new ProblemException(403, 'fresh_auth_required');
     }
     return true;

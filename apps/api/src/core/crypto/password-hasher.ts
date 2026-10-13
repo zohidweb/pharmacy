@@ -120,7 +120,10 @@ export class PasswordHasher implements OnModuleInit {
   ): Promise<boolean> {
     try {
       const parsed = parsePhc(phc);
-      if (!parsed) {
+      // A corrupt hash or a retired pepper costs the time of a real check too: the answer time
+      // must not tell such an account apart.
+      if (!parsed || !this.peppers.keys.has(String(pepperVersion))) {
+        await this.verifyDummy(secret);
         return false;
       }
       const derived = await this.derive(

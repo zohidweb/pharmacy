@@ -21,6 +21,9 @@ const PHONE_SEPARATORS = /[\s\-()]/g;
 const DIGITS = /^\d+$/;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 const WHITESPACE = /\s/;
+// Invisible format characters (zero-width space and joiners, direction marks): an identifier that
+// looks the same must be the same identifier.
+const FORMAT_CHARACTER = /\p{Cf}/u;
 
 function normalizePhone(raw: string): string | null {
   const compact = raw.replace(PHONE_SEPARATORS, '');
@@ -42,8 +45,9 @@ function normalizePhone(raw: string): string | null {
 
 /** The kind and normalized value of a login identifier, or null when it cannot be one. */
 export function normalizeIdentifier(raw: string): NormalizedIdentifier | null {
-  const trimmed = raw.trim();
-  if (trimmed === '') return null;
+  // Compatibility forms (full-width letters and digits, ligatures) become their plain characters.
+  const trimmed = raw.normalize('NFKC').trim();
+  if (trimmed === '' || FORMAT_CHARACTER.test(trimmed)) return null;
 
   if (trimmed.includes('@')) {
     const email = trimmed.toLowerCase();

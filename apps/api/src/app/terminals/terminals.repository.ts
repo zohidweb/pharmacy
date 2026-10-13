@@ -130,21 +130,22 @@ export class TerminalsRepository {
       .execute();
   }
 
-  /** Revokes an active terminal; false when it was already revoked or does not exist. */
+  /** Revokes an active terminal; its store, or null when it was revoked already or is unknown. */
   async revoke(
     trx: TenantTransaction,
     tenantId: string,
     terminalId: string,
     revokedBy: string,
-  ): Promise<boolean> {
-    const result = await trx
+  ): Promise<string | null> {
+    const row = await trx
       .updateTable('terminals')
       .set({ revokedAt: sql<Date>`now()`, revokedBy })
       .where('tenantId', '=', tenantId)
       .where('id', '=', terminalId)
       .where('revokedAt', 'is', null)
+      .returning('storeId')
       .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+    return row?.storeId ?? null;
   }
 
   async touchLastSeen(
@@ -321,6 +322,30 @@ export class TerminalsRepository {
           ? null
           : new Date(row.pinLockedAt),
     };
+  }
+
+  /**
+   * Replaces the PIN hash after a successful check, only while the stored hash is still the
+   * verified one: a PIN changed meanwhile is never overwritten with the old secret.
+   */
+  async updatePinHash(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+    verifiedPhc: string,
+    next: { phc: string; pepperVersion: number },
+  ): Promise<void> {
+    await trx
+      .updateTable('employeeCredentials')
+      .set({
+        pinHash: next.phc,
+        pinPepperVersion: next.pepperVersion,
+        updatedAt: sql<Date>`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('employeeId', '=', employeeId)
+      .where('pinHash', '=', verifiedPhc)
+      .execute();
   }
 
   /** Sets the PIN and clears the failure counter and the lock; creates the credentials row. */

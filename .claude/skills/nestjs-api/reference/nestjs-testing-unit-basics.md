@@ -63,7 +63,6 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { ProductsRepository } from './products.repository';
 import { TenantDatabase } from '../../core/database';
-import { RedisService } from '../../core/redis/redis.service';
 import { createTenantDatabaseMock, inContext } from '../../../test/mocks';
 import { buildProductRow } from '../../../test/factories';
 
@@ -71,7 +70,6 @@ describe('ProductsService', () => {
   const { db, trx } = createTenantDatabaseMock();
   const TENANT = '01920000-0000-7000-8000-000000000001';
   const repo = { findById: jest.fn(), findByBarcode: jest.fn(), insert: jest.fn(), search: jest.fn() };
-  const cache = { get: jest.fn(), set: jest.fn(), delByPrefix: jest.fn() };
   let service: ProductsService;
 
   beforeEach(async () => {
@@ -80,7 +78,6 @@ describe('ProductsService', () => {
         ProductsService,
         { provide: TenantDatabase, useValue: db },
         { provide: ProductsRepository, useValue: repo },
-        { provide: RedisService, useValue: cache },
       ],
     }).compile();
     service = moduleRef.get(ProductsService);
@@ -90,7 +87,7 @@ describe('ProductsService', () => {
     const dto = { name: { ru: 'Парацетамол 500 мг', tj: 'Парасетамол 500 мг' }, piecesPerPack: 10,
                   isPrescription: false, isControlled: false, barcodes: ['4600000000017'] };
 
-    it('inserts within tenant transaction and invalidates tenant catalog cache', async () => {
+    it('inserts within tenant transaction', async () => {
       repo.findByBarcode.mockResolvedValue(undefined);
       repo.insert.mockResolvedValue(buildProductRow({ tenantId: TENANT, name: dto.name }));
 
@@ -99,7 +96,6 @@ describe('ProductsService', () => {
       expect(result.name).toEqual(dto.name);
       expect(db.tenantTransaction).toHaveBeenCalledTimes(1);
       expect(repo.insert).toHaveBeenCalledWith(trx, TENANT, expect.objectContaining({ name: dto.name }));
-      expect(cache.delByPrefix).toHaveBeenCalledWith(`catalog:${TENANT}:`);
     });
 
     it('throws ConflictException when barcode already exists in the tenant', async () => {
@@ -112,17 +108,7 @@ describe('ProductsService', () => {
   });
 
   describe('findOne', () => {
-    it('returns cached product; cache key is tenant-scoped', async () => {
-      cache.get.mockResolvedValue({ id: 'p-1', nameRu: 'X' });
-
-      await inContext({ tenantId: TENANT }, () => service.findOne('p-1'));
-
-      expect(cache.get).toHaveBeenCalledWith(`catalog:${TENANT}:product:p-1`);
-      expect(repo.findById).not.toHaveBeenCalled();
-    });
-
     it('throws NotFoundException when product is absent in current tenant', async () => {
-      cache.get.mockResolvedValue(null);
       repo.findById.mockResolvedValue(undefined);
 
       await expect(inContext({ tenantId: TENANT }, () => service.findOne('missing')))
@@ -144,8 +130,11 @@ describe('ProductsService', () => {
 
 Что проверяет каждый тест сервиса проекта:
 - запись/чтение идёт через `tenantTransaction` (а значит, с `tenantId` из контекста), репозиторий получает `trx` и `tenantId`;
-- ключи кэша содержат `tenantId`;
 - отказ без тенанта (fail closed) проверяется один раз — тестами `request-context.spec.ts` и `tenant-database.int-spec.ts`, а не в каждом сервисе.
+
+Redis в unit-тесте сервиса не появляется: он скрыт за портами (`SessionStore`,
+`PermissionsVersionCache`, `LoginLimiter`), и тест получает фейк порта — `nestjs-testing-unit-mocks.md`,
+раздел «Redis».
 
 ## Деньги — integer (обязательный unit-кейс)
 

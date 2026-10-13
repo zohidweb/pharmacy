@@ -7,7 +7,9 @@
 
 - NestJS, Node.js LTS, TypeScript `strict`. HTTP-адаптер — стандартный Express
   (`@nestjs/platform-express`). Fastify — только после ADR.
-- PostgreSQL — единственная БД; Redis — сессии, PIN-сессии терминалов, кэш каталога/цен.
+- PostgreSQL — единственная БД; Redis (только в облаке, клиент `REDIS_CLIENT`) — сессии, PIN-сессии
+  терминалов, версия прав, лимиты входа и throttler; кэш каталога/цен stack.md допускает, в коде его
+  пока нет. На офлайн-точке Redis нет: сессии — в PostgreSQL точки, лимиты — в памяти процесса.
 - REST (`/api/v1/…`), JSON camelCase, ошибки RFC 7807 (`application/problem+json`).
 - Тесты — Jest (стандарт Nx). Vitest не используем.
 - Монорепо Nx: `apps/api` — модульный монолит (ADR-0002).

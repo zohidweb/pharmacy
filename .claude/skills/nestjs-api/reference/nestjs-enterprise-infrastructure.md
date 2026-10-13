@@ -38,43 +38,58 @@ app.getHttpAdapter().getInstance().disable('x-powered-by');
 - Экспорт `openapi.json` «для API gateway» не делаем — API gateway пока не выбран (вводится через ADR);
   типы для фронтендов уже общие (`libs/shared/dto`).
 
-## Health checks (@nestjs/terminus)
+## Health checks
 
-Два эндпоинта: liveness (процесс жив) и readiness (PostgreSQL и Redis доступны).
+Два эндпоинта: liveness (процесс жив) и readiness (PostgreSQL и, в облаке, Redis доступны).
 Используются healthcheck'ом Docker на офлайн-точке и мониторингом облака (когда он будет
 выбран через ADR). Без аутентификации, без детальной информации об окружении.
 
+Сейчас в коде только liveness:
+
 ```typescript
-// apps/api/src/app/health/health.controller.ts (exists: liveness GET /api/v1/health; readiness to be added)
+// apps/api/src/app/health/health.controller.ts (real file)
 import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckService, HealthIndicatorService } from '@nestjs/terminus';
 import { SkipThrottle } from '@nestjs/throttler';
-import { Public } from '../auth/decorators';
-import { TenantDatabase } from '../../core/database';
-import { RedisService } from '../../core/redis/redis.service';
+import { Public } from '../../common/guards/decorators';
 
 @Public()
 @SkipThrottle()
 @Controller('health') // default version 1 -> /api/v1/health (Dockerfile healthcheck, web connectivity ping)
 export class HealthController {
+  @Get() // liveness — the path is used by apps/api/Dockerfile and apps/web, do not move it
+  check(): { status: 'ok' } {
+    return { status: 'ok' };
+  }
+}
+```
+
+Readiness (`GET /api/v1/health/ready`) добавляется вместе с `@nestjs/terminus` (разрешён в
+`nestjs-config-npm-ts.md`, в зависимостях пока нет). Redis — через тот же клиент `REDIS_CLIENT`
+(`core/redis`), что и у сессий; на офлайн-точке клиента нет (`null`) и проверки Redis нет. Клиент
+создан без офлайн-очереди (`disableOfflineQueue`): пока Redis переподключается, `ping()`
+отклоняется сразу — readiness отвечает `down`, а не зависает.
+
+```typescript
+// apps/api/src/app/health/health.controller.ts — readiness, to be added (fragment)
+import { Inject } from '@nestjs/common';
+import { HealthCheck, HealthCheckService, HealthIndicatorService } from '@nestjs/terminus';
+import { TenantDatabase } from '../../core/database';
+import { REDIS_CLIENT, type RedisClient } from '../../core/redis/redis.tokens';
+
   constructor(
     private readonly health: HealthCheckService,
     private readonly indicators: HealthIndicatorService,
     private readonly db: TenantDatabase, // ping(): `select 1` without a tenant context — add with /health/ready
-    private readonly redis: RedisService,
+    @Inject(REDIS_CLIENT) private readonly redis: RedisClient | null, // null on an offline store
   ) {}
-
-  @Get() // liveness: /api/v1/health — the path is used by apps/api/Dockerfile and apps/web, do not move it
-  check() {
-    return { status: 'ok' };
-  }
 
   @Get('ready') // readiness: /api/v1/health/ready
   @HealthCheck()
   ready() {
+    const redis = this.redis;
     return this.health.check([
       () => this.probe('database', () => this.db.ping()),
-      () => this.probe('redis', () => this.redis.ping()),
+      ...(redis ? [() => this.probe('redis', () => redis.ping())] : []),
     ]);
   }
 
@@ -87,7 +102,6 @@ export class HealthController {
       return indicator.down({ message: 'unavailable' }); // no error text: it may leak hosts/credentials
     }
   }
-}
 ```
 
 `HealthIndicatorService` — API Terminus 11; старый `HealthIndicator`/`HealthCheckError`

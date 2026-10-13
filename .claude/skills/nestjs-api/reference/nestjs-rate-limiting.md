@@ -8,67 +8,86 @@ Edge-защита (WAF, балансировщик) — вне этого ски
 
 | Развёртывание | Хранилище |
 |---|---|
-| Облако, несколько stateless-инстансов api | Redis (общий счётчик для всех инстансов) |
-| Офлайн-точка (один инстанс) / локально | in-memory (по умолчанию) допустимо |
+| Облако (`STORE_MODE=cloud`), несколько stateless-инстансов api | Redis — `RedisThrottlerStorage` (общий счётчик для всех инстансов) |
+| Офлайн-точка (`STORE_MODE=offline`, один процесс) | in-memory хранилище `@nestjs/throttler` |
 
 ```typescript
 // apps/api/src/app/app.module.ts (fragment)
+const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 }; // per tracker, per minute
+
 ThrottlerModule.forRootAsync({
-  inject: [RedisService, applicationConfig.KEY],
-  useFactory: (redis: RedisService, app: ConfigType<typeof applicationConfig>) => ({
-    throttlers: [
-      { name: 'default', ttl: 60_000, limit: 300 }, // per tracker, per minute
-    ],
-    // Redis storage adapter for throttler: a community package (e.g. @nest-lab/throttler-storage-redis).
-    // Check maintenance status and license before adding it; alternatively implement ThrottlerStorage on RedisService.
-    storage: app.deploymentMode === 'cloud' ? redis.throttlerStorage() : undefined,
+  inject: [REDIS_CLIENT],
+  useFactory: (client: RedisClient | null) => ({
+    throttlers: [DEFAULT_THROTTLE],
+    // No Redis client on an offline store (a single process): the package's in-memory storage.
+    ...(client ? { storage: new RedisThrottlerStorage(client) } : {}),
   }),
 }),
 ```
 
+`RedisThrottlerStorage` (`apps/api/src/common/throttling/redis-throttler.storage.ts`) — своя
+реализация `ThrottlerStorage` из `@nestjs/throttler` 6 на единственном клиенте node-redis
+(`REDIS_CLIENT` из `core/redis`, ADR-0008): один Lua-скрипт на запрос (фиксированное окно + ключ
+блокировки), сроки возвращаются в секундах для `Retry-After`. В ключах нет ПДн: guard передаёт
+SHA-256 маршрута и трекера. Другой адаптер хранилища или второй Redis-клиент — только через ADR.
+
 ## Трекер: сотрудник, а не только IP
 
 В аптеке несколько касс часто выходят в интернет с одного IP — лимит только по IP накажет всю
-точку. Для аутентифицированных запросов считаем по сессии/сотруднику.
+точку. Поэтому трекер — сотрудник, оператор платформы — свой id, гость — IP.
 
 ```typescript
-// apps/api/src/common/throttling/tenant-aware-throttler.guard.ts
-import { Injectable } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
-import type { Request } from 'express';
-import { getRequestContext } from '../context/request-context';
-
+// apps/api/src/common/throttling/principal-throttler.guard.ts
 @Injectable()
-export class TenantAwareThrottlerGuard extends ThrottlerGuard {
-  protected async getTracker(req: Request): Promise<string> {
-    const ctx = getRequestContext();
-    return ctx?.employeeId ? `t:${ctx.tenantId}:e:${ctx.employeeId}` : `ip:${req.ip}`;
+export class PrincipalThrottlerGuard extends ThrottlerGuard {
+  protected override async getTracker(req: Record<string, unknown>): Promise<string> {
+    const principal = getPrincipal();
+    if (principal) return principal.employeeId;
+    const operator = getOperator();
+    if (operator) return `op:${operator.operatorId}`;
+    return super.getTracker(req); // guest: req.ip
+  }
+
+  // Retry-After is already set by ThrottlerGuard; the limit details are not exposed.
+  protected override async throwThrottlingException(): Promise<void> {
+    throw new ProblemException(429, 'too_many_requests');
   }
 }
 ```
 
-Guard регистрируется глобально вместо `ThrottlerGuard` и **после** `AuthGuard`
-(порядок: session → throttle → permissions), иначе контекст сотрудника ещё пуст.
-`AuthGuard` для `@Public()`-маршрутов пропускает запрос дальше, и трекером становится
-IP; поэтому логин дополнительно ограничивается по учётной записи (ниже).
+- Принципала guard не строит: контекст запроса собирает `SessionMiddleware` (после
+  `CorrelationIdMiddleware`, до guard'ов) и замораживает через `runWithContext`; guard только
+  читает `getPrincipal()` / `getOperator()` (`nestjs-security-auth.md`, «Контекст запроса»).
+- Guard глобальный (`APP_GUARD`), третий — после `AuthGuard` и `CsrfGuard`; порядок задан только в
+  `apps/api/src/app/app.module.ts`, таблица guard'ов — `nestjs-security-auth.md`.
+- На `@Public()`-маршрутах без сессии трекер — IP, поэтому вход дополнительно ограничен по
+  идентификатору (ниже). За reverse proxy `req.ip` верен только при правильном `TRUST_PROXY`
+  (CLAUDE.md, «Containers»).
 
 ## Жёсткие лимиты на аутентификацию
 
 ```typescript
-@Public()
-@Throttle({ default: { limit: 10, ttl: 60_000 } })
-@Post('sessions')            // POST /api/v1/sessions — login + password
-login(@Body() dto: LoginDto) { /* ... */ }
+// apps/api/src/common/throttling/auth-route-limit.ts
+export const AUTH_ROUTE_LIMIT = { limit: 60, ttl: 60_000 }; // per IP and minute
 
-@Throttle({ default: { limit: 10, ttl: 60_000 } })
-@Post('terminal-sessions/current/switch-employee')   // PIN switch on a bound terminal
-switchEmployee(@Body() dto: PinSwitchDto) { /* ... */ }
+// apps/api/src/app/auth/sessions.controller.ts (fragment)
+@Public()
+@Throttle({ default: AUTH_ROUTE_LIMIT })
+@Post()                       // POST /api/v1/sessions — login + password
+async login(@Body() body: EmployeeLoginDto /* , … */) { /* ... */ }
 ```
 
-Throttler — только первый рубеж. Основная защита — счётчик неудачных попыток **по учётной
-записи** (логин тенанта / сотрудник + терминал) в Redis с блокировкой на
-`PIN_LOCKOUT_SECONDS` после `PIN_MAX_ATTEMPTS` (`nestjs-security-auth.md`). Блокировка и
-разблокировка пишутся в аудит.
+`AUTH_ROUTE_LIMIT` — одна граница для всех маршрутов входа, активации и PIN: `POST /sessions`,
+`POST /sessions/current/confirmation`, `POST /activations`, `POST /terminal-sessions` (PIN на
+привязанном терминале), `POST /operator/sessions`, `POST /operator/activations`. Новый такой
+маршрут берёт ту же константу.
+
+Throttler — только первый рубеж. Основная защита от перебора — порт `LoginLimiter`
+(`apps/api/src/app/auth/login-limiter.ts`): атомарный счётчик неудач с блокировкой по
+идентификатору (вход, активация, подтверждение и смена пароля, смена PIN) и по терминалу (PIN) —
+`RedisLoginLimiter` в облаке (ключи — HMAC идентификатора, ПДн в Redis нет), `MemoryLoginLimiter`
+на офлайн-точке. Пороги, коды ответов (`429 login_locked`, `423 terminal_locked`; блокировка PIN
+сотрудника в БД — `423 pin_locked`) и аудит — `nestjs-security-auth.md`.
 
 ## Правила
 
@@ -76,5 +95,6 @@ Throttler — только первый рубеж. Основная защит�
   неудачные попытки — по IP;
   лимит должен пропускать штатную досылку накопленной очереди после перебоя связи
   (порционно, с `Retry-After` при 429).
-- Ответ 429 — тоже `application/problem+json` с `correlationId`.
+- Ответ 429 — `ProblemException(429, 'too_many_requests')`: `application/problem+json` с
+  `correlationId` и `Retry-After`.
 - `@SkipThrottle()` — только для health checks.

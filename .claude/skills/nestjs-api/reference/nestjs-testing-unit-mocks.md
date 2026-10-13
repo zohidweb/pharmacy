@@ -87,13 +87,61 @@ it('replays the original result for the same operationId', async () => {
 
 Моки — явные типизированные объекты `{ method: jest.fn() }` и фабрики в `apps/api/test/mocks` / `libs/shared/testing`; `@golevelup/ts-jest` не используем (ADR-0009, ось Г).
 
-## Кэш (Redis)
+## Redis
 
-Redis в стеке (stack.md) — для сессий и кэша каталога/цен. Мокается обёртка `RedisService`, не клиент.
+Обёртки над Redis нет. Единственный клиент node-redis 6 — токен `REDIS_CLIENT` (`core/redis`,
+`null` на офлайн-точке); сейчас его получают только фабрики модулей, которые выбирают реализацию порта
+(`SessionStore` / `PermissionsVersionCache` в `core/sessions`: Redis или PostgreSQL точки;
+`LoginLimiter` в `app/auth/login-limiter.ts`: `RedisLoginLimiter` или `MemoryLoginLimiter`), и
+хранилище throttler. Сервисы зависят от портов, поэтому тест делится на два уровня.
+
+**Unit-тест потребителя** подставляет фейк порта, клиент Redis не мокается: класс-наследник
+абстрактного порта, который записывает вызовы и умеет падать по флагу (`sessions.service.spec.ts`,
+`session.middleware.spec.ts`), или объект с `jest.fn()` для узкого порта:
 
 ```typescript
-export const createRedisMock = () => ({ get: jest.fn(), set: jest.fn(), del: jest.fn(), delByPrefix: jest.fn(), ping: jest.fn() });
+// apps/api/src/app/auth/sessions.service.spec.ts (abridged)
+class FakeSessionStore extends SessionStore {
+  readonly created: SessionRecord[] = [];
+  failCreate = false;
+
+  async create(record: SessionRecord): Promise<void> {
+    if (this.failCreate) throw new Error('redis down');
+    this.created.push(record);
+  }
+  // …the other abstract methods of the port
+}
+
+const limiter = {
+  tryAcquire: jest.fn(async (): Promise<LoginAttempt> => ({ allowed: true })),
+  reset: jest.fn(async () => undefined),
+};
 ```
+
+**Redis-реализация порта** (Lua-скрипты, TTL, атомарность) проверяется интеграционным тестом
+`*.int-spec.ts` на настоящем Redis (`npx nx run api:integration`, нужен `npm run dev:deps`).
+Хелперы `apps/api/test/integration/redis.ts` переводят `REDIS_URL` на логическую БД 15 — dev-данные
+(БД 0) не трогаются:
+
+```typescript
+// apps/api/src/core/sessions/redis-session-store.int-spec.ts (abridged)
+import { createTestRedis, flushTestRedis } from '../../../test/integration/redis';
+
+let redis: RedisClient;
+beforeAll(async () => {
+  redis = await createTestRedis();      // connected client on database 15
+  store = new RedisSessionStore(redis);
+});
+beforeEach(async () => {
+  await flushTestRedis(redis);          // empties database 15 only
+});
+afterAll(async () => {
+  await redis.close();
+});
+```
+
+Образцы — `redis-session-store.int-spec.ts`, `login-limiter.int-spec.ts`,
+`redis-throttler.storage.int-spec.ts`.
 
 ## Внешние интеграции (только закрытый список)
 

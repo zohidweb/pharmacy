@@ -234,6 +234,11 @@ export interface Shift {
   receipts: number;
   byMethod: Record<ReceiptPaymentMethod, PaymentTotal>;
   returns: PaymentTotal;
+  /**
+   * Returns made in this shift by the way the money went back (spec 2026-10-13-customer-returns,
+   * E13): the bank terminal of a kind is reconciled against `byMethod − returnsByMethod`.
+   */
+  returnsByMethod: Record<ReceiptPaymentMethod, PaymentTotal>;
   /** Sales minus returns. */
   revenueMinor: number;
   cash: {
@@ -301,11 +306,21 @@ export interface ReturnableLine {
   /** Already returned by earlier returns. */
   returnedQuantity: number;
   unitPriceMinor: number;
+  /** Discount share of the whole line: a return takes back its part (`returnLineRefund`, R1). */
+  discountShareMinor: number;
+  /** Kind of the product: ПКУ when the line was sold as ПКУ (E8). */
+  kind: PrescriptionKind;
+  /** The return policy of the network takes this kind back at the customer's wish (R3). */
+  customerReturnAllowed: boolean;
+  /** The batch has expired: a returned piece is written off (E9). */
+  batchExpired: boolean;
 }
 
 /**
- * GET /api/v1/receipts/returnable?number= (or ?qr=) — a receipt of the store for a return.
- * 404 `not_found`; 422 `return_window_expired` past the return window of the network.
+ * GET /api/v1/receipts/returnable?number= (or ?id= — the QR of the receipt) — a receipt of the store
+ * for a return (`returns:create`). With `&productId=` — a sale found without the receipt: only the
+ * lines of that product (R8, `returns:without-receipt`). 404 `not_found`; 422
+ * `return_window_expired` past the return window of the network.
  */
 export interface ReturnableReceipt {
   id: string;
@@ -317,11 +332,7 @@ export interface ReturnableReceipt {
   daysLeft: number;
   subtotalMinor: number;
   discountMinor: number;
-  discountPercent: number;
-  /** Threshold of the applied rule; 0 without discount. */
-  discountMinSubtotalMinor: number;
-  /** Subtotal returned by earlier returns. */
-  returnedSubtotalMinor: number;
+  /** What can still go back by each way of payment: paid (cash net of change) − refunded (E7). */
   payments: ReceiptPayment[];
   lines: ReturnableLine[];
 }
@@ -331,6 +342,7 @@ export interface SaleSearchItem {
   receiptId: string;
   receiptNumber: string;
   soldAt: string;
+  productId: string;
   productName: string;
   quantity: number;
   unit: SaleUnit;
@@ -342,7 +354,15 @@ export interface ReturnLineInput {
   quantity: number;
 }
 
-/** POST /api/v1/returns — money goes back the same way it was paid, goods into the same batch (ТЗ). */
+/**
+ * POST /api/v1/returns — online, `Idempotency-Key` = `id` (spec 2026-10-13-customer-returns): money
+ * goes back the same way it was paid, goods into the batch of the line; a defect and an expired batch
+ * are written off. 400 `validation_failed` (`unknown_line`, `duplicate`, `positive`,
+ * `total_mismatch`, `refund_exceeds_paid`, `unknown_method`, `required`); 403 `forbidden`,
+ * `store_not_in_scope`, `terminal_required`; 404 `not_found`; 409 `idempotency_conflict`,
+ * `no_open_shift`, `shift_closed`, `wrong_terminal`, `return_exceeds_sold`; 422
+ * `return_window_expired`, `return_not_allowed` (`other_product`), `period_closed`.
+ */
 export interface CreateReturnRequest extends PosOperationContext {
   receiptId: string;
   shiftId: string;
@@ -350,12 +370,16 @@ export interface CreateReturnRequest extends PosOperationContext {
   reason: ReturnReason;
   refunds: ReceiptPayment[];
   refundMinor: number;
+  /** The product of the search when the sale was found without the receipt (R8), else null. */
+  foundProductId: string | null;
 }
 
 export interface CreatedReturn {
   id: string;
   number: string;
   refundMinor: number;
+  /** The write-off of a defect or an expired batch (E9), if any. */
+  writeOffNumber: string | null;
 }
 
 export interface ReturnListItem {
@@ -367,12 +391,26 @@ export interface ReturnListItem {
   summary: string;
   reason: ReturnReason;
   refundMinor: number;
-  method: ReceiptPaymentMethod;
+  methods: ReceiptPaymentMethod[];
   cashierName: string;
+  foundWithoutReceipt: boolean;
+  /** The write-off of a defect or an expired batch of the return (E9), if any. */
+  writeOffNumber: string | null;
 }
 
-/** GET /api/v1/returns?storeId=&reason=&limit=&offset= — journal of returns (ВЗ). */
+/** GET /api/v1/returns?storeId=&reason=&limit=&offset= — journal of returns (ВЗ, `returns:view`). */
 export type ReturnListResponse = Page<ReturnListItem>;
+
+/**
+ * GET / PUT /api/v1/settings/returns — the return window and the return policy of the network
+ * (`settings:view` / `settings:update`; spec 2026-10-13-customer-returns, R3, E17): which kinds of
+ * products are taken back at the customer's wish; a defect is taken back always.
+ */
+export interface ReturnPolicy {
+  /** 0–365; 0 — only on the day of the sale. */
+  returnWindowDays: number;
+  customerReturns: Record<PrescriptionKind, boolean>;
+}
 
 /** GET /api/v1/deployment — where this web build runs: the Service Worker is cloud-only. */
 export interface DeploymentInfo {

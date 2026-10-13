@@ -427,6 +427,9 @@ export class WriteOffsService {
             ])
           ).get(doc.sourceDocumentId) ?? null)
         : null,
+      // filled by the stock of the customer returns (spec 2026-10-13-customer-returns, E9)
+      customerReturnId: null,
+      customerReturnNumber: null,
     };
   }
 }

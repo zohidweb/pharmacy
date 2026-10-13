@@ -83,6 +83,9 @@ export class ShiftMapper {
       receipts: totals.receipts,
       byMethod,
       returns: { count: 0, amountMinor: 0 },
+      returnsByMethod: Object.fromEntries(
+        METHODS.map((method) => [method, { count: 0, amountMinor: 0 }]),
+      ) as Record<ReceiptPaymentMethod, PaymentTotal>,
       revenueMinor: totals.revenueDirams,
       cash: {
         openingMinor: opening,

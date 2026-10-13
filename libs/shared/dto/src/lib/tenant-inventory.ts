@@ -321,7 +321,15 @@ export type OpeningBalanceListResponse = Page<OpeningBalanceListItem>;
 /* ---------------- Write-off (СП) ---------------- */
 
 export type WriteOffReason =
-  'expired' | 'broken' | 'defect' | 'misgrade' | 'transfer_discrepancy';
+  | 'expired'
+  | 'broken'
+  | 'defect'
+  | 'misgrade'
+  | 'transfer_discrepancy'
+  // system reasons of the write-off of a customer return (spec 2026-10-13-customer-returns, E9):
+  // not chosen by hand
+  | 'customer_return_defect'
+  | 'customer_return_expired';
 
 export interface StockLine {
   productId: string;
@@ -360,6 +368,12 @@ export interface WriteOff {
    */
   transferId: string | null;
   transferNumber: string | null;
+  /**
+   * The customer return whose defect or expired batch this write-off records (E9): made by the
+   * return, never edited, posted or unposted by hand — 409 `write_off_from_return`.
+   */
+  customerReturnId: string | null;
+  customerReturnNumber: string | null;
 }
 
 export type StockLineInput = Pick<

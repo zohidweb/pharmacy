@@ -87,6 +87,7 @@ export function lineOf(
  */
 export function StockLinesEditor({
   storeId,
+  supplierId,
   lines,
   onChange,
   editable,
@@ -94,8 +95,11 @@ export function StockLinesEditor({
   withNote = false,
   touched,
   allowExpired = true,
+  totalMinor,
 }: {
   storeId: string;
+  /** Only the batches of this supplier can be picked (a supplier return). */
+  supplierId?: string;
   lines: EditableStockLine[];
   onChange: (lines: EditableStockLine[]) => void;
   editable: boolean;
@@ -103,6 +107,8 @@ export function StockLinesEditor({
   withNote?: boolean;
   touched: boolean;
   allowExpired?: boolean;
+  /** The amount of a posted document as the server fixed it; else the lines are summed. */
+  totalMinor?: number;
 }) {
   const t = useTranslations('stockDocs.lines');
   const tDocs = useTranslations('stockDocs');
@@ -121,6 +127,7 @@ export function StockLinesEditor({
       {editable && (
         <ProductSearch
           storeId={storeId}
+          supplierId={supplierId}
           onPick={(product) => {
             const line = lineOf(product, { includeExpired: allowExpired });
             if (line) onChange([...lines, line]);
@@ -305,7 +312,7 @@ export function StockLinesEditor({
       {showCost && lines.length > 0 && (
         <p className="flex justify-end gap-2 text-md">
           <span>{t('total')}</span>
-          <b className="tabular-nums">{formatMoney(total)}</b>
+          <b className="tabular-nums">{formatMoney(totalMinor ?? total)}</b>
         </p>
       )}
     </div>

@@ -571,6 +571,14 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         r.lines.map((l) => [`${l.productId}/${l.batchNumber}`, r.supplierId]),
       ),
     );
+    const receipt = query?.receiptId
+      ? db().goodsReceipts.find((r) => r.id === query.receiptId)
+      : null;
+    const ofReceipt = (productId: string, b: { number: string }) =>
+      !receipt ||
+      receipt.lines.some(
+        (l) => l.productId === productId && l.batchNumber === b.number,
+      );
     const ofSupplier = (productId: string, b: { number: string }) =>
       !query?.supplierId ||
       (supplierOf.get(`${productId}/${b.number}`) ?? query.supplierId) ===
@@ -581,12 +589,24 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
           ? ids.includes(p.id)
           : query?.expired
             ? p.batches.some(expired)
-            : !needle ||
-              [p.name, p.inn ?? '', ...p.barcodes].some((v) =>
-                v.toLocaleLowerCase('ru').includes(needle),
-              ),
+            : (!needle ||
+                [p.name, p.inn ?? '', ...p.barcodes].some((v) =>
+                  v.toLocaleLowerCase('ru').includes(needle),
+                )) &&
+              // a supplier return searches among the products with the supplier's batches
+              (!query?.supplierId ||
+                p.batches.some(
+                  (b) =>
+                    ofSupplier(p.id, b) &&
+                    (stockAt(params.storeId)[b.id] ?? 0) > 0,
+                )),
       )
-      .slice(0, query?.expired || ids ? undefined : (query?.limit ?? 20))
+      .slice(
+        0,
+        query?.expired || ids || query?.receiptId
+          ? undefined
+          : (query?.limit ?? 20),
+      )
       .map((p): StockProductOption => ({
         id: p.id,
         name: p.name,
@@ -603,7 +623,12 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         maxPriceMinor: mockDb().catalog.extras[p.id]?.maxPriceMinor ?? null,
         minStockPacks: db().minPacks[p.id] ?? 0,
         batches: p.batches
-          .filter((b) => (!query?.expired || expired(b)) && ofSupplier(p.id, b))
+          .filter(
+            (b) =>
+              (!query?.expired || expired(b)) &&
+              ofSupplier(p.id, b) &&
+              ofReceipt(p.id, b),
+          )
           .map((b) => {
             const batch = {
               ...b,
@@ -612,7 +637,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
             return canSeeCost ? batch : hideCost(batch, false);
           }),
       }))
-      .filter((p) => !query?.supplierId || p.batches.length > 0);
+      .filter((p) => !receipt || p.batches.some((b) => b.quantityPieces > 0));
   },
 
   'stock.productBatches': ({ params, correlationId }) => {

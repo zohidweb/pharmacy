@@ -26,7 +26,9 @@ import {
 import { EmployeesService } from './employees.service';
 
 // Employees of the network (spec 2026-10-06-staff-design, section 4). Every change needs a fresh
-// password sign-in (auth design, guard 5). The services' own refusals are audited (ADR-0018, p. 9).
+// password sign-in (auth design, guard 5). A peer — the same permissions and stores as the editor —
+// is changed only with `employees:manage-peers`, otherwise 403 `forbidden` (ADR-0018, amendment
+// 2026-10-13). The services' own refusals are audited (ADR-0018, p. 9).
 @Controller({ path: 'employees', version: '1' })
 @UseInterceptors(AccessDeniedAudit)
 export class EmployeesController {

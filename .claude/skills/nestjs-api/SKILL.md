@@ -103,7 +103,7 @@ API gateway / ESB, push → не используются.
 | **Transactions** | Документ/чек + `stock_movements` + `audit_log` атомарно; `FOR UPDATE` на партиях; остаток = сумма движений |
 | **Idempotency** | Заголовок `Idempotency-Key`, `UNIQUE (tenant_id, key)`, повтор возвращает исходный результат |
 | **Errors** | Доменные исключения → `ProblemDetailsFilter` → `application/problem+json` (RFC 7807) с `code`, `correlationId` |
-| **Auth** | JWT в cookie + серверная сессия в Redis (логин+пароль, PIN терминала; scrypt, ADR-0008); контекст строит `SessionMiddleware`, глобальные guard'ы по порядку `AuthGuard` → `CsrfGuard` → `PrincipalThrottlerGuard` → `PermissionsGuard` → `FreshAuthGuard`: `@RequirePermission('inventory:post')` по каталогу прав ADR-0018, охват точек, запрет по умолчанию |
+| **Auth** | JWT в cookie + серверная сессия в Redis (логин+пароль, PIN терминала; scrypt, ADR-0008); контекст строит `SessionMiddleware`, глобальные guard'ы по порядку `AuthGuard` → `CsrfGuard` → `PrincipalThrottlerGuard` → `PermissionsGuard` → `OperatorPermissionsGuard` → `FreshAuthGuard`: `@RequirePermission('inventory:post')` по каталогу прав ADR-0018, охват точек, запрет по умолчанию |
 | **Pagination** | `limit`/`offset` → `{ items, total, limit, offset }`, сортировка по whitelist |
 | **Background work** | Очереди-таблицы PostgreSQL (`FOR UPDATE SKIP LOCKED`), outbox в транзакции операции |
 | **Integrations** | Только закрытый список: фискализация (порт + заглушка MVP; HTTP-клиент вендора ККМ — `fetch` с таймаутом), 1С (файлы XML), синхронизация точек (лицензионный ключ) |

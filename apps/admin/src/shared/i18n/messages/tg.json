@@ -340,6 +340,7 @@
     "title": "Ширкат",
     "subtitle": "Корти мизоҷ",
     "back": "Ҳамаи ширкатҳо",
+    "operatorActions": "Амалҳои операторон оид ба ширкат",
     "meta": "Соҳиб: {owner} · {phone} · {city} · дар платформа аз {since}",
     "inn": "РМА {inn}",
     "blockedTitle": "Ширкат баста шудааст",
@@ -957,16 +958,16 @@
     "typeLabel": "Намуди амал",
     "allTypes": "Ҳамаи намудҳо",
     "types": {
+      "access": "Вуруд ва дастрасӣ",
       "company": "Ширкат",
       "payment": "Пардохт",
       "key": "Калид",
       "service": "Хизматрасонӣ",
-      "impersonation": "Вуруд аз номи",
       "settings": "Танзимот"
     },
     "columns": {
       "at": "Кай",
-      "operator": "Оператор",
+      "operator": "Кӣ",
       "type": "Намуд",
       "target": "Объект",
       "description": "Амал"
@@ -974,7 +975,46 @@
     "empty": "Аз рӯи филтр сабт нест",
     "reset": "Бекор кардани филтрҳо",
     "pagesLabel": "Саҳифаҳои маҷалла",
-    "note": "Сабтҳоро тағйир додан ё нест кардан мумкин нест — на аз админка, на дар пойгоҳи маълумот."
+    "note": "Сабтҳоро тағйир додан ё нест кардан мумкин нест — на аз админка, на дар пойгоҳи маълумот.",
+    "platform": "Платформа",
+    "companyFilter": "Ширкат: {name}",
+    "allCompanies": "Ҳамаи ширкатҳо",
+    "jobs": {
+      "operator-auth": "Вуруд ба админка (система)",
+      "create-operator": "Скрипти сохтани оператор",
+      "operator-activation": "Вуруди аввали оператор (система)",
+      "other": "Вазифаи хизматӣ «{job}»"
+    },
+    "reasons": {
+      "unknown_login": "логини номаълум",
+      "invalid_password": "пароли нодуруст",
+      "no_password": "парол ҳанӯз муқаррар нашудааст",
+      "operator_blocked": "оператор хомӯш аст",
+      "missing_permission": "ҳуқуқ нест",
+      "no_operator_permission_declared": "барои масир ҳуқуқ эълон нашудааст"
+    },
+    "actions": {
+      "tenant_created": "Ширкат сохта шуд",
+      "tenant_owner-code-issued": "Ба соҳиб рамзи фаъолсозӣ дода шуд",
+      "tenant_blocked": "Ширкат баста шуд",
+      "tenant_unblocked": "Ширкат кушода шуд",
+      "auth_operator-login-succeeded": "Вуруд ба админка",
+      "auth_operator-login-failed": "Кӯшиши ноком барои вуруд",
+      "operator_activated": "Пароли аввал муқаррар шуд",
+      "operator_code-issued": "Рамзи нави вуруди аввал дода шуд",
+      "operator_code-issued-new": "Оператор илова шуд, рамзи вуруди аввал дода шуд",
+      "operator_created": "Оператор илова шуд",
+      "operator_disabled": "Оператор хомӯш карда шуд",
+      "access_denied": "Дастрасӣ рад карда шуд",
+      "payment_recorded": "Пардохт сабт шуд",
+      "license_issued": "Калиди литсензионӣ дода шуд",
+      "license_revoked": "Калиди литсензионӣ бозхонда шуд",
+      "service_request-approved": "Хизматрасонӣ тасдиқ шуд",
+      "settings_updated": "Танзимоти платформа тағйир дода шуд",
+      "announcement_published": "Эълон нашр шуд",
+      "announcement_cancelled": "Эълон бекор карда шуд",
+      "unknown": "Ҳодисаи {action}"
+    }
   },
   "settings": {
     "title": "Танзимоти платформа",

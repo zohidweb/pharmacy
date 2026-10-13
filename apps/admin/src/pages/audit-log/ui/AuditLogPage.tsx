@@ -13,44 +13,43 @@ import {
   DataTable,
   EmptyState,
   Pagination,
+  Spinner,
   StatusPill,
   TextField,
   type DataTableColumn,
-  type StatusTone,
 } from '@pharmacy/ui';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
+import {
+  operatorActionTone,
+  operatorActionTypes,
+  useOperatorAuditText,
+} from '@/entities/operator-audit';
+import { useTenant } from '@/entities/tenant';
 import { apiRequest } from '@/shared/api';
+import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 const PAGE = 20;
-const types: OperatorActionType[] = [
-  'company',
-  'payment',
-  'key',
-  'service',
-  'impersonation',
-  'settings',
-];
-const typeTone: Record<OperatorActionType, StatusTone> = {
-  company: 'info',
-  payment: 'success',
-  key: 'warning',
-  service: 'info',
-  impersonation: 'attention',
-  settings: 'neutral',
-};
 
 function monthStart(): string {
   return `${toAppDate().slice(0, 7)}-01`;
 }
 
-/** Operators' audit log (UI mockup «Журнал»): append-only, read only, kept for at least 3 years. */
-export function AuditLogPage() {
+/**
+ * Operators' audit log (UI mockup «Журнал»): append-only, read only, kept for at least 3 years.
+ * `?tenantId=` narrows it to one company (the link from the company card).
+ */
+function AuditLogView() {
   const t = useTranslations('auditLog');
   const tTable = useTranslations('table');
+  const router = useRouter();
+  const tenantId = useSearchParams()?.get('tenantId') ?? '';
+  const tenant = useTenant(tenantId);
+  const text = useOperatorAuditText();
   const [operatorId, setOperatorId] = useState<string | undefined>(undefined);
   const [type, setType] = useState<OperatorActionType | undefined>(undefined);
   const [from, setFrom] = useState(() => {
@@ -64,10 +63,11 @@ export function AuditLogPage() {
     queryFn: ({ signal }) => apiRequest('operators.list', { signal }),
   });
   const log = useQuery({
-    queryKey: ['operator-audit', operatorId, type, from, to, offset],
+    queryKey: ['operator-audit', tenantId, operatorId, type, from, to, offset],
     queryFn: ({ signal }) =>
       apiRequest('operatorAudit.list', {
         query: {
+          tenantId: tenantId || undefined,
           operatorId,
           type,
           from: from || undefined,
@@ -97,14 +97,14 @@ export function AuditLogPage() {
     {
       key: 'operator',
       header: t('columns.operator'),
-      cell: (row) => row.operatorName,
+      cell: (row) => text.actor(row),
     },
     {
       key: 'type',
       header: t('columns.type'),
       nowrap: true,
       cell: (row) => (
-        <StatusPill tone={typeTone[row.type]} icon={null}>
+        <StatusPill tone={operatorActionTone[row.type]} icon={null}>
           {t(`types.${row.type}`)}
         </StatusPill>
       ),
@@ -112,22 +112,18 @@ export function AuditLogPage() {
     {
       key: 'target',
       header: t('columns.target'),
-      cell: (row) => row.targetLabel,
+      cell: (row) => text.target(row),
     },
     {
       key: 'description',
       header: t('columns.description'),
-      cell: (row) => row.description,
+      cell: (row) => text.describe(row),
     },
   ];
 
   return (
     <>
-      <PageHeader
-        demoRoutes={['operatorAudit.list']}
-        title={t('title')}
-        subtitle={t('subtitle')}
-      />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <div className="flex flex-col gap-4 p-6">
         <Card className="flex flex-col gap-4">
           <div className="grid grid-cols-4 items-end gap-4">
@@ -152,6 +148,22 @@ export function AuditLogPage() {
               }}
             />
           </div>
+          {tenantId && (
+            <ChipGroup label={t('types.company')}>
+              <Chip
+                selected={false}
+                onClick={() => {
+                  setOffset(0);
+                  router.replace(routes.auditLog());
+                }}
+              >
+                {t('allCompanies')}
+              </Chip>
+              <Chip selected>
+                {t('companyFilter', { name: tenant.data?.name ?? '…' })}
+              </Chip>
+            </ChipGroup>
+          )}
           <ChipGroup label={t('operatorLabel')}>
             <Chip
               selected={operatorId === undefined}
@@ -179,7 +191,7 @@ export function AuditLogPage() {
             >
               {t('allTypes')}
             </Chip>
-            {types.map((value) => (
+            {operatorActionTypes.map((value) => (
               <Chip
                 key={value}
                 selected={type === value}
@@ -237,5 +249,19 @@ export function AuditLogPage() {
         </QueryState>
       </div>
     </>
+  );
+}
+
+export function AuditLogPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="grid min-h-dvh place-items-center text-primary">
+          <Spinner size="xl" />
+        </div>
+      }
+    >
+      <AuditLogView />
+    </Suspense>
   );
 }

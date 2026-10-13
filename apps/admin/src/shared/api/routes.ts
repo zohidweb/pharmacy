@@ -12,7 +12,6 @@ import type {
   NotificationListResponse,
   NotificationPreferences,
   NotificationTopic,
-  OperatorActivityItem,
   OperatorAuditEntry,
   OperatorAuditQuery,
   OperatorMe,
@@ -401,7 +400,7 @@ export const apiRoutes = {
     'DELETE',
     () => '/operator/me/sessions/others',
   ),
-  'me.activity': route<OperatorActivityItem[]>(
+  'me.activity': route<OperatorAuditEntry[]>(
     'GET',
     () => '/operator/me/activity',
   ),

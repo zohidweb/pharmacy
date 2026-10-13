@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { useOperatorAuditText } from '@/entities/operator-audit';
 import { sessionQueryKey, useSession } from '@/entities/session';
 import { apiRequest, servedByMocks, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
@@ -294,6 +295,7 @@ export function ProfilePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const session = useSession();
+  const auditText = useOperatorAuditText();
   // While the profile is not on apps/api (partial mode), who is signed in comes from the session.
   const signedIn = servedByMocks('me.get') ? session.data?.operator : undefined;
   const me = useQuery({
@@ -394,7 +396,7 @@ export function ProfilePage() {
                         <ul className="m-0 flex list-none flex-col gap-3 p-0">
                           {rows.map((item) => (
                             <li key={item.id} className="flex flex-col text-sm">
-                              <span>{item.description}</span>
+                              <span>{auditText.describe(item)}</span>
                               <span className="text-xs text-fg-subtle">
                                 {formatDateTime(item.at)}
                               </span>

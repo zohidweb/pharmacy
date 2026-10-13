@@ -1,4 +1,4 @@
-export { useCatalog, type CatalogData } from './api/use-catalog';
+export { storeSnapshot, useCatalog, type CatalogData } from './api/use-catalog';
 export {
   batchState,
   buildCatalogIndex,

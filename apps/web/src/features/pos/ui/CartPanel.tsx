@@ -55,6 +55,10 @@ export interface CartPanelProps {
   onPay: () => void;
 }
 
+/** Some prescription data of a ПКУ line was given. */
+const filled = (line: DraftLine) =>
+  Object.values(line.controlled ?? {}).some((value) => Boolean(value?.trim()));
+
 function MoneyInput({
   label,
   valueMinor,
@@ -153,12 +157,13 @@ function Line({
         </span>
       </div>
       {line.prescription === 'controlled' && (
+        // the prescription data is optional (K3): the line says whether any of it was given
         <Button
-          variant={line.controlled ? 'tertiary' : 'secondary'}
-          iconStart={line.controlled ? 'circle-check' : 'file-text'}
+          variant={filled(line) ? 'tertiary' : 'secondary'}
+          iconStart={filled(line) ? 'circle-check' : 'file-text'}
           onClick={() => onControlled(line)}
         >
-          {line.controlled ? t('controlledFilled') : t('controlledRequired')}
+          {filled(line) ? t('controlledFilled') : t('controlledRequired')}
         </Button>
       )}
       <div className="flex items-center gap-2">

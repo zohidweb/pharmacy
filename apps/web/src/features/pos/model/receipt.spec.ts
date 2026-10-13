@@ -178,6 +178,7 @@ describe('payment', () => {
       'cash_short',
     );
     const pku = add(emptyDraft(), tramadol).draft;
-    expect(paymentState(pku, 4_200).problem).toBe('controlled_data_missing');
+    // optional until the customer fixes the set (spec 2026-10-13-pos-shift-sale, K3)
+    expect(paymentState(pku, 4_200).problem).toBeNull();
   });
 });

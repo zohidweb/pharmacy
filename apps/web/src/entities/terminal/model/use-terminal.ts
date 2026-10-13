@@ -31,6 +31,12 @@ export function useTerminalRuntime(): TerminalRuntime | null {
     };
   }, [tenantId, storeId]);
 
+  // a sign-in (PIN or password) ends the pause of the buffer after a 401/403 (spec 2026-10-13, E18)
+  const signedInAt = session?.authenticatedAt;
+  useEffect(() => {
+    if (runtime && signedInAt) runtime.queue.resume();
+  }, [runtime, signedInAt]);
+
   return runtime && storeId && runtime.key.endsWith(`:${storeId}`)
     ? runtime
     : null;

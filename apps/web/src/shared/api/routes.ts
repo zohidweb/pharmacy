@@ -267,6 +267,11 @@ export const apiRoutes = {
     'POST',
     (p) => `/shifts/${id(p)}/closure`,
   ),
+  /** Z-report of a closed shift of the store: printing after delivery and reprint. */
+  'shifts.zReport': route<ZReport, never, { id: string }>(
+    'GET',
+    (p) => `/shifts/${id(p)}/z-report`,
+  ),
 
   'receipts.returnable': route<
     ReturnableReceipt,

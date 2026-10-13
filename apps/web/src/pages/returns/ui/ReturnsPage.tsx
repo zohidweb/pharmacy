@@ -263,7 +263,8 @@ function ReturnsPageView() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const storeId = currentStoreOf(session)?.id ?? null;
-  const shift = useCurrentShift(storeId);
+  // a return goes into the shift of the terminal (K6): no PIN session — no shift
+  const shift = useCurrentShift(storeId, session?.terminalId != null);
   const online = useSyncExternalStore(
     subscribeConnectivity,
     isOnline,

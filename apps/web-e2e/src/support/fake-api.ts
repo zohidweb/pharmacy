@@ -87,7 +87,7 @@ const payment = () => ({ count: 0, amountMinor: 0 });
 function openShift(): Shift {
   return {
     id: 'shift-218',
-    number: 218,
+    number: 'СМ-03-2026-000218',
     storeId: store.id,
     status: 'open',
     openedAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
@@ -110,6 +110,7 @@ function openShift(): Shift {
       returnsMinor: 0,
       expectedMinor: 50_000,
     },
+    discrepancyReceipts: 0,
     events: [],
   };
 }

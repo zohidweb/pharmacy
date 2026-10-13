@@ -183,21 +183,22 @@ export function ControlledDialog({
 }) {
   const t = useTranslations('pos.controlledDialog');
   const tPos = useTranslations('pos');
-  const [data, setData] = useState<ControlledSaleData>(
-    initial ?? {
-      prescriptionNumber: '',
-      prescriptionDate: today,
-      clinic: '',
-      doctor: '',
-      buyerName: '',
-      buyerDocument: '',
-    },
-  );
+  const [data, setData] = useState<Required<ControlledSaleData>>({
+    prescriptionNumber: '',
+    // no date by default: an empty field is not a prescription of today
+    prescriptionDate: '',
+    clinic: '',
+    doctor: '',
+    buyerName: '',
+    buyerDocument: '',
+    ...initial,
+  });
   const [touched, setTouched] = useState(false);
+  // every field is optional (K3); a date, when given, is a real one and not in the future
   const invalid = (field: keyof ControlledSaleData) =>
-    field === 'prescriptionDate'
-      ? !DATE.test(data.prescriptionDate) || data.prescriptionDate > today
-      : data[field].trim().length < 2;
+    field === 'prescriptionDate' &&
+    data.prescriptionDate !== '' &&
+    (!DATE.test(data.prescriptionDate) || data.prescriptionDate > today);
   const valid = CONTROLLED_FIELDS.every((field) => !invalid(field));
   return (
     <Dialog
@@ -243,8 +244,8 @@ export function ControlledDialog({
               label={t(`fields.${field}`)}
               type={field === 'prescriptionDate' ? 'date' : 'text'}
               max={field === 'prescriptionDate' ? today : undefined}
+              maxLength={field === 'prescriptionDate' ? undefined : 200}
               autoComplete="off"
-              required
               value={data[field]}
               error={
                 touched && invalid(field) ? t(`errors.${field}`) : undefined

@@ -25,11 +25,15 @@ import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
 import { FoundLineDialog } from './FoundLineDialog';
 
-/** Difference of a counted line: fact − (book − sold since the start); a found product — its fact. */
+/**
+ * Difference of a counted line: fact − (book − sold before the line was counted); what was sold
+ * after it was counted is counted already (spec 2026-10-13-pos-shift-sale, K2). A found product —
+ * its fact.
+ */
 export const lineDiff = (line: StockCountLine) =>
   line.factPieces === null
     ? null
-    : line.factPieces - (line.bookPieces - line.soldSincePieces);
+    : line.factPieces - (line.bookPieces - line.soldBeforeCountPieces);
 
 function packsText(
   pieces: number,
@@ -414,6 +418,7 @@ export function StockCountEditor({
                       'batch',
                       'book',
                       'sold',
+                      'soldAfter',
                       'fact',
                       'diff',
                     ] as const
@@ -492,7 +497,14 @@ export function StockCountEditor({
                       </td>
                       <td className="px-2 py-2 tabular-nums">
                         {packsText(
-                          line.soldSincePieces,
+                          line.soldBeforeCountPieces,
+                          line.piecesPerPack,
+                          tCounts,
+                        )}
+                      </td>
+                      <td className="px-2 py-2 tabular-nums text-fg-muted">
+                        {packsText(
+                          line.soldAfterCountPieces,
                           line.piecesPerPack,
                           tCounts,
                         )}

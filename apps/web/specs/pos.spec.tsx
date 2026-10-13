@@ -131,19 +131,26 @@ describe('PosPage', () => {
     ).toBeTruthy();
   });
 
-  it('sells ПКУ only with prescription and buyer data', async () => {
-    await signInAs('manizha', 'store-3');
+  it('sells ПКУ with optional prescription data', async () => {
+    // the manager sells at the bound terminal by PIN (spec 2026-10-13-pos-shift-sale, K6)
+    await signInByPin('emp-manager', '3690');
     await openPos();
     fireEvent.click(screen.getByRole('button', { name: /^Трамадол 50 мг/ }));
-    const dialog = await screen.findByRole('dialog', {
+    let dialog = await screen.findByRole('dialog', {
       name: 'ПКУ · данные рецепта',
     });
+    // every field is optional (K3): the line goes into the receipt without data
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Добавить в чек' }),
     );
-    expect(
-      within(dialog).getByText('Укажите серию и номер рецепта'),
-    ).toBeTruthy();
+    fireEvent.click(
+      await within(receipt()).findByRole('button', {
+        name: 'Данные рецепта (ПКУ) — необязательно',
+      }),
+    );
+    dialog = await screen.findByRole('dialog', {
+      name: 'ПКУ · данные рецепта',
+    });
     const fields: Array<[RegExp, string]> = [
       [/^Серия и номер рецепта/, 'Р-441288'],
       [/^Медучреждение/, 'Поликлиника №4'],
@@ -165,7 +172,8 @@ describe('PosPage', () => {
   });
 
   it('keeps expired batches in the batch choice but never sellable', async () => {
-    await signInAs('manizha', 'store-3');
+    // the manager sells at the bound terminal by PIN (spec 2026-10-13-pos-shift-sale, K6)
+    await signInByPin('emp-manager', '3690');
     await openPos();
     act(() => scan(PARACETAMOL));
     fireEvent.click(
@@ -218,7 +226,7 @@ describe('PosPage', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Чек оплачен' });
     await waitFor(() =>
-      expect(within(dialog).getByText('Чек №1042')).toBeTruthy(),
+      expect(within(dialog).getByText(/^Чек ЧК-03-\d{4}-001042$/)).toBeTruthy(),
     );
     const preview = within(dialog).getByRole('figure', {
       name: 'Предпросмотр чека',

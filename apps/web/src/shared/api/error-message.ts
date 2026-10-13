@@ -24,6 +24,11 @@ const knownCodes = [
   'read_only_session',
   'shift_open',
   'no_open_shift',
+  'shift_closed',
+  'wrong_terminal',
+  'idempotency_conflict',
+  'author_not_allowed',
+  'terminal_required',
   'return_window_expired',
   'return_quantity_exceeded',
   'forbidden',
@@ -60,6 +65,12 @@ export function apiFieldErrors(error: unknown): readonly ApiFieldError[] {
 
 const isKnown = (code: string): code is KnownCode =>
   (knownCodes as readonly string[]).includes(code);
+
+/** The localized text of a known problem code (a quarantined operation of the buffer), else null. */
+export function useApiCodeMessage(): (code: string) => string | null {
+  const t = useTranslations();
+  return (code) => (isKnown(code) ? t(`apiErrors.${code}`) : null);
+}
 
 /**
  * User-facing text for a failed request: a specific message for known problem codes, a network

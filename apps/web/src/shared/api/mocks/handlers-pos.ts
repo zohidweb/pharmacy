@@ -18,7 +18,7 @@ import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
-import type { MockReceipt } from './db-pos';
+import type { MockReceipt, MockShift } from './db-pos';
 import { stores } from './fixtures';
 import { categories, storeSettings } from './fixtures-pos';
 import {
@@ -41,6 +41,7 @@ type PosRoute = Extract<
   | 'shifts.open'
   | 'shifts.cashMovement'
   | 'shifts.close'
+  | 'shifts.zReport'
   | 'receipts.returnable'
   | 'returns.salesSearch'
   | 'returns.create'
@@ -78,11 +79,26 @@ function shortNameOf(employeeId: string): string {
   return mockDb().employees.find((e) => e.id === employeeId)?.shortName ?? '—';
 }
 
-function openShiftOf(storeId: string | null): Shift | undefined {
-  return pos().shifts.find((s) => s.storeId === storeId && s.status === 'open');
+/** The open shift of a terminal (K5); a session without a terminal sees the shift of the store. */
+function openShiftOf(
+  storeId: string | null,
+  terminalId: string | null,
+): MockShift | undefined {
+  return pos().shifts.find(
+    (s) =>
+      s.storeId === storeId &&
+      s.status === 'open' &&
+      (terminalId === null || s.terminalId === terminalId),
+  );
 }
 
-function requireShift(id: string, correlationId: string): Shift {
+/** Numbers of the server: `<prefix>-<store code>-<year>-<6 digits>` (spec 2026-10-13, E2). */
+function posNumber(prefix: 'ЧК' | 'СМ', storeId: string, n: number): string {
+  const code = storeId.replace(/\D/g, '').padStart(2, '0');
+  return `${prefix}-${code}-${new Date().getFullYear()}-${String(n).padStart(6, '0')}`;
+}
+
+function requireShift(id: string, correlationId: string): MockShift {
   const shift = pos().shifts.find((s) => s.id === id);
   if (!shift || shift.status !== 'open') {
     throw new ApiError(409, 'no_open_shift', correlationId);
@@ -125,11 +141,6 @@ export function productAt(item: PosProduct, storeId: string): PosProduct {
 }
 
 /** FEFO: the batch with the nearest expiry that is not expired and has stock. */
-function fefoBatch(item: PosProduct) {
-  return [...item.batches]
-    .filter((b) => b.expiresOn >= today() && b.quantityPieces > 0)
-    .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn))[0];
-}
 
 function withoutCost(item: PosProduct): PosProduct {
   return {
@@ -222,33 +233,25 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
             'unknown_batch',
           );
         if (batch.expiresOn < today()) {
-          throw new ApiError(422, 'batch_expired', correlationId, [
-            { field: `lines.${index}.batchId`, code: 'expired' },
-          ]);
+          throw validation(
+            correlationId,
+            `lines.${index}.batchId`,
+            'batch_expired',
+          );
         }
-        if (item.prescription === 'controlled') {
-          if (!hasPermissions(session.permissions, 'pos:sell-controlled')) {
-            throw new ApiError(403, 'forbidden', correlationId);
-          }
-          if (!line.controlled) {
-            throw validation(
-              correlationId,
-              `lines.${index}.controlled`,
-              'required',
-            );
-          }
-        }
-        const fefo = fefoBatch(item);
+        // the sale happened: rights of the author and catalog changes are marks, not refusals
         if (
-          fefo &&
-          fefo.id !== batch.id &&
-          !hasPermissions(session.permissions, 'pos:choose-batch')
+          (line.controlled !== null &&
+            !hasPermissions(session.permissions, 'pos:sell-controlled')) ||
+          (line.batchChosenManually &&
+            !hasPermissions(session.permissions, 'pos:choose-batch')) ||
+          line.piecesPerPack !== item.piecesPerPack
         ) {
-          throw new ApiError(403, 'forbidden', correlationId);
+          discrepancies += 1;
         }
         const pieces =
           line.unit === 'pack'
-            ? line.quantity * item.piecesPerPack
+            ? line.quantity * line.piecesPerPack
             : line.quantity;
         const price =
           line.unit === 'pack' ? item.priceMinor : item.piecePriceMinor;
@@ -274,7 +277,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         throw validation(correlationId, 'cashTenderedMinor', 'too_small');
       }
       const rule = discountThresholdById(body.discountRuleId);
-      const number = String(pos().nextReceipt++);
+      const number = posNumber('ЧК', body.storeId, pos().nextReceipt++);
       const receipt: MockReceipt = {
         id: body.id,
         number,
@@ -299,6 +302,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       }
       shift.revenueMinor += body.totalMinor;
       shift.cash.salesMinor += cashPart;
+      if (discrepancies > 0) shift.discrepancyReceipts += 1;
       recomputeCash(shift);
       shift.events.unshift({
         id: `e-${body.id}`,
@@ -307,6 +311,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         reference: number,
         employeeName: receipt.cashierName,
         amountMinor: body.totalMinor,
+        flagged: discrepancies > 0,
       });
       return { id: body.id, number, fiscal: null, discrepancies };
     });
@@ -337,7 +342,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
 
   'shifts.current': ({ correlationId }) => {
     const { session } = authorize(correlationId, 'shifts:view');
-    const shift = openShiftOf(session.currentStoreId);
+    const shift = openShiftOf(session.currentStoreId, session.terminalId);
     if (!shift) throw new ApiError(404, 'no_open_shift', correlationId);
     return shift;
   },
@@ -346,15 +351,17 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       write: true,
     });
     return idempotent(body.id, body, correlationId, () => {
-      if (openShiftOf(body.storeId)) {
+      const terminalId = body.terminalId ?? session.terminalId;
+      if (openShiftOf(body.storeId, terminalId)) {
         throw new ApiError(409, 'shift_open', correlationId);
       }
       const by = shortNameOf(session.employee.id);
       const zero = () => ({ count: 0, amountMinor: 0 });
-      const shift: Shift = {
+      const shift: MockShift = {
         id: body.id,
-        number: pos().nextShift++,
+        number: posNumber('СМ', body.storeId, pos().nextShift++),
         storeId: body.storeId,
+        terminalId,
         status: 'open',
         openedAt: body.occurredAt,
         openedBy: by,
@@ -371,6 +378,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
           returnsMinor: 0,
           expectedMinor: body.openingCashMinor,
         },
+        discrepancyReceipts: 0,
         events: [
           {
             id: `e-${body.id}`,
@@ -379,6 +387,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
             reference: null,
             employeeName: by,
             amountMinor: body.openingCashMinor,
+            flagged: false,
           },
         ],
       };
@@ -405,6 +414,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         reference: body.reason,
         employeeName: shortNameOf(session.employee.id),
         amountMinor: body.kind === 'in' ? body.amountMinor : -body.amountMinor,
+        flagged: false,
       });
       return shift;
     });
@@ -424,6 +434,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         reference: null,
         employeeName: shortNameOf(session.employee.id),
         amountMinor: body.actualCashMinor,
+        flagged: false,
       });
       // held receipts live until the shift closes (ТЗ)
       pos().held[shift.storeId] = [];
@@ -432,18 +443,30 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         'qr',
         'nfc',
       ];
-      return {
+      const discrepancyMinor = body.actualCashMinor - shift.cash.expectedMinor;
+      const report: ZReport = {
         shift,
         actualCashMinor: body.actualCashMinor,
-        discrepancyMinor: body.actualCashMinor - shift.cash.expectedMinor,
+        discrepancyMinor,
         terminalDiff: Object.fromEntries(
           methods.map((m) => [
             m,
             body.terminalTotals[m] - shift.byMethod[m].amountMinor,
           ]),
         ) as ZReport['terminalDiff'],
+        // the closing is a fact: a discrepancy without a reason is accepted and marked (E24)
+        discrepancyReasonMissing:
+          discrepancyMinor !== 0 && body.discrepancyReason.trim() === '',
       };
+      pos().zReports[shift.id] = report;
+      return report;
     });
+  },
+  'shifts.zReport': ({ params, correlationId }) => {
+    authorize(correlationId, 'shifts:view');
+    const report = pos().zReports[params.id];
+    if (!report) throw new ApiError(404, 'not_found', correlationId);
+    return report;
   },
 
   'receipts.returnable': ({ query, correlationId }) => {
@@ -573,6 +596,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         reference: number,
         employeeName: cashier,
         amountMinor: -body.refundMinor,
+        flagged: false,
       });
       const first = receipt.lines.find(
         (l) => l.lineId === body.lines[0]?.lineId,

@@ -169,6 +169,7 @@ export function CashMovementDialog({
         <TextField
           label={t('comment')}
           hint={t('optional')}
+          maxLength={200}
           value={comment}
           onChange={(event) => setComment(event.target.value)}
         />
@@ -318,6 +319,7 @@ export function CloseShiftDialog({
               label={t('discrepancyReason')}
               placeholder={t('discrepancyPlaceholder')}
               required
+              maxLength={500}
               value={reason}
               error={
                 touched && reason.trim().length < 3

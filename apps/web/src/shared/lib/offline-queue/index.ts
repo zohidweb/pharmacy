@@ -8,10 +8,18 @@ export {
   type PosWriteTransaction,
 } from './db';
 export {
+  isSealed,
+  openControlled,
+  sealControlled,
+  type SealedControlled,
+} from './controlled-crypto';
+export {
+  sealReceipt,
   sendPosOperation,
   type PosOperation,
   type PosOperationKind,
   type PosOutboxRecord,
+  type StoredReceiptRequest,
 } from './operations';
 export {
   backoffDelay,

@@ -43,6 +43,8 @@ export interface ApiRequestOptions<K extends ApiRouteKey> {
   body?: ApiBody<K>;
   /** Sent as Idempotency-Key: the same key for retries of one user action. */
   idempotencyKey?: string;
+  /** Extra headers of the request (not part of the idempotent body). */
+  headers?: Record<string, string>;
   signal?: AbortSignal;
 }
 
@@ -84,6 +86,7 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
         ...(options.idempotencyKey && {
           'Idempotency-Key': options.idempotencyKey,
         }),
+        ...options.headers,
         ...(options.body !== undefined && {
           'Content-Type': 'application/json',
         }),
@@ -242,6 +245,19 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'stockCounts.post',
   'stockCounts.unpost',
   'stockCounts.cancel',
+  // the POS: shift and sale (spec 2026-10-13-pos-shift-sale)
+  'catalog.snapshot',
+  'receipts.create',
+  'heldReceipts.list',
+  'heldReceipts.create',
+  'heldReceipts.delete',
+  'shifts.current',
+  'shifts.open',
+  'shifts.cashMovement',
+  'shifts.close',
+  'shifts.zReport',
+  'deployment.get',
+  'health.get',
 ]);
 
 /**

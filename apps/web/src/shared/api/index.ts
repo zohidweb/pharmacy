@@ -29,7 +29,11 @@ export {
   startConnectivity,
   subscribeConnectivity,
 } from './connectivity';
-export { apiFieldErrors, useApiErrorMessage } from './error-message';
+export {
+  apiFieldErrors,
+  useApiCodeMessage,
+  useApiErrorMessage,
+} from './error-message';
 
 /**
  * NEXT_PUBLIC_API_MOCKS: `true` — every route in in-memory mocks; `partial` — routes apps/api

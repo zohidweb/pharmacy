@@ -27,16 +27,17 @@ import {
   type PaperWidth,
 } from '@pharmacy/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useCatalog } from '@/entities/catalog';
 import { canWrite, currentStoreOf, useSession } from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
 import { useOutboxCounts, useTerminalRuntime } from '@/entities/terminal';
-import { apiRequest } from '@/shared/api';
+import { apiRequest, useApiCodeMessage } from '@/shared/api';
 import type { PosOutboxRecord } from '@/shared/lib/offline-queue';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { withPending } from '../lib/pending';
 import { zReportLines, type ZReportLabels } from '../lib/z-report';
 import {
   CashMovementDialog,
@@ -73,6 +74,9 @@ function useZLabels(): ZReportLabels {
     byTerminal: (method) => t('byTerminal', { method }),
     fiscalPlaceholder: t('fiscalPlaceholder'),
     taxId: t('taxId'),
+    discrepancyReceipts: t('discrepancyReceipts'),
+    reasonMissing: t('reasonMissing'),
+    preliminary: t('preliminary'),
   };
 }
 
@@ -192,15 +196,24 @@ function EventLog({ events }: { events: ShiftEvent[] }) {
           {
             key: 'kind',
             header: t('operation'),
-            cell: (e) =>
-              t(`events.${e.kind}`, {
-                reference:
-                  e.kind === 'cash_in' || e.kind === 'cash_out'
-                    ? t(
-                        `reasons.${(e.reference ?? 'other') as CashInReason | CashOutReason}`,
-                      )
-                    : (e.reference ?? ''),
-              }),
+            cell: (e) => (
+              <span className="flex flex-wrap items-center gap-2">
+                {t(`events.${e.kind}`, {
+                  reference:
+                    e.kind === 'cash_in' || e.kind === 'cash_out'
+                      ? t(
+                          `reasons.${(e.reference ?? 'other') as CashInReason | CashOutReason}`,
+                        )
+                      : (e.reference ?? ''),
+                })}
+                {/* a receipt with discrepancy marks, an author without the right now (K7) */}
+                {e.flagged && (
+                  <span title={t('flaggedHint')}>
+                    <StatusPill tone="warning">{t('flagged')}</StatusPill>
+                  </span>
+                )}
+              </span>
+            ),
           },
           { key: 'who', header: t('cashier'), cell: (e) => e.employeeName },
           {
@@ -232,6 +245,7 @@ function Quarantine({
   onRetry: (id: string) => void;
 }) {
   const t = useTranslations('shift.quarantine');
+  const known = useApiCodeMessage();
   if (records.length === 0) return null;
   return (
     <Card padding="none" className="border border-danger-border">
@@ -257,13 +271,20 @@ function Quarantine({
             key: 'error',
             header: t('error'),
             cell: (r) =>
-              r.lastError
-                ? t('errorText', {
-                    status: r.lastError.status,
-                    code: r.lastError.code,
-                    correlationId: r.lastError.correlationId,
-                  })
-                : '—',
+              r.lastError ? (
+                <span className="flex flex-col">
+                  {known(r.lastError.code)}
+                  <span className="text-xs text-fg-subtle">
+                    {t('errorText', {
+                      status: r.lastError.status,
+                      code: r.lastError.code,
+                      correlationId: r.lastError.correlationId,
+                    })}
+                  </span>
+                </span>
+              ) : (
+                '—'
+              ),
           },
           {
             key: 'actions',
@@ -292,13 +313,27 @@ function ShiftPageView() {
   const storeId = store?.id ?? null;
   const runtime = useTerminalRuntime();
   const counts = useOutboxCounts(runtime);
-  const shift = useCurrentShift(storeId);
+  // a buffered operation left the buffer: the shift of the server has it now (final review I1)
+  const pendingBefore = useRef(counts.pending);
+  useEffect(() => {
+    if (counts.pending < pendingBefore.current) {
+      void queryClient.invalidateQueries({ queryKey: shiftQueryKey(storeId) });
+    }
+    pendingBefore.current = counts.pending;
+  }, [counts.pending, queryClient, storeId]);
+  // the shift belongs to the terminal: only a PIN session of a bound one has it (K6)
+  const onTerminal = session?.terminalId != null;
+  const shift = useCurrentShift(storeId, onTerminal);
   const settings = useCatalog(runtime, storeId).data?.snapshot.settings;
   const [dialog, setDialog] = useState<
     'open' | 'close' | CashMovementKind | null
   >(null);
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<ZReport | null>(null);
+  // the Z-report of the terminal while its closing waits in the buffer
+  const [preliminary, setPreliminary] = useState(false);
+  // the Z-report of the server for the last closing of this page: printed again on demand (M6)
+  const [lastZ, setLastZ] = useState<ZReport | null>(null);
   const [paper, setPaper] = useState<PaperWidth>('80');
   const records = useQuery({
     queryKey: ['outbox', runtime?.key, counts.pending, counts.quarantine],
@@ -312,7 +347,7 @@ function ShiftPageView() {
         params: { storeId: storeId ?? '' },
         signal,
       }),
-    enabled: Boolean(storeId),
+    enabled: Boolean(storeId) && onTerminal,
   });
   const writable = canWrite(session, 'shifts:update');
   const context = () => ({
@@ -351,7 +386,8 @@ function ShiftPageView() {
       const zero = () => ({ count: 0, amountMinor: 0 });
       const local: Shift = {
         id: payload.id,
-        number: 0,
+        // the server gives the number at delivery
+        number: '',
         storeId: payload.storeId,
         status: 'open',
         openedAt: payload.occurredAt,
@@ -369,6 +405,7 @@ function ShiftPageView() {
           returnsMinor: 0,
           expectedMinor: openingCashMinor,
         },
+        discrepancyReceipts: 0,
         events: [],
       };
       queryClient.setQueryData(shiftQueryKey(storeId), local);
@@ -405,7 +442,19 @@ function ShiftPageView() {
       if (!runtime) return;
       const payload = { ...context(), shiftId: current.id, ...input };
       refreshAfterDelivery(payload.id);
+      // the terminal's own Z-report at once; the server's replaces it whenever the closing is delivered
+      const unsubscribe = runtime.queue.onDelivered((record, response) => {
+        if (record.id !== payload.id) return;
+        unsubscribe();
+        const server = response as ZReport;
+        setLastZ(server);
+        setReport((shown) =>
+          shown && shown.shift.id === server.shift.id ? server : shown,
+        );
+        setPreliminary(false);
+      });
       await runtime.enqueue({ kind: 'shift.close', payload });
+      setPreliminary(true);
       setReport({
         shift: { ...current, status: 'closed', closedAt: payload.occurredAt },
         actualCashMinor: input.actualCashMinor,
@@ -415,6 +464,9 @@ function ShiftPageView() {
           qr: input.terminalTotals.qr - current.byMethod.qr.amountMinor,
           nfc: input.terminalTotals.nfc - current.byMethod.nfc.amountMinor,
         },
+        discrepancyReasonMissing:
+          input.actualCashMinor !== current.cash.expectedMinor &&
+          input.discrepancyReason.trim() === '',
       });
       queryClient.setQueryData(shiftQueryKey(storeId), null);
       void rememberShift(storeId ?? '', null);
@@ -433,8 +485,24 @@ function ShiftPageView() {
         },
         zLabels,
         RECEIPT_COLUMNS[paper],
+        preliminary,
       )
     : [];
+
+  if (session && !onTerminal) {
+    return (
+      <>
+        <PageHeader title={t('titleNone')} />
+        <div className="px-6 pt-4">
+          <EmptyState
+            icon="lock"
+            title={t('noTerminal')}
+            description={t('noTerminalHint')}
+          />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -475,7 +543,8 @@ function ShiftPageView() {
                     </Button>
                     <Button
                       variant="destructive"
-                      disabled={!writable}
+                      // the shift and the buffer are read at the same moment for the reconciliation
+                      disabled={!writable || shift.isFetching}
                       onClick={() => setDialog('close')}
                     >
                       {t('closeAction')}
@@ -503,6 +572,13 @@ function ShiftPageView() {
               />
               {current ? (
                 <>
+                  {current.discrepancyReceipts > 0 && (
+                    <Alert tone="warning">
+                      {t('discrepancyReceipts', {
+                        count: current.discrepancyReceipts,
+                      })}
+                    </Alert>
+                  )}
                   <div className="grid grid-cols-2 items-start gap-4">
                     <Totals shift={current} />
                     <Drawer shift={current} />
@@ -519,11 +595,16 @@ function ShiftPageView() {
                   {dialog === 'close' && (
                     <CloseShiftDialog
                       open
-                      shift={current}
+                      shift={withPending(current, records.data ?? [])}
                       pendingOperations={counts.pending}
                       heldReceipts={held.data?.length ?? 0}
                       busy={busy}
-                      onConfirm={(input) => void close(current, input)}
+                      onConfirm={(input) =>
+                        void close(
+                          withPending(current, records.data ?? []),
+                          input,
+                        )
+                      }
                       onClose={() => setDialog(null)}
                     />
                   )}
@@ -533,6 +614,20 @@ function ShiftPageView() {
                   icon="clock"
                   title={t('titleNone')}
                   description={t('noneHint')}
+                  action={
+                    lastZ ? (
+                      <Button
+                        variant="secondary"
+                        iconStart="printer"
+                        onClick={() => {
+                          setPreliminary(false);
+                          setReport(lastZ);
+                        }}
+                      >
+                        {t('lastZ', { number: lastZ.shift.number })}
+                      </Button>
+                    ) : undefined
+                  }
                 />
               )}
             </div>
@@ -553,7 +648,12 @@ function ShiftPageView() {
         onClose={() => setReport(null)}
         title={t('z.previewTitle')}
         description={
-          report ? t('shiftNumber', { number: report.shift.number }) : undefined
+          report
+            ? [
+                t('shiftNumber', { number: report.shift.number || '…' }),
+                ...(preliminary ? [t('z.preliminary')] : []),
+              ].join(' · ')
+            : undefined
         }
         closeLabel={t('close')}
         size="md"

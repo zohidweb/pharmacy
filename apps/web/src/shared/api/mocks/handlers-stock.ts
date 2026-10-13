@@ -262,7 +262,7 @@ function unpostCheck(
 
 /** Difference of a counted line: fact − (book − sold since the start). */
 const countDiff = (line: StockCountLine) =>
-  (line.factPieces ?? 0) - (line.bookPieces - line.soldSincePieces);
+  (line.factPieces ?? 0) - (line.bookPieces - line.soldBeforeCountPieces);
 
 function recount(line: StockCountLine) {
   line.counted = line.entries.length > 0;
@@ -1606,7 +1606,8 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
             expiresOn: b.expiresOn,
             piecesPerPack: p.piecesPerPack,
             bookPieces: stockAt(body.storeId)[b.id] ?? 0,
-            soldSincePieces: 0,
+            soldBeforeCountPieces: 0,
+            soldAfterCountPieces: 0,
             counted: false,
             factPieces: null,
             entries: [],
@@ -1720,7 +1721,8 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       expiresOn: body.expiresOn,
       piecesPerPack: product.piecesPerPack,
       bookPieces: 0,
-      soldSincePieces: 0,
+      soldBeforeCountPieces: 0,
+      soldAfterCountPieces: 0,
       counted: false,
       factPieces: null,
       entries: [],

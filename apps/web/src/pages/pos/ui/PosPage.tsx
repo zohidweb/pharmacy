@@ -18,8 +18,12 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useTranslations } from 'use-intl';
-import { useCatalog, type CatalogData } from '@/entities/catalog';
+import { useLocale, useTranslations } from 'use-intl';
+import {
+  storeSnapshot,
+  useCatalog,
+  type CatalogData,
+} from '@/entities/catalog';
 import { can, canWrite, currentStoreOf, useSession } from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
 import { useTerminalRuntime } from '@/entities/terminal';
@@ -78,6 +82,7 @@ function useOnlineState(): boolean {
 /** POS (UI mockups «Касса» and «Касса · полный экран»). */
 function PosPageView() {
   const t = useTranslations('pos');
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const store = currentStoreOf(session);
@@ -85,7 +90,9 @@ function PosPageView() {
   const runtime = useTerminalRuntime();
   useDraftPersistence(runtime);
   const catalog = useCatalog(runtime, storeId);
-  const shift = useCurrentShift(storeId);
+  // the shift belongs to the terminal: only a PIN session of a bound one sells (K6)
+  const onTerminal = session?.terminalId != null;
+  const shift = useCurrentShift(storeId, onTerminal);
   const online = useOnlineState();
   const { fullscreen, setFullscreen } = useShellChrome();
 
@@ -163,6 +170,11 @@ function PosPageView() {
         setNotice(t('controlledForbidden', { name: product.name }));
         return;
       }
+      // a ПКУ sale needs the connection until the limits of the buffer come (spec 2026-10-13, E17)
+      if (!online) {
+        setNotice(t('controlledOffline', { name: product.name }));
+        return;
+      }
       setControlled({ pending, line: null });
       return;
     }
@@ -193,7 +205,7 @@ function PosPageView() {
         params: { storeId: storeId ?? '' },
         signal,
       }),
-    enabled: Boolean(storeId) && online,
+    enabled: Boolean(storeId) && online && onTerminal,
   });
   const heldCount = held.data?.length;
 
@@ -255,6 +267,25 @@ function PosPageView() {
 
   const pay = async () => {
     if (!session || !openShift || !snapshot || !runtime || paying) return;
+    if (
+      !online &&
+      usePosStore
+        .getState()
+        .draft.lines.some((line) => line.prescription === 'controlled')
+    ) {
+      setNotice(t('controlledOfflinePay'));
+      return;
+    }
+    // the expired batch is a hard ban (ТЗ): a cart kept past midnight is checked again
+    const expired = usePosStore
+      .getState()
+      .draft.lines.find((line) => line.expiresOn < toAppDate());
+    if (expired) {
+      setNotice(
+        t('expiredAtPay', { name: expired.name, batch: expired.batchNumber }),
+      );
+      return;
+    }
     setPaying(true);
     try {
       const current = usePosStore.getState().draft;
@@ -262,6 +293,7 @@ function PosPageView() {
         session,
         shiftId: openShift.id,
         snapshot,
+        language: locale === 'tg' ? 'tj' : 'ru',
       });
       const delivery = awaitDelivery(runtime, request.id);
       await enqueueSale(runtime, request);
@@ -269,7 +301,7 @@ function PosPageView() {
       queryClient.setQueryData<CatalogData>(['catalog', storeId], (data) =>
         data ? { ...data, snapshot: updated } : data,
       );
-      void runtime.db.put('catalog', updated, 'snapshot');
+      void storeSnapshot(runtime, updated, locale);
       usePosStore.getState().replace(emptyDraft());
       if (current.heldId && online) deleteHeld.mutate(current.heldId);
       const data: ReceiptPrintData = {
@@ -292,6 +324,8 @@ function PosPageView() {
         void queryClient.invalidateQueries({
           queryKey: shiftQueryKey(storeId),
         });
+        // the stock of the other terminals of the store comes with the delta (E16)
+        void queryClient.invalidateQueries({ queryKey: ['catalog', storeId] });
       }
     } finally {
       setPaying(false);
@@ -336,6 +370,21 @@ function PosPageView() {
       }
     />
   );
+
+  if (session && !onTerminal) {
+    return (
+      <>
+        {header}
+        <div className="px-6 pt-4">
+          <EmptyState
+            icon="lock"
+            title={t('noTerminal')}
+            description={t('noTerminalHint')}
+          />
+        </div>
+      </>
+    );
+  }
 
   if (shift.isPending || (Boolean(runtime) && !hydrated)) {
     return (

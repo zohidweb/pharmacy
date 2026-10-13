@@ -35,7 +35,7 @@ export interface ShiftTotals {
 export interface ShiftEventRow {
   id: string;
   at: Date;
-  kind: 'sale' | 'cash_in' | 'cash_out';
+  kind: 'sale' | 'cash_in' | 'cash_out' | 'return';
   reference: string;
   employeeName: string;
   amountDirams: number;

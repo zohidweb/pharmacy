@@ -283,7 +283,10 @@ export class ShiftsService implements OnModuleInit {
           terminalDiff: Object.fromEntries(
             BANK.map((m) => [
               m,
-              body.terminalTotals[m] - open.byMethod[m].amountMinor,
+              // the sales less the returns of the kind (spec 2026-10-13-customer-returns, E13)
+              body.terminalTotals[m] -
+                (open.byMethod[m].amountMinor -
+                  open.returnsByMethod[m].amountMinor),
             ]),
           ) as ZReport['terminalDiff'],
           // the closing is a fact (E24): no reason at a discrepancy is marked, not refused

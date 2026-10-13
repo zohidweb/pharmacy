@@ -5,8 +5,16 @@ import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
 
-/** Operations of the POS buffer (data model 06, `idempotency_keys.scope`). */
-export type PosScope = 'receipt' | 'shift.open' | 'shift.cash' | 'shift.close';
+/**
+ * Operations with an idempotency key (data model 06, `idempotency_keys.scope`): the POS buffer and
+ * the customer return (spec 2026-10-13-customer-returns, E1).
+ */
+export type PosScope =
+  | 'receipt'
+  | 'shift.open'
+  | 'shift.cash'
+  | 'shift.close'
+  | 'return';
 
 /** How long a key answers repeats: longer than any buffer of a terminal (ADR-0015: 24 h). */
 const KEY_TTL_DAYS = 30;

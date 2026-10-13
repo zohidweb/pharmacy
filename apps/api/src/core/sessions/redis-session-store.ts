@@ -1,4 +1,4 @@
-import type { RedisClient } from '../redis/redis.tokens';
+import { type RedisClient, readyMulti } from '../redis/redis.tokens';
 import {
   PermissionsVersionCache,
   SessionStore,
@@ -7,9 +7,12 @@ import {
   type SessionRecord,
 } from './session-store';
 
-const sessionKey = (sessionId: string): string => `sess:${sessionId}`;
+const SESSION_PREFIX = 'sess:';
+const EMPLOYEE_SESSIONS_PREFIX = 'emp-sess:';
+
+const sessionKey = (sessionId: string): string => `${SESSION_PREFIX}${sessionId}`;
 const employeeSessionsKey = (tenantId: string, employeeId: string): string =>
-  `emp-sess:${tenantId}:${employeeId}`;
+  `${EMPLOYEE_SESSIONS_PREFIX}${tenantId}:${employeeId}`;
 const versionKey = (tenantId: string, employeeId: string): string =>
   `pv:${tenantId}:${employeeId}`;
 const terminalSessionKey = (tenantId: string, terminalId: string): string =>
@@ -53,6 +56,34 @@ if current == nil or current < tonumber(ARGV[1]) then
 end
 return 0`;
 
+// One PIN session per terminal, kept exact: the session the terminal's link names is removed
+// (with its entry in its employee's set) and the link moves to the new session, or is deleted, in
+// one atomic step, so overlapping PIN sign-ins on a terminal leave only the last one alive and
+// linked. The keys of the linked session are only known once the link is read, so they are built
+// here from the prefixes (a single Redis node; no cluster slots to declare).
+// KEYS[1] the link; ARGV: session prefix, employee set prefix, new session id ('' deletes the
+// link), link lifetime in ms.
+const SWAP_TERMINAL_SESSION = `
+local previous = redis.call('GET', KEYS[1])
+if previous and previous ~= ARGV[3] then
+  local key = ARGV[1] .. previous
+  local raw = redis.call('GET', key)
+  redis.call('DEL', key)
+  if raw then
+    local ok, record = pcall(cjson.decode, raw)
+    if ok and type(record) == 'table' and type(record.tenantId) == 'string'
+        and type(record.employeeId) == 'string' then
+      redis.call('SREM', ARGV[2] .. record.tenantId .. ':' .. record.employeeId, previous)
+    end
+  end
+end
+if ARGV[3] == '' then
+  redis.call('DEL', KEYS[1])
+else
+  redis.call('SET', KEYS[1], ARGV[3], 'PX', ARGV[4])
+end
+return 1`;
+
 // Idle lifetime in ms, capped by the absolute expiry; null when the session has already expired.
 function lifetimeMs(idleTtlSeconds: number, absoluteExpiresAt: string): number | null {
   const untilAbsolute = Date.parse(absoluteExpiresAt) - Date.now();
@@ -89,10 +120,16 @@ export class RedisSessionStore extends SessionStore {
     if (ttl === null) return;
     const setKey = employeeSessionsKey(record.tenantId, record.employeeId);
     const absoluteMs = Math.ceil(Date.parse(record.absoluteExpiresAt) - Date.now());
-    const multi = this.redis.multi();
+    const multi = readyMulti(this.redis);
     if (record.terminalId !== null) {
-      multi.set(terminalSessionKey(record.tenantId, record.terminalId), record.sessionId, {
-        expiration: { type: 'PX', value: absoluteMs },
+      multi.eval(SWAP_TERMINAL_SESSION, {
+        keys: [terminalSessionKey(record.tenantId, record.terminalId)],
+        arguments: [
+          SESSION_PREFIX,
+          EMPLOYEE_SESSIONS_PREFIX,
+          record.sessionId,
+          String(absoluteMs),
+        ],
       });
     }
     await multi
@@ -169,7 +206,7 @@ export class RedisSessionStore extends SessionStore {
   async destroy(sessionId: string): Promise<void> {
     const key = sessionKey(sessionId);
     const record = parseRecord(await this.redis.get(key));
-    const multi = this.redis.multi().del(key);
+    const multi = readyMulti(this.redis).del(key);
     if (record !== null) {
       multi.sRem(employeeSessionsKey(record.tenantId, record.employeeId), sessionId);
     }
@@ -185,14 +222,14 @@ export class RedisSessionStore extends SessionStore {
     const ids = (await this.redis.sMembers(setKey)).filter((id) => id !== exceptSessionId);
     if (ids.length === 0) return;
     // Removing only the listed ids keeps the excepted session and any session created meanwhile.
-    await this.redis.multi().del(ids.map(sessionKey)).sRem(setKey, ids).exec();
+    await readyMulti(this.redis).del(ids.map(sessionKey)).sRem(setKey, ids).exec();
   }
 
   async destroyForTerminal(tenantId: string, terminalId: string): Promise<void> {
-    const linkKey = terminalSessionKey(tenantId, terminalId);
-    const sessionId = await this.redis.get(linkKey);
-    if (sessionId !== null) await this.destroy(sessionId);
-    await this.redis.del(linkKey);
+    await this.redis.eval(SWAP_TERMINAL_SESSION, {
+      keys: [terminalSessionKey(tenantId, terminalId)],
+      arguments: [SESSION_PREFIX, EMPLOYEE_SESSIONS_PREFIX, '', '0'],
+    });
   }
 
   async markTerminalRevoked(

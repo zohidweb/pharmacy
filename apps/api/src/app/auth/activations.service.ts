@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { passwordProblems } from '@pharmacy/shared-domain';
 import {
   getRequestContext,
   runWithContext,
 } from '../../common/context/request-context';
+import { afterCommitBestEffort } from '../../common/errors/after-commit';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { PasswordHasher } from '../../core/crypto';
 import {
@@ -34,6 +35,7 @@ const invalidCode = () => new ProblemException(401, 'invalid_code');
 // or audited.
 @Injectable()
 export class ActivationsService {
+  private readonly logger = new Logger(ActivationsService.name);
   private readonly failureFloorMs: number;
 
   constructor(
@@ -135,8 +137,14 @@ export class ActivationsService {
       });
     });
 
-    // After the commit: sessions opened with the old password end, the attempts are forgotten.
-    await this.sessions.destroyAllFor(tenantId, employeeId);
-    await this.limiter.reset(key);
+    // After the commit: sessions opened with the old password end, the attempts are forgotten. The
+    // password is set and the code is spent, so a retry would only meet 401 invalid_code: a failure
+    // here is logged, not answered.
+    await afterCommitBestEffort(this.logger, 'Ending the sessions of an activated employee', () =>
+      this.sessions.destroyAllFor(tenantId, employeeId),
+    );
+    await afterCommitBestEffort(this.logger, 'Resetting the activation attempts', () =>
+      this.limiter.reset(key),
+    );
   }
 }

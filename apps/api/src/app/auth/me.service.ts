@@ -73,9 +73,11 @@ export class MeService {
         principal.employeeId,
         dbLanguage(locale),
       );
-      // Last inside the transaction: if the session cannot be updated, the language rolls back.
+      const me = await this.buildMe(trx, principal, locale);
+      // Last inside the transaction: if the session cannot be updated, the language rolls back. Only
+      // the commit itself can still fail after it, leaving the session ahead by a locale.
       await this.sessions.update(principal.sessionId, { locale });
-      return this.buildMe(trx, principal, locale);
+      return me;
     });
   }
 
@@ -146,24 +148,39 @@ export class MeService {
       ).toISOString(),
     };
 
-    await this.db.tenantTransaction(async (trx) => {
-      const changed = await this.repository.changePassword(
-        trx,
-        tenantId,
-        employeeId,
-        phc,
-        next,
-      );
-      // The stored hash is not the verified one any more: the password changed meanwhile.
-      if (!changed) throw new ProblemException(409, 'conflict');
-      await this.audit.append(trx, {
-        action: 'auth.password-changed',
-        entityType: 'employee',
-        entityId: employeeId,
+    const stored = { session: false };
+    try {
+      await this.db.tenantTransaction(async (trx) => {
+        const changed = await this.repository.changePassword(
+          trx,
+          tenantId,
+          employeeId,
+          phc,
+          next,
+        );
+        // The stored hash is not the verified one any more: the password changed meanwhile.
+        if (!changed) throw new ProblemException(409, 'conflict');
+        await this.audit.append(trx, {
+          action: 'auth.password-changed',
+          entityType: 'employee',
+          entityId: employeeId,
+        });
+        // Last inside the transaction: if the session cannot be stored, the password rolls back.
+        await this.sessions.create(record);
+        stored.session = true;
       });
-      // Last inside the transaction: if the session cannot be stored, the password rolls back.
-      await this.sessions.create(record);
-    });
+    } catch (error) {
+      // A commit that fails after the new session was stored leaves it with no password behind
+      // it; nobody holds its token, so it is removed rather than left to expire.
+      if (stored.session) {
+        try {
+          await this.sessions.destroy(sessionId);
+        } catch (cleanup) {
+          this.logDestroyFailure('the uncommitted session', cleanup);
+        }
+      }
+      throw error;
+    }
 
     await this.endPreviousSessions(principal, sessionId);
     return { token, maxAgeSeconds: this.absoluteTtlSeconds };

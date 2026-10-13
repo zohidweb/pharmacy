@@ -168,7 +168,13 @@ export class TerminalsService {
     });
 
     if (previous !== null) {
-      await this.afterRevoke(principal.tenantId, previous);
+      try {
+        await this.afterRevoke(principal.tenantId, previous);
+      } catch {
+        // Logged by afterRevoke. Not answered here: the new cookie replaces this browser's old
+        // one, so the old terminal's PIN session no longer matches its device anyway, and an
+        // error would leave the new terminal bound, holding its name, with no cookie to use it.
+      }
     }
     return { secret, terminal };
   }

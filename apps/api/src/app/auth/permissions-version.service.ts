@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { requireTenantId } from '../../common/context/request-context';
+import { afterCommitBestEffort } from '../../common/errors/after-commit';
 import type { TenantTransaction } from '../../core/database';
 import { PermissionsVersionCache } from '../../core/sessions';
 import { PermissionsVersionRepository } from './permissions-version.repository';
@@ -14,6 +15,8 @@ export type AfterCommit = () => Promise<void>;
 // concurrent bumps and cache-miss fills landing in any order never move the cache backwards.
 @Injectable()
 export class PermissionsVersionService {
+  private readonly logger = new Logger(PermissionsVersionService.name);
+
   constructor(
     private readonly repository: PermissionsVersionRepository,
     private readonly cache: PermissionsVersionCache,
@@ -28,14 +31,16 @@ export class PermissionsVersionService {
     if (ids.length === 0) return async () => undefined;
 
     const bumped = await this.repository.bump(trx, tenantId, ids);
-    // A failed cache write leaves an older version cached until its short TTL (minutes); the error is not
-    // swallowed: the caller (already committed) decides how to report it.
-    return async () => {
-      await Promise.all(
-        bumped.map(({ employeeId, version }) =>
-          this.cache.setIfGreater(tenantId, employeeId, version),
+    // A failed cache write leaves an older version cached until its short TTL (minutes), the
+    // staleness the design accepts; the change itself has committed, so the failure is logged and
+    // the request still succeeds. A caller that must end sessions (blocking) does it on its own.
+    return () =>
+      afterCommitBestEffort(this.logger, 'Writing the permissions versions', () =>
+        Promise.all(
+          bumped.map(({ employeeId, version }) =>
+            this.cache.setIfGreater(tenantId, employeeId, version),
+          ),
         ),
       );
-    };
   }
 }

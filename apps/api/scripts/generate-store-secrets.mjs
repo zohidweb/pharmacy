@@ -33,9 +33,10 @@ function parseArgs(argv) {
 }
 
 function definedNames(content) {
-  // `NAME=` and the shell form `export NAME=` both define a value; a commented line does not.
+  // `NAME=`, the shell form `export NAME=` and the dotenv form `NAME: value` all define a value; a
+  // commented line does not.
   return NAMES.filter((name) =>
-    new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`, 'm').test(content),
+    new RegExp(`^\\s*(?:export\\s+)?${name}\\s*[=:]`, 'm').test(content),
   );
 }
 

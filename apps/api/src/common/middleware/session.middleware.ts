@@ -119,7 +119,9 @@ function snapshotPatch(
 // Resolves the principal of every request from the session cookie and runs the rest of the
 // request inside a frozen RequestContext (auth design 2026-10-02, section 7, steps 1-6). A missing,
 // invalid or revoked session gives a guest context; the guards decide whether that is enough.
-// Any failure fails closed to a guest. Tokens, cookies and session records are never logged.
+// A failure to read or verify the session fails closed to a guest; only a failed write of state
+// this request has just verified (persistFresh) lets it go on. Tokens, cookies and session records
+// are never logged.
 @Injectable()
 export class SessionMiddleware implements NestMiddleware {
   private readonly logger = new Logger(SessionMiddleware.name);
@@ -141,7 +143,7 @@ export class SessionMiddleware implements NestMiddleware {
     try {
       principal = isOperatorPath(req.originalUrl)
         ? await this.resolveOperator(req)
-        : await this.resolve(req);
+        : await this.resolve(req, correlationId);
     } catch (error) {
       // The error text may carry keys or values from the store or the database: name only.
       const name = error instanceof Error ? error.name : typeof error;
@@ -170,7 +172,10 @@ export class SessionMiddleware implements NestMiddleware {
     return this.operators.resolve(token);
   }
 
-  private async resolve(req: Request): Promise<EmployeePrincipal | null> {
+  private async resolve(
+    req: Request,
+    correlationId: string,
+  ): Promise<EmployeePrincipal | null> {
     if (isOperatorPath(req.originalUrl)) return null;
 
     // Step 1: the token of the web contour.
@@ -203,7 +208,9 @@ export class SessionMiddleware implements NestMiddleware {
         await this.sessions.destroyAllFor(tenantId, employeeId);
         return null;
       }
-      await this.sessions.clearTenantBlocked(tenantId);
+      await this.persistFresh(correlationId, 'Clearing a stale network block flag', () =>
+        this.sessions.clearTenantBlocked(tenantId),
+      );
     }
     if (
       session.terminalId !== null &&
@@ -231,10 +238,8 @@ export class SessionMiddleware implements NestMiddleware {
       // meanwhile by the post-commit writer is never overwritten; then the next request reloads
       // against it.
       if (permissionsVersion === null) {
-        await this.versions.setIfGreater(
-          tenantId,
-          employeeId,
-          fresh.permissionsVersion,
+        await this.persistFresh(correlationId, 'The permissions version cache fill', () =>
+          this.versions.setIfGreater(tenantId, employeeId, fresh.permissionsVersion),
         );
       }
       if (fresh.permissionsVersion !== record.permissionsVersion) {
@@ -243,22 +248,45 @@ export class SessionMiddleware implements NestMiddleware {
           await this.sessions.destroy(sessionId);
           return null;
         }
-        await this.sessions.update(sessionId, patch);
+        await this.persistFresh(correlationId, 'The session snapshot update', () =>
+          this.sessions.update(sessionId, patch),
+        );
         record = { ...record, ...patch };
       }
     }
 
     // Step 5: extend the idle lifetime at most once per TOUCH_INTERVAL_MS.
     if (this.touches.claim(sessionId, Date.now())) {
-      try {
-        await this.sessions.touch(sessionId, record.idleTtlSeconds);
-      } catch (error) {
-        this.touches.release(sessionId);
-        throw error;
-      }
+      await this.persistFresh(correlationId, 'The idle lifetime extension', async () => {
+        try {
+          await this.sessions.touch(sessionId, record.idleTtlSeconds);
+        } catch (error) {
+          // The next request of the session tries again.
+          this.touches.release(sessionId);
+          throw error;
+        }
+      });
     }
 
     // Step 6: the principal; the caller freezes it into the request context.
     return toPrincipal(record);
+  }
+
+  // Storing what this request has just verified: the request goes on with it in memory whatever the
+  // store does, so a failed write does not sign the employee out; the stored state still differs,
+  // and the next request repeats the write.
+  private async persistFresh(
+    correlationId: string,
+    what: string,
+    write: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await write();
+    } catch (error) {
+      const name = error instanceof Error ? error.name : typeof error;
+      this.logger.warn(
+        `${what} failed (${name}); the request goes on with the fresh snapshot [correlationId=${correlationId}]`,
+      );
+    }
   }
 }

@@ -26,7 +26,11 @@ import { normalizeIdentifier } from './identifier';
 import { LoginClock, padFailure } from './login-clock';
 import { LoginLimiter, loginLimiterKey } from './login-limiter';
 import { PrincipalLoader } from './principal-loader';
-import { SessionIssuer } from './session-issuer';
+import {
+  EmployeeGoneError,
+  type IssuedSession,
+  SessionIssuer,
+} from './session-issuer';
 import { buildEmployeeSession, type SessionView } from './session-profile';
 
 export interface LoginResult {
@@ -256,30 +260,44 @@ export class SessionsService {
       ? await this.hasher.hash(password)
       : null;
 
-    const issued = await this.db.tenantTransaction(async (trx) => {
-      if (rehash !== null) {
-        await this.repository.updatePasswordHash(
-          trx,
+    const stored: { sessionId?: string } = {};
+    let issued: IssuedSession;
+    try {
+      issued = await this.db.tenantTransaction(async (trx) => {
+        if (rehash !== null) {
+          await this.repository.updatePasswordHash(
+            trx,
+            tenantId,
+            employeeId,
+            verified.phc,
+            rehash,
+          );
+        }
+        // The success audit, last_login_at and the session commit together.
+        await this.audit.append(trx, {
+          action: 'auth.login-succeeded',
+          entityType: 'employee',
+          entityId: employeeId,
+          details: { ip },
+        });
+        const result = await this.issuer.issue(trx, {
           tenantId,
           employeeId,
-          verified.phc,
-          rehash,
-        );
+          auth: 'password',
+          snapshot,
+        });
+        stored.sessionId = result.record.sessionId;
+        return result;
+      });
+    } catch (error) {
+      if (stored.sessionId !== undefined) {
+        await this.issuer.discard(stored.sessionId);
       }
-      // The success audit, last_login_at and the session commit together.
-      await this.audit.append(trx, {
-        action: 'auth.login-succeeded',
-        entityType: 'employee',
-        entityId: employeeId,
-        details: { ip },
-      });
-      return this.issuer.issue(trx, {
-        tenantId,
-        employeeId,
-        auth: 'password',
-        snapshot,
-      });
-    });
+      if (error instanceof EmployeeGoneError) {
+        return this.fail(employeeId, 'unknown_employee', ip);
+      }
+      throw error;
+    }
     await this.issuer.seedVersion(
       tenantId,
       employeeId,

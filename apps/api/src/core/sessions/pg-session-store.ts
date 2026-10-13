@@ -62,6 +62,20 @@ export class PgSessionStore extends SessionStore {
           ]),
         )
         .execute();
+      if (record.terminalId !== null) {
+        // One PIN session per terminal, as in the Redis store: the terminal's other sessions end in
+        // the transaction that stores the new one, under a lock of the terminal, so overlapping PIN
+        // sign-ins leave only the last one. An advisory lock, not the terminals row: the caller's
+        // transaction (another connection) may hold that row while it waits for this one.
+        await sql`select pg_advisory_xact_lock(hashtextextended(${`terminal-sessions:${this.tenantId}:${record.terminalId}`}, 0))`.execute(
+          trx,
+        );
+        await trx
+          .deleteFrom('sessions')
+          .where('tenantId', '=', this.tenantId)
+          .where('terminalId', '=', record.terminalId)
+          .execute();
+      }
       await trx
         .insertInto('sessions')
         .values({

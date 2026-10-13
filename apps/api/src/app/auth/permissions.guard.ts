@@ -24,20 +24,22 @@ type DenyReason =
   | 'store_missing'
   | 'store_out_of_scope';
 
-// A non-empty string value, or null (missing, repeated or of another type).
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value !== '' ? value : null;
+// A non-empty string value, or null (missing, repeated or of another type). A UUID is compared in
+// the form the database keeps (lower case): in upper case it names the same store, not a foreign one.
+function storeIdValue(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return null;
+  return isUuid(value) ? value.toLowerCase() : value;
 }
 
 // The store ids named by the request for each scope option that is set; null for a missing value.
 function storeIdsOf(req: Request, scope: StoreScopeOptions): (string | null)[] {
   const ids: (string | null)[] = [];
   if (scope.storeParam !== undefined) {
-    ids.push(stringValue(req.params?.[scope.storeParam]));
+    ids.push(storeIdValue(req.params?.[scope.storeParam]));
   }
   if (scope.storeQuery !== undefined) {
     ids.push(
-      stringValue(
+      storeIdValue(
         (req.query as Record<string, unknown> | undefined)?.[scope.storeQuery],
       ),
     );
@@ -48,7 +50,7 @@ function storeIdsOf(req: Request, scope: StoreScopeOptions): (string | null)[] {
       typeof body === 'object' && body !== null && !Array.isArray(body);
     ids.push(
       isObject
-        ? stringValue((body as Record<string, unknown>)[scope.storeBody])
+        ? storeIdValue((body as Record<string, unknown>)[scope.storeBody])
         : null,
     );
   }
@@ -61,7 +63,9 @@ function inScope(principal: EmployeePrincipal, storeId: string): boolean {
     return false;
   }
   return (
-    principal.storeScope === 'all' || principal.storeScope.includes(storeId)
+    principal.storeScope === 'all' ||
+    (Array.isArray(principal.storeScope) &&
+      principal.storeScope.includes(storeId))
   );
 }
 

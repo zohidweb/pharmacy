@@ -8,7 +8,11 @@ import { SessionStore } from '../../core/sessions';
 import { AuditService } from '../audit/audit.service';
 import type { LoginLimiter } from '../auth/login-limiter';
 import { PrincipalLoader } from '../auth/principal-loader';
-import { SessionIssuer } from '../auth/session-issuer';
+import {
+  EmployeeGoneError,
+  type IssuedSession,
+  SessionIssuer,
+} from '../auth/session-issuer';
 import { TerminalsRepository } from './terminals.repository';
 import { type DeviceTerminal, TerminalsService } from './terminals.service';
 
@@ -143,28 +147,42 @@ export class TerminalSessionsService {
     // One PIN session per terminal: the previous cashier's session ends before the new one starts.
     await this.sessions.destroyForTerminal(tenantId, terminalId);
 
-    const issued = await this.db.tenantTransaction(async (trx) => {
-      await this.repository.clearPinFailures(trx, tenantId, employeeId);
-      await this.repository.touchLastSeen(trx, tenantId, terminalId);
-      await this.audit.append(trx, {
-        action: 'auth.pin-succeeded',
-        entityType: 'employee',
-        entityId: employeeId,
-        storeId,
-        details: { terminalId },
-      });
-      return this.issuer.issue(trx, {
-        tenantId,
-        employeeId,
-        auth: 'pin',
-        snapshot,
-        terminal: {
-          terminalId,
+    const stored: { sessionId?: string } = {};
+    let issued: IssuedSession;
+    try {
+      issued = await this.db.tenantTransaction(async (trx) => {
+        await this.repository.clearPinFailures(trx, tenantId, employeeId);
+        await this.repository.touchLastSeen(trx, tenantId, terminalId);
+        await this.audit.append(trx, {
+          action: 'auth.pin-succeeded',
+          entityType: 'employee',
+          entityId: employeeId,
           storeId,
-          credentialHash: device.credentialHash,
-        },
+          details: { terminalId },
+        });
+        const result = await this.issuer.issue(trx, {
+          tenantId,
+          employeeId,
+          auth: 'pin',
+          snapshot,
+          terminal: {
+            terminalId,
+            storeId,
+            credentialHash: device.credentialHash,
+          },
+        });
+        stored.sessionId = result.record.sessionId;
+        return result;
       });
-    });
+    } catch (error) {
+      if (stored.sessionId !== undefined) {
+        await this.issuer.discard(stored.sessionId);
+      }
+      if (error instanceof EmployeeGoneError) {
+        return this.fail(device, employeeId, 'unknown_employee');
+      }
+      throw error;
+    }
     await this.issuer.seedVersion(tenantId, employeeId, snapshot.permissionsVersion);
 
     return {

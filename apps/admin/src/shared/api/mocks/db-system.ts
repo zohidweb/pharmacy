@@ -12,6 +12,7 @@ import type {
   PlatformOperator,
   PlatformSettings,
 } from '@pharmacy/shared-dto';
+import { DEFAULT_VAT_RATE_PERCENT, PRICE_PER_STORE_MINOR } from './db-billing';
 import { demoOperator, demoOperatorPassword } from './fixtures';
 
 export interface SystemDb {
@@ -189,8 +190,8 @@ export function seedSystem(): SystemDb {
       },
     ],
     settings: {
-      pricePerStoreMinor: 12_000,
-      vatRatePercent: 15,
+      pricePerStoreMinor: PRICE_PER_STORE_MINOR,
+      vatRatePercent: DEFAULT_VAT_RATE_PERCENT,
       prorateByDays: true,
       keyExpiryNoticeDays: 7,
       defaultSyncSchedule: 'daily',

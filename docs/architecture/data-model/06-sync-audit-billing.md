@@ -55,7 +55,7 @@
 
 | Таблица | Класс | Колонки и правила |
 |---|---|---|
-| `platform_settings` | platform | Одна строка: `vat_bp`, `store_monthly_price_dirams`, `offline_store_billing_kind` `monthly` / `one_time` / `free` и `offline_store_price_dirams` (тариф офлайн-точки настраивается, решение 2026-10-01), `feed_window_days` (90), `revoked_key_grace_days` (30) |
+| `platform_settings` | platform | Одна строка: `vat_bp` (ставка НДС новых счетов, задаётся оператором в настройках; по умолчанию 1400 — 14 %, решение 2026-10-13; выставленный счёт хранит свою `vat_bp`), `store_monthly_price_dirams`, `offline_store_billing_kind` `monthly` / `one_time` / `free` и `offline_store_price_dirams` (тариф офлайн-точки настраивается, решение 2026-10-01), `feed_window_days` (90), `revoked_key_grace_days` (30) |
 | `store_billing` | platform | Ключ `(tenant_id, store_id)`: `paid_until date null`. Ведёт оператор; поле «оплачено до» не в `stores`, потому что `stores` пишет владелец |
 | `store_usage_monthly` | tenant-export | Ключ `(tenant_id, store_id, month)`: `receipts_count`, `first_sale_at`, `last_sale_at`, `computed_at`. Пересчёт ночью, отсечка — 3-е число (ADR-0013) |
 | `tenant_stats_daily` | tenant-export | Ключ `(tenant_id, day)`: счётчики чеков и активных точек, без сумм позиций и ПДн |

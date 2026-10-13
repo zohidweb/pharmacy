@@ -22,6 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import { ProductsReader } from '../catalog/products-reader';
 import { type DocumentRow, DocumentsRepository } from './documents.repository';
 import { InventoryRepository } from './inventory.repository';
+import { CustomerReturnNumbers } from './customer-return-numbers';
 import { Numbering } from './numbering';
 import { StockRepository } from './stock.repository';
 import { StoreAccess } from './store-access';
@@ -36,10 +37,16 @@ const notFound = () => new ProblemException(404, 'not_found');
 const badLine = (field: string, code: string) =>
   new FieldProblemException(400, 'validation_failed', [{ field, code }]);
 
-/** The write-off of a transfer shortage is made by the acceptance (spec T6): 409 by hand. */
+/**
+ * The write-off of a transfer shortage is made by the acceptance (spec T6), the one of a customer
+ * return by the return (spec 2026-10-13-customer-returns, E9): 409 by hand.
+ */
 function notFromTransfer(doc: DocumentRow): void {
   if (doc.sourceDocumentId !== null) {
     throw new ProblemException(409, 'write_off_from_transfer');
+  }
+  if (doc.sourceCustomerReturnId !== null) {
+    throw new ProblemException(409, 'write_off_from_return');
   }
 }
 
@@ -58,6 +65,7 @@ export class WriteOffsService {
     private readonly posting: WriteOffPosting,
     private readonly products: ProductsReader,
     private readonly audit: AuditService,
+    private readonly customerReturns: CustomerReturnNumbers,
     private readonly stores: StoreAccess,
   ) {}
 
@@ -427,9 +435,14 @@ export class WriteOffsService {
             ])
           ).get(doc.sourceDocumentId) ?? null)
         : null,
-      // filled by the stock of the customer returns (spec 2026-10-13-customer-returns, E9)
-      customerReturnId: null,
-      customerReturnNumber: null,
+      customerReturnId: doc.sourceCustomerReturnId,
+      customerReturnNumber: doc.sourceCustomerReturnId
+        ? ((
+            await this.customerReturns.numbers(trx, tenantId, [
+              doc.sourceCustomerReturnId,
+            ])
+          ).get(doc.sourceCustomerReturnId) ?? null)
+        : null,
     };
   }
 }

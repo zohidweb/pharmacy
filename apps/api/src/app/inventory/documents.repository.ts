@@ -56,6 +56,8 @@ export interface DocumentRow {
   supplierReturnReason: string | null;
   /** A supplier return → its goods receipt. */
   sourceDocumentId: string | null;
+  /** A write-off made by a customer return (spec 2026-10-13-customer-returns, E9). */
+  sourceCustomerReturnId: string | null;
   inventoryScope: 'all' | 'category' | null;
   inventoryCategoryId: string | null;
   inventoryStartedAt: Date | null;
@@ -116,6 +118,7 @@ export interface HeaderValues {
   writeOffReason?: string | null;
   supplierReturnReason?: string | null;
   sourceDocumentId?: string | null;
+  sourceCustomerReturnId?: string | null;
   destinationStoreId?: string | null;
   requestDocumentId?: string | null;
   inventoryScope?: 'all' | 'category' | null;
@@ -147,6 +150,7 @@ export const HEADER = sql`d.id, d.store_id, d.type, d.number, d.document_date::t
   d.status, d.created_by, d.created_at, d.posted_by, d.posted_at, d.comment, d.total_dirams,
   d.supplier_id, d.supplier_invoice_number, d.payment_due_date::text as payment_due_date,
   d.purchase_order_id, d.write_off_reason, d.supplier_return_reason, d.source_document_id,
+  d.source_customer_return_id,
   d.inventory_scope, d.inventory_category_id,
   d.inventory_started_at, d.cancelled_by, d.cancelled_at, d.destination_store_id,
   d.request_document_id, d.dispatched_at, d.dispatched_by, d.received_at, d.received_by,
@@ -400,8 +404,11 @@ export class DocumentsRepository {
       sourceLineId: string | null;
       businessDate: string;
       reversesMovementId: string | null;
-      /** `receipt` — a sale of the POS (spec 2026-10-13-pos-shift-sale); a document by default. */
-      sourceType?: 'document' | 'receipt';
+      /**
+       * `receipt` — a sale of the POS (spec 2026-10-13-pos-shift-sale), `customer_return` — a customer
+       * return (spec 2026-10-13-customer-returns); a document by default.
+       */
+      sourceType?: 'document' | 'receipt' | 'customer_return';
     }>,
   ): Promise<void> {
     // ≤ 1 000 rows per statement: PostgreSQL takes at most 65 535 bind parameters

@@ -2,6 +2,36 @@
 
 Соглашения — в [README](README.md). `tenant_id`, `(tenant_id, id)` и `created_at` в списках колонок не повторяются.
 
+> **Введено миграцией `pos-shifts-sales` (2026-10-13, спецификация `docs/superpowers/specs/2026-10-13-pos-shift-sale-design.md`):** `shifts`,
+> `shift_cash_operations`, `held_receipts`, `receipts`, `receipt_lines`, `payments`, `controlled_sale_records`
+> (облачная точка; касса офлайн-точки — с синхронизацией). Возвраты покупателей (`customer_returns*`) и
+> `payment_methods` — позже. Поправки модели (утверждены архитектором 2026-10-13, раздел 2.1 спецификации):
+> - `id` смены, операции с наличными и чека — UUIDv7 операции клиента (ключ идемпотентности); отдельной колонки
+>   `receipts.operation_id` нет; у смены, операций и чека есть `received_at` (приём сервером);
+> - **смена на терминал** (D3), продажа и смена — только на привязанном терминале после входа по PIN;
+>   номера `СМ-<код точки>-<год>-<6 цифр>` (счётчик `z_report`) и `ЧК-<код точки>-<год>-<6 цифр>` (`receipt`);
+> - **закрытие смены — факт:** `discrepancy_reason` при расхождении может быть пустым — смена и Z-отчёт помечены
+>   «причина не указана»; `terminal_totals` — суммы банковского терминала; `z_report` — снимок для повторной печати;
+> - `shift_cash_operations`: причины `change_fund` / `other` (внесение), `collection` / `expense` (изъятие),
+>   `comment`; у операций и смены — пометка автора (`author_flagged`, `opened_author_flagged`,
+>   `closed_author_flagged`);
+> - **продажа — факт** (ADR-0015): нехватка остатка, изменённая цена, скидка или карточка товара не отклоняют чек —
+>   `receipts.discrepancy_kinds` (`stock`, `price`, `discount`, `catalog`, `author`, `closed_period`),
+>   `receipt_lines.shortfall_pieces` и `current_price_dirams`; чек несёт значения снимка кассы
+>   (`receipt_lines.pieces_per_pack`, `receipts.discount_min_total_dirams`);
+> - **права автора** проверяются по текущему состоянию: неактивен, вне охвата или без права — пометка `author`, не
+>   отказ (уточнение ADR-0015, 2026-10-13); онлайн-операция от имени не того сотрудника, что вошёл, — тоже `author`;
+> - момент операции — часы ПК, исправленные на их разницу с сервером (заголовок `X-Client-Sent-At`), не старше 30 дней;
+> - смена не удаляется, закрытая смена не меняется (триггер `shifts_guard`) — Z-отчёт печатается повторно как был;
+> - `payments` — только `kind` (без `payment_method_id`); строка наличных хранит полученную сумму, Σ оплат = итог +
+>   сдача; `receipts.cash_tendered_dirams`;
+> - `receipts.origin` — `online` (принят в пределах 60 секунд от продажи) или `offline_buffer`; `fiscal_status` —
+>   `not_required`, пока не выбрана фискализация;
+> - `controlled_sale_records.prescription_note` — необязательные `prescriptionNumber`, `prescriptionDate`,
+>   `clinic`, `doctor`, `buyerName`, `buyerDocument` (только заполненные); запись создаётся и без данных; очистка
+>   по сроку — с журналом ПКУ;
+> - `held_receipts.payload` — строки без данных ПКУ, `subtotal_dirams`; `label` не используется.
+
 ```mermaid
 erDiagram
   terminals ||--o{ shifts : "one open (D3)"

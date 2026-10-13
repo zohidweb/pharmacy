@@ -335,6 +335,8 @@ function ReturnsPageView() {
     onSuccess: (found, query) => {
       setReceipt(found);
       setQuantities({});
+      // every receipt starts at the customer's wish: a defect is chosen on purpose (it writes off)
+      setReason('customer');
       setFoundProductId(query.productId ?? null);
       returnKey.current = null;
     },
@@ -388,6 +390,7 @@ function ReturnsPageView() {
       returnKey.current = null;
       setReceipt(null);
       setQuantities({});
+      setReason('customer');
       setFoundProductId(null);
       setNumber('');
       void queryClient.invalidateQueries({ queryKey: ['returns'] });
@@ -423,6 +426,7 @@ function ReturnsPageView() {
   const cashOut = payments.find((p) => p.method === 'cash')?.amountMinor ?? 0;
   // the drawer holds less cash than the return gives back: a warning only (R6)
   const cashShort =
+    cashOut > 0 &&
     shift.data !== undefined &&
     shift.data !== null &&
     cashOut > shift.data.cash.expectedMinor;

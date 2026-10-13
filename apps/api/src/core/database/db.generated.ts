@@ -51,6 +51,7 @@ export interface Batches {
   origin: string;
   productId: string;
   purchasePricePerPackDirams: bigint;
+  sourceBatchId: string | null;
   sourceDocumentId: string;
   storeId: string;
   supplierId: string | null;
@@ -126,6 +127,9 @@ export interface Documents {
   comment: string | null;
   createdAt: Generated<Timestamp>;
   createdBy: string;
+  destinationStoreId: string | null;
+  dispatchedAt: Timestamp | null;
+  dispatchedBy: string | null;
   documentDate: string;
   id: string;
   inventoryCategoryId: string | null;
@@ -136,6 +140,12 @@ export interface Documents {
   postedAt: Timestamp | null;
   postedBy: string | null;
   purchaseOrderId: string | null;
+  receivedAt: Timestamp | null;
+  receivedBy: string | null;
+  receivedComment: string | null;
+  rejectionComment: string | null;
+  rejectionReason: string | null;
+  requestDocumentId: string | null;
   sourceDocumentId: string | null;
   status: Generated<string>;
   storeId: string;
@@ -585,6 +595,30 @@ export interface Terminals {
   tenantId: string;
 }
 
+export interface TransferLines {
+  createdAt: Generated<Timestamp>;
+  documentId: string;
+  id: string;
+  lineNo: number;
+  productId: string;
+  qtyReceivedPieces: number | null;
+  qtySentPieces: number;
+  sourceBatchId: string;
+  targetBatchId: string | null;
+  tenantId: string;
+  unit: string;
+}
+
+export interface TransferRequestLines {
+  createdAt: Generated<Timestamp>;
+  documentId: string;
+  id: string;
+  lineNo: number;
+  productId: string;
+  qtyRequestedPieces: number;
+  tenantId: string;
+}
+
 export interface WriteOffLines {
   batchId: string;
   createdAt: Generated<Timestamp>;
@@ -637,5 +671,7 @@ export interface DB {
   tenants: Tenants;
   tenantSettings: TenantSettings;
   terminals: Terminals;
+  transferLines: TransferLines;
+  transferRequestLines: TransferRequestLines;
   writeOffLines: WriteOffLines;
 }

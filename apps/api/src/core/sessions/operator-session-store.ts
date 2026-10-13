@@ -1,4 +1,4 @@
-import type { RedisClient } from '../redis/redis.tokens';
+import { type RedisClient, readyMulti } from '../redis/redis.tokens';
 
 // Server-side session of a platform operator (auth design 2026-10-02, section 9). Ids only, never
 // secrets; never logged.
@@ -63,8 +63,7 @@ export class RedisOperatorSessionStore extends OperatorSessionStore {
     if (ttl === null) return;
     const setKey = operatorSessionsKey(record.operatorId);
     const absoluteMs = Math.ceil(Date.parse(record.absoluteExpiresAt) - Date.now());
-    await this.redis
-      .multi()
+    await readyMulti(this.redis)
       .set(sessionKey(record.sessionId), JSON.stringify(record), {
         expiration: { type: 'PX', value: ttl },
       })
@@ -104,7 +103,7 @@ export class RedisOperatorSessionStore extends OperatorSessionStore {
   async destroy(sessionId: string): Promise<void> {
     const key = sessionKey(sessionId);
     const record = parseRecord(await this.redis.get(key));
-    const multi = this.redis.multi().del(key);
+    const multi = readyMulti(this.redis).del(key);
     if (record !== null) {
       multi.sRem(operatorSessionsKey(record.operatorId), sessionId);
     }
@@ -117,6 +116,6 @@ export class RedisOperatorSessionStore extends OperatorSessionStore {
       (id) => id !== exceptSessionId,
     );
     if (ids.length === 0) return;
-    await this.redis.multi().del(ids.map(sessionKey)).sRem(setKey, ids).exec();
+    await readyMulti(this.redis).del(ids.map(sessionKey)).sRem(setKey, ids).exec();
   }
 }

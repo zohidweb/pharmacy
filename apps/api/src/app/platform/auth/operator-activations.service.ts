@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { passwordProblems } from '@pharmacy/shared-domain';
+import { afterCommitBestEffort } from '../../../common/errors/after-commit';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { PasswordHasher, sha256Hex } from '../../../core/crypto';
 import { PlatformDatabase } from '../../../core/database/platform';
@@ -25,6 +26,7 @@ const invalidCode = () => new ProblemException(401, 'invalid_code');
 // codes, hashes and login values are never logged or audited.
 @Injectable()
 export class OperatorActivationsService {
+  private readonly logger = new Logger(OperatorActivationsService.name);
   private readonly failureFloorMs: number;
 
   constructor(
@@ -84,8 +86,14 @@ export class OperatorActivationsService {
       return consumed;
     });
 
-    // After the commit: sessions opened with an old password end, the attempts are forgotten.
-    await this.sessions.destroyAllFor(operatorId);
-    await this.limiter.reset(key);
+    // After the commit: sessions opened with an old password end, the attempts are forgotten. The
+    // password is set and the code is spent, so a retry would only meet 401 invalid_code: a failure
+    // here is logged, not answered.
+    await afterCommitBestEffort(this.logger, 'Ending the sessions of an activated operator', () =>
+      this.sessions.destroyAllFor(operatorId),
+    );
+    await afterCommitBestEffort(this.logger, 'Resetting the activation attempts', () =>
+      this.limiter.reset(key),
+    );
   }
 }

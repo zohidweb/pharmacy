@@ -103,7 +103,11 @@ class EnvironmentVariables {
   STORE_MODE: 'cloud' | 'offline' = 'cloud';
 
   // The one network an offline store serves (plan auth-part4, decision P1); required with
-  // STORE_MODE=offline, refused in the cloud (cross-field check in validateEnv).
+  // STORE_MODE=offline, refused in the cloud (cross-field check in validateEnv). Kept in lower case,
+  // the form the database returns ids in: it is compared with them as a string.
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toLowerCase() : value,
+  )
   @IsUUID()
   @IsOptional()
   OFFLINE_TENANT_ID?: string;

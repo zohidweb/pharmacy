@@ -261,7 +261,6 @@ export class EmployeesService {
     const { tenantId } = requirePrincipal();
     const employeeId = id.toLowerCase();
     let afterCommit: () => Promise<void> = async () => undefined;
-    let blocked = false;
     const card = await this.db.tenantTransaction(async (trx) => {
       const editor = await loadEditor(this.repository, trx);
       const employee = await this.othersEditable(trx, editor, employeeId);
@@ -275,7 +274,6 @@ export class EmployeesService {
         }
         await this.repository.setStatus(trx, tenantId, employee.id, status);
         afterCommit = await this.versions.bump(trx, [employee.id]);
-        blocked = status === 'blocked';
         await this.audit.append(trx, {
           action: status === 'blocked' ? 'employee.blocked' : 'employee.unblocked',
           entityType: 'employee',
@@ -284,12 +282,11 @@ export class EmployeesService {
       }
       return this.card(trx, await this.read(trx, employee.id));
     });
-    try {
-      await afterCommit();
-    } finally {
-      // A failed cache write of the version must not keep a blocked employee signed in.
-      if (blocked) await this.sessions.destroyAllFor(tenantId, employeeId);
-    }
+    await afterCommit();
+    // Ended here, not only through the version: a failed cache write of the version (logged by
+    // afterCommit) must not keep a blocked employee signed in. Also when the employee was already
+    // blocked, so a retry after a failure here completes the cleanup.
+    if (status === 'blocked') await this.sessions.destroyAllFor(tenantId, employeeId);
     return card;
   }
 

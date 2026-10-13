@@ -3,7 +3,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EmployeeSession } from '@pharmacy/shared-dto';
 import { getRequestContext } from '../../common/context/request-context';
-import { ProblemException } from '../../common/errors/problem.exception';
 import { SessionTokenService } from '../../core/crypto';
 import type { TenantTransaction } from '../../core/database';
 import {
@@ -34,6 +33,17 @@ export interface IssueSessionInput {
   /** Permissions, scope and version the session snapshot is built from. */
   snapshot: PrincipalSnapshot;
   terminal?: SessionTerminal;
+}
+
+/**
+ * The employee of a verified credential is gone between the check and the session: the caller
+ * answers it like any failed sign-in of the identifier, not as a lost session.
+ */
+export class EmployeeGoneError extends Error {
+  constructor() {
+    super('The employee of a verified credential is gone');
+    this.name = 'EmployeeGoneError';
+  }
 }
 
 export interface IssuedSession {
@@ -90,8 +100,7 @@ export class SessionIssuer {
     );
 
     const profile = await this.repository.loadProfile(trx, tenantId, employeeId);
-    // The employee of a verified credential is gone: no profile to show.
-    if (profile === null) throw new ProblemException(401, 'unauthenticated');
+    if (profile === null) throw new EmployeeGoneError();
     const storeScope: 'all' | string[] = terminal
       ? [terminal.storeId]
       : snapshot.storeScope;
@@ -129,13 +138,27 @@ export class SessionIssuer {
         now + this.absoluteTtlSeconds * 1000,
       ).toISOString(),
     };
+    const session = buildEmployeeSession(profile, stores, record);
+    // Last: nothing after it can fail with the session already stored.
     await this.sessions.create(record);
     return {
       token,
       maxAgeSeconds: this.absoluteTtlSeconds,
-      session: buildEmployeeSession(profile, stores, record),
+      session,
       record,
     };
+  }
+
+  // A session stored by issue() whose transaction then failed to commit: nobody holds its token,
+  // so it is removed rather than left to expire. Best effort: a failure is logged.
+  async discard(sessionId: string): Promise<void> {
+    try {
+      await this.sessions.destroy(sessionId);
+    } catch (error) {
+      this.logger.warn(
+        `Uncommitted session was not removed (${error instanceof Error ? error.name : typeof error}) [correlationId=${getRequestContext()?.correlationId}]`,
+      );
+    }
   }
 
   // After the commit: seed the cache with the version the snapshot was built from, so the first

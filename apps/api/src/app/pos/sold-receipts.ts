@@ -139,6 +139,38 @@ export class SoldReceipts {
     };
   }
 
+  /** Receipt lines by id with their receipt and product (the journal of returns). */
+  async linesByIds(
+    trx: TenantTransaction,
+    tenantId: string,
+    lineIds: readonly string[],
+  ): Promise<
+    Map<string, { receiptId: string; receiptNumber: string; productId: string }>
+  > {
+    const ids = [...new Set(lineIds)];
+    if (ids.length === 0) return new Map();
+    const result = await sql<{
+      id: string;
+      receiptId: string;
+      receiptNumber: string;
+      productId: string;
+    }>`
+      select l.id, l.receipt_id, r.number as receipt_number, l.product_id
+      from pharmacy.receipt_lines l
+      join pharmacy.receipts r on r.tenant_id = l.tenant_id and r.id = l.receipt_id
+      where l.tenant_id = ${tenantId} and l.id in (${sql.join(ids)})`.execute(trx);
+    return new Map(
+      result.rows.map((row) => [
+        row.id,
+        {
+          receiptId: row.receiptId,
+          receiptNumber: row.receiptNumber,
+          productId: row.productId,
+        },
+      ]),
+    );
+  }
+
   /** Lines of the sales of the products at the store on a business date, the newest first. */
   async salesOfProducts(
     trx: TenantTransaction,

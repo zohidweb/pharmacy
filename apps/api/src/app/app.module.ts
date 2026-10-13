@@ -114,7 +114,11 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       PricingModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
-    ReturnsModule,
+    // Customer returns of a cloud store, as the POS (spec 2026-10-13-customer-returns, E16).
+    ConditionalModule.registerWhen(
+      ReturnsModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     BillingModule,
     SyncModule,
     FiscalModule,

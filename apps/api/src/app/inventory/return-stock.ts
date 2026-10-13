@@ -73,6 +73,30 @@ export class ReturnStock {
     );
   }
 
+  /** The write-offs made by the returns (the journal of returns): return id → its write-off. */
+  async writeOffsOf(
+    trx: TenantTransaction,
+    tenantId: string,
+    customerReturnIds: readonly string[],
+  ): Promise<Map<string, { id: string; number: string }>> {
+    const ids = [...new Set(customerReturnIds)];
+    if (ids.length === 0) return new Map();
+    const result = await sql<{
+      id: string;
+      number: string;
+      sourceCustomerReturnId: string;
+    }>`
+      select d.id, d.number, d.source_customer_return_id from pharmacy.documents d
+      where d.tenant_id = ${tenantId}
+        and d.source_customer_return_id in (${sql.join(ids)})`.execute(trx);
+    return new Map(
+      result.rows.map((row) => [
+        row.sourceCustomerReturnId,
+        { id: row.id, number: row.number },
+      ]),
+    );
+  }
+
   /** The store for a return dated `businessDate`: 422 `period_closed` in the closed period (E11). */
   async storeForReturn(
     trx: TenantTransaction,

@@ -79,15 +79,18 @@ export interface CatalogSnapshot {
   settings: PosStoreSettings;
 }
 
-/** ПКУ: prescription and buyer document, recorded in the ПКУ journal (ТЗ). */
+/**
+ * ПКУ: prescription and buyer document, recorded in the ПКУ journal (ТЗ). Every field is optional
+ * until the customer fixes the set (ТЗ, section 14; spec 2026-10-13-pos-shift-sale, K3).
+ */
 export interface ControlledSaleData {
-  prescriptionNumber: string;
+  prescriptionNumber?: string;
   /** YYYY-MM-DD */
-  prescriptionDate: string;
-  clinic: string;
-  doctor: string;
-  buyerName: string;
-  buyerDocument: string;
+  prescriptionDate?: string;
+  clinic?: string;
+  doctor?: string;
+  buyerName?: string;
+  buyerDocument?: string;
 }
 
 export interface ReceiptLineInput {
@@ -97,6 +100,14 @@ export interface ReceiptLineInput {
   quantity: number;
   unitPriceMinor: number;
   amountMinor: number;
+  /**
+   * Values of the snapshot the POS counted by (E23): the server counts the pieces by them and marks
+   * a product changed since, never refuses the sale for it.
+   */
+  piecesPerPack: number;
+  /** The cashier chose a batch other than FEFO (`pos:choose-batch`). */
+  batchChosenManually: boolean;
+  /** Not null ⇔ the product was ПКУ in the snapshot; `{}` — no prescription data. */
   controlled: ControlledSaleData | null;
 }
 
@@ -119,20 +130,32 @@ export interface PosOperationContext {
   occurredAt: string;
 }
 
-/** POST /api/v1/receipts — a paid sale. */
+/**
+ * POST /api/v1/receipts — a paid sale, a fact (ADR-0015): stock, price, discount and catalog
+ * differences are marked, not refused. 400 `validation_failed` (`unknown_product`, `unknown_batch`,
+ * `wrong_store`, `batch_expired`, `unknown_discount`, `total_mismatch`, `mismatch`, `too_small`),
+ * 403 `terminal_required`, 409 `idempotency_conflict` / `no_open_shift` / `shift_closed` /
+ * `wrong_terminal` / `offline_store_read_only`, 422 `author_not_allowed`.
+ */
 export interface CreateReceiptRequest extends PosOperationContext {
   shiftId: string;
   /** Snapshot version the prices come from: the server accepts them («продажа — факт»). */
   priceListVersion: number;
   lines: ReceiptLineInput[];
   subtotalMinor: number;
+  /** `DiscountRule.id` of the snapshot: `<ruleId>:<minSubtotalMinor>`. */
   discountRuleId: string | null;
+  /** Percent and threshold of that step in the snapshot (E23); 0 without a discount. */
+  discountPercent: number;
+  discountMinSubtotalMinor: number;
   discountMinor: number;
   totalMinor: number;
   payments: ReceiptPayment[];
   /** Cash handed over by the customer; change = tendered − cash part. */
   cashTenderedMinor: number;
   changeMinor: number;
+  /** Language of the printed receipt. */
+  language: 'ru' | 'tj';
 }
 
 export interface CreatedReceipt {
@@ -140,14 +163,21 @@ export interface CreatedReceipt {
   number: string;
   /** Fiscal requisites of the ККМ; null until the fiscal adapter is chosen (stack.md, вопрос 9). */
   fiscal: null;
-  /** Prices or stock that differed from the server at acceptance — marked for the manager. */
+  /**
+   * Marks of the differences found at acceptance (stock, price, discount, catalog, author, closed
+   * period; spec 2026-10-13-pos-shift-sale, E5) — the receipt is accepted and marked for the manager.
+   */
   discrepancies: number;
 }
 
 /** GET /api/v1/stores/{storeId}/held-receipts — visible to every cashier of the store. */
 export interface HeldReceipt {
   id: string;
-  lines: Array<Omit<ReceiptLineInput, 'controlled'> & { productName: string }>;
+  lines: Array<
+    Omit<ReceiptLineInput, 'controlled' | 'piecesPerPack' | 'batchChosenManually'> & {
+      productName: string;
+    }
+  >;
   subtotalMinor: number;
   heldAt: string;
   heldBy: string;
@@ -184,12 +214,18 @@ export interface ShiftEvent {
   employeeName: string;
   /** Signed: money out of the drawer is negative. */
   amountMinor: number;
+  /** A receipt with discrepancy marks, or an operation whose author has no right now (K7). */
+  flagged: boolean;
 }
 
-/** GET /api/v1/shifts/current — the open shift of the terminal (or of the store without one). */
+/**
+ * GET /api/v1/shifts/current — the open shift of the terminal of the PIN session (one per terminal,
+ * K5); 404 `no_open_shift`, 403 `terminal_required` without a terminal.
+ */
 export interface Shift {
   id: string;
-  number: number;
+  /** `СМ-<store code>-<year>-<6 digits>`, the Z-report number. */
+  number: string;
   storeId: string;
   status: ShiftStatus;
   openedAt: string;
@@ -209,15 +245,17 @@ export interface Shift {
     /** opening + sales + in − out − returns. */
     expectedMinor: number;
   };
+  /** Receipts of the shift with discrepancy marks (K4). */
+  discrepancyReceipts: number;
   events: ShiftEvent[];
 }
 
-/** POST /api/v1/shifts — open; 409 `shift_open` if the terminal already has one. */
+/** POST /api/v1/shifts — open; 409 `shift_open` if the terminal already has one, `idempotency_conflict`. */
 export interface OpenShiftRequest extends PosOperationContext {
   openingCashMinor: number;
 }
 
-/** POST /api/v1/shifts/{id}/cash-movements */
+/** POST /api/v1/shifts/{id}/cash-movements — 409 `no_open_shift` / `shift_closed` / `idempotency_conflict`. */
 export interface CashMovementRequest extends PosOperationContext {
   shiftId: string;
   kind: CashMovementKind;
@@ -226,7 +264,10 @@ export interface CashMovementRequest extends PosOperationContext {
   comment: string;
 }
 
-/** POST /api/v1/shifts/{id}/closure — reconciliation; card/QR/NFC are checked by hand with the bank terminal. */
+/**
+ * POST /api/v1/shifts/{id}/closure — reconciliation; card/QR/NFC are checked by hand with the bank
+ * terminal. Accepted as a fact (E24); 409 `no_open_shift` / `shift_closed` / `idempotency_conflict`.
+ */
 export interface CloseShiftRequest extends PosOperationContext {
   shiftId: string;
   actualCashMinor: number;
@@ -234,12 +275,17 @@ export interface CloseShiftRequest extends PosOperationContext {
   terminalTotals: Record<Exclude<ReceiptPaymentMethod, 'cash'>, number>;
 }
 
-/** Z-report of a closed shift. */
+/**
+ * Z-report of a closed shift: the answer of POST /shifts/{id}/closure and of
+ * GET /api/v1/shifts/{id}/z-report (the snapshot saved at the closing).
+ */
 export interface ZReport {
   shift: Shift;
   actualCashMinor: number;
   discrepancyMinor: number;
   terminalDiff: Record<Exclude<ReceiptPaymentMethod, 'cash'>, number>;
+  /** A discrepancy without a reason: the closing is a fact and is accepted (E24). */
+  discrepancyReasonMissing: boolean;
 }
 
 export type ReturnReason = 'customer' | 'defect';

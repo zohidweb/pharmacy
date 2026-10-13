@@ -526,8 +526,13 @@ export interface StockCountLine {
   piecesPerPack: number;
   /** Book stock at the start, pieces; 0 for a found product. */
   bookPieces: number;
-  /** Sold since the start (POS sales minus returns): the POS keeps working during the count (ТЗ). */
-  soldSincePieces: number;
+  /**
+   * Sold between the start and the first entry of the line (POS sales minus returns, by the moment
+   * of the sale): the expected stock is the book minus it (spec 2026-10-13-pos-shift-sale, K2).
+   */
+  soldBeforeCountPieces: number;
+  /** Sold after the first entry: counted already, shown for the manager (K2). */
+  soldAfterCountPieces: number;
   /** Has at least one entry. */
   counted: boolean;
   /** Sum of the entries, pieces; null until counted. */

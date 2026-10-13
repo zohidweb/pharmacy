@@ -91,3 +91,20 @@ export function priceWarnings(input: {
   }
   return warnings;
 }
+
+/**
+ * Retail price of one piece of a divisible pack (data model 02, `retail_price_per_piece_dirams`):
+ * the own piece price of the store, else the pack price divided by the pieces and rounded UP to the
+ * step of the network (`piece_price_rounding_dirams`, ≥ 1).
+ */
+export function piecePriceMinor(
+  packMinor: number,
+  piecesPerPack: number,
+  ownPieceMinor: number | null,
+  stepMinor: number,
+): number {
+  if (ownPieceMinor !== null) return ownPieceMinor;
+  if (piecesPerPack < 1) throw new RangeError('piecesPerPack must be ≥ 1');
+  const step = Math.max(1, stepMinor);
+  return Math.ceil(packMinor / (piecesPerPack * step)) * step;
+}

@@ -3,7 +3,11 @@ import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
 
 export type NumberedKind =
-  'goods_receipt' | 'opening_balance' | 'write_off' | 'inventory';
+  | 'goods_receipt'
+  | 'opening_balance'
+  | 'write_off'
+  | 'inventory'
+  | 'supplier_return';
 
 // Prefixes are constants of the code, not a column: old numbers stay as they were (data model 03).
 const PREFIX: Record<NumberedKind, string> = {
@@ -11,6 +15,7 @@ const PREFIX: Record<NumberedKind, string> = {
   opening_balance: 'НО',
   write_off: 'СП',
   inventory: 'ИН',
+  supplier_return: 'ВП',
 };
 
 // Numbers of stock documents: `<prefix>-<store code>-<year>-<6 digits>`, a counter per store, kind

@@ -58,6 +58,12 @@ export interface StockProductsQuery {
    * `limit` and with `ids` (the lines of a supplier return).
    */
   supplierId?: string;
+  /**
+   * Only the batches created by this goods receipt that are still in stock, of any product status;
+   * no search and no page limit («добавить из прихода» of a supplier return — reading the receipt
+   * itself needs `finance:view-cost`).
+   */
+  receiptId?: string;
 }
 
 /** GET /api/v1/stores/{storeId}/stock-products — products for document lines. */
@@ -436,8 +442,9 @@ export interface SupplierReturn {
 
 /**
  * POST / PUT /api/v1/supplier-returns — a draft (`inventory:create` / `inventory:update`): 400 at
- * `lines.i.batchId` (`wrong_supplier` — a batch of another supplier), `receiptId` (not a posted
- * receipt of the supplier at the store); 409 `supplier_archived` / `document_posted`.
+ * `lines.i.batchId` (`wrong_supplier` — a batch of another supplier), `supplierId`
+ * (`unknown_supplier` — unknown or archived), `receiptId` (not a posted receipt of the supplier at the
+ * store); 409 `document_posted`.
  */
 export interface SupplierReturnInput {
   date: string;

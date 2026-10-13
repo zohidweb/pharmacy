@@ -205,7 +205,14 @@ export class StockService {
 
   async productOptions(
     storeId: string,
-    query: { query?: string; limit?: number; expired?: boolean; ids?: string },
+    query: {
+      query?: string;
+      limit?: number;
+      expired?: boolean;
+      ids?: string;
+      supplierId?: string;
+      receiptId?: string;
+    },
   ): Promise<StockProductOption[]> {
     const { tenantId, storeScope, permissions } = requirePrincipal();
     const canSeeCost = hasPermissions(permissions, 'finance:view-cost');
@@ -218,32 +225,51 @@ export class StockService {
       const today = query.expired
         ? (await this.inventory.settings(trx, tenantId)).today
         : '';
+      const receiptId = query.receiptId?.toLowerCase();
       const ids = query.ids
         ? [...new Set(query.ids.toLowerCase().split(','))]
-        : query.expired
+        : receiptId
           ? [
               ...new Set(
                 (await this.stock.batchStock(trx, tenantId, [id], null))
-                  .filter((b) => b.qty > 0 && b.expiryDate < today)
+                  .filter((b) => b.qty > 0 && b.sourceDocumentId === receiptId)
                   .map((b) => b.productId),
               ),
             ]
-          : (
-              await this.products.listForPricing(trx, tenantId, {
-                q: query.query,
-                limit: query.limit ?? 20,
-                offset: 0,
-              })
-            ).items.map((p) => p.id);
+          : query.expired
+            ? [
+                ...new Set(
+                  (await this.stock.batchStock(trx, tenantId, [id], null))
+                    .filter((b) => b.qty > 0 && b.expiryDate < today)
+                    .map((b) => b.productId),
+                ),
+              ]
+            : (
+                await this.products.listForPricing(trx, tenantId, {
+                  q: query.query,
+                  limit: query.limit ?? 20,
+                  offset: 0,
+                })
+              ).items.map((p) => p.id);
       const products = await this.products.findForStock(trx, tenantId, ids);
       const byId = new Map(products.map((p) => [p.id, p]));
+      const supplierId = query.supplierId?.toLowerCase();
       const batches = (
         await this.stock.batchStock(trx, tenantId, [id], ids)
-      ).filter((b) => !query.expired || b.expiryDate < today);
+      ).filter(
+        (b) =>
+          (!query.expired || b.expiryDate < today) &&
+          (!supplierId || b.supplierId === supplierId) &&
+          (!receiptId || b.sourceDocumentId === receiptId),
+      );
       const prices = await this.prices.pricesAt(trx, tenantId, [id], ids);
+      // a supplier return: only the products with batches of the supplier in stock
+      const withBatches = new Set(
+        batches.filter((b) => b.qty > 0).map((b) => b.productId),
+      );
       return ids.flatMap((productId): StockProductOption[] => {
         const product = byId.get(productId);
-        if (!product) return [];
+        if (!product || (supplierId && !withBatches.has(productId))) return [];
         return [
           {
             id: product.id,

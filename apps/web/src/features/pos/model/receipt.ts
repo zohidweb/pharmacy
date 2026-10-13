@@ -33,6 +33,11 @@ export interface DraftLine {
   controlled: ControlledSaleData | null;
   /** The cashier chose the batch instead of FEFO (`pos:choose-batch`). */
   manualBatch: boolean;
+  /**
+   * Pieces in a pack in the snapshot the line was priced by (spec 2026-10-13-pos-shift-sale, E23);
+   * absent in a draft stored before it.
+   */
+  piecesPerPack?: number;
 }
 
 export type NonCashMethod = Exclude<ReceiptPaymentMethod, 'cash'>;
@@ -118,6 +123,7 @@ function toLine(
     prescription: product.prescription,
     controlled,
     manualBatch,
+    piecesPerPack: product.piecesPerPack,
   };
 }
 
@@ -246,8 +252,7 @@ export function totals(
   };
 }
 
-export type PaymentProblem =
-  'empty' | 'non_cash_exceeds_total' | 'cash_short' | 'controlled_data_missing';
+export type PaymentProblem = 'empty' | 'non_cash_exceeds_total' | 'cash_short';
 
 export interface PaymentState {
   nonCashMinor: number;
@@ -279,11 +284,7 @@ export function paymentState(
   if (draft.lines.length === 0) problem = 'empty';
   else if (nonCashMinor > totalMinor) problem = 'non_cash_exceeds_total';
   else if (tenderedMinor < cashPartMinor) problem = 'cash_short';
-  else if (
-    draft.lines.some((l) => l.prescription === 'controlled' && !l.controlled)
-  ) {
-    problem = 'controlled_data_missing';
-  }
+  // the prescription data of a ПКУ line is optional (spec 2026-10-13-pos-shift-sale, K3)
   return {
     nonCashMinor,
     cashPartMinor,

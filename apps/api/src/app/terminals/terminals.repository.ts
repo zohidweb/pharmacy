@@ -130,6 +130,23 @@ export class TerminalsRepository {
       .execute();
   }
 
+  /**
+   * Locks the row of a terminal: `update` — its revocation, `share` — an opening of a shift on it
+   * (final review M7: a shift is never opened on a terminal being revoked). False — revoked or absent.
+   */
+  async lockTerminal(
+    trx: TenantTransaction,
+    tenantId: string,
+    terminalId: string,
+    mode: 'share' | 'update',
+  ): Promise<boolean> {
+    const result = await sql<{ id: string }>`
+      select id from pharmacy.terminals
+      where tenant_id = ${tenantId} and id = ${terminalId} and revoked_at is null
+      ${mode === 'share' ? sql`for share` : sql`for update`}`.execute(trx);
+    return result.rows.length > 0;
+  }
+
   /** Revokes an active terminal; its store, or null when it was revoked already or is unknown. */
   async revoke(
     trx: TenantTransaction,

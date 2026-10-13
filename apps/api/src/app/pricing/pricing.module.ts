@@ -7,6 +7,7 @@ import { PricesController } from './prices.controller';
 import { PricesService } from './prices.service';
 import { PricingRepository } from './pricing.repository';
 import { StorePriceWriter } from './store-price-writer';
+import { StorePricesReader } from './store-prices-reader';
 
 // Retail prices of the stores and discount rules (spec 2026-10-07-catalog-pricing). Products come
 // from the catalog's ProductsReader (ADR-0002). Cloud only for now (ADR-0014: price conflicts of
@@ -19,7 +20,8 @@ import { StorePriceWriter } from './store-price-writer';
     PricesService,
     DiscountRulesService,
     StorePriceWriter,
+    StorePricesReader,
   ],
-  exports: [StorePriceWriter],
+  exports: [StorePriceWriter, StorePricesReader],
 })
 export class PricingModule {}

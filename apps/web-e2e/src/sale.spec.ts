@@ -16,7 +16,7 @@ test('sells a scanned product with an Idempotency-Key', async ({
   ).toBeVisible();
 
   const paid = await payCash(page);
-  await expect(paid.getByText('Чек №1042', { exact: true })).toBeVisible();
+  await expect(paid.getByText('Чек 1042', { exact: true })).toBeVisible();
 
   expect(api.receiptRequests).toHaveLength(1);
   const [request] = api.receiptRequests;

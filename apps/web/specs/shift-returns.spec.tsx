@@ -34,7 +34,7 @@ describe('ShiftPage', () => {
     await signInByPin('emp-cashier', '2580');
     renderWithProviders(<ShiftPage />);
     expect(
-      await screen.findByRole('heading', { name: 'Смена №218' }),
+      await screen.findByRole('heading', { name: 'Смена СМ-03-2026-000218' }),
     ).toBeTruthy();
     const drawer = screen.getByRole('region', { name: 'Денежный ящик' });
     expect(
@@ -131,7 +131,7 @@ describe('ShiftPage', () => {
     expect(
       await screen.findByRole(
         'heading',
-        { name: /^Смена №/ },
+        { name: /^Смена / },
         { timeout: 15_000 },
       ),
     ).toBeTruthy();
@@ -140,7 +140,7 @@ describe('ShiftPage', () => {
   it('has no axe violations', async () => {
     await signInByPin('emp-cashier', '2580');
     const { container } = renderWithProviders(<ShiftPage />);
-    await screen.findByRole('heading', { name: 'Смена №218' });
+    await screen.findByRole('heading', { name: 'Смена СМ-03-2026-000218' });
     expect(await axe(container)).toHaveNoViolations();
   });
 });
@@ -154,7 +154,8 @@ async function findReceipt(number: string) {
 
 describe('ReturnsPage', () => {
   it('returns part of a receipt and takes the lost discount back', async () => {
-    await signInAs('manizha', 'store-3');
+    // a return goes into the shift of the terminal: the manager signs in there by PIN (K6)
+    await signInByPin('emp-manager', '3690');
     renderWithProviders(<ReturnsPage />);
     await findReceipt('1035');
     const lines = await screen.findByRole('table', { name: 'Строки чека' });

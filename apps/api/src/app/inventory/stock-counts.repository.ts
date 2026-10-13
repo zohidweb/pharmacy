@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
+import { type RawBuilder, sql } from 'kysely';
 import { newId, type TenantTransaction } from '../../core/database';
 
 export interface CountLineRow {
@@ -21,6 +21,14 @@ export interface CountLineRow {
   costPerPieceDirams: bigint | null;
   /** The current stock of the batch of the line, pieces (0 without a batch). */
   stockPieces: number;
+  /**
+   * The stock of the batch at the first entry of the line (spec 2026-10-13-pos-shift-sale, K2): the
+   * expected stock — a sale counts by the moment of the sale, the rest by its write. Null without an
+   * entry or a batch.
+   */
+  stockAtFirstEntryPieces: number | null;
+  /** Sold after the first entry, fixed at the posting. */
+  soldAfterCountPieces: number | null;
 }
 
 export interface CountEntryRow {
@@ -50,6 +58,26 @@ export interface CountSummaryRow {
 
 // The lines and entries of stock counts (spec 2026-10-12-write-offs-stock-counts, section 3.2); the
 // header lives in DocumentsRepository. The stock of a batch is the sum of its movements.
+/**
+ * The stock of the batch of a line (alias `line`) up to a moment (`at`): the expected stock of the
+ * line (spec 2026-10-13-pos-shift-sale, K2). A sale counts by the moment of the sale — a receipt
+ * of an outage sold before the count but delivered after the first entry is «sold before»; the
+ * other movements by their write.
+ */
+const stockAt = (
+  line: RawBuilder<unknown>,
+  store: RawBuilder<unknown>,
+  at: RawBuilder<unknown>,
+) => sql`
+  select sum(m.qty_delta_pieces) as qty
+  from pharmacy.stock_movements m
+  left join pharmacy.receipts r
+    on m.source_type = 'receipt' and r.tenant_id = m.tenant_id and r.id = m.source_id
+  -- the store too: the batch index is (tenant_id, store_id, batch_id)
+  where m.tenant_id = ${line}.tenant_id and m.store_id = ${store} and m.batch_id = ${line}.batch_id
+    and ${line}.batch_id is not null and ${at} is not null
+    and coalesce(r.sold_at, m.recorded_at) <= ${at}`;
+
 @Injectable()
 export class StockCountsRepository {
   /** Locks the header against a posting or a cancellation; entries share it. */
@@ -65,7 +93,7 @@ export class StockCountsRepository {
   }
 
   /**
-   * The snapshot of a start: a line per batch of the store with stock > 0 (of the products, or
+   * The snapshot of a start: a line per batch of the store with stock ≠ 0 (of the products, or
    * every one), in one statement — a store may hold tens of thousands of batches. The number of
    * lines.
    */
@@ -87,7 +115,8 @@ export class StockCountsRepository {
         ) s on true
         where b.tenant_id = ${tenantId} and b.store_id = ${storeId}
           ${productIds === null ? sql`` : sql`and b.product_id = any(${[...productIds]}::uuid[])`}
-          and s.qty > 0
+          -- a batch in the minus is counted too: the count fixes it (K4)
+          and s.qty <> 0
       ), inserted as (
         insert into pharmacy.inventory_lines
           (tenant_id, id, document_id, line_no, product_id, batch_id, book_qty_pieces)
@@ -114,7 +143,10 @@ export class StockCountsRepository {
              coalesce(b.lot_number, l.surplus_lot_number) as lot_number,
              coalesce(b.expiry_date::text, l.surplus_expiry_date::text) as expiry_date,
              b.cost_per_piece_dirams,
-             coalesce(s.qty, 0)::integer as stock_pieces
+             coalesce(s.qty, 0)::integer as stock_pieces,
+             case when l.batch_id is null or f.at is null then null
+                  else coalesce(fe.qty, 0)::integer end as stock_at_first_entry_pieces,
+             l.sold_after_count_pieces
       from pharmacy.inventory_lines l
       left join pharmacy.batches b
         on b.tenant_id = l.tenant_id and b.id = coalesce(l.batch_id, l.surplus_batch_id)
@@ -123,6 +155,11 @@ export class StockCountsRepository {
         from pharmacy.stock_movements m
         where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
       ) s on true
+      left join lateral (
+        select min(x.entered_at) as at from pharmacy.inventory_count_entries x
+        where x.tenant_id = l.tenant_id and x.line_id = l.id
+      ) f on true
+      left join lateral (${stockAt(sql`l`, sql`b.store_id`, sql`f.at`)}) fe on true
       where l.tenant_id = ${tenantId} and l.document_id = ${documentId}
         ${lineId ? sql`and l.id = ${lineId}` : sql``}
       order by l.line_no`.execute(trx);
@@ -170,6 +207,7 @@ export class StockCountsRepository {
     result: {
       countedQtyPieces: number;
       soldSinceStartPieces: number;
+      soldAfterCountPieces?: number;
       surplusBatchId?: string;
     },
   ): Promise<void> {
@@ -386,7 +424,7 @@ export class StockCountsRepository {
 
   /**
    * Surplus and shortage lines and the difference at cost of the counts: posted — by the fixed
-   * counts, running — by the entries against the current stock of the batches.
+   * counts, running — by the entries against the stock of the batches at the first entry (K2).
    */
   async summaries(
     trx: TenantTransaction,
@@ -409,14 +447,13 @@ export class StockCountsRepository {
         join pharmacy.products p on p.tenant_id = l.tenant_id and p.id = l.product_id
         left join pharmacy.batches b
           on b.tenant_id = l.tenant_id and b.id = coalesce(l.batch_id, l.surplus_batch_id)
+        -- a posted count reads its fixed numbers: no entries or stock lookups for it
         left join lateral (
-          select sum(m.qty_delta_pieces) as qty from pharmacy.stock_movements m
-          where m.tenant_id = l.tenant_id and m.batch_id = l.batch_id and l.batch_id is not null
-        ) s on true
-        left join lateral (
-          select sum(x.qty_pieces) as fact from pharmacy.inventory_count_entries x
-          where x.tenant_id = l.tenant_id and x.line_id = l.id
+          select sum(x.qty_pieces) as fact, min(x.entered_at) as at
+          from pharmacy.inventory_count_entries x
+          where x.tenant_id = l.tenant_id and x.line_id = l.id and d.status <> 'posted'
         ) e on true
+        left join lateral (${stockAt(sql`l`, sql`d.store_id`, sql`e.at`)}) s on true
         where l.tenant_id = ${tenantId} and l.document_id in (${sql.join([...documentIds])})
       )
       select document_id,

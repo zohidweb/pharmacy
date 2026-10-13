@@ -87,6 +87,89 @@ export class PricingRepository {
       .execute();
   }
 
+  /** Prices of a pack (and the own piece price) of a store: of the products, or every one set. */
+  async storePrices(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    productIds: readonly string[] | null,
+  ): Promise<
+    Array<{ productId: string; packDirams: bigint; pieceDirams: bigint | null }>
+  > {
+    if (productIds !== null && productIds.length === 0) return [];
+    const result = await sql<{
+      productId: string;
+      packDirams: bigint;
+      pieceDirams: bigint | null;
+    }>`
+      select sp.product_id, sp.retail_price_per_pack_dirams as pack_dirams,
+             sp.retail_price_per_piece_dirams as piece_dirams
+      from pharmacy.store_products sp
+      where sp.tenant_id = ${tenantId} and sp.store_id = ${storeId}
+        and sp.retail_price_per_pack_dirams is not null
+        ${productIds === null ? sql`` : sql`and sp.product_id in (${sql.join([...productIds])})`}`.execute(
+      trx,
+    );
+    return result.rows;
+  }
+
+  /** Products whose price at the store changed after a moment. */
+  async repricedSince(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    since: Date,
+  ): Promise<string[]> {
+    const result = await sql<{ productId: string }>`
+      select sp.product_id from pharmacy.store_products sp
+      where sp.tenant_id = ${tenantId} and sp.store_id = ${storeId}
+        and sp.updated_at > ${since}`.execute(trx);
+    return result.rows.map((row) => row.productId);
+  }
+
+  /**
+   * Steps of the discount rules acting at a store on a business date: active, within the period,
+   * of the network or with the store in the list.
+   */
+  async activeTiers(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    businessDate: string,
+  ): Promise<Array<{ ruleId: string; minTotalDirams: bigint; percentBp: number }>> {
+    const result = await sql<{
+      ruleId: string;
+      minTotalDirams: bigint;
+      percentBp: number;
+    }>`
+      select t.rule_id, t.min_total_dirams, t.percent_bp
+      from pharmacy.discount_rule_tiers t
+      join pharmacy.discount_rules r on r.tenant_id = t.tenant_id and r.id = t.rule_id
+      where t.tenant_id = ${tenantId} and r.status = 'active'
+        and (r.valid_from is null or r.valid_from <= ${businessDate}::date)
+        and (r.valid_to is null or r.valid_to >= ${businessDate}::date)
+        and (r.store_scope = 'all' or exists (
+          select 1 from pharmacy.discount_rule_stores rs
+          where rs.tenant_id = r.tenant_id and rs.rule_id = r.id and rs.store_id = ${storeId}))
+      order by t.min_total_dirams, t.rule_id`.execute(trx);
+    return result.rows;
+  }
+
+  /** A discount rule of the network exists, in any status. */
+  async ruleExists(
+    trx: TenantTransaction,
+    tenantId: string,
+    ruleId: string,
+  ): Promise<boolean> {
+    const row = await trx
+      .selectFrom('discountRules')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', ruleId)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   /** Every price set at the stores. */
   async pricesOfStores(
     trx: TenantTransaction,

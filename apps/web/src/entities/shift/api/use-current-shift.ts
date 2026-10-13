@@ -9,10 +9,11 @@ export const shiftQueryKey = (storeId: string | null) =>
   ['shift', 'current', storeId] as const;
 
 /**
- * The open shift of the working store; null when none is open (404 no_open_shift). During an
- * outage — the shift the terminal saw last (ADR-0015, ось 3).
+ * The open shift of the terminal of the session; null when none is open (404 no_open_shift). During
+ * an outage — the shift the terminal saw last (ADR-0015, ось 3). Only a PIN session of a bound
+ * terminal has a shift (spec 2026-10-13-pos-shift-sale, K6): otherwise the query stays off.
  */
-export function useCurrentShift(storeId: string | null) {
+export function useCurrentShift(storeId: string | null, onTerminal = true) {
   return useQuery({
     queryKey: shiftQueryKey(storeId),
     queryFn: async ({ signal }): Promise<Shift | null> => {
@@ -33,7 +34,7 @@ export function useCurrentShift(storeId: string | null) {
         throw error;
       }
     },
-    enabled: Boolean(storeId),
+    enabled: Boolean(storeId) && onTerminal,
     // runs during an outage too: the remembered shift answers then (not a paused query)
     networkMode: 'always',
   });

@@ -6,6 +6,7 @@ import type {
   ReceiptLineInput,
   ReturnListItem,
   Shift,
+  ZReport,
   ShiftEvent,
 } from '@pharmacy/shared-dto';
 import { DAY_MS, initialProducts, minutesAgo } from './fixtures-pos';
@@ -33,10 +34,15 @@ export interface MockReceipt {
   payments: ReceiptPayment[];
 }
 
+/** A shift of the mock: one open per terminal (spec 2026-10-13-pos-shift-sale, K5). */
+export type MockShift = Shift & { terminalId: string | null };
+
 export interface PosMockDb {
   catalogVersion: number;
   products: PosProduct[];
-  shifts: Shift[];
+  shifts: MockShift[];
+  /** Z-reports of the closed shifts, by shift id (GET /shifts/{id}/z-report). */
+  zReports: Record<string, ZReport>;
   receipts: MockReceipt[];
   held: Record<string, HeldReceipt[]>;
   returns: ReturnListItem[];
@@ -66,10 +72,11 @@ function event(
     reference,
     employeeName,
     amountMinor,
+    flagged: false,
   };
 }
 
-function openShift(): Shift {
+function openShift(): MockShift {
   const opening = 50_000;
   const sales = 231_050;
   const cashIn = 20_000;
@@ -77,8 +84,9 @@ function openShift(): Shift {
   const returns = 3_800;
   return {
     id: 'shift-218',
-    number: 218,
+    number: 'СМ-03-2026-000218',
     storeId: 'store-3',
+    terminalId: 'term-3-1',
     status: 'open',
     openedAt: minutesAgo(280),
     openedBy: 'Зарина Р.',
@@ -100,6 +108,7 @@ function openShift(): Shift {
       returnsMinor: returns,
       expectedMinor: opening + sales + cashIn - cashOut - returns,
     },
+    discrepancyReceipts: 0,
     events: [
       event('e-5', 4, 'sale', '1041', 'Зарина Р.', 8_650),
       event('e-4', 45, 'cash_out', 'collection', 'Манижа К.', -cashOut),
@@ -129,6 +138,9 @@ function line(
     quantity,
     unitPriceMinor,
     amountMinor: quantity * unitPriceMinor,
+    piecesPerPack:
+      initialProducts().find((p) => p.id === productId)?.piecesPerPack ?? 1,
+    batchChosenManually: false,
     controlled: null,
     returnedQuantity: 0,
   };
@@ -347,6 +359,7 @@ export function createPosDb(): PosMockDb {
     catalogVersion: 41,
     products: initialProducts(),
     shifts: [openShift()],
+    zReports: {},
     receipts: initialReceipts(),
     held: initialHeld(),
     returns: initialReturns(),

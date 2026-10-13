@@ -8,6 +8,7 @@ import { DocumentsRepository } from './documents.repository';
 import { GoodsReceiptsController } from './goods-receipts.controller';
 import { InventoryRepository } from './inventory.repository';
 import { Numbering } from './numbering';
+import { PosStock } from './pos-stock';
 import { OpeningBalancesController } from './opening-balances.controller';
 import { DocumentPosting } from './posting';
 import { StockDocumentsService } from './stock-documents.service';
@@ -78,6 +79,9 @@ import { WriteOffsService } from './write-offs.service';
     TransferPosting,
     TransfersService,
     TransferRequestsService,
+    PosStock,
   ],
+  // the POS reads and moves the stock only through these (spec 2026-10-13-pos-shift-sale)
+  exports: [Numbering, PosStock],
 })
 export class InventoryModule {}

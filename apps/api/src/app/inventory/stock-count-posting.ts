@@ -74,7 +74,8 @@ export class StockCountPosting {
       throw new FieldProblemException(422, 'validation_failed', problems);
     }
 
-    // lock, then count (ADR-0006): the expected stock is the current one
+    // lock, then count (ADR-0006); the expected stock of a line is the stock of its batch at the
+    // first entry (spec 2026-10-13-pos-shift-sale, K2): what the POS sold after it was counted
     const batchIds = lines.flatMap((l) => (l.batchId ? [l.batchId] : []));
     await this.documents.lockBatches(trx, tenantId, batchIds);
     const current = await this.stock.stockOfBatches(
@@ -156,7 +157,8 @@ export class StockCountPosting {
         });
         continue;
       }
-      const expected = current.get(line.batchId as string) ?? 0;
+      const now = current.get(line.batchId as string) ?? 0;
+      const expected = line.stockAtFirstEntryPieces ?? now;
       const diff = fact - expected;
       if (diff !== 0) {
         movements.push({
@@ -176,6 +178,7 @@ export class StockCountPosting {
       await this.counts.setLineResult(trx, tenantId, line.id, {
         countedQtyPieces: fact,
         soldSinceStartPieces: line.bookQtyPieces - expected,
+        soldAfterCountPieces: expected - now,
       });
     }
     await this.documents.insertMovements(trx, tenantId, movements);

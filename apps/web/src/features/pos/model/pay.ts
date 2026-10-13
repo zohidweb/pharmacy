@@ -10,8 +10,8 @@ import type {
   EmployeeSession,
 } from '@pharmacy/shared-dto';
 import { uuidv7 } from '@pharmacy/shared-util';
-import type { TerminalRuntime } from '@/shared/lib/offline-queue';
-import { DRAFT_KEY } from './pos-store';
+import { sealReceipt, type TerminalRuntime } from '@/shared/lib/offline-queue';
+import { DRAFT_KEY, forgetStoredDraft } from './pos-store';
 import {
   lineAmount,
   paymentState,
@@ -24,11 +24,13 @@ export interface SaleContext {
   session: EmployeeSession;
   shiftId: string;
   snapshot: CatalogSnapshot;
+  /** Language of the printed receipt. */
+  language: CreateReceiptRequest['language'];
 }
 
 export function buildReceiptRequest(
   draft: ReceiptDraft,
-  { session, shiftId, snapshot }: SaleContext,
+  { session, shiftId, snapshot, language }: SaleContext,
   id: string = uuidv7(),
   occurredAt: string = new Date().toISOString(),
 ): CreateReceiptRequest {
@@ -36,6 +38,11 @@ export function buildReceiptRequest(
   const payment = paymentState(draft, sum.totalMinor);
   if (payment.problem)
     throw new Error(`receipt is not payable: ${payment.problem}`);
+  // the values of the snapshot the receipt was counted by travel with it (spec 2026-10-13, E23)
+  const products = new Map(snapshot.products.map((p) => [p.id, p]));
+  const step = snapshot.discountRules.find(
+    (rule) => rule.id === sum.discount.ruleId,
+  );
   return {
     id,
     storeId: session.currentStoreId ?? '',
@@ -51,15 +58,22 @@ export function buildReceiptRequest(
       quantity: line.quantity,
       unitPriceMinor: line.unitPriceMinor,
       amountMinor: lineAmount(line),
-      controlled: line.controlled,
+      piecesPerPack:
+        line.piecesPerPack ?? products.get(line.productId)?.piecesPerPack ?? 1,
+      batchChosenManually: line.manualBatch,
+      controlled:
+        line.prescription === 'controlled' ? (line.controlled ?? {}) : null,
     })),
     subtotalMinor: sum.subtotalMinor,
     discountRuleId: sum.discount.ruleId,
+    discountPercent: step ? step.percent : 0,
+    discountMinSubtotalMinor: step ? step.minSubtotalMinor : 0,
     discountMinor: sum.discount.amountMinor,
     totalMinor: sum.totalMinor,
     payments: payment.payments,
     cashTenderedMinor: payment.tenderedMinor,
     changeMinor: payment.changeMinor,
+    language,
   };
 }
 
@@ -106,23 +120,30 @@ export async function enqueueSale(
   runtime: TerminalRuntime,
   request: CreateReceiptRequest,
 ): Promise<void> {
-  await runtime.enqueue({ kind: 'receipt', payload: request }, async (tx) => {
+  // the prescription data of the ПКУ lines goes into the buffer sealed (E17)
+  const payload = await sealReceipt(runtime.db, request);
+  // a draft write still queued from before the payment must not bring the paid cart back
+  forgetStoredDraft();
+  await runtime.enqueue({ kind: 'receipt', payload }, async (tx) => {
     await tx.objectStore('state').delete(DRAFT_KEY);
   });
 }
 
-/** Waits briefly for the server number of the receipt; null when it stays in the buffer. */
-export function awaitDelivery(
+/**
+ * Waits briefly for the server answer of a buffered operation (the number of a receipt, the
+ * Z-report of a closing); null when it stays in the buffer.
+ */
+export function awaitDelivery<T = CreatedReceipt>(
   runtime: TerminalRuntime,
   id: string,
   timeoutMs = 1_500,
-): Promise<CreatedReceipt | null> {
+): Promise<T | null> {
   return new Promise((resolve) => {
     const unsubscribe = runtime.queue.onDelivered((record, response) => {
       if (record.id !== id) return;
       clearTimeout(timer);
       unsubscribe();
-      resolve(response as CreatedReceipt);
+      resolve(response as T);
     });
     const timer = setTimeout(() => {
       unsubscribe();

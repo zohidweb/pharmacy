@@ -31,6 +31,9 @@ export interface ZReportLabels {
   byTerminal: (method: string) => string;
   fiscalPlaceholder: string;
   taxId: string;
+  discrepancyReceipts: string;
+  reasonMissing: string;
+  preliminary: string;
 }
 
 export function zReportLines(
@@ -38,15 +41,18 @@ export function zReportLines(
   settings: Pick<PosStoreSettings, 'storeName' | 'storeAddress' | 'taxId'>,
   labels: ZReportLabels,
   cols: number,
+  /** Built on the terminal while the closing waits in the buffer. */
+  preliminary = false,
 ): string[] {
   const { shift } = report;
   const row = (left: string, right: string) => receiptRow(left, right, cols);
   const out: string[] = [
     ...receiptCenter(labels.title, cols),
+    ...(preliminary ? receiptCenter(labels.preliminary, cols) : []),
     ...receiptCenter(`${settings.storeName} · ${settings.storeAddress}`, cols),
     ...receiptCenter(`${labels.taxId} ${settings.taxId}`, cols),
     receiptRule(cols),
-    ...row(labels.shift, `№${shift.number}`),
+    ...row(labels.shift, shift.number || '—'),
     ...row(labels.cashier, shift.openedBy),
     ...row(labels.opened, formatDateTime(shift.openedAt)),
     ...row(
@@ -73,6 +79,12 @@ export function zReportLines(
       labels.discrepancy,
       `${amount(report.discrepancyMinor)} ${CURRENCY_SIGN}`,
     ),
+    ...(report.discrepancyReasonMissing
+      ? receiptCenter(labels.reasonMissing, cols)
+      : []),
+    ...(shift.discrepancyReceipts > 0
+      ? row(labels.discrepancyReceipts, String(shift.discrepancyReceipts))
+      : []),
   ];
   const diffs = (['card', 'qr', 'nfc'] as const).filter(
     (m) => report.terminalDiff[m] !== 0,

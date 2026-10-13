@@ -19,6 +19,7 @@ import {
 import { SessionStore } from '../../core/sessions';
 import { AuditService } from '../audit/audit.service';
 import { sessionStoreMode } from '../auth/session-profile';
+import { TerminalRevocationChecks } from './terminal-revocation-checks';
 import { isUniqueViolation, TerminalsRepository } from './terminals.repository';
 
 export interface BindResult {
@@ -56,6 +57,7 @@ export class TerminalsService {
     private readonly repository: TerminalsRepository,
     private readonly sessions: SessionStore,
     private readonly audit: AuditService,
+    private readonly revocationChecks: TerminalRevocationChecks,
     config: ConfigService,
   ) {
     // The revocation flag outlives every session created before the revocation.
@@ -227,12 +229,28 @@ export class TerminalsService {
     return resolved.terminalId;
   }
 
+  /**
+   * For the POS (spec 2026-10-13-pos-shift-sale, M7): the terminal stays bound until the transaction
+   * of a shift opening ends. False — it is revoked.
+   */
+  holdForShift(
+    trx: TenantTransaction,
+    tenantId: string,
+    terminalId: string,
+  ): Promise<boolean> {
+    return this.repository.lockTerminal(trx, tenantId, terminalId, 'share');
+  }
+
   private async revokeInTransaction(
     trx: TenantTransaction,
     tenantId: string,
     terminalId: string,
     revokedBy: string,
   ): Promise<void> {
+    // the row first: an opening of a shift waits for the revocation or the revocation sees it
+    await this.repository.lockTerminal(trx, tenantId, terminalId, 'update');
+    // e.g. 409 `shift_open` of the POS (spec 2026-10-13-pos-shift-sale, E14)
+    await this.revocationChecks.run(trx, tenantId, terminalId);
     const storeId = await this.repository.revoke(trx, tenantId, terminalId, revokedBy);
     if (storeId !== null) {
       // The store column too, so the audit screen's store filter finds the event.

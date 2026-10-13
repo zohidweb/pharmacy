@@ -15,6 +15,7 @@ import {
   TerminalSessionsService,
 } from './terminal-sessions.service';
 import { TerminalsController } from './terminals.controller';
+import { TerminalRevocationChecks } from './terminal-revocation-checks';
 import { TerminalsRepository } from './terminals.repository';
 import { TerminalsService } from './terminals.service';
 
@@ -27,6 +28,7 @@ import { TerminalsService } from './terminals.service';
   controllers: [TerminalsController, TerminalSessionsController, MePinController],
   providers: [
     TerminalsRepository,
+    TerminalRevocationChecks,
     TerminalsService,
     TerminalSessionsService,
     MePinService,
@@ -56,6 +58,6 @@ import { TerminalsService } from './terminals.service';
       },
     },
   ],
-  exports: [TerminalsService],
+  exports: [TerminalsService, TerminalRevocationChecks],
 })
 export class TerminalsModule {}

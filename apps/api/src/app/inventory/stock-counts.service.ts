@@ -615,13 +615,20 @@ export class StockCountsService {
         : counted
           ? own.reduce((sum, e) => sum + e.qtyPieces, 0)
           : null;
-      // sold since the start: the book stock minus the current one (only the POS moves the
-      // frozen batches); fixed at the posting
+      // sold before the count of the line (book − stock at its first entry) moves the expected
+      // stock; sold after it was counted is shown only (K2). Only the POS moves the frozen batches;
+      // both are fixed at the posting.
+      const atFirst = line.stockAtFirstEntryPieces ?? line.stockPieces;
       const sold = line.isFound
         ? 0
         : posted
           ? (line.soldSinceStartPieces ?? 0)
-          : line.bookQtyPieces - line.stockPieces;
+          : line.bookQtyPieces - atFirst;
+      const soldAfter = line.isFound
+        ? 0
+        : posted
+          ? (line.soldAfterCountPieces ?? 0)
+          : atFirst - line.stockPieces;
       const surplusPrice =
         line.surplusPurchasePricePerPackDirams === null
           ? null
@@ -643,7 +650,8 @@ export class StockCountsService {
         expiresOn: line.expiryDate,
         piecesPerPack: ppp,
         bookPieces: line.bookQtyPieces,
-        soldSincePieces: sold,
+        soldBeforeCountPieces: sold,
+        soldAfterCountPieces: soldAfter,
         counted,
         factPieces: fact,
         entries: own.map((e) => ({

@@ -25,7 +25,8 @@ async function create(key: string): Promise<TerminalRuntime> {
   const queue = new OfflineQueue(
     db,
     `pharmacy-outbox:${key}`,
-    sendPosOperation,
+    // the sender opens the sealed prescription data of a sale with the key of this database
+    (record) => sendPosOperation(record, db),
   );
   subscribeConnectivity((online) => {
     if (online) void queue.flush();

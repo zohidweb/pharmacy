@@ -17,7 +17,7 @@
 3. Опечатки в имени/токене провайдера (GitHub #598 — сообщение может вводить в заблуждение).
 4. **Порядок реэкспортов в barrel-файлах (`index.ts`)** — может давать циклическое разрешение и `undefined` вместо класса (GitHub #9095).
 
-Вариант проекта: не резолвится `TenantDatabase` / `RedisService` — они в глобальных `DatabaseModule` / `RedisModule` (`nestjs-templates-core.md`); в unit-тесте их нужно подставить моками явно (глобальные модули в `Test.createTestingModule` не подтягиваются сами). `PlatformDatabase` не глобальный: модуль платформы импортирует `PlatformDatabaseModule` явно.
+Вариант проекта: не резолвится `TenantDatabase` или токен `REDIS_CLIENT` — они в глобальных `DatabaseModule` / `RedisModule` (`nestjs-templates-core.md`), а глобальные модули в `Test.createTestingModule` сами не подтягиваются. В unit-тесте подставляются явно мок `TenantDatabase` и фейки портов, с которыми работает сервис (`SessionStore`, `PermissionsVersionCache`, `LoginLimiter` — `nestjs-testing-unit-mocks.md`): `REDIS_CLIENT` сейчас инжектят только фабрики модулей, выбирающие реализацию порта (на офлайн-точке клиент `null`), и `RedisThrottlerStorage`. `PlatformDatabase` не глобальный: модуль платформы импортирует `PlatformDatabaseModule` явно.
 
 ---
 

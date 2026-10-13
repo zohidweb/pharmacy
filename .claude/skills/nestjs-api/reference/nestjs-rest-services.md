@@ -175,6 +175,11 @@ async bulkUpdatePrices(dto: BulkPriceUpdateDto): Promise<{ updated: number }> {
 
 ## 6. Кэш (Redis)
 
+Кэша каталога/цен в коде пока нет (stack.md его допускает). Redis в API сейчас — сессии, версия
+прав, лимиты входа и счётчики throttler, все за портами: сервис зависит от порта, а фабрика модуля
+выбирает реализацию по клиенту `REDIS_CLIENT` (на офлайн-точке он `null`), как у `SessionStore` и
+`LoginLimiter`. Кэш строится так же.
+
 ```typescript
 const key = `t:${tenantId}:prices:store:${storeId}:v${priceListVersion}`; // tenant is always part of the key
 ```

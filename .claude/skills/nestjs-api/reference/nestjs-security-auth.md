@@ -113,9 +113,10 @@
 |---|---|---|
 | 1 | `AuthGuard` | нет принципала → `401 unauthenticated`, кроме `@Public()` |
 | 2 | `CsrfGuard` | небезопасный метод: чужой `Sec-Fetch-Site`/`Origin`, не JSON → `403 csrf_rejected` (в том числе у `@Public()`) |
-| 3 | `PrincipalThrottlerGuard` | лимит по сотруднику, для гостя — по IP → `429 too_many_requests` (хранилище — Redis, `RedisThrottlerStorage`) |
+| 3 | `PrincipalThrottlerGuard` | лимит по сотруднику, оператору — по `op:<id>`, для гостя — по IP → `429 too_many_requests` (хранилище — Redis, `RedisThrottlerStorage`; на офлайн-точке — в памяти; `nestjs-rate-limiting.md`) |
 | 4 | `PermissionsGuard` | нет права или точки в охвате → `403 forbidden` + аудит `access.denied`; маршрут без маркера → запрет |
-| 5 | `FreshAuthGuard` | `@RequireFreshAuth()`: сессия открыта паролем давно → `403 fresh_auth_required` |
+| 5 | `OperatorPermissionsGuard` | контур оператора `/operator/*`: нужен `@Public()` или `@RequireOperatorPermission(...)`, иначе `403` + `platform_audit_log` (раздел «Оператор платформы») |
+| 6 | `FreshAuthGuard` | `@RequireFreshAuth()`: сессия открыта паролем давно → `403 fresh_auth_required` |
 
 Throttler стоит после `AuthGuard` и `CsrfGuard` и использует принципал из контекста; ошибки всех
 guard'ов — `ProblemException(status, code)`, которое глобальный `ProblemDetailsFilter` (`APP_FILTER`)

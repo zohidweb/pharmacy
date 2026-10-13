@@ -1,9 +1,10 @@
 'use client';
 
 import type {
-  RejectionReason,
+  SaleUnit,
   StockProductOption,
   Transfer,
+  TransferOverview,
   TransferRequest,
 } from '@pharmacy/shared-dto';
 import {
@@ -19,475 +20,276 @@ import {
   Icon,
   IconButton,
   Select,
+  Spinner,
   TextField,
   type IconName,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { useSession } from '@/entities/session';
 import { TransferStatusPill } from '@/entities/stock-document';
 import {
   ProductSearch,
   QuantityInput,
-  useStoreProducts,
   type StockAccess,
 } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { useInvalidateTransfers, useProductsByIds } from '../api/queries';
 
-const invalidateKeys = [['transfers'], ['stock'], ['stock-products']] as const;
+type Store = TransferOverview['stores'][number];
 
-function useInvalidate() {
-  const queryClient = useQueryClient();
-  return () =>
-    Promise.all(
-      invalidateKeys.map((queryKey) =>
-        queryClient.invalidateQueries({ queryKey }),
-      ),
-    );
-}
-
-/* ---------------- request ---------------- */
-
-interface RequestLine {
-  productId: string;
-  productName: string;
-  quantity: number;
-  senderPacks: number;
-  ourPacks: number;
-}
-
-const packsOf = (product: StockProductOption | undefined) =>
-  product
-    ? Math.floor(
-        product.batches.reduce((s, b) => s + Math.max(0, b.quantityPieces), 0) /
-          product.piecesPerPack,
-      )
-    : 0;
-
-/** Request of goods from another store (ЗП). */
-export function RequestDialog({
-  access,
-  onClose,
-}: {
-  access: StockAccess;
-  onClose: () => void;
-}) {
-  const t = useTranslations('transfers.request');
-  const tDocs = useTranslations('stockDocs');
-  const invalidate = useInvalidate();
-  const { data: session } = useSession();
-  const [toStoreId, setToStoreId] = useState(
-    access.writableStores[0]?.id ?? '',
-  );
-  const others = (session?.stores ?? []).filter((s) => s.id !== toStoreId);
-  const [fromStoreId, setFromStoreId] = useState(others[0]?.id ?? '');
-  const [lines, setLines] = useState<RequestLine[]>([]);
-  const [comment, setComment] = useState('');
-  const [touched, setTouched] = useState(false);
-  const ours = useStoreProducts(toStoreId);
-  const create = useMutation({
-    mutationFn: (send: boolean) =>
-      apiRequest('transferRequests.create', {
-        body: {
-          fromStoreId,
-          toStoreId,
-          comment: comment.trim(),
-          send,
-          lines: lines.map((l) => ({
-            productId: l.productId,
-            quantity: l.quantity,
-          })),
-        },
-      }),
-    onSuccess: () => {
-      void invalidate();
-      onClose();
-    },
-  });
-  const error = useApiErrorMessage(create.error);
-  const valid =
-    Boolean(fromStoreId) &&
-    lines.length > 0 &&
-    lines.every((l) => l.quantity > 0);
-  const submit = (send: boolean) => {
-    setTouched(true);
-    if (valid) create.mutate(send);
-  };
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      title={t('title')}
-      closeLabel={tDocs('close')}
-      size="xl"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {tDocs('cancel')}
-          </Button>
-          <Button
-            variant="secondary"
-            loading={create.isPending}
-            onClick={() => submit(false)}
-          >
-            {tDocs('saveDraft')}
-          </Button>
-          <Button
-            iconStart="arrow-up"
-            loading={create.isPending}
-            onClick={() => submit(true)}
-          >
-            {t('send')}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        {error && (
-          <Alert tone="danger" live="assertive">
-            {error}
-          </Alert>
-        )}
-        <div className="grid grid-cols-3 gap-4">
-          <Select
-            label={t('to')}
-            value={toStoreId}
-            disabled={lines.length > 0}
-            onChange={(event) => setToStoreId(event.target.value)}
-            options={access.writableStores.map((s) => ({
-              value: s.id,
-              label: s.name,
-            }))}
-          />
-          <Select
-            label={t('from')}
-            value={fromStoreId}
-            disabled={lines.length > 0}
-            onChange={(event) => setFromStoreId(event.target.value)}
-            options={others.map((s) => ({ value: s.id, label: s.name }))}
-          />
-          <TextField
-            label={tDocs('date')}
-            value={formatDateOnly(toAppDate())}
-            readOnly
-          />
-        </div>
-        {fromStoreId && (
-          <ProductSearch
-            storeId={fromStoreId}
-            onPick={(product) =>
-              setLines((current) =>
-                current.some((l) => l.productId === product.id)
-                  ? current
-                  : [
-                      ...current,
-                      {
-                        productId: product.id,
-                        productName: product.name,
-                        quantity: 1,
-                        senderPacks: packsOf(product),
-                        ourPacks: packsOf(ours.byId.get(product.id)),
-                      },
-                    ],
-              )
-            }
-          />
-        )}
-        {touched && lines.length === 0 && (
-          <Alert tone="warning">{t('linesRequired')}</Alert>
-        )}
-        {lines.length === 0 ? (
-          <EmptyState icon="clipboard-list" title={t('empty')} />
-        ) : (
-          <table className="w-full border-collapse text-sm">
-            <caption className="ph-visually-hidden">{t('caption')}</caption>
-            <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
-              <tr>
-                <th scope="col" className="px-2 py-2 text-start font-medium">
-                  {t('product')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-end font-medium">
-                  {t('ours')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-end font-medium">
-                  {t('sender')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-start font-medium">
-                  {t('quantity')}
-                </th>
-                <th scope="col">
-                  <span className="ph-visually-hidden">{tDocs('actions')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => (
-                <tr key={line.productId} className="border-b border-border">
-                  <td className="px-2 py-2 font-medium">{line.productName}</td>
-                  <td className="px-2 py-2 text-end tabular-nums">
-                    {line.ourPacks}
-                  </td>
-                  <td className="px-2 py-2 text-end tabular-nums">
-                    {line.senderPacks}
-                  </td>
-                  <td className="w-cell-sm px-2 py-2">
-                    <QuantityInput
-                      label={t('quantityOf', { name: line.productName })}
-                      value={line.quantity}
-                      invalid={
-                        touched && line.quantity < 1
-                          ? t('quantityRequired')
-                          : undefined
-                      }
-                      onChange={(value) =>
-                        setLines((current) =>
-                          current.map((l) =>
-                            l.productId === line.productId
-                              ? { ...l, quantity: value ?? 0 }
-                              : l,
-                          ),
-                        )
-                      }
-                    />
-                  </td>
-                  <td className="px-1 py-2">
-                    <IconButton
-                      icon="trash-2"
-                      label={tDocs('removeLine', { name: line.productName })}
-                      onClick={() =>
-                        setLines((current) =>
-                          current.filter((l) => l.productId !== line.productId),
-                        )
-                      }
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <TextField
-          label={t('comment')}
-          placeholder={t('commentPlaceholder')}
-          value={comment}
-          onChange={(event) => setComment(event.target.value)}
-        />
-      </div>
-    </Dialog>
-  );
-}
-
-const REJECTION_REASONS: RejectionReason[] = [
-  'no_stock',
-  'order_from_supplier',
-  'other',
-];
-
-export function RejectDialog({
-  request,
-  onClose,
-}: {
-  request: TransferRequest;
-  onClose: () => void;
-}) {
-  const t = useTranslations('transfers.reject');
-  const tDocs = useTranslations('stockDocs');
-  const invalidate = useInvalidate();
-  const [reason, setReason] = useState<RejectionReason>('no_stock');
-  const [comment, setComment] = useState('');
-  const reject = useMutation({
-    mutationFn: () =>
-      apiRequest('transferRequests.reject', {
-        params: { id: request.id },
-        body: { reason, comment: comment.trim() },
-      }),
-    onSuccess: () => {
-      void invalidate();
-      onClose();
-    },
-  });
-  const error = useApiErrorMessage(reject.error);
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      title={t('title')}
-      description={`${request.number} · ${request.requesterStoreName}`}
-      closeLabel={tDocs('close')}
-      icon="ban"
-      tone="danger"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {tDocs('cancel')}
-          </Button>
-          <Button
-            variant="destructive"
-            loading={reject.isPending}
-            onClick={() => reject.mutate()}
-          >
-            {t('confirm')}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        {error && (
-          <Alert tone="danger" live="assertive">
-            {error}
-          </Alert>
-        )}
-        <Select
-          label={t('reason')}
-          value={reason}
-          onChange={(event) => setReason(event.target.value as RejectionReason)}
-          options={REJECTION_REASONS.map((value) => ({
-            value,
-            label: t(`reasons.${value}`),
-          }))}
-        />
-        <TextField
-          label={t('comment')}
-          placeholder={t('commentPlaceholder')}
-          value={comment}
-          onChange={(event) => setComment(event.target.value)}
-        />
-      </div>
-    </Dialog>
-  );
-}
-
-/* ---------------- transfer (new or picked from a request) ---------------- */
+/* ---------------- transfer (new, by a request, or a draft) ---------------- */
 
 interface PickLine {
   key: string;
-  product: StockProductOption;
+  productId: string;
+  productName: string;
   batchId: string;
+  unit: SaleUnit;
   quantity: number;
-  requested: number | null;
 }
 
-function fefoBatchId(product: StockProductOption) {
+/** Batches with stock that have not expired, earliest expiry first (FEFO). */
+function fefoBatches(product: StockProductOption) {
   const today = toAppDate();
-  return (
-    [...product.batches]
-      .filter((b) => b.expiresOn >= today && b.quantityPieces > 0)
-      .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn))[0]?.id ?? ''
-  );
+  return [...product.batches]
+    .filter((b) => b.expiresOn >= today && b.quantityPieces > 0)
+    .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn));
 }
 
-const batchPacks = (line: PickLine) => {
-  const batch = line.product.batches.find((b) => b.id === line.batchId);
-  return batch
-    ? Math.floor(batch.quantityPieces / line.product.piecesPerPack)
-    : 0;
-};
+const piecesOf = (
+  line: Pick<PickLine, 'unit' | 'quantity'>,
+  product: StockProductOption | undefined,
+) =>
+  line.unit === 'piece'
+    ? line.quantity
+    : line.quantity * (product?.piecesPerPack ?? 1);
 
-/** Transfer (ПМ): FEFO batches within the sender stock, picked from a request or new. */
+/**
+ * Transfer (ПМ) of the sender: FEFO batches within its stock, picked from a request (only its
+ * products, not more than asked) or new; a draft is saved, sent or cancelled (spec
+ * 2026-10-12-supplier-returns-transfers, 5.3).
+ */
 export function TransferDialog({
   access,
-  request,
+  request: givenRequest,
+  transferId,
+  stores,
   onClose,
 }: {
   access: StockAccess;
   request: TransferRequest | null;
+  /** A draft to edit. */
+  transferId: string | null;
+  stores: Store[];
   onClose: () => void;
 }) {
   const t = useTranslations('transfers.transfer');
   const tDocs = useTranslations('stockDocs');
-  const invalidate = useInvalidate();
-  const { data: session } = useSession();
+  const tLines = useTranslations('stockDocs.lines');
+  const invalidate = useInvalidateTransfers();
+  const draft = useQuery({
+    queryKey: ['transfers', 'detail', transferId],
+    queryFn: ({ signal }) =>
+      apiRequest('transfers.get', { params: { id: transferId ?? '' }, signal }),
+    enabled: transferId !== null,
+  });
+  const doc = draft.data ?? null;
+  const requestOfDraft = useQuery({
+    queryKey: ['transfers', 'request', doc?.requestId],
+    queryFn: ({ signal }) =>
+      apiRequest('transferRequests.get', {
+        params: { id: doc?.requestId ?? '' },
+        signal,
+      }),
+    enabled: Boolean(doc?.requestId) && givenRequest === null,
+  });
+  const request = givenRequest ?? requestOfDraft.data ?? null;
   const [fromStoreId, setFromStoreId] = useState(
-    request?.fromStoreId ?? access.writableStores[0]?.id ?? '',
+    givenRequest?.fromStoreId ?? access.writableStores[0]?.id ?? '',
+  );
+  const others = stores.filter(
+    (s) => s.id !== fromStoreId && s.mode !== 'offline',
   );
   const [toStoreId, setToStoreId] = useState(
-    request?.requesterStoreId ??
-      (session?.stores ?? []).find((s) => s.id !== fromStoreId)?.id ??
-      '',
+    givenRequest?.requesterStoreId ?? others[0]?.id ?? '',
   );
-  const sender = useStoreProducts(fromStoreId);
-  const [lines, setLines] = useState<PickLine[] | null>(request ? null : []);
+  const [lines, setLines] = useState<PickLine[] | null>(
+    givenRequest || transferId ? null : [],
+  );
+  const [extra, setExtra] = useState<StockProductOption[]>([]);
   const [touched, setTouched] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const productIds = [
+    ...(givenRequest?.lines.map((l) => l.productId) ?? []),
+    ...(doc?.lines.map((l) => l.productId) ?? []),
+    ...(lines ?? []).map((l) => l.productId),
+  ];
+  const sender = useProductsByIds(fromStoreId, productIds);
+  const productOf = (id: string) =>
+    sender.byId.get(id) ?? extra.find((p) => p.id === id);
 
-  // a request is picked by FEFO as soon as the sender stock is known
-  if (lines === null && request && !sender.isPending) {
-    setLines(
-      request.lines.flatMap((l) => {
-        const product = sender.byId.get(l.productId);
-        if (!product) return [];
-        const line: PickLine = {
-          key: l.productId,
-          product,
-          batchId: fefoBatchId(product),
-          quantity: 0,
-          requested: l.quantity,
-        };
-        return [{ ...line, quantity: Math.min(l.quantity, batchPacks(line)) }];
-      }),
-    );
-  }
+  // a request is picked by FEFO as soon as the sender stock is known; a draft opens as saved
+  useEffect(() => {
+    if (lines !== null) return;
+    if (givenRequest && !sender.isPending) {
+      setLines(
+        givenRequest.lines.flatMap((asked): PickLine[] => {
+          const product = sender.byId.get(asked.productId);
+          if (!product) return [];
+          let need = asked.quantity;
+          const picked: PickLine[] = [];
+          for (const batch of fefoBatches(product)) {
+            if (need === 0) break;
+            const take = Math.min(
+              need,
+              Math.floor(batch.quantityPieces / product.piecesPerPack),
+            );
+            if (take === 0) continue;
+            picked.push({
+              key: `${asked.productId}-${batch.id}`,
+              productId: asked.productId,
+              productName: asked.productName,
+              batchId: batch.id,
+              unit: 'pack',
+              quantity: take,
+            });
+            need -= take;
+          }
+          return picked;
+        }),
+      );
+    } else if (doc) {
+      setFromStoreId(doc.fromStoreId);
+      setToStoreId(doc.toStoreId);
+      setLines(
+        doc.lines.map((l) => ({
+          key: l.batchId,
+          productId: l.productId,
+          productName: l.productName,
+          batchId: l.batchId,
+          unit: l.unit,
+          quantity: l.sentQuantity,
+        })),
+      );
+    }
+  }, [lines, givenRequest, sender.isPending, sender.byId, doc]);
 
-  const create = useMutation({
+  const current = lines ?? [];
+  // requested products the sender has no line of (no stock that has not expired)
+  const missingFromStock = (request?.lines ?? [])
+    .filter((asked) => !current.some((l) => l.productId === asked.productId))
+    .map((asked) => asked.productName);
+  const requestedPieces = (productId: string) => {
+    const asked = request?.lines.find((l) => l.productId === productId);
+    return asked === undefined
+      ? null
+      : asked.quantity * (productOf(productId)?.piecesPerPack ?? 1);
+  };
+  const sentPieces = (productId: string) =>
+    current
+      .filter((l) => l.productId === productId)
+      .reduce((s, l) => s + piecesOf(l, productOf(l.productId)), 0);
+  const problemOf = (line: PickLine) => {
+    const product = productOf(line.productId);
+    const batch = product?.batches.find((b) => b.id === line.batchId);
+    if (line.quantity < 1) return tLines('quantityRequired');
+    if (!batch || piecesOf(line, product) > batch.quantityPieces)
+      return t('overStock');
+    const asked = requestedPieces(line.productId);
+    if (asked !== null && sentPieces(line.productId) > asked)
+      return t('overRequest');
+    return null;
+  };
+
+  const body = (send: boolean) => ({
+    requestId: request?.id ?? null,
+    fromStoreId,
+    toStoreId,
+    send,
+    lines: current.map((l) => ({
+      productId: l.productId,
+      batchId: l.batchId,
+      unit: l.unit,
+      quantity: l.quantity,
+    })),
+  });
+  const save = useMutation({
     mutationFn: (send: boolean) =>
-      apiRequest('transfers.create', {
-        body: {
-          requestId: request?.id ?? null,
-          fromStoreId,
-          toStoreId,
-          send,
-          lines: (lines ?? [])
-            .filter((l) => l.quantity > 0)
-            .map((l) => ({
-              productId: l.product.id,
-              batchId: l.batchId,
-              quantity: l.quantity,
-            })),
-        },
-      }),
+      doc
+        ? apiRequest('transfers.update', {
+            params: { id: doc.id },
+            body: body(send),
+          })
+        : apiRequest('transfers.create', { body: body(send) }),
     onSuccess: () => {
       void invalidate();
       onClose();
     },
   });
-  const error = useApiErrorMessage(create.error);
-  const current = lines ?? [];
+  const cancel = useMutation({
+    mutationFn: () =>
+      apiRequest('transfers.cancel', { params: { id: doc?.id ?? '' } }),
+    onSuccess: () => {
+      void invalidate();
+      onClose();
+    },
+  });
+  const error = useApiErrorMessage(save.error ?? cancel.error ?? draft.error);
   const valid =
     Boolean(toStoreId) &&
-    current.some((l) => l.quantity > 0) &&
-    current.every((l) => l.quantity <= batchPacks(l));
+    current.length > 0 &&
+    current.every((l) => problemOf(l) === null);
   const submit = (send: boolean) => {
     setTouched(true);
-    if (valid) create.mutate(send);
+    if (valid) save.mutate(send);
   };
+  const title = doc
+    ? t('editTitle', { number: doc.number })
+    : request
+      ? t('pickTitle', { request: request.number })
+      : t('newTitle');
+
   return (
     <Dialog
       open
       onClose={onClose}
-      title={
-        request ? t('pickTitle', { request: request.number }) : t('newTitle')
-      }
+      title={title}
       closeLabel={tDocs('close')}
       size="xl"
       footer={
         <>
+          {doc && access.canDelete && (
+            <Button
+              variant="destructive"
+              iconStart="ban"
+              loading={cancel.isPending}
+              onClick={() => cancel.mutate()}
+            >
+              {t('cancelDraft')}
+            </Button>
+          )}
           <Button variant="secondary" onClick={onClose}>
             {tDocs('cancel')}
           </Button>
           <Button
             variant="secondary"
-            loading={create.isPending}
+            loading={save.isPending}
+            disabled={lines === null}
             onClick={() => submit(false)}
           >
             {tDocs('saveDraft')}
           </Button>
-          <Button
-            iconStart="truck"
-            loading={create.isPending}
-            onClick={() => submit(true)}
-          >
-            {t('send')}
-          </Button>
+          {access.canPost && (
+            <Button
+              iconStart="truck"
+              loading={save.isPending}
+              disabled={lines === null}
+              onClick={() => submit(true)}
+            >
+              {t('send')}
+            </Button>
+          )}
         </>
       }
     >
@@ -501,21 +303,27 @@ export function TransferDialog({
           <Select
             label={t('from')}
             value={fromStoreId}
-            disabled={Boolean(request) || current.length > 0}
+            disabled={Boolean(request) || doc !== null || current.length > 0}
             onChange={(event) => setFromStoreId(event.target.value)}
-            options={access.writableStores.map((s) => ({
-              value: s.id,
-              label: s.name,
-            }))}
+            options={(doc
+              ? [{ id: doc.fromStoreId, name: doc.fromStoreName }]
+              : access.writableStores
+            ).map((s) => ({ value: s.id, label: s.name }))}
           />
           <Select
             label={t('to')}
             value={toStoreId}
             disabled={Boolean(request)}
             onChange={(event) => setToStoreId(event.target.value)}
-            options={(session?.stores ?? [])
-              .filter((s) => s.id !== fromStoreId)
-              .map((s) => ({ value: s.id, label: s.name }))}
+            options={(request
+              ? [
+                  {
+                    id: request.requesterStoreId,
+                    name: request.requesterStoreName,
+                  },
+                ]
+              : others
+            ).map((s) => ({ value: s.id, label: s.name }))}
           />
           <TextField
             label={tDocs('date')}
@@ -523,26 +331,53 @@ export function TransferDialog({
             readOnly
           />
         </div>
-        {!request && fromStoreId && (
+        {fromStoreId && lines !== null && (
+          // a new transfer takes any product; by a request — another batch of a requested one
           <ProductSearch
             storeId={fromStoreId}
             onPick={(product) => {
-              const batchId = fefoBatchId(product);
-              if (!batchId) return;
+              if (
+                request &&
+                !request.lines.some((l) => l.productId === product.id)
+              ) {
+                setNotice(t('notRequested', { name: product.name }));
+                return;
+              }
+              const batch = fefoBatches(product).find(
+                (b) => !current.some((l) => l.batchId === b.id),
+              );
+              if (!batch) {
+                setNotice(t('noBatch', { name: product.name }));
+                return;
+              }
+              setNotice(null);
+              setExtra((list) => [
+                ...list.filter((p) => p.id !== product.id),
+                product,
+              ]);
               setLines([
                 ...current,
                 {
-                  key: `${product.id}-${Date.now()}`,
-                  product,
-                  batchId,
+                  key: `${product.id}-${batch.id}`,
+                  productId: product.id,
+                  productName: product.name,
+                  batchId: batch.id,
+                  unit: 'pack',
                   quantity: 1,
-                  requested: null,
                 },
               ]);
             }}
           />
         )}
-        {current.length === 0 ? (
+        {notice && <Alert tone="warning">{notice}</Alert>}
+        {request && lines !== null && missingFromStock.length > 0 && (
+          <Alert tone="warning">
+            {t('missingStock', { names: missingFromStock.join(', ') })}
+          </Alert>
+        )}
+        {lines === null ? (
+          <Spinner size="md" label={tDocs('loading')} />
+        ) : current.length === 0 ? (
           <EmptyState icon="arrow-left-right" title={t('empty')} />
         ) : (
           <table className="w-full border-collapse text-sm">
@@ -566,46 +401,56 @@ export function TransferDialog({
                 <th scope="col" className="px-2 py-2 text-start font-medium">
                   {t('quantity')}
                 </th>
+                <th scope="col">
+                  <span className="ph-visually-hidden">{tDocs('actions')}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {current.map((line) => {
-                const available = batchPacks(line);
-                const over = line.quantity > available;
-                const less =
-                  line.requested !== null && line.quantity < line.requested;
+                const product = productOf(line.productId);
+                const batch = product?.batches.find(
+                  (b) => b.id === line.batchId,
+                );
+                const problem = problemOf(line);
+                const asked = request?.lines.find(
+                  (l) => l.productId === line.productId,
+                );
+                const set = (change: Partial<PickLine>) =>
+                  setLines(
+                    current.map((l) =>
+                      l.key === line.key ? { ...l, ...change } : l,
+                    ),
+                  );
                 return (
                   <tr
                     key={line.key}
                     className="border-b border-border align-top"
                   >
                     <td className="px-2 py-2">
-                      <span className="font-medium">{line.product.name}</span>
-                      {less && !over && (
-                        <span className="block text-xs text-warning">
-                          {t('lessThanRequested')}
-                        </span>
-                      )}
+                      <span className="font-medium">{line.productName}</span>
+                      {asked &&
+                        sentPieces(line.productId) <
+                          asked.quantity * (product?.piecesPerPack ?? 1) && (
+                          <span className="block text-xs text-warning">
+                            {t('lessThanRequested')}
+                          </span>
+                        )}
                     </td>
                     <td className="w-cell-lg px-2 py-2">
                       <Select
-                        label={t('batchOf', { name: line.product.name })}
+                        label={t('batchOf', { name: line.productName })}
                         hideLabel
                         value={line.batchId}
                         onChange={(event) =>
-                          setLines(
-                            current.map((l) =>
-                              l.key === line.key
-                                ? { ...l, batchId: event.target.value }
-                                : l,
-                            ),
-                          )
+                          set({ batchId: event.target.value })
                         }
-                        options={line.product.batches
+                        options={(product?.batches ?? [])
                           .filter(
                             (b) =>
-                              b.quantityPieces > 0 &&
-                              b.expiresOn >= toAppDate(),
+                              (b.quantityPieces > 0 &&
+                                b.expiresOn >= toAppDate()) ||
+                              b.id === line.batchId,
                           )
                           .map((b) => ({
                             value: b.id,
@@ -615,25 +460,54 @@ export function TransferDialog({
                     </td>
                     {request && (
                       <td className="px-2 py-2 text-end tabular-nums">
-                        {line.requested}
+                        {asked?.quantity ?? '—'}
                       </td>
                     )}
                     <td className="px-2 py-2 text-end tabular-nums">
-                      {available}
-                    </td>
-                    <td className="w-cell-sm px-2 py-2">
-                      <QuantityInput
-                        label={t('quantityOf', { name: line.product.name })}
-                        value={line.quantity}
-                        invalid={touched && over ? t('overStock') : undefined}
-                        onChange={(value) =>
-                          setLines(
-                            current.map((l) =>
-                              l.key === line.key
-                                ? { ...l, quantity: value ?? 0 }
-                                : l,
+                      {batch && product
+                        ? tLines('stockValue', {
+                            packs: Math.floor(
+                              batch.quantityPieces / product.piecesPerPack,
                             ),
-                          )
+                            pieces:
+                              batch.quantityPieces % product.piecesPerPack,
+                          })
+                        : '—'}
+                    </td>
+                    <td className="px-2 py-2">
+                      <span className="flex gap-2">
+                        <span className="w-cell-sm">
+                          <QuantityInput
+                            label={t('quantityOf', { name: line.productName })}
+                            value={line.quantity}
+                            invalid={touched && problem ? problem : undefined}
+                            onChange={(value) => set({ quantity: value ?? 0 })}
+                          />
+                        </span>
+                        {product?.divisible && (
+                          <Select
+                            label={tLines('unitOf', { name: line.productName })}
+                            hideLabel
+                            value={line.unit}
+                            onChange={(event) =>
+                              set({ unit: event.target.value as SaleUnit })
+                            }
+                            options={(['pack', 'piece'] as const).map(
+                              (unit) => ({
+                                value: unit,
+                                label: tLines(`units.${unit}`),
+                              }),
+                            )}
+                          />
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-1 py-2">
+                      <IconButton
+                        icon="trash-2"
+                        label={tDocs('removeLine', { name: line.productName })}
+                        onClick={() =>
+                          setLines(current.filter((l) => l.key !== line.key))
                         }
                       />
                     </td>
@@ -649,7 +523,7 @@ export function TransferDialog({
   );
 }
 
-/* ---------------- transfer card: acceptance and discrepancy ---------------- */
+/* ---------------- transfer card: acceptance, recall ---------------- */
 
 function Step({
   icon,
@@ -681,6 +555,10 @@ function Step({
   );
 }
 
+/**
+ * The card of a transfer: the receiver confirms the actual quantities (a shortage is written off
+ * at the sender by the system); the sender recalls a transfer in transit.
+ */
 export function TransferDetailDialog({
   transferId,
   access,
@@ -692,9 +570,9 @@ export function TransferDetailDialog({
 }) {
   const t = useTranslations('transfers.detail');
   const tDocs = useTranslations('stockDocs');
-  const invalidate = useInvalidate();
+  const tUnits = useTranslations('stockDocs.lines.units');
+  const invalidate = useInvalidateTransfers();
   const queryClient = useQueryClient();
-  const { data: session } = useSession();
   const transfer = useQuery({
     queryKey: ['transfers', 'detail', transferId],
     queryFn: ({ signal }) =>
@@ -702,6 +580,8 @@ export function TransferDetailDialog({
   });
   const [received, setReceived] = useState<Record<string, number | null>>({});
   const [comment, setComment] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const doc = transfer.data;
   const isReceiver =
     doc !== undefined &&
@@ -711,6 +591,8 @@ export function TransferDetailDialog({
     doc !== undefined &&
     access.writableStores.some((s) => s.id === doc.fromStoreId);
   const receiving = doc?.status === 'in_transit' && isReceiver;
+  const recalling =
+    doc?.status === 'in_transit' && isSender && access.canUnpost;
   const valueOf = (line: Transfer['lines'][number]) =>
     received[line.batchId] === undefined
       ? line.sentQuantity
@@ -734,30 +616,40 @@ export function TransferDetailDialog({
       }),
     onSuccess: update,
   });
-  const resolve = useMutation({
-    mutationFn: (resolution: 'write_off' | 'resend') =>
-      apiRequest('transfers.resolve', {
-        params: { id: transferId },
-        body: { resolution },
-      }),
+  // every line needs its actual quantity: an empty field is never taken for zero
+  const incomplete = (doc?.lines ?? []).some((l) => {
+    const value = valueOf(l);
+    return value === null || value > l.sentQuantity;
+  });
+  const recall = useMutation({
+    mutationFn: () =>
+      apiRequest('transfers.recall', { params: { id: transferId } }),
     onSuccess: update,
   });
   const error = useApiErrorMessage(
-    accept.error ?? resolve.error ?? transfer.error,
+    accept.error ?? recall.error ?? transfer.error,
   );
-  const missing = (doc?.lines ?? []).reduce(
-    (s, l) =>
-      s +
-      Math.max(
-        0,
-        l.sentQuantity -
-          (receiving
-            ? (valueOf(l) ?? 0)
-            : (l.receivedQuantity ?? l.sentQuantity)),
-      ),
-    0,
-  );
-  void session;
+  // the shortage by unit: «−2 уп.», «−2 уп., −3 шт.»
+  const missing = (['pack', 'piece'] as const)
+    .map((unit) => {
+      const count = (doc?.lines ?? [])
+        .filter((l) => l.unit === unit)
+        .reduce(
+          (s, l) =>
+            s +
+            Math.max(
+              0,
+              l.sentQuantity -
+                (receiving
+                  ? (valueOf(l) ?? 0)
+                  : (l.receivedQuantity ?? l.sentQuantity)),
+            ),
+          0,
+        );
+      return count > 0 ? `−${count} ${tUnits(unit)}` : null;
+    })
+    .filter((part): part is string => part !== null)
+    .join(', ');
 
   return (
     <Dialog
@@ -778,14 +670,33 @@ export function TransferDetailDialog({
               {t('stockAfterAccept')}
             </p>
           )}
+          {recalling && !receiving && (
+            <p className="me-auto text-xs text-fg-subtle">{t('recallHint')}</p>
+          )}
           <Button variant="secondary" onClick={onClose}>
             {tDocs('close')}
           </Button>
+          {recalling && (
+            <Button
+              variant="secondary"
+              iconStart="undo-2"
+              loading={recall.isPending}
+              onClick={() => recall.mutate()}
+            >
+              {t('recall')}
+            </Button>
+          )}
           {receiving && (
             <Button
               iconStart="check"
               loading={accept.isPending}
-              onClick={() => accept.mutate()}
+              onClick={() => {
+                setTouched(true);
+                if (incomplete) return;
+                // the shortage is written off at the sender at once and for good: confirm it
+                if (missing) setConfirming(true);
+                else accept.mutate();
+              }}
             >
               {t('accept')}
             </Button>
@@ -825,7 +736,7 @@ export function TransferDetailDialog({
                   ? t('awaitingSync')
                   : `${doc.fromStoreName} → ${doc.toStoreName}`
               }
-              done={doc.status !== 'draft'}
+              done={doc.status === 'in_transit' || doc.status === 'accepted'}
             />
             <Step
               icon="circle-check"
@@ -874,13 +785,22 @@ export function TransferDetailDialog({
                       </span>
                     </td>
                     <td className="px-2 py-2 tabular-nums">
-                      {t('packs', { count: line.sentQuantity })}
+                      {`${line.sentQuantity} ${tUnits(line.unit)}`}
                     </td>
                     <td className="w-cell-sm px-2 py-2">
                       {receiving ? (
                         <QuantityInput
                           label={t('receivedOf', { name: line.productName })}
                           value={valueOf(line)}
+                          invalid={
+                            valueOf(line) === null
+                              ? touched
+                                ? t('quantityRequired')
+                                : undefined
+                              : (valueOf(line) ?? 0) > line.sentQuantity
+                                ? t('overSent')
+                                : undefined
+                          }
                           onChange={(next) =>
                             setReceived((current) => ({
                               ...current,
@@ -889,7 +809,11 @@ export function TransferDetailDialog({
                           }
                         />
                       ) : (
-                        <span className="tabular-nums">{value ?? '—'}</span>
+                        <span className="tabular-nums">
+                          {value === null
+                            ? '—'
+                            : `${value} ${tUnits(line.unit)}`}
+                        </span>
                       )}
                     </td>
                     <td className="px-2 py-2 tabular-nums">
@@ -909,48 +833,59 @@ export function TransferDetailDialog({
           {receiving && (
             <TextField
               label={t('comment')}
-              hint={missing > 0 ? t('commentRequiredHint') : undefined}
+              hint={missing ? t('commentRequiredHint') : undefined}
+              maxLength={500}
               value={comment}
               onChange={(event) => setComment(event.target.value)}
             />
           )}
+          {confirming && (
+            <Dialog
+              open
+              onClose={() => setConfirming(false)}
+              title={t('confirmShortageTitle')}
+              closeLabel={tDocs('close')}
+              icon="triangle-alert"
+              tone="danger"
+              footer={
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setConfirming(false)}
+                  >
+                    {tDocs('cancel')}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    loading={accept.isPending}
+                    onClick={() => {
+                      setConfirming(false);
+                      accept.mutate();
+                    }}
+                  >
+                    {t('confirmShortage')}
+                  </Button>
+                </>
+              }
+            >
+              <p className="text-sm">
+                {t('confirmShortageText', { amount: missing })}
+              </p>
+            </Dialog>
+          )}
           {doc.discrepancy && (
             <Alert
-              tone={doc.discrepancy.resolution ? 'success' : 'warning'}
-              title={t('discrepancyTitle', { count: missing })}
+              tone="warning"
+              title={t('discrepancyTitle', { amount: missing })}
             >
               <div className="flex flex-col gap-2">
+                <span>
+                  {t('writtenOff', {
+                    document: doc.discrepancy.writeOffNumber,
+                  })}
+                </span>
                 {doc.discrepancy.comment && (
                   <span>{doc.discrepancy.comment}</span>
-                )}
-                {doc.discrepancy.resolution ? (
-                  <span>
-                    {t(`resolved.${doc.discrepancy.resolution}`, {
-                      document: doc.discrepancy.documentNumber ?? '—',
-                    })}
-                  </span>
-                ) : (
-                  <>
-                    <span>{t('discrepancyHint')}</span>
-                    {isSender && access.canPost && (
-                      <span className="flex flex-wrap gap-2">
-                        <Button
-                          variant="secondary"
-                          loading={resolve.isPending}
-                          onClick={() => resolve.mutate('write_off')}
-                        >
-                          {t('writeOff')}
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          loading={resolve.isPending}
-                          onClick={() => resolve.mutate('resend')}
-                        >
-                          {t('resend')}
-                        </Button>
-                      </span>
-                    )}
-                  </>
                 )}
               </div>
             </Alert>

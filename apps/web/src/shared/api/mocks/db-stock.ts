@@ -513,6 +513,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         totalMinor: 870,
         createdBy: author('Манижа К.', 0),
         postedBy: null,
+        transferId: null,
+        transferNumber: null,
       },
       {
         id: 'wo-17',
@@ -538,6 +540,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         totalMinor: 380,
         createdBy: author('Зарина Р.', 9),
         postedBy: author('Зарина Р.', 9),
+        transferId: null,
+        transferNumber: null,
       },
       {
         id: 'wo-18',
@@ -563,6 +567,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         totalMinor: 3_800,
         createdBy: author('Манижа К.', 4),
         postedBy: author('Манижа К.', 4),
+        transferId: null,
+        transferNumber: null,
       },
     ],
     supplierReturns: [
@@ -724,6 +730,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         status: 'draft',
         comment: '',
         rejection: null,
+        transferId: null,
+        transferNumber: null,
         lines: [
           {
             productId: 'p-tramadol',
@@ -743,6 +751,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         status: 'sent',
         comment: 'Закончился Парацетамол',
         rejection: null,
+        transferId: null,
+        transferNumber: null,
         lines: [
           {
             productId: 'p-paracetamol',
@@ -769,9 +779,11 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         requesterStoreName: 'Аптека №3 · Рудаки',
         fromStoreId: 'store-1',
         fromStoreName: 'Аптека №1 · Центр',
-        status: 'in_progress',
+        status: 'done',
         comment: '',
         rejection: null,
+        transferId: 'mv-15',
+        transferNumber: 'ПМ-000015',
         lines: [
           {
             productId: 'p-paracetamol',
@@ -796,6 +808,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         status: 'rejected',
         comment: '',
         rejection: { reason: 'no_stock', comment: '' },
+        transferId: null,
+        transferNumber: null,
         lines: [
           {
             productId: 'p-ibufen',
@@ -824,6 +838,7 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
             batchId: 'b-p-2311',
             batchNumber: 'P-2311',
             expiresOn: dateIn(180),
+            unit: 'pack',
             sentQuantity: 30,
             receivedQuantity: null,
           },
@@ -833,6 +848,7 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
             batchId: 'b-n-4471',
             batchNumber: 'N-4471',
             expiresOn: dateIn(12),
+            unit: 'pack',
             sentQuantity: 20,
             receivedQuantity: null,
           },
@@ -859,6 +875,7 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
             batchId: 'b-f-0902',
             batchNumber: 'F-0902',
             expiresOn: dateIn(40),
+            unit: 'pack',
             sentQuantity: 40,
             receivedQuantity: null,
           },
@@ -885,6 +902,7 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
             batchId: 'b-v-9021',
             batchNumber: 'V-9021',
             expiresOn: dateIn(500),
+            unit: 'pack',
             sentQuantity: 6,
             receivedQuantity: 6,
           },

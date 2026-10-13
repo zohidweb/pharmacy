@@ -31,7 +31,11 @@ import type {
   SupplierReturn,
   SupplierReturnInput,
   Transfer,
+  TransferInput,
+  TransferLine,
   TransferListItem,
+  TransferRequest,
+  TransferRequestInput,
   UnpostCheck,
   WriteOff,
   OpeningBalance,
@@ -441,18 +445,196 @@ function transferItem(t: Transfer): TransferListItem {
     id: t.id,
     number: t.number,
     date: t.date,
+    fromStoreId: t.fromStoreId,
     fromStoreName: t.fromStoreName,
+    toStoreId: t.toStoreId,
     toStoreName: t.toStoreName,
     requestNumber: t.requestNumber,
     positions: t.lines.length,
     status: t.status,
     sentByName: t.sentBy?.name ?? null,
-    openDiscrepancy: Boolean(t.discrepancy && !t.discrepancy.resolution),
+    shortage: t.discrepancy !== null,
   };
 }
 
 const involves = (session: EmployeeSession, ...storeIds: string[]) =>
   storeIds.some((id) => session.stores.some((s) => s.id === id));
+
+const fieldError = (correlationId: string, field: string, code: string) =>
+  new ApiError(400, 'validation_failed', correlationId, [{ field, code }]);
+
+/** The other store of a transfer or a request: another active cloud store of the network. */
+function counterpart(storeId: string, ownId: string, correlationId: string) {
+  const store = stores.find((s) => s.id === storeId);
+  if (!store || storeId === ownId) {
+    throw fieldError(correlationId, 'toStoreId', 'invalid');
+  }
+  if (store.mode === 'offline') {
+    throw new ApiError(409, 'offline_store_read_only', correlationId);
+  }
+}
+
+/** Pieces of a quantity of a transfer line in its unit. */
+const linePieces = (
+  line: Pick<TransferLine, 'productId' | 'unit'>,
+  quantity: number,
+  correlationId: string,
+) =>
+  line.unit === 'piece'
+    ? quantity
+    : quantity * productOf(line.productId, correlationId).piecesPerPack;
+
+/** A sent request addressed by the receiver to this sender, with no transfer yet. */
+function openRequest(
+  id: string,
+  body: Pick<TransferInput, 'fromStoreId' | 'toStoreId'>,
+  correlationId: string,
+): TransferRequest {
+  const request = db().transferRequests.find((r) => r.id === id);
+  if (
+    !request ||
+    request.status !== 'sent' ||
+    request.fromStoreId !== body.fromStoreId ||
+    request.requesterStoreId !== body.toStoreId
+  ) {
+    throw new ApiError(409, 'request_not_open', correlationId);
+  }
+  if (
+    db().transfers.some(
+      (t) => t.requestId === request.id && t.status !== 'cancelled',
+    )
+  ) {
+    throw new ApiError(409, 'request_has_transfer', correlationId);
+  }
+  return request;
+}
+
+/** Lines of a transfer: batches of the sender; by a request — its products, not more than asked. */
+function transferLines(
+  body: Pick<TransferInput, 'fromStoreId' | 'lines'>,
+  request: TransferRequest | null,
+  correlationId: string,
+): TransferLine[] {
+  if (body.lines.length === 0)
+    throw fieldError(correlationId, 'lines', 'required');
+  const seen = new Set<string>();
+  const sentByProduct = new Map<string, number>();
+  return body.lines.map((line, i) => {
+    const product = productOf(line.productId, correlationId);
+    const batch = batchOf(line.productId, line.batchId, correlationId);
+    if (seen.has(batch.id)) {
+      throw fieldError(correlationId, `lines.${i}.batchId`, 'duplicate');
+    }
+    seen.add(batch.id);
+    if (line.unit === 'piece' && !product.divisible) {
+      throw fieldError(correlationId, `lines.${i}.unit`, 'not_divisible');
+    }
+    if (request) {
+      const asked = request.lines.find((l) => l.productId === product.id);
+      if (!asked) {
+        throw fieldError(
+          correlationId,
+          `lines.${i}.productId`,
+          'not_requested',
+        );
+      }
+      const pieces =
+        (sentByProduct.get(product.id) ?? 0) +
+        linePieces(line, line.quantity, correlationId);
+      sentByProduct.set(product.id, pieces);
+      if (pieces > asked.quantity * product.piecesPerPack) {
+        throw fieldError(
+          correlationId,
+          `lines.${i}.quantity`,
+          'exceeds_request',
+        );
+      }
+    }
+    return {
+      productId: product.id,
+      productName: product.name,
+      batchId: batch.id,
+      batchNumber: batch.number,
+      expiresOn: batch.expiresOn,
+      unit: line.unit,
+      sentQuantity: line.quantity,
+      receivedQuantity: null,
+    };
+  });
+}
+
+function transferDraft(doc: Transfer, correlationId: string) {
+  if (doc.status === 'cancelled') {
+    throw new ApiError(409, 'document_cancelled', correlationId);
+  }
+  if (doc.status !== 'draft') {
+    throw new ApiError(409, 'document_posted', correlationId);
+  }
+}
+
+/** Sending: the sender's stock goes down now; the request closes — all asked or less. */
+function dispatch(
+  doc: Transfer,
+  author: () => DocumentAuthor,
+  correlationId: string,
+) {
+  const short = doc.lines.flatMap((line, i) =>
+    (stockAt(doc.fromStoreId)[line.batchId] ?? 0) <
+    linePieces(line, line.sentQuantity, correlationId)
+      ? [{ field: `lines.${i}.quantity`, code: 'stock_insufficient' }]
+      : [],
+  );
+  if (short.length > 0) {
+    throw new ApiError(409, 'stock_insufficient', correlationId, short);
+  }
+  for (const line of doc.lines) {
+    move(
+      doc.fromStoreId,
+      line.batchId,
+      doc.number,
+      -linePieces(line, line.sentQuantity, correlationId),
+    );
+  }
+  doc.status = 'in_transit';
+  doc.date = today();
+  doc.sentBy = author();
+  const request = db().transferRequests.find((r) => r.id === doc.requestId);
+  if (request) {
+    const full = request.lines.every((asked) => {
+      const product = productOf(asked.productId, correlationId);
+      const sent = doc.lines
+        .filter((l) => l.productId === asked.productId)
+        .reduce(
+          (sum, l) => sum + linePieces(l, l.sentQuantity, correlationId),
+          0,
+        );
+      return sent >= asked.quantity * product.piecesPerPack;
+    });
+    request.status = full ? 'done' : 'partial';
+  }
+  mockDb().pos.catalogVersion += 1;
+}
+
+/** Lines of a request: active products, once each, packs. */
+function requestLines(
+  body: Pick<TransferRequestInput, 'lines'>,
+  correlationId: string,
+): TransferRequest['lines'] {
+  if (body.lines.length === 0)
+    throw fieldError(correlationId, 'lines', 'required');
+  const seen = new Set<string>();
+  return body.lines.map((line, i) => {
+    if (seen.has(line.productId)) {
+      throw fieldError(correlationId, `lines.${i}.productId`, 'duplicate');
+    }
+    seen.add(line.productId);
+    return {
+      productId: line.productId,
+      productName: productOf(line.productId, correlationId).name,
+      quantity: line.quantity,
+    };
+  });
+}
 
 export const stockHandlers: Pick<MockHandlers, StockRoute> = {
   'stock.list': ({ query, correlationId }) => {
@@ -1123,6 +1305,8 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       totalMinor: linesTotal(lines),
       createdBy: author(),
       postedBy: null,
+      transferId: null,
+      transferNumber: null,
     };
     db().writeOffs.unshift(doc);
     return doc;
@@ -1132,6 +1316,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       write: true,
     });
     const doc = findDoc(db().writeOffs, params.id, correlationId);
+    if (doc.transferId) {
+      throw new ApiError(409, 'write_off_from_transfer', correlationId);
+    }
     requireDraft(doc.status, correlationId);
     writable(session, body.storeId, correlationId);
     const lines = stockLines(body.lines, correlationId);
@@ -1147,6 +1334,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       write: true,
     });
     const doc = findDoc(db().writeOffs, params.id, correlationId);
+    if (doc.transferId) {
+      throw new ApiError(409, 'write_off_from_transfer', correlationId);
+    }
     requireDraft(doc.status, correlationId);
     writable(session, doc.storeId, correlationId);
     assertNotFrozen(
@@ -1180,6 +1370,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       write: true,
     });
     const doc = findDoc(db().writeOffs, params.id, correlationId);
+    if (doc.transferId) {
+      throw new ApiError(409, 'write_off_from_transfer', correlationId);
+    }
     writable(session, doc.storeId, correlationId);
     assertNotFrozen(
       doc.storeId,
@@ -1674,38 +1867,40 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     return countView(doc, canSeeCost, author().name);
   },
 
-  /* transfers */
-  'transfers.overview': ({ correlationId }) => {
+  /* transfers (spec 2026-10-12-supplier-returns-transfers, section 5) */
+  'transfers.overview': ({ query, correlationId }) => {
     const { session } = context(correlationId, 'inventory:view');
-    const requests = db().transferRequests.filter((r) =>
-      involves(session, r.requesterStoreId, r.fromStoreId),
-    );
+    if (query?.storeId) inScope(session, query.storeId, correlationId);
+    const mine = (...ids: string[]) =>
+      query?.storeId ? ids.includes(query.storeId) : involves(session, ...ids);
+    const requests = db()
+      .transferRequests.filter((r) => mine(r.requesterStoreId, r.fromStoreId))
+      .sort((a, b) => b.number.localeCompare(a.number));
     const transfers = db()
-      .transfers.filter((t) => involves(session, t.fromStoreId, t.toStoreId))
+      .transfers.filter((t) => mine(t.fromStoreId, t.toStoreId))
       .sort(
         (a, b) =>
           b.date.localeCompare(a.date) || b.number.localeCompare(a.number),
       );
     return {
-      requests: [...requests].sort((a, b) => b.number.localeCompare(a.number)),
+      requests,
       transfers: transfers.map(transferItem),
       kpi: {
-        newRequests: requests.filter((r) => r.status === 'sent').length,
+        newRequests: requests.filter(
+          (r) => r.status === 'sent' && mine(r.fromStoreId),
+        ).length,
         requestsInProgress: requests.filter((r) => r.status === 'in_progress')
           .length,
         inTransit: transfers.filter((t) => t.status === 'in_transit').length,
-        awaiting: transfers.filter((t) => t.status === 'awaiting').length,
-        openDiscrepancies: transfers.filter(
-          (t) => t.discrepancy && !t.discrepancy.resolution,
-        ).length,
       },
+      stores: stores.map((s) => ({ id: s.id, name: s.name, mode: s.mode })),
     };
   },
   'transfers.get': ({ params, correlationId }) => {
     const { session } = context(correlationId, 'inventory:view');
     const doc = findDoc(db().transfers, params.id, correlationId);
     if (!involves(session, doc.fromStoreId, doc.toStoreId)) {
-      throw new ApiError(403, 'store_not_in_scope', correlationId);
+      throw new ApiError(404, 'not_found', correlationId);
     }
     return doc;
   },
@@ -1713,36 +1908,13 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const { session, author } = context(correlationId, 'inventory:create', {
       write: true,
     });
+    if (body.send) context(correlationId, 'inventory:post', { write: true });
     writable(session, body.fromStoreId, correlationId);
-    if (body.fromStoreId === body.toStoreId || body.lines.length === 0) {
-      throw new ApiError(422, 'validation_failed', correlationId, [
-        {
-          field: body.lines.length === 0 ? 'lines' : 'toStoreId',
-          code: 'invalid',
-        },
-      ]);
-    }
-    const lines = body.lines.map((line) => {
-      const product = productOf(line.productId, correlationId);
-      const batch = batchOf(line.productId, line.batchId, correlationId);
-      const pieces = line.quantity * product.piecesPerPack;
-      if (body.send && (stockAt(body.fromStoreId)[batch.id] ?? 0) < pieces) {
-        throw new ApiError(409, 'stock_insufficient', correlationId);
-      }
-      return {
-        productId: product.id,
-        productName: product.name,
-        batchId: batch.id,
-        batchNumber: batch.number,
-        expiresOn: batch.expiresOn,
-        sentQuantity: line.quantity,
-        receivedQuantity: null,
-      };
-    });
-    const request =
-      db().transferRequests.find((r) => r.id === body.requestId) ?? null;
-    const toOffline =
-      stores.find((s) => s.id === body.toStoreId)?.mode === 'offline';
+    counterpart(body.toStoreId, body.fromStoreId, correlationId);
+    const request = body.requestId
+      ? openRequest(body.requestId, body, correlationId)
+      : null;
+    const lines = transferLines(body, request, correlationId);
     const doc: Transfer = {
       id: `mv-${Date.now()}`,
       number: number('ПМ', 'pm'),
@@ -1753,25 +1925,93 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       fromStoreName: storeName(body.fromStoreId),
       toStoreId: body.toStoreId,
       toStoreName: storeName(body.toStoreId),
-      status: body.send ? (toOffline ? 'awaiting' : 'in_transit') : 'draft',
+      status: 'draft',
       lines,
-      sentBy: body.send ? author() : null,
+      sentBy: null,
       receivedBy: null,
       discrepancy: null,
     };
-    if (body.send) {
-      for (const line of lines) {
-        const product = productOf(line.productId, correlationId);
-        move(
-          body.fromStoreId,
-          line.batchId,
-          doc.number,
-          -line.sentQuantity * product.piecesPerPack,
-        );
-      }
-      if (request) request.status = 'in_progress';
-    }
+    if (body.send) dispatch(doc, author, correlationId);
     db().transfers.unshift(doc);
+    if (request) {
+      request.transferId = doc.id;
+      request.transferNumber = doc.number;
+      if (!body.send) request.status = 'in_progress';
+    }
+    return doc;
+  },
+  'transfers.update': ({ params, body, correlationId }) => {
+    const { session, author } = context(correlationId, 'inventory:update', {
+      write: true,
+    });
+    if (body.send) context(correlationId, 'inventory:post', { write: true });
+    const doc = findDoc(db().transfers, params.id, correlationId);
+    transferDraft(doc, correlationId);
+    writable(session, doc.fromStoreId, correlationId);
+    const request = doc.requestId
+      ? (db().transferRequests.find((r) => r.id === doc.requestId) ?? null)
+      : null;
+    if (!request) counterpart(body.toStoreId, doc.fromStoreId, correlationId);
+    doc.lines = transferLines(
+      { ...body, fromStoreId: doc.fromStoreId },
+      request,
+      correlationId,
+    );
+    if (!request) {
+      doc.toStoreId = body.toStoreId;
+      doc.toStoreName = storeName(body.toStoreId);
+    }
+    if (body.send) dispatch(doc, author, correlationId);
+    return doc;
+  },
+  'transfers.send': ({ params, correlationId }) => {
+    const { session, author } = context(correlationId, 'inventory:post', {
+      write: true,
+    });
+    const doc = findDoc(db().transfers, params.id, correlationId);
+    transferDraft(doc, correlationId);
+    writable(session, doc.fromStoreId, correlationId);
+    dispatch(doc, author, correlationId);
+    return doc;
+  },
+  'transfers.recall': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:unpost', {
+      write: true,
+    });
+    const doc = findDoc(db().transfers, params.id, correlationId);
+    if (doc.status !== 'in_transit') {
+      throw new ApiError(409, 'transfer_not_in_transit', correlationId);
+    }
+    writable(session, doc.fromStoreId, correlationId);
+    for (const line of doc.lines) {
+      move(
+        doc.fromStoreId,
+        line.batchId,
+        `${doc.number} отзыв`,
+        linePieces(line, line.sentQuantity, correlationId),
+      );
+    }
+    doc.status = 'draft';
+    doc.sentBy = null;
+    const request = db().transferRequests.find((r) => r.id === doc.requestId);
+    if (request) request.status = 'in_progress';
+    mockDb().pos.catalogVersion += 1;
+    return doc;
+  },
+  'transfers.cancel': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:delete', {
+      write: true,
+    });
+    const doc = findDoc(db().transfers, params.id, correlationId);
+    transferDraft(doc, correlationId);
+    writable(session, doc.fromStoreId, correlationId);
+    doc.status = 'cancelled';
+    const request = db().transferRequests.find((r) => r.id === doc.requestId);
+    if (request) {
+      request.status = 'sent';
+      request.transferId = null;
+      request.transferNumber = null;
+    }
     return doc;
   },
   'transfers.accept': ({ params, body, correlationId }) => {
@@ -1783,55 +2023,40 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       throw new ApiError(409, 'transfer_not_in_transit', correlationId);
     }
     writable(session, doc.toStoreId, correlationId);
-    let short = false;
-    for (const line of doc.lines) {
-      const received =
-        body.lines.find((l) => l.batchId === line.batchId)?.receivedQuantity ??
-        0;
-      if (received < 0 || received > line.sentQuantity) {
-        throw new ApiError(422, 'validation_failed', correlationId, [
-          { field: 'receivedQuantity', code: 'range' },
+    const received = doc.lines.map((line, i) => {
+      const given = body.lines.filter((l) => l.batchId === line.batchId);
+      const value = given[0]?.receivedQuantity;
+      if (
+        given.length !== 1 ||
+        value === undefined ||
+        value < 0 ||
+        value > line.sentQuantity
+      ) {
+        throw new ApiError(400, 'validation_failed', correlationId, [
+          { field: `lines.${i}.receivedQuantity`, code: 'range' },
         ]);
       }
-      line.receivedQuantity = received;
-      if (received < line.sentQuantity) short = true;
-      const product = productOf(line.productId, correlationId);
+      return value;
+    });
+    const short: TransferLine[] = [];
+    doc.lines.forEach((line, i) => {
+      line.receivedQuantity = received[i];
       // the receiver's stock changes only now (ТЗ)
-      if (received > 0)
+      if (received[i] > 0) {
         move(
           doc.toStoreId,
           line.batchId,
           doc.number,
-          received * product.piecesPerPack,
+          linePieces(line, received[i], correlationId),
         );
-    }
+      }
+      if (received[i] < line.sentQuantity) short.push(line);
+    });
     doc.status = 'accepted';
     doc.receivedBy = author();
-    doc.discrepancy = short
-      ? { comment: body.comment, resolution: null, documentNumber: null }
-      : null;
-    const request = db().transferRequests.find((r) => r.id === doc.requestId);
-    if (request) request.status = short ? 'partial' : 'done';
-    completeStoreClosing(doc.id);
-    return doc;
-  },
-  'transfers.resolve': ({ params, body, correlationId }) => {
-    const { session, author } = context(correlationId, 'inventory:post', {
-      write: true,
-    });
-    const doc = findDoc(db().transfers, params.id, correlationId);
-    if (!doc.discrepancy || doc.discrepancy.resolution) {
-      throw new ApiError(409, 'document_posted', correlationId);
-    }
-    writable(session, doc.fromStoreId, correlationId);
-    const missing = doc.lines
-      .map((l) => ({
-        ...l,
-        missing: l.sentQuantity - (l.receivedQuantity ?? 0),
-      }))
-      .filter((l) => l.missing > 0);
-    if (body.resolution === 'write_off') {
-      // the packs already left the sender: the write-off records the loss, no stock movement
+    doc.discrepancy = null;
+    if (short.length > 0) {
+      // the shortage is written off at the sender by the system (spec T6); its stock already left
       const writeOff: WriteOff = {
         id: `wo-${Date.now()}`,
         number: number('СП', 'sp'),
@@ -1840,71 +2065,53 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         storeId: doc.fromStoreId,
         storeName: doc.fromStoreName,
         reason: 'transfer_discrepancy',
-        comment: `${doc.number}: ${doc.discrepancy.comment}`,
-        lines: missing.map((l) => {
-          const product = productOf(l.productId, correlationId);
-          const batch = batchOf(l.productId, l.batchId, correlationId);
+        comment: `${doc.number}: ${body.comment}`.trim(),
+        lines: short.map((line) => {
+          const product = productOf(line.productId, correlationId);
+          const batch = batchOf(line.productId, line.batchId, correlationId);
           return {
-            productId: l.productId,
-            productName: l.productName,
-            batchId: l.batchId,
-            batchNumber: l.batchNumber,
-            expiresOn: l.expiresOn,
-            unit: 'pack' as const,
-            quantity: l.missing,
-            costMinor: unitCost(product, batch, 'pack'),
+            productId: line.productId,
+            productName: line.productName,
+            batchId: line.batchId,
+            batchNumber: line.batchNumber,
+            expiresOn: line.expiresOn,
+            unit: line.unit,
+            quantity: line.sentQuantity - (line.receivedQuantity ?? 0),
+            costMinor: unitCost(product, batch, line.unit),
           };
         }),
         createdBy: author(),
         postedBy: author(),
+        transferId: doc.id,
+        transferNumber: doc.number,
       };
       writeOff.totalMinor = linesTotal(writeOff.lines);
       db().writeOffs.unshift(writeOff);
       doc.discrepancy = {
-        ...doc.discrepancy,
-        resolution: 'write_off',
-        documentNumber: writeOff.number,
-      };
-    } else {
-      const resend = stockHandlers['transfers.create']({
-        params: undefined,
-        query: undefined,
-        correlationId,
-        body: {
-          requestId: doc.requestId,
-          fromStoreId: doc.fromStoreId,
-          toStoreId: doc.toStoreId,
-          send: true,
-          lines: missing.map((l) => ({
-            productId: l.productId,
-            batchId: l.batchId,
-            quantity: l.missing,
-          })),
-        },
-      });
-      doc.discrepancy = {
-        ...doc.discrepancy,
-        resolution: 'resend',
-        documentNumber: resend.number,
+        comment: body.comment,
+        writeOffId: writeOff.id,
+        writeOffNumber: writeOff.number,
       };
     }
+    completeStoreClosing(doc.id);
+    mockDb().pos.catalogVersion += 1;
     return doc;
   },
   'transferRequests.get': ({ params, correlationId }) => {
-    context(correlationId, 'inventory:view');
-    return findDoc(db().transferRequests, params.id, correlationId);
+    const { session } = context(correlationId, 'inventory:view');
+    const doc = findDoc(db().transferRequests, params.id, correlationId);
+    if (!involves(session, doc.requesterStoreId, doc.fromStoreId)) {
+      throw new ApiError(404, 'not_found', correlationId);
+    }
+    return doc;
   },
   'transferRequests.create': ({ body, correlationId }) => {
     const { session } = context(correlationId, 'inventory:create', {
       write: true,
     });
     writable(session, body.toStoreId, correlationId);
-    if (body.lines.length === 0) {
-      throw new ApiError(422, 'validation_failed', correlationId, [
-        { field: 'lines', code: 'required' },
-      ]);
-    }
-    const doc = {
+    counterpart(body.fromStoreId, body.toStoreId, correlationId);
+    const doc: TransferRequest = {
       id: `rq-${Date.now()}`,
       number: number('ЗП', 'zp'),
       date: today(),
@@ -1912,27 +2119,80 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       requesterStoreName: storeName(body.toStoreId),
       fromStoreId: body.fromStoreId,
       fromStoreName: storeName(body.fromStoreId),
-      status: body.send ? ('sent' as const) : ('draft' as const),
+      status: body.send ? 'sent' : 'draft',
       comment: body.comment,
       rejection: null,
-      lines: body.lines.map((l) => ({
-        ...l,
-        productName: productOf(l.productId, correlationId).name,
-      })),
+      lines: requestLines(body, correlationId),
+      transferId: null,
+      transferNumber: null,
     };
     db().transferRequests.unshift(doc);
     return doc;
   },
-  'transferRequests.reject': ({ params, body, correlationId }) => {
+  'transferRequests.update': ({ params, body, correlationId }) => {
     const { session } = context(correlationId, 'inventory:update', {
       write: true,
     });
     const doc = findDoc(db().transferRequests, params.id, correlationId);
-    inScope(session, doc.fromStoreId, correlationId);
-    if (doc.status !== 'sent')
-      throw new ApiError(409, 'document_posted', correlationId);
+    requireDraft(doc.status, correlationId);
+    writable(session, doc.requesterStoreId, correlationId);
+    counterpart(body.fromStoreId, doc.requesterStoreId, correlationId);
+    Object.assign(doc, {
+      fromStoreId: body.fromStoreId,
+      fromStoreName: storeName(body.fromStoreId),
+      comment: body.comment,
+      lines: requestLines(body, correlationId),
+      status: body.send ? 'sent' : 'draft',
+    });
+    return doc;
+  },
+  'transferRequests.delete': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:update', {
+      write: true,
+    });
+    const doc = findDoc(db().transferRequests, params.id, correlationId);
+    requireDraft(doc.status, correlationId);
+    writable(session, doc.requesterStoreId, correlationId);
+    db().transferRequests = db().transferRequests.filter(
+      (r) => r.id !== doc.id,
+    );
+    return undefined;
+  },
+  'transferRequests.send': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:create', {
+      write: true,
+    });
+    const doc = findDoc(db().transferRequests, params.id, correlationId);
+    requireDraft(doc.status, correlationId);
+    writable(session, doc.requesterStoreId, correlationId);
+    doc.status = 'sent';
+    return doc;
+  },
+  'transferRequests.reject': ({ params, body, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:post', {
+      write: true,
+    });
+    const doc = findDoc(db().transferRequests, params.id, correlationId);
+    writable(session, doc.fromStoreId, correlationId);
+    const transfer = db().transfers.find(
+      (t) => t.id === doc.transferId && t.status !== 'cancelled',
+    );
+    if (
+      !(doc.status === 'sent' || doc.status === 'in_progress') ||
+      (transfer && transfer.status !== 'draft')
+    ) {
+      throw new ApiError(409, 'request_not_open', correlationId);
+    }
+    if (body.reason === 'other' && !body.comment.trim()) {
+      throw new ApiError(400, 'validation_failed', correlationId, [
+        { field: 'comment', code: 'required' },
+      ]);
+    }
+    if (transfer) transfer.status = 'cancelled';
     doc.status = 'rejected';
-    doc.rejection = body;
+    doc.rejection = { reason: body.reason, comment: body.comment };
+    doc.transferId = null;
+    doc.transferNumber = null;
     return doc;
   },
 };

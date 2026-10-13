@@ -74,7 +74,6 @@ import type {
   UpdateCategoryStatusRequest,
   UpdatePricesRequest,
   AcceptTransferRequest,
-  DiscrepancyResolution,
   DocumentListQuery,
   GoodsReceipt,
   GoodsReceiptInput,
@@ -84,7 +83,7 @@ import type {
   OpeningBalanceListResponse,
   ProductBatchRow,
   PurchaseOrderOption,
-  RejectionReason,
+  RejectTransferRequest,
   SaveStockCountRequest,
   StartStockCountRequest,
   StockCount,
@@ -770,7 +769,7 @@ export const apiRoutes = {
     TransferOverview,
     undefined,
     undefined,
-    { status?: string }
+    { storeId?: string }
   >('GET', () => '/transfers/overview'),
   'transfers.get': route<Transfer, undefined, { id: string }>(
     'GET',
@@ -780,15 +779,26 @@ export const apiRoutes = {
     'POST',
     () => '/transfers',
   ),
+  'transfers.update': route<Transfer, TransferInput, { id: string }>(
+    'PUT',
+    (p) => `/transfers/${id(p)}`,
+  ),
+  'transfers.send': route<Transfer, undefined, { id: string }>(
+    'POST',
+    (p) => `/transfers/${id(p)}/sending`,
+  ),
+  'transfers.recall': route<Transfer, undefined, { id: string }>(
+    'POST',
+    (p) => `/transfers/${id(p)}/recall`,
+  ),
+  'transfers.cancel': route<Transfer, undefined, { id: string }>(
+    'POST',
+    (p) => `/transfers/${id(p)}/cancellation`,
+  ),
   'transfers.accept': route<Transfer, AcceptTransferRequest, { id: string }>(
     'POST',
     (p) => `/transfers/${id(p)}/acceptance`,
   ),
-  'transfers.resolve': route<
-    Transfer,
-    { resolution: DiscrepancyResolution },
-    { id: string }
-  >('POST', (p) => `/transfers/${id(p)}/discrepancy-resolution`),
   'transferRequests.get': route<TransferRequest, undefined, { id: string }>(
     'GET',
     (p) => `/transfer-requests/${id(p)}`,
@@ -797,9 +807,22 @@ export const apiRoutes = {
     'POST',
     () => '/transfer-requests',
   ),
+  'transferRequests.update': route<
+    TransferRequest,
+    TransferRequestInput,
+    { id: string }
+  >('PUT', (p) => `/transfer-requests/${id(p)}`),
+  'transferRequests.delete': route<void, undefined, { id: string }>(
+    'DELETE',
+    (p) => `/transfer-requests/${id(p)}`,
+  ),
+  'transferRequests.send': route<TransferRequest, undefined, { id: string }>(
+    'POST',
+    (p) => `/transfer-requests/${id(p)}/sending`,
+  ),
   'transferRequests.reject': route<
     TransferRequest,
-    { reason: RejectionReason; comment: string },
+    RejectTransferRequest,
     { id: string }
   >('POST', (p) => `/transfer-requests/${id(p)}/rejection`),
 

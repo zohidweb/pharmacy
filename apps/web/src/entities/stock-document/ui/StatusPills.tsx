@@ -81,6 +81,7 @@ const transferTone: Record<TransferStatus, [StatusTone, IconName | null]> = {
   in_transit: ['info', 'truck'],
   awaiting: ['attention', 'refresh-cw'],
   accepted: ['success', 'circle-check'],
+  cancelled: ['neutral', 'ban'],
 };
 
 export function TransferStatusPill({ status }: { status: TransferStatus }) {

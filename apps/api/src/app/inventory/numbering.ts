@@ -7,7 +7,9 @@ export type NumberedKind =
   | 'opening_balance'
   | 'write_off'
   | 'inventory'
-  | 'supplier_return';
+  | 'supplier_return'
+  | 'transfer'
+  | 'transfer_request';
 
 // Prefixes are constants of the code, not a column: old numbers stay as they were (data model 03).
 const PREFIX: Record<NumberedKind, string> = {
@@ -16,6 +18,8 @@ const PREFIX: Record<NumberedKind, string> = {
   write_off: 'СП',
   inventory: 'ИН',
   supplier_return: 'ВП',
+  transfer: 'ПМ',
+  transfer_request: 'ЗП',
 };
 
 // Numbers of stock documents: `<prefix>-<store code>-<year>-<6 digits>`, a counter per store, kind

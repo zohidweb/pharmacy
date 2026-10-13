@@ -95,6 +95,48 @@ export class StorePriceWriter {
     return 'changed';
   }
 
+  /**
+   * A transfer accepted at a store without a price of a product gives it the sender's price (spec
+   * 2026-10-12-supplier-returns-transfers, T10). No right on prices is needed: the receiver does
+   * not choose the price; the version of the price grows and the audit names the transfer.
+   */
+  async copyIfMissing(
+    trx: TenantTransaction,
+    c: {
+      tenantId: string;
+      productIds: readonly string[];
+      fromStoreId: string;
+      toStoreId: string;
+      documentId: string;
+    },
+  ): Promise<void> {
+    const { employeeId } = requirePrincipal();
+    for (const productId of c.productIds) {
+      const price = await this.repository.copyPrice(
+        trx,
+        c.tenantId,
+        productId,
+        c.fromStoreId,
+        c.toStoreId,
+        employeeId,
+      );
+      if (price === null) continue;
+      await this.audit.append(trx, {
+        action: 'price.changed',
+        entityType: 'product',
+        entityId: productId,
+        storeId: c.toStoreId,
+        details: {
+          storeId: c.toStoreId,
+          oldPriceMinor: null,
+          newPriceMinor: price,
+          source: 'transfer',
+          documentId: c.documentId,
+        },
+      });
+    }
+  }
+
   /** Every product with a price at the stores: key `${storeId}/${productId}` → price of a pack. */
   async pricedAt(
     trx: TenantTransaction,

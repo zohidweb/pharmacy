@@ -145,6 +145,43 @@ export class PricingRepository {
         updated_at = now()`.execute(trx);
   }
 
+  /**
+   * The price of the sender at the receiver, when the receiver has none (spec
+   * 2026-10-12-supplier-returns-transfers, T10): the pack and the own piece price. Returns the
+   * new price of a pack, or null when nothing was copied (no price at the sender, or the receiver
+   * already has one).
+   */
+  async copyPrice(
+    trx: TenantTransaction,
+    tenantId: string,
+    productId: string,
+    fromStoreId: string,
+    toStoreId: string,
+    employeeId: string,
+  ): Promise<number | null> {
+    const result = await sql<{ price: bigint }>`
+      insert into pharmacy.store_products
+        (tenant_id, store_id, product_id, retail_price_per_pack_dirams,
+         retail_price_per_piece_dirams, price_changed_at, price_changed_by, price_source)
+      select tenant_id, ${toStoreId}, product_id, retail_price_per_pack_dirams,
+             retail_price_per_piece_dirams, now(), ${employeeId}, 'cloud'
+      from pharmacy.store_products
+      where tenant_id = ${tenantId} and store_id = ${fromStoreId} and product_id = ${productId}
+        and retail_price_per_pack_dirams is not null
+      on conflict (tenant_id, store_id, product_id) do update set
+        retail_price_per_pack_dirams = excluded.retail_price_per_pack_dirams,
+        retail_price_per_piece_dirams = excluded.retail_price_per_piece_dirams,
+        price_version = pharmacy.store_products.price_version + 1,
+        price_changed_at = excluded.price_changed_at,
+        price_changed_by = excluded.price_changed_by,
+        price_source = 'cloud',
+        updated_at = now()
+      where pharmacy.store_products.retail_price_per_pack_dirams is null
+      returning retail_price_per_pack_dirams as price`.execute(trx);
+    const row = result.rows[0];
+    return row ? Number(row.price) : null;
+  }
+
   /** Rules of the network, or of one id; with their store ids, tiers and author. */
   async rules(
     trx: TenantTransaction,

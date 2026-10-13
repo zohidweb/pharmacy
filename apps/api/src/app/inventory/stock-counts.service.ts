@@ -38,11 +38,13 @@ const notFound = () => new ProblemException(404, 'not_found');
 const badField = (field: string, code: string) =>
   new FieldProblemException(400, 'validation_failed', [{ field, code }]);
 const running = () => new ProblemException(409, 'stock_count_in_progress');
-const STATUS = {
+const STATUSES = {
   draft: 'in_progress',
   posted: 'posted',
   cancelled: 'cancelled',
 } as const;
+/** A stock count is only ever draft, posted or cancelled (documents_status_type_check). */
+const STATUS = STATUSES as Record<string, StockCount['status']>;
 
 // Stock counts (spec 2026-10-12-write-offs-stock-counts, section 5): a manager starts a count with
 // a snapshot of the book stock, the employees count on tablets (entries add up), found products get

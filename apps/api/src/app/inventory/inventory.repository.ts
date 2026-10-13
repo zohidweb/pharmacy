@@ -39,6 +39,23 @@ export class InventoryRepository {
     return result.rows[0] ?? null;
   }
 
+  /** Numbers of documents by id. */
+  async documentNumbers(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const rows = await trx
+      .selectFrom('documents')
+      .select(['id', 'number'])
+      .where('tenantId', '=', tenantId)
+      .where('id', 'in', unique)
+      .execute();
+    return new Map(rows.map((r) => [r.id, r.number]));
+  }
+
   async storeNames(
     trx: TenantTransaction,
     tenantId: string,

@@ -22,6 +22,13 @@ import { SupplierReturnPosting } from './supplier-return-posting';
 import { SupplierReturnsController } from './supplier-returns.controller';
 import { SupplierReturnsRepository } from './supplier-returns.repository';
 import { SupplierReturnsService } from './supplier-returns.service';
+import { TransferMapper } from './transfer-mapper';
+import { TransferPosting } from './transfer-posting';
+import { TransferRequestsController } from './transfer-requests.controller';
+import { TransferRequestsService } from './transfer-requests.service';
+import { TransfersController } from './transfers.controller';
+import { TransfersRepository } from './transfers.repository';
+import { TransfersService } from './transfers.service';
 import { StockRepository } from './stock.repository';
 import { StockService } from './stock.service';
 import { UnpostingCheckController } from './unposting-check.controller';
@@ -44,6 +51,8 @@ import { WriteOffsService } from './write-offs.service';
     WriteOffsController,
     StockCountsController,
     SupplierReturnsController,
+    TransfersController,
+    TransferRequestsController,
   ],
   providers: [
     InventoryRepository,
@@ -64,6 +73,11 @@ import { WriteOffsService } from './write-offs.service';
     SupplierReturnsRepository,
     SupplierReturnPosting,
     SupplierReturnsService,
+    TransfersRepository,
+    TransferMapper,
+    TransferPosting,
+    TransfersService,
+    TransferRequestsService,
   ],
 })
 export class InventoryModule {}

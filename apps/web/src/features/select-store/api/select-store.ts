@@ -12,7 +12,12 @@ export function useSelectStore() {
   return useMutation({
     mutationFn: (storeId: string) =>
       apiRequest('sessions.selectStore', { body: { storeId } }),
-    onSuccess: (session: EmployeeSession) => {
+    // A session refetch still in flight (the first store has just been created) would answer
+    // without the working store and overwrite the one this request sets: cancelled before the
+    // request and again before its answer is written (one may have started meanwhile).
+    onMutate: () => queryClient.cancelQueries({ queryKey: sessionQueryKey }),
+    onSuccess: async (session: EmployeeSession) => {
+      await queryClient.cancelQueries({ queryKey: sessionQueryKey });
       queryClient.setQueryData(sessionQueryKey, session);
       void queryClient.invalidateQueries({
         predicate: (query) => query.queryKey[0] !== sessionQueryKey[0],

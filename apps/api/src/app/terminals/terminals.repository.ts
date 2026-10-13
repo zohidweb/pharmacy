@@ -352,7 +352,10 @@ export class TerminalsRepository {
       .execute();
   }
 
-  /** Terminals the employee signed in on by PIN within MY_TERMINALS_DAYS, latest first. */
+  /**
+   * Active terminals the employee signed in on by PIN within MY_TERMINALS_DAYS, latest first. A
+   * revoked terminal is left out: it cannot be signed in on or unbound any more.
+   */
   async myTerminals(
     trx: TenantTransaction,
     tenantId: string,
@@ -395,6 +398,7 @@ export class TerminalsRepository {
         'terminals.boundAt',
         'signIns.lastSignInAt',
       ])
+      .where('terminals.revokedAt', 'is', null)
       .orderBy('signIns.lastSignInAt', 'desc')
       .execute();
     return rows.map((row) => ({

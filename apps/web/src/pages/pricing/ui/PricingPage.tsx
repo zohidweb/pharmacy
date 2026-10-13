@@ -31,7 +31,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiRequest,
+  isApiRouteAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { PriceDialog, RuleDialog } from './PricingDialogs';
@@ -52,9 +56,12 @@ function PricingPageView() {
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
   const [tab, setTab] = useState<Tab>('prices');
+  // price conflicts of offline stores come with the sync (ADR-0014): no tab until the API has them
+  const conflictsAvailable = isApiRouteAvailable('priceConflicts.list');
   const conflicts = useQuery({
     queryKey: ['prices', 'conflicts'],
     queryFn: ({ signal }) => apiRequest('priceConflicts.list', { signal }),
+    enabled: conflictsAvailable,
   });
   const canDiscounts = can(session, 'discounts:view');
 
@@ -80,12 +87,16 @@ function PricingPageView() {
                   },
                 ]
               : []),
-            {
-              value: 'conflicts',
-              label: t('tabs.conflicts'),
-              count: conflicts.data?.length,
-              panel: <ConflictsTab rows={conflicts.data ?? []} />,
-            },
+            ...(conflictsAvailable
+              ? [
+                  {
+                    value: 'conflicts' as const,
+                    label: t('tabs.conflicts'),
+                    count: conflicts.data?.length,
+                    panel: <ConflictsTab rows={conflicts.data ?? []} />,
+                  },
+                ]
+              : []),
           ]}
         />
       </div>

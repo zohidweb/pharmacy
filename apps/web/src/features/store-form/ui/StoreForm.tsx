@@ -11,10 +11,10 @@ import {
   TextareaField,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
-import { sessionQueryKey } from '@/entities/session';
+import { canWrite, sessionQueryKey, useSession } from '@/entities/session';
 import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import {
@@ -68,7 +68,17 @@ function StoreFormFields({
 }: StoreFormProps & { legalEntities: LegalEntitiesResponse }) {
   const t = useTranslations('storeForm');
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  // A legal entity created by an earlier attempt whose store update then failed: a retry reuses
+  // it (updated when the fields changed, a corrected tax ID too) instead of creating another one
+  // (409 tax_id_taken, or an orphan with the wrong tax ID).
+  const createdLegalEntity = useRef<{ id: string; sent: string } | null>(
+    null,
+  );
+  // An existing store moves to a new legal entity only for those who may create one.
+  const offerNewLegalEntity =
+    store === null || canWrite(session, 'stores:create');
   const form = useForm<StoreFormValues, unknown, StoreFormPayload>({
     resolver: zodResolver(storeFormSchema),
     defaultValues: storeFormDefaults(store, legalEntities),
@@ -93,11 +103,7 @@ function StoreFormFields({
       }
       // A store moves to a new legal entity: create it first, then point the store at it.
       const target = creatingLegalEntity
-        ? (
-            await apiRequest('legalEntities.create', {
-              body: toCreateStoreRequest(values).newLegalEntity ?? values.le,
-            })
-          ).id
+        ? await newLegalEntityId(values)
         : values.legalEntityId;
       return apiRequest('stores.update', {
         params: { id: store.id },
@@ -117,9 +123,40 @@ function StoreFormFields({
       }
       if (error.code === 'tax_id_taken') {
         setError('le.taxId', { message: 'tax_id_taken' });
+        // the message asks to pick the existing one: it may have been created by an attempt whose
+        // answer was lost
+        void queryClient.invalidateQueries({ queryKey: legalEntitiesQueryKey });
       }
     },
   });
+  async function newLegalEntityId(values: StoreFormPayload): Promise<string> {
+    const body = toCreateStoreRequest(values).newLegalEntity ?? values.le;
+    const sent = JSON.stringify(body);
+    const earlier = createdLegalEntity.current;
+    if (earlier !== null) {
+      if (earlier.sent === sent) return earlier.id;
+      try {
+        await apiRequest('legalEntities.update', {
+          params: { id: earlier.id },
+          body,
+        });
+        createdLegalEntity.current = { id: earlier.id, sent };
+        return earlier.id;
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 404)) throw error;
+        createdLegalEntity.current = null;
+      }
+    }
+    const created = await apiRequest('legalEntities.create', { body });
+    createdLegalEntity.current = { id: created.id, sent };
+    // stale for the next form; not refetched now: a failed refetch would replace this form
+    void queryClient.invalidateQueries({
+      queryKey: legalEntitiesQueryKey,
+      refetchType: 'none',
+    });
+    return created.id;
+  }
+
   const fieldConflict =
     save.error instanceof ApiError &&
     (save.error.code === 'store_code_taken' ||
@@ -208,7 +245,9 @@ function StoreFormFields({
               value: entity.id,
               label: `${entity.name} · ${t('taxIdShort', { taxId: entity.taxId })}`,
             })),
-            { value: NEW_LEGAL_ENTITY, label: t('newLegalEntity') },
+            ...(offerNewLegalEntity
+              ? [{ value: NEW_LEGAL_ENTITY, label: t('newLegalEntity') }]
+              : []),
           ]}
           {...register('legalEntityId')}
         />

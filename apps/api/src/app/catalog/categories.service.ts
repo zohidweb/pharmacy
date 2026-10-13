@@ -205,6 +205,7 @@ export class CategoriesService {
     const wanted = Object.values(name).map((value) =>
       value.toLocaleLowerCase('ru'),
     );
+    await this.repository.lockCategoryNames(trx, tenantId);
     const rows = await this.repository.listCategories(trx, tenantId, false);
     const taken = rows.some(
       (row) =>

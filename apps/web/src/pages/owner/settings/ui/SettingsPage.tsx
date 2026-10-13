@@ -265,6 +265,15 @@ function MarkupsCard({
                           : Number(event.target.value.replace(/\D/g, '')),
                     }))
                   }
+                  onBlur={() =>
+                    // A saved markup cannot be removed here (the API keeps it): an emptied field
+                    // shows it again instead of looking cleared.
+                    setValues((current) =>
+                      current[m.categoryId] === null && m.markupPercent !== null
+                        ? { ...current, [m.categoryId]: m.markupPercent }
+                        : current,
+                    )
+                  }
                 />
               </td>
               <td className="px-2 py-2 text-end tabular-nums">{m.products}</td>

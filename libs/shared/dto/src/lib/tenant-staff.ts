@@ -68,7 +68,9 @@ export interface CreateEmployeeRequest {
 /**
  * PUT /api/v1/employees/{id} (`employees:update`; a new role or scope also `employees:assign-role`).
  * 404 outside the viewer's scope, 403 `own_assignment` / `permission_escalation` /
- * `store_not_in_scope`, 409 `last_owner` and the identifier conflicts.
+ * `store_not_in_scope`, 403 `forbidden` for a peer without `employees:manage-peers` (the same
+ * permissions and stores as the editor; this holds for the password, status and PIN below too),
+ * 409 `last_owner` and the identifier conflicts.
  */
 export type UpdateEmployeeRequest = Omit<
   CreateEmployeeRequest,
@@ -77,7 +79,7 @@ export type UpdateEmployeeRequest = Omit<
 
 /**
  * POST /api/v1/employees/{id}/password (`employees:update`) — set by the manager; the employee's
- * sessions end. 422 `password_policy`.
+ * sessions end. 403 `forbidden` for a peer, 422 `password_policy`.
  */
 export interface ResetEmployeePasswordRequest {
   newPassword: string;
@@ -85,7 +87,7 @@ export interface ResetEmployeePasswordRequest {
 
 /**
  * POST /api/v1/employees/{id}/status (`employees:update`) — blocking ends the employee's sessions
- * (ADR-0018, п. 7). 403 `own_assignment`, 409 `last_owner`.
+ * (ADR-0018, п. 7). 403 `own_assignment`, 403 `forbidden` for a peer, 409 `last_owner`.
  */
 export interface SetEmployeeStatusRequest {
   status: EmployeeStatus;
@@ -93,7 +95,8 @@ export interface SetEmployeeStatusRequest {
 
 /**
  * POST /api/v1/employees/{id}/pin (`employees:update`) — a new PIN set by the manager; it also lifts
- * the PIN lock after three wrong attempts. 204; 422 `pin_length` / `pin_trivial`.
+ * the PIN lock after three wrong attempts. 204; 403 `forbidden` for a peer; 422 `pin_length` /
+ * `pin_trivial`.
  */
 export interface SetEmployeePinRequest {
   pin: string;

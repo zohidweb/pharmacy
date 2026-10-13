@@ -217,7 +217,7 @@ async login(@Body() body: EmployeeLoginDto, @Req() req: Request, @Res({ passthro
 - спецправа: `pos:sell-controlled`, `returns:without-receipt`, `pos:choose-batch`,
   `pricing:update-store`, `pricing:update-network`, `discounts:manage-store`,
   `discounts:manage-network`, `finance:view-cost`, `roles:manage`, `employees:assign-role`,
-  `sync:run`.
+  `employees:manage-peers`, `sync:run`.
 
 Новое право — изменение каталога в коде и миграция шаблонов ролей; права на новые
 возможности у существующих ролей сами не появляются (кроме роли «Владелец» — у неё всегда все).
@@ -250,6 +250,9 @@ create(@Body() dto: CreateReceiptDto) { /* ... */ }
   изменяемой роли ⊆ прав того, кто меняет; охват назначения ⊆ его охвата; менять собственные
   роль и охват нельзя; роль «Владелец» назначает только владелец; в сети всегда ≥ 1 активный
   владелец.
+- **Равные** (поправка ADR-0018 от 2026-10-13): сотрудника с теми же правами и охватом (карточка,
+  роль, пароль, PIN, статус) меняют только со спецправом `employees:manage-peers` (`editable` в
+  `staff/employees.service.ts`); в шаблоны ролей право не входит.
 - **`permissions_version`:** растёт при изменении роли, её прав, охвата или блокировке
   сотрудника. `SessionMiddleware` на каждом запросе сверяет версию в записи сессии с кэшем (Redis; на
   офлайн-точке — PostgreSQL), при расхождении или отсутствии ключа перечитывает права, охват и

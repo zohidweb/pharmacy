@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { isPermission, type Permission } from '@pharmacy/shared-domain';
+import {
+  isPermission,
+  type Permission,
+  permissions as catalog,
+} from '@pharmacy/shared-domain';
 import type { Role, RoleInput } from '@pharmacy/shared-dto';
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
@@ -25,11 +29,13 @@ export async function loadEditor(
   trx: TenantTransaction,
 ): Promise<Editor> {
   const principal = requirePrincipal();
+  const isOwner = await repository.isOwnerEmployee(trx, principal.tenantId, principal.employeeId);
   return {
     employeeId: principal.employeeId,
-    permissions: principal.permissions,
+    // «Владелец» holds the whole catalog, also a permission added after the session began.
+    permissions: isOwner ? catalog : principal.permissions,
     scope: scopeOf(principal.storeScope),
-    isOwner: await repository.isOwnerEmployee(trx, principal.tenantId, principal.employeeId),
+    isOwner,
   };
 }
 

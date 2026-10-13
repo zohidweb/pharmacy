@@ -115,6 +115,7 @@ export function StatisticsPage() {
   return (
     <>
       <PageHeader
+        demoRoutes={['usage.stats']}
         title={t('title')}
         subtitle={t('subtitle')}
         actions={

@@ -58,7 +58,11 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title={t('title')} subtitle={t('subtitle', { month })} />
+      <PageHeader
+        demoRoutes={['dashboard.get']}
+        title={t('title')}
+        subtitle={t('subtitle', { month })}
+      />
       <div className="flex flex-col gap-4 p-6">
         <QueryState query={dashboard}>
           {({ summary, sales, queue }) => {

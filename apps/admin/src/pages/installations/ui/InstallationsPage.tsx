@@ -268,7 +268,11 @@ export function InstallationsPage() {
 
   return (
     <>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PageHeader
+        demoRoutes={['installations.list']}
+        title={t('title')}
+        subtitle={t('subtitle')}
+      />
       <div className="flex flex-col gap-4 p-6">
         <QueryState query={list}>
           {(data) => (

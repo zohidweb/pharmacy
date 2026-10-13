@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { canWrite, useSession } from '@/entities/session';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
-import { QueryState } from '@/shared/ui';
+import { DemoDataNotice, QueryState } from '@/shared/ui';
 
 /**
  * Manual export to 1C:Бухгалтерия 8 for a period (CommerceML, closed list of integrations): the
@@ -159,6 +159,7 @@ export function Export1cDialog({
       }
     >
       <div className="flex flex-col gap-4">
+        <DemoDataNotice routes={['export1c.preview']} />
         {error && (
           <Alert tone="danger" live="assertive">
             {error}

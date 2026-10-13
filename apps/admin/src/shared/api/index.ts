@@ -40,6 +40,18 @@ export function isApiRouteAvailable(route: ApiRouteKey): boolean {
 }
 
 /**
+ * Whether a screen (or a part of it) built on these routes shows mock data in the `partial` mode:
+ * one of them is not served by apps/api yet. Such data is marked «Демо-данные» so its figures are
+ * not taken for the platform's own; the mark goes away once the routes reach apps/api.
+ */
+export function servedByMocks(...routes: readonly ApiRouteKey[]): boolean {
+  return (
+    apiMocksMode === 'partial' &&
+    routes.some((route) => !REAL_API_ROUTES.has(route))
+  );
+}
+
+/**
  * Loads the in-memory mock transport. The env variables are inlined at build time, so a build
  * without the flag folds the condition to `null` and emits no mock chunk.
  */

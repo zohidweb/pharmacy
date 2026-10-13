@@ -247,6 +247,7 @@ export function NotificationsPage() {
   return (
     <>
       <PageHeader
+        demoRoutes={['notifications.list', 'announcements.list']}
         title={t('title')}
         subtitle={t('subtitle')}
         actions={

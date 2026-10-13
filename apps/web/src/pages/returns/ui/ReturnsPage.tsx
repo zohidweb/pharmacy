@@ -367,6 +367,7 @@ function ReturnsPageView() {
     <>
       <PageHeader
         title={t('title')}
+        demoRoutes={['returns.list', 'receipts.returnable', 'returns.create']}
         subtitle={t('subtitle', { days: RETURN_WINDOW_DAYS })}
       />
       <div className="flex flex-col gap-4 px-6 pt-4">

@@ -400,6 +400,8 @@ export class DocumentsRepository {
       sourceLineId: string | null;
       businessDate: string;
       reversesMovementId: string | null;
+      /** `receipt` — a sale of the POS (spec 2026-10-13-pos-shift-sale); a document by default. */
+      sourceType?: 'document' | 'receipt';
     }>,
   ): Promise<void> {
     // ≤ 1 000 rows per statement: PostgreSQL takes at most 65 535 bind parameters

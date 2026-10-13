@@ -300,6 +300,38 @@ export class CatalogRepository {
     return result.rows;
   }
 
+  /**
+   * Products for the POS snapshot (spec 2026-10-13-pos-shift-sale, 4.3): all active ones, or the
+   * given ids in any status.
+   */
+  async posProducts(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[] | null,
+  ): Promise<ProductRow[]> {
+    if (ids !== null) return this.findProducts(trx, tenantId, ids);
+    const result = await sql<{ id: string }>`
+      select p.id from pharmacy.products p
+      where p.tenant_id = ${tenantId} and p.status = 'active'`.execute(trx);
+    return this.findProducts(
+      trx,
+      tenantId,
+      result.rows.map((row) => row.id),
+    );
+  }
+
+  /** Products changed after a moment (card, barcodes, status): the delta of the POS snapshot. */
+  async productsChangedSince(
+    trx: TenantTransaction,
+    tenantId: string,
+    since: Date,
+  ): Promise<Array<{ id: string; status: string }>> {
+    const result = await sql<{ id: string; status: string }>`
+      select p.id, p.status from pharmacy.products p
+      where p.tenant_id = ${tenantId} and p.updated_at > ${since}`.execute(trx);
+    return result.rows;
+  }
+
   /** Product ids of the page of the price list (active products, the list order). */
   async listProductIds(
     trx: TenantTransaction,

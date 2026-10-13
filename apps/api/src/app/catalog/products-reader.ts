@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { countries } from '@pharmacy/shared-domain';
 import { requirePrincipal } from '../../common/context/request-context';
 import type { TenantTransaction } from '../../core/database';
 import {
@@ -6,6 +7,24 @@ import {
   localizedName,
   type ProductRow,
 } from './catalog.repository';
+
+/** A product as the POS snapshot sees it (spec 2026-10-13-pos-shift-sale, 4.3). */
+export interface PosCatalogProduct {
+  id: string;
+  /** In the session language, else the default language of the network. */
+  name: string;
+  inn: string | null;
+  manufacturer: string;
+  /** Country name in the session language. */
+  country: string;
+  form: string;
+  categoryId: string;
+  barcodes: string[];
+  piecesPerPack: number;
+  divisible: boolean;
+  prescription: 'none' | 'rx' | 'controlled';
+  status: 'active' | 'archived';
+}
 
 /** A product as the stock module sees it. */
 export interface StockProduct {
@@ -131,6 +150,70 @@ export class ProductsReader {
         row.id,
       ),
     };
+  }
+
+  /** Products of the POS snapshot: all active ones, or the given ids in any status. */
+  async listForPos(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[] | null,
+  ): Promise<PosCatalogProduct[]> {
+    const { locale } = requirePrincipal();
+    const language = await this.repository.networkLanguage(trx, tenantId);
+    const rows = await this.repository.posProducts(trx, tenantId, ids);
+    return rows.map((row) => {
+      const inn = localizedName(row.inn, locale, language);
+      const country = countries.find((c) => c.code === row.country);
+      return {
+        id: row.id,
+        name: localizedName(row.name, locale, language),
+        inn: inn === '' ? null : inn,
+        manufacturer: row.manufacturer ?? '',
+        country: country
+          ? locale === 'tg'
+            ? country.name.tj
+            : country.name.ru
+          : (row.country ?? ''),
+        form: row.dosageForm ?? '',
+        categoryId: row.categoryId,
+        barcodes: row.barcodes,
+        piecesPerPack: row.piecesPerPack,
+        divisible: row.soldByPiece,
+        prescription: row.isControlled
+          ? 'controlled'
+          : row.isPrescription
+            ? 'rx'
+            : 'none',
+        status: row.status === 'archived' ? 'archived' : 'active',
+      };
+    });
+  }
+
+  /** Products changed after a moment: still active ones and the archived ones. */
+  async changedSince(
+    trx: TenantTransaction,
+    tenantId: string,
+    since: Date,
+  ): Promise<{ changed: string[]; archived: string[] }> {
+    const rows = await this.repository.productsChangedSince(trx, tenantId, since);
+    return {
+      changed: rows.filter((r) => r.status !== 'archived').map((r) => r.id),
+      archived: rows.filter((r) => r.status === 'archived').map((r) => r.id),
+    };
+  }
+
+  /** Active categories in the POS order, names in the session language. */
+  async categoriesForPos(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<Array<{ id: string; name: string }>> {
+    const { locale } = requirePrincipal();
+    const language = await this.repository.networkLanguage(trx, tenantId);
+    const rows = await this.repository.listCategories(trx, tenantId, true);
+    return rows.map((row) => ({
+      id: row.id,
+      name: localizedName(row.name, locale, language),
+    }));
   }
 
   /** Active products with a default minimum stock (the deficit of a purchase order). */

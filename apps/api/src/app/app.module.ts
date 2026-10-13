@@ -101,7 +101,11 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       InventoryModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
-    PosModule,
+    // The POS of an offline store comes with the sync (spec 2026-10-13-pos-shift-sale, E19).
+    ConditionalModule.registerWhen(
+      PosModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     ConditionalModule.registerWhen(
       PurchasingModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',

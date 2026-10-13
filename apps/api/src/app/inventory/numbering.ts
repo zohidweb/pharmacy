@@ -9,7 +9,10 @@ export type NumberedKind =
   | 'inventory'
   | 'supplier_return'
   | 'transfer'
-  | 'transfer_request';
+  | 'transfer_request'
+  // the POS (spec 2026-10-13-pos-shift-sale, E2): a receipt and a shift (the Z-report number)
+  | 'receipt'
+  | 'z_report';
 
 // Prefixes are constants of the code, not a column: old numbers stay as they were (data model 03).
 const PREFIX: Record<NumberedKind, string> = {
@@ -20,6 +23,8 @@ const PREFIX: Record<NumberedKind, string> = {
   supplier_return: 'ВП',
   transfer: 'ПМ',
   transfer_request: 'ЗП',
+  receipt: 'ЧК',
+  z_report: 'СМ',
 };
 
 // Numbers of stock documents: `<prefix>-<store code>-<year>-<6 digits>`, a counter per store, kind

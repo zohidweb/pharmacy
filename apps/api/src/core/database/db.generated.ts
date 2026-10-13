@@ -82,6 +82,45 @@ export interface ControlledSaleRecords {
   tenantId: string;
 }
 
+export interface CustomerReturnLines {
+  amountDirams: bigint;
+  createdAt: Generated<Timestamp>;
+  customerReturnId: string;
+  discountShareDirams: bigint;
+  id: string;
+  qtyPieces: number;
+  receiptLineId: string;
+  tenantId: string;
+}
+
+export interface CustomerReturnRefunds {
+  amountDirams: bigint;
+  createdAt: Generated<Timestamp>;
+  customerReturnId: string;
+  id: string;
+  kind: string;
+  tenantId: string;
+}
+
+export interface CustomerReturns {
+  businessDate: string;
+  cashierId: string;
+  correlationId: string;
+  createdAt: Generated<Timestamp>;
+  discountReturnedDirams: bigint;
+  foundWithoutReceipt: Generated<boolean>;
+  id: string;
+  number: string;
+  reason: string;
+  receiptId: string;
+  refundDirams: bigint;
+  returnedAt: Timestamp;
+  shiftId: string;
+  storeId: string;
+  tenantId: string;
+  terminalId: string;
+}
+
 export interface DictionaryValues {
   archivedAt: Timestamp | null;
   code: string | null;
@@ -158,6 +197,7 @@ export interface Documents {
   rejectionComment: string | null;
   rejectionReason: string | null;
   requestDocumentId: string | null;
+  sourceCustomerReturnId: string | null;
   sourceDocumentId: string | null;
   status: Generated<string>;
   storeId: string;
@@ -699,6 +739,9 @@ export interface TenantSettings {
   backdatingMaxDays: Generated<number>;
   cashierSessionIdleMin: Generated<number>;
   createdAt: Generated<Timestamp>;
+  customerReturnControlled: Generated<boolean>;
+  customerReturnOtc: Generated<boolean>;
+  customerReturnRx: Generated<boolean>;
   defaultLanguage: Generated<string>;
   expiryReminderDays: Generated<number>;
   piecePriceRoundingDirams: Generated<number>;
@@ -769,6 +812,9 @@ export interface DB {
   batches: Batches;
   categories: Categories;
   controlledSaleRecords: ControlledSaleRecords;
+  customerReturnLines: CustomerReturnLines;
+  customerReturnRefunds: CustomerReturnRefunds;
+  customerReturns: CustomerReturns;
   dictionaryValues: DictionaryValues;
   discountRules: DiscountRules;
   discountRuleStores: DiscountRuleStores;

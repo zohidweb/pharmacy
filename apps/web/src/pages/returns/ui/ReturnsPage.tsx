@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  CreateReturnRequest,
   ReturnableLine,
   ReturnableReceipt,
   ReturnReason,
@@ -321,8 +322,11 @@ function ReturnsPageView() {
   const [reason, setReason] = useState<ReturnReason>('customer');
   // the product of the search when the sale was found without the receipt (R8)
   const [foundProductId, setFoundProductId] = useState<string | null>(null);
-  // one key per return of the opened receipt: a repeat after a network error is the same return (E1)
-  const returnKey = useRef<string | null>(null);
+  // the request of the return with its key: a repeat after a network error sends it unchanged, so the
+  // server answers with the return it has already made (E1); another set of lines is another return
+  const pending = useRef<{ signature: string; body: CreateReturnRequest } | null>(
+    null,
+  );
   const withoutReceipt = can(session, 'returns:without-receipt');
   const runtime = useTerminalRuntime();
   const windowDays =
@@ -338,7 +342,7 @@ function ReturnsPageView() {
       // every receipt starts at the customer's wish: a defect is chosen on purpose (it writes off)
       setReason('customer');
       setFoundProductId(query.productId ?? null);
-      returnKey.current = null;
+      pending.current = null;
     },
   });
   const findByCode = (code: string) =>
@@ -354,25 +358,31 @@ function ReturnsPageView() {
       const lines = Object.entries(quantities)
         .filter(([, quantity]) => quantity > 0)
         .map(([lineId, quantity]) => ({ lineId, quantity }));
-      returnKey.current ??= uuidv7();
-      const id = returnKey.current;
-      return apiRequest('returns.create', {
-        idempotencyKey: id,
-        body: {
-          id,
-          storeId: storeId ?? '',
-          terminalId: session.terminalId,
-          employeeId: session.employee.id,
-          occurredAt: new Date().toISOString(),
-          receiptId: receipt.id,
-          shiftId: shift.data.id,
-          lines,
-          reason,
-          refunds: refundPayments(receipt.payments, refund.refundMinor),
-          refundMinor: refund.refundMinor,
-          foundProductId,
-        },
-      });
+      const draft = {
+        receiptId: receipt.id,
+        shiftId: shift.data.id,
+        lines,
+        reason,
+        refunds: refundPayments(receipt.payments, refund.refundMinor),
+        refundMinor: refund.refundMinor,
+        foundProductId,
+      };
+      const signature = JSON.stringify(draft);
+      if (pending.current?.signature !== signature) {
+        pending.current = {
+          signature,
+          body: {
+            id: uuidv7(),
+            storeId: storeId ?? '',
+            terminalId: session.terminalId,
+            employeeId: session.employee.id,
+            occurredAt: new Date().toISOString(),
+            ...draft,
+          },
+        };
+      }
+      const { body } = pending.current;
+      return apiRequest('returns.create', { idempotencyKey: body.id, body });
     },
     onSuccess: (created) => {
       toast.show(
@@ -387,7 +397,7 @@ function ReturnsPageView() {
               amount: formatMoney(created.refundMinor),
             }),
       );
-      returnKey.current = null;
+      pending.current = null;
       setReceipt(null);
       setQuantities({});
       setReason('customer');
@@ -569,7 +579,8 @@ function ReturnsPageView() {
                     <Button
                       variant="secondary"
                       onClick={() => {
-                        setNumber(r.receiptNumber);
+                        // not into the number field: «Найти» would open the whole receipt (R8)
+                        setNumber('');
                         lookup.mutate({
                           id: r.receiptId,
                           productId: r.productId,

@@ -110,19 +110,23 @@ export class CashMovementDto
   comment!: string;
 }
 
+/**
+ * The bank terminal of a kind over the shift: its sales less its refunds — negative when the returns
+ * paid back by the kind exceed the sales of the shift (spec 2026-10-13-customer-returns, E13).
+ */
 export class TerminalTotalsDto {
   @IsInt()
-  @Min(0)
+  @Min(-MAX_MONEY_MINOR)
   @Max(MAX_MONEY_MINOR)
   card!: number;
 
   @IsInt()
-  @Min(0)
+  @Min(-MAX_MONEY_MINOR)
   @Max(MAX_MONEY_MINOR)
   qr!: number;
 
   @IsInt()
-  @Min(0)
+  @Min(-MAX_MONEY_MINOR)
   @Max(MAX_MONEY_MINOR)
   nfc!: number;
 }

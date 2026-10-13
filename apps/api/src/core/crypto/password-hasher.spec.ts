@@ -50,6 +50,8 @@ describe('PasswordHasher', () => {
     expect(rotated.needsRehash(phc, 2)).toBe(true);
   });
 
+  // Each malformed hash costs a real scrypt check (the answer time does not tell it apart), so the
+  // nine of them need more than the default 5 s on a loaded machine.
   it('returns false (never throws) for malformed input', async () => {
     const [, , , salt, hash] = phc.split('$');
     const bad = [
@@ -66,7 +68,7 @@ describe('PasswordHasher', () => {
     for (const value of bad) {
       await expect(hasher.verify(secret, value, 2)).resolves.toBe(false);
     }
-  });
+  }, 30_000);
 
   it('returns false for an unknown pepper version', async () => {
     await expect(hasher.verify(secret, phc, 99)).resolves.toBe(false);

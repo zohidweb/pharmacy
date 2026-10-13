@@ -95,6 +95,7 @@ describe('findCredentials', () => {
       status: 'active',
       passwordHash: '$scrypt$test',
       passwordPepperVersion: 3,
+      passwordChangedAt: null,
     });
   });
 
@@ -111,6 +112,7 @@ describe('findCredentials', () => {
       status: 'active',
       passwordHash: null,
       passwordPepperVersion: null,
+      passwordChangedAt: null,
     });
   });
 
@@ -306,6 +308,7 @@ describe('recordLogin and updatePasswordHash', () => {
       status: 'active',
       passwordHash: '$scrypt$new',
       passwordPepperVersion: 2,
+      passwordChangedAt: null,
     });
   });
 });

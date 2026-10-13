@@ -319,7 +319,11 @@ export function ServicesPage() {
 
   return (
     <>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PageHeader
+        demoRoutes={['serviceRequests.list', 'services.list']}
+        title={t('title')}
+        subtitle={t('subtitle')}
+      />
       <div className="flex flex-col gap-4 p-6">
         <Card as="section" padding="none" aria-labelledby="requests-title">
           <CardHeader

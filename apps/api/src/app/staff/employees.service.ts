@@ -27,6 +27,7 @@ import { PermissionsVersionService } from '../auth/permissions-version.service';
 import { dbLanguage, roleDisplayName, uiLocale } from '../auth/session-profile';
 import {
   type Editor,
+  isPeer,
   isVisible,
   roleWithinEditor,
   type Scope,
@@ -350,7 +351,10 @@ export class EmployeesService {
 
   // A visible employee who is not above the editor — neither the role nor the stores: resetting the
   // password of a stronger employee, or of one working in other stores too, would hand over that
-  // employee's permissions or stores (ADR-0018, п. 4).
+  // employee's permissions or stores (ADR-0018, п. 4). A peer — the same permissions and stores —
+  // only with `employees:manage-peers`, which no role template holds: by default colleagues do not
+  // change each other at all, so a peer cannot be narrowed first and then have the password reset
+  // (ADR-0018, amendment 2026-10-13).
   private async editable(
     trx: TenantTransaction,
     editor: Editor,
@@ -364,6 +368,12 @@ export class EmployeesService {
     }
     if (!scopeWithinEditor(editor, scopeOfRow(employee))) {
       throw new ProblemException(403, 'store_not_in_scope');
+    }
+    if (
+      !editor.permissions.includes('employees:manage-peers') &&
+      isPeer(editor, role, scopeOfRow(employee))
+    ) {
+      throw new MissingPermissionException('employees:manage-peers');
     }
     return employee;
   }

@@ -108,7 +108,9 @@ function employeeOf(
 
 /**
  * Another employee may be changed only when not above the editor — role and stores (ADR-0018,
- * п. 4): a password reset would otherwise hand over a stronger account or other stores.
+ * п. 4): a password reset would otherwise hand over a stronger account or other stores. A peer —
+ * the same permissions and stores — only with `employees:manage-peers`, which no role template
+ * holds (ADR-0018, amendment 2026-10-13).
  */
 function editableOf(
   session: EmployeeSession,
@@ -125,8 +127,36 @@ function editableOf(
   ) {
     throw new ApiError(403, 'permission_escalation', correlationId);
   }
-  if (!scopeWithin(scopeOf(session), employee.storeIds)) {
+  const own = scopeOf(session);
+  if (!scopeWithin(own, employee.storeIds)) {
     throw new ApiError(403, 'store_not_in_scope', correlationId);
+  }
+  const stores = employee.storeIds;
+  const sameStores =
+    own === null || stores === null
+      ? own === stores
+      : own.length === stores.length && stores.every((s) => own.includes(s));
+  if (
+    !session.permissions.includes('employees:manage-peers') &&
+    exceedingPermissions(role.permissions, session.permissions).length === 0 &&
+    sameStores
+  ) {
+    throw new ApiError(403, 'forbidden', correlationId);
+  }
+  return employee;
+}
+
+/**
+ * As `editableOf`, and not oneself: one's own password, PIN and status are changed in the profile.
+ */
+function othersEditableOf(
+  session: EmployeeSession,
+  id: string,
+  correlationId: string,
+) {
+  const employee = editableOf(session, id, correlationId);
+  if (employee.id === session.employee.id) {
+    throw new ApiError(403, 'own_assignment', correlationId);
   }
   return employee;
 }
@@ -301,7 +331,7 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     const { session } = context(correlationId, 'employees:update', {
       write: true,
     });
-    const employee = editableOf(session, params.id, correlationId);
+    const employee = othersEditableOf(session, params.id, correlationId);
     if (passwordProblems(body.newPassword).length > 0) {
       throw validation(correlationId, 'newPassword', 'policy');
     }
@@ -316,10 +346,7 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     const { session } = context(correlationId, 'employees:update', {
       write: true,
     });
-    const employee = editableOf(session, params.id, correlationId);
-    if (employee.id === session.employee.id) {
-      throw new ApiError(403, 'own_assignment', correlationId);
-    }
+    const employee = othersEditableOf(session, params.id, correlationId);
     const problem = checkPin(body.pin, owner().settings.minPinLength);
     if (problem !== null) {
       const code = problem === 'trivial' ? 'pin_trivial' : 'pin_length';
@@ -338,10 +365,7 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     const { session } = context(correlationId, 'employees:update', {
       write: true,
     });
-    const employee = editableOf(session, params.id, correlationId);
-    if (employee.id === session.employee.id) {
-      throw new ApiError(403, 'own_assignment', correlationId);
-    }
+    const employee = othersEditableOf(session, params.id, correlationId);
     if (
       body.status === 'blocked' &&
       roleOf(employee.roleId)?.system &&

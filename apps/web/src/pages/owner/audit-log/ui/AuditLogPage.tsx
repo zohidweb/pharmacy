@@ -146,6 +146,7 @@ function AuditLogPageView() {
     <>
       <PageHeader
         title={t('title')}
+        demoRoutes={['auditLog.list']}
         subtitle={t('subtitle')}
         actions={
           <Button

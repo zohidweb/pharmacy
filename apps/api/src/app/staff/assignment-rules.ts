@@ -48,6 +48,19 @@ export function roleWithinEditor(editor: Editor, role: RoleFacts): boolean {
   return exceedingPermissions(editor.permissions, permissionsOf(role)).length === 0;
 }
 
+/**
+ * ADR-0018, amendment 2026-10-13 — a peer of the editor: the same permissions and the same stores.
+ * A peer is changed (card, role, password, PIN, status) only with `employees:manage-peers`.
+ */
+export function isPeer(editor: Editor, role: RoleFacts, scope: Scope): boolean {
+  const theirs = permissionsOf(role);
+  return (
+    exceedingPermissions(editor.permissions, theirs).length === 0 &&
+    exceedingPermissions(theirs, editor.permissions).length === 0 &&
+    sameScope(editor.scope, scope)
+  );
+}
+
 /** ADR-0018, п. 4 — the assigned scope lies within the editor's scope. */
 export function scopeWithinEditor(editor: Editor, assigned: Scope): boolean {
   return scopeWithin(editor.scope, assigned);

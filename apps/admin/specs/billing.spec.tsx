@@ -93,14 +93,14 @@ describe('BillingPage', () => {
     fireEvent.change(invoice, { target: { value: option.value } });
     expect(
       plain((within(dialog).getByLabelText(/Сумма/) as HTMLInputElement).value),
-    ).toBe('174,80');
+    ).toBe('173,28');
 
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Зафиксировать' }),
     );
     expect(
       plain((await screen.findByText(/Платёж .* зафиксирован/)).textContent),
-    ).toBe('Платёж 174,80 с зафиксирован');
+    ).toBe('Платёж 173,28 с зафиксирован');
     await waitFor(() => {
       const row = within(screen.getByRole('table', { name: 'Счета' }))
         .getByText('СЧ-2026-09-003')
@@ -198,7 +198,7 @@ describe('BillingPage', () => {
     expect(
       await within(dialog).findByText('Пример Мед — склад — 8 дней'),
     ).toBeTruthy();
-    expect(within(dialog).getByText('НДС 15%')).toBeTruthy();
+    expect(within(dialog).getByText('НДС 14%')).toBeTruthy();
   });
 });
 

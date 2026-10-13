@@ -226,6 +226,7 @@ function StoreView() {
   return (
     <>
       <PageHeader
+        demoRoutes={['stores.get']}
         title={store.data?.name ?? t('title')}
         subtitle={store.data?.tenantName}
       />

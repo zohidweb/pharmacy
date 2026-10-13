@@ -49,6 +49,8 @@ export const specialPermissions = [
   'finance:view-cost',
   'roles:manage',
   'employees:assign-role',
+  // changing a peer — the same permissions and stores (ADR-0018, amendment 2026-10-13)
+  'employees:manage-peers',
   'sync:run',
 ] as const;
 

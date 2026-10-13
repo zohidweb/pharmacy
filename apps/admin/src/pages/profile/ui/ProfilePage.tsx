@@ -18,11 +18,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { sessionQueryKey } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { sessionQueryKey, useSession } from '@/entities/session';
+import { apiRequest, servedByMocks, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { setLocale, type Locale } from '@/shared/i18n';
-import { QueryState } from '@/shared/ui';
+import { DemoDataNotice, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 const PHONE = /^\+992(\s?\d){9}$/;
@@ -293,9 +293,16 @@ export function ProfilePage() {
   const t = useTranslations('profile');
   const router = useRouter();
   const queryClient = useQueryClient();
+  const session = useSession();
+  // While the profile is not on apps/api (partial mode), who is signed in comes from the session.
+  const signedIn = servedByMocks('me.get') ? session.data?.operator : undefined;
   const me = useQuery({
     queryKey: ['me'],
     queryFn: ({ signal }) => apiRequest('me.get', { signal }),
+    select: (stored) =>
+      signedIn
+        ? { ...stored, fullName: signedIn.fullName, login: signedIn.login }
+        : stored,
   });
   const activity = useQuery({
     queryKey: ['me', 'activity'],
@@ -329,12 +336,15 @@ export function ProfilePage() {
                     </StatusPill>
                   </div>
                   <p className="text-sm text-fg-muted">
-                    {data.login} · {data.phone}
-                    {data.lastLoginAt &&
+                    {data.login}
+                    {!signedIn && ` · ${data.phone}`}
+                    {!signedIn &&
+                      data.lastLoginAt &&
                       ` · ${t('lastLogin', { at: formatDateTime(data.lastLoginAt) })}`}
                   </p>
                 </div>
               </Card>
+              <DemoDataNotice routes={['me.get']} />
               <div className="grid grid-cols-3 items-start gap-4">
                 <div className="col-span-2 flex flex-col gap-4">
                   <PersonalData me={data} />
@@ -355,7 +365,6 @@ export function ProfilePage() {
                           'billing',
                           'licenses',
                           'services',
-                          'impersonation',
                           'settings',
                         ] as const
                       ).map((key) => (

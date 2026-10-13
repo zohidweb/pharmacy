@@ -13,3 +13,6 @@ export const demoOperator: OperatorProfile = {
 
 /** Mock-only password of the demo operator (apps/admin/README.md, "Моки API"). */
 export const demoOperatorPassword = 'demo-password';
+
+/** Mock-only one-time code of the demo operator: sets a new password on the activation screen. */
+export const demoActivationCode = 'DEMO-ACTI-VATE-CODE-2345-ABCD-EF';

@@ -12,12 +12,16 @@ import type {
   ServiceRequestItem,
 } from '@pharmacy/shared-dto';
 
-export const VAT_RATE_PERCENT = 15;
+/**
+ * The rate of the seeded invoices and the default of the platform settings (Tajikistan, 14 %).
+ * New invoices take the rate from the settings (`settings.vatRatePercent`), issued ones keep theirs.
+ */
+export const DEFAULT_VAT_RATE_PERCENT = 14;
 export const PRICE_PER_STORE_MINOR = 12_000;
 
 /** Mock-only VAT split; the real calculation and rounding belong to apps/api. */
-export function withVat(netMinor: number) {
-  const vatMinor = Math.round((netMinor * VAT_RATE_PERCENT) / 100);
+export function withVat(netMinor: number, ratePercent: number) {
+  const vatMinor = Math.round((netMinor * ratePercent) / 100);
   return { netMinor, vatMinor, totalMinor: netMinor + vatMinor };
 }
 
@@ -28,7 +32,11 @@ function invoice(
   >,
 ): InvoiceDetails {
   const net = partial.lines.reduce((sum, line) => sum + line.amountMinor, 0);
-  return { ...partial, ...withVat(net), vatRatePercent: VAT_RATE_PERCENT };
+  return {
+    ...partial,
+    ...withVat(net, DEFAULT_VAT_RATE_PERCENT),
+    vatRatePercent: DEFAULT_VAT_RATE_PERCENT,
+  };
 }
 
 export interface BillingDb {

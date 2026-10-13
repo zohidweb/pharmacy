@@ -62,6 +62,9 @@
       "path": "../../libs/shared/dto"
     },
     {
+      "path": "../../libs/shared/domain"
+    },
+    {
       "path": "../../libs/ui"
     }
   ]

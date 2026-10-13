@@ -243,6 +243,7 @@ function DashboardPageView() {
     <>
       <PageHeader
         title={t('title')}
+        demoRoutes={['dashboard.get']}
         subtitle={t('subtitle', {
           network: session?.tenant.name ?? '—',
           stores: session?.stores.length ?? 0,

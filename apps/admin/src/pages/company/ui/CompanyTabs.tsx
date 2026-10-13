@@ -35,8 +35,11 @@ import {
   useTenantStats,
   useTenantStores,
 } from '@/entities/tenant';
+import { isApiRouteAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
+
+const storeCardAvailable = isApiRouteAvailable('stores.get');
 
 export function StoresTab({ tenantId }: { tenantId: string }) {
   const t = useTranslations('company.stores');
@@ -47,12 +50,17 @@ export function StoresTab({ tenantId }: { tenantId: string }) {
       header: t('columns.store'),
       cell: (store) => (
         <div className="flex flex-col">
-          <Link
-            href={routes.store(store.id)}
-            className="font-medium text-fg hover:text-primary"
-          >
-            {store.name}
-          </Link>
+          {/* the store card has no API yet: no link where its route does not answer */}
+          {storeCardAvailable ? (
+            <Link
+              href={routes.store(store.id)}
+              className="font-medium text-fg hover:text-primary"
+            >
+              {store.name}
+            </Link>
+          ) : (
+            <span className="font-medium text-fg">{store.name}</span>
+          )}
           <span className="text-xs text-fg-subtle">{store.address}</span>
         </div>
       ),

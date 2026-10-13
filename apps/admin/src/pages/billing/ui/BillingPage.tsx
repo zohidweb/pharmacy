@@ -262,6 +262,7 @@ export function BillingPage() {
   return (
     <>
       <PageHeader
+        demoRoutes={['billing.summary', 'invoices.list']}
         title={t('title')}
         subtitle={t('subtitle', { period: formatPeriod(period) })}
       />

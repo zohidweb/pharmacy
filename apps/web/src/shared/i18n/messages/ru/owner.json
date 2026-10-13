@@ -280,6 +280,7 @@
         "finance_view-cost": "Закупочные цены и маржа",
         "roles_manage": "Управление ролями",
         "employees_assign-role": "Назначение ролей",
+        "employees_manage-peers": "Изменение сотрудников с равными правами",
         "sync_run": "Запуск синхронизации"
       }
     },

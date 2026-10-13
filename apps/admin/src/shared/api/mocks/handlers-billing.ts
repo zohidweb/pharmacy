@@ -12,13 +12,15 @@ import type {
 } from '@pharmacy/shared-dto';
 import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
-import { PRICE_PER_STORE_MINOR, VAT_RATE_PERCENT, withVat } from './db-billing';
+import { withVat } from './db-billing';
 import { mockDb } from './db';
 import { demoOperator } from './fixtures';
 import { audit, findStore, findTenant, notFound } from './helpers';
 import type { MockHandlers } from './types';
 
 const billing = () => mockDb().billing;
+/** Platform settings: the tariff and VAT rate of the invoices issued next. */
+const settings = () => mockDb().system.settings;
 const today = () => toAppDate();
 const currentPeriod = () => today().slice(0, 7);
 
@@ -171,8 +173,9 @@ export const billingHandlers: Pick<
         0,
       ),
       overdueTenants: new Set(overdue.map((invoice) => invoice.tenantId)).size,
-      pricePerStoreMinor: PRICE_PER_STORE_MINOR,
-      vatRatePercent: VAT_RATE_PERCENT,
+      // the period's own rate once invoiced, otherwise the one new invoices will take
+      pricePerStoreMinor: settings().pricePerStoreMinor,
+      vatRatePercent: invoices[0]?.vatRatePercent ?? settings().vatRatePercent,
     };
   },
   'invoices.list': ({ query }) => {
@@ -227,7 +230,10 @@ export const billingHandlers: Pick<
           totalMinor:
             state === 'future'
               ? 0
-              : withVat(activeStores * PRICE_PER_STORE_MINOR).totalMinor,
+              : withVat(
+                  activeStores * settings().pricePerStoreMinor,
+                  settings().vatRatePercent,
+                ).totalMinor,
         };
       });
     return {

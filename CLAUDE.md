@@ -280,7 +280,8 @@ npm run prod:build / prod:up / prod:down
   (нужен `npm run dev:deps`). Скрипт печатает код и срок и больше ничего; ни код, ни хеш не логируются.
 - Первый оператор платформы (часть 3 аутентификации) — тот же механизм: `scripts/create-operator.mjs
   --login <рабочий e-mail> --name "<ФИО>"` создаёт оператора (или находит существующего) и печатает
-  одноразовый код один раз; пароль оператор задаёт сам через `POST /api/v1/operator/activations`.
+  одноразовый код один раз; пароль оператор задаёт сам на экране админки «Первый вход» (`/activate`,
+  ссылка со страницы входа) — `POST /api/v1/operator/activations`.
   Скрипт работает ролью `pharmacy_platform` (`PLATFORM_DATABASE_URL`, задан в сервисе `api`) и пишет
   `platform_audit_log`. Запуск — как выше, с `node scripts/create-operator.mjs …`; в dev —
   `node --env-file=.env apps/api/scripts/create-operator.mjs --login … --name "…"`.

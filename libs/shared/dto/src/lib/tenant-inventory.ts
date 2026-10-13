@@ -54,8 +54,9 @@ export interface StockProductsQuery {
    */
   ids?: string;
   /**
-   * Only the batches of this supplier; products without them are left out. Combines with `query` /
-   * `limit` and with `ids` (the lines of a supplier return).
+   * Only the batches of this supplier. A search (`query` / `limit`) looks among the products with
+   * the supplier's batches in stock; with `ids` (the lines of a supplier return) every product stays,
+   * with the supplier's batches only.
    */
   supplierId?: string;
   /**

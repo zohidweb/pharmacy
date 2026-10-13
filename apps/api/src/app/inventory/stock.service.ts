@@ -226,6 +226,28 @@ export class StockService {
         ? (await this.inventory.settings(trx, tenantId)).today
         : '';
       const receiptId = query.receiptId?.toLowerCase();
+      const supplierId = query.supplierId?.toLowerCase();
+      // a supplier return searches among the products with batches of the supplier in stock: the
+      // page limit applies to them, not to the whole catalog
+      const ofSupplier = async (): Promise<string[]> => {
+        const own = new Set(
+          (await this.stock.batchStock(trx, tenantId, [id], null))
+            .filter((b) => b.qty > 0 && b.supplierId === supplierId)
+            .map((b) => b.productId),
+        );
+        const ranked = query.query
+          ? (
+              await this.products.listForPricing(trx, tenantId, {
+                q: query.query,
+                limit: 500,
+                offset: 0,
+              })
+            ).items.map((p) => p.id)
+          : [...own];
+        return ranked
+          .filter((productId) => own.has(productId))
+          .slice(0, query.limit ?? 20);
+      };
       const ids = query.ids
         ? [...new Set(query.ids.toLowerCase().split(','))]
         : receiptId
@@ -244,16 +266,17 @@ export class StockService {
                     .map((b) => b.productId),
                 ),
               ]
-            : (
-                await this.products.listForPricing(trx, tenantId, {
-                  q: query.query,
-                  limit: query.limit ?? 20,
-                  offset: 0,
-                })
-              ).items.map((p) => p.id);
+            : supplierId
+              ? await ofSupplier()
+              : (
+                  await this.products.listForPricing(trx, tenantId, {
+                    q: query.query,
+                    limit: query.limit ?? 20,
+                    offset: 0,
+                  })
+                ).items.map((p) => p.id);
       const products = await this.products.findForStock(trx, tenantId, ids);
       const byId = new Map(products.map((p) => [p.id, p]));
-      const supplierId = query.supplierId?.toLowerCase();
       const batches = (
         await this.stock.batchStock(trx, tenantId, [id], ids)
       ).filter(
@@ -263,13 +286,10 @@ export class StockService {
           (!receiptId || b.sourceDocumentId === receiptId),
       );
       const prices = await this.prices.pricesAt(trx, tenantId, [id], ids);
-      // a supplier return: only the products with batches of the supplier in stock
-      const withBatches = new Set(
-        batches.filter((b) => b.qty > 0).map((b) => b.productId),
-      );
       return ids.flatMap((productId): StockProductOption[] => {
+        // `ids` reopens saved lines: a product stays even when its batch went back whole
         const product = byId.get(productId);
-        if (!product || (supplierId && !withBatches.has(productId))) return [];
+        if (!product) return [];
         return [
           {
             id: product.id,

@@ -101,6 +101,7 @@ import type {
   SupplierOption,
   SupplierReturn,
   SupplierReturnInput,
+  SupplierReturnListQuery,
   SupplierReturnListResponse,
   Transfer,
   TransferInput,
@@ -672,7 +673,7 @@ export const apiRoutes = {
     SupplierReturnListResponse,
     undefined,
     undefined,
-    DocumentListQuery
+    SupplierReturnListQuery
   >('GET', () => '/supplier-returns'),
   'supplierReturns.get': route<SupplierReturn, undefined, { id: string }>(
     'GET',

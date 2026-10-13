@@ -136,11 +136,13 @@ export interface Documents {
   postedAt: Timestamp | null;
   postedBy: string | null;
   purchaseOrderId: string | null;
+  sourceDocumentId: string | null;
   status: Generated<string>;
   storeId: string;
   supplierId: string | null;
   supplierInvoiceDate: string | null;
   supplierInvoiceNumber: string | null;
+  supplierReturnReason: string | null;
   tenantId: string;
   totalDirams: bigint | null;
   type: string;
@@ -489,6 +491,28 @@ export interface SupplierPayments {
   tenantId: string;
 }
 
+export interface SupplierReturnAllocations {
+  amountDirams: bigint;
+  createdAt: Generated<Timestamp>;
+  goodsReceiptDocumentId: string;
+  returnDocumentId: string;
+  tenantId: string;
+}
+
+export interface SupplierReturnLines {
+  amountDirams: bigint | null;
+  batchId: string;
+  createdAt: Generated<Timestamp>;
+  documentId: string;
+  id: string;
+  lineNo: number;
+  note: string | null;
+  productId: string;
+  qtyPieces: number;
+  tenantId: string;
+  unit: string;
+}
+
 export interface Suppliers {
   address: string | null;
   archivedAt: Timestamp | null;
@@ -607,6 +631,8 @@ export interface DB {
   supplierLedgerEntries: SupplierLedgerEntries;
   supplierPaymentAllocations: SupplierPaymentAllocations;
   supplierPayments: SupplierPayments;
+  supplierReturnAllocations: SupplierReturnAllocations;
+  supplierReturnLines: SupplierReturnLines;
   suppliers: Suppliers;
   tenants: Tenants;
   tenantSettings: TenantSettings;

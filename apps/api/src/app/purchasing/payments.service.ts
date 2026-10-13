@@ -64,15 +64,11 @@ export class PaymentsService {
         return this.replay(trx, tenantId, existing, supplierId, input);
       }
       if (
-        (await this.repository.findSupplier(trx, tenantId, supplierId)) ===
-        null
+        (await this.repository.findSupplier(trx, tenantId, supplierId)) === null
       ) {
         throw notFound();
       }
-      const entities = await this.repository.activeLegalEntities(
-        trx,
-        tenantId,
-      );
+      const entities = await this.repository.activeLegalEntities(trx, tenantId);
       let legalEntityId: string;
       if (requestedEntity !== null) {
         if (!entities.includes(requestedEntity)) throw notFound();
@@ -169,8 +165,7 @@ export class PaymentsService {
     const entry = ledgerEntries(rows).find(
       (e) => e.sourceType === 'payment' && e.sourceId === paymentId,
     );
-    if (entry === undefined)
-      throw new Error('The payment has no ledger entry');
+    if (entry === undefined) throw new Error('The payment has no ledger entry');
     return entry.entry;
   }
 }

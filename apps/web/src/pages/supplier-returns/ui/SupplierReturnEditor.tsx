@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  StockProductOption,
   SupplierReturn,
   SupplierReturnInput,
   SupplierReturnReason,
@@ -12,24 +13,22 @@ import {
   Dialog,
   Select,
   Spinner,
-  Switch,
   TextField,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { ClaimStatusPill, DocumentStatusPill } from '@/entities/stock-document';
+import { DocumentStatusPill } from '@/entities/stock-document';
 import {
   lineOf,
   StockLinesEditor,
   stockLineProblem,
   toEditableLines,
   UnpostDialog,
-  useStoreProducts,
   type EditableStockLine,
   type StockAccess,
 } from '@/features/stock-document';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 
 export const SUPPLIER_RETURN_REASONS: SupplierReturnReason[] = [
   'defect',
@@ -64,14 +63,29 @@ export function SupplierReturnEditor({
   const [reason, setReason] = useState<SupplierReturnReason>(
     document?.reason ?? 'defect',
   );
-  const [createClaim, setCreateClaim] = useState(
-    document ? document.claim !== 'none' : true,
-  );
+  const [comment, setComment] = useState(document?.comment ?? '');
   const [lines, setLines] = useState<EditableStockLine[]>([]);
   const [loaded, setLoaded] = useState(!document);
   const [touched, setTouched] = useState(false);
   const [unposting, setUnposting] = useState(false);
-  const products = useStoreProducts(storeId);
+  /** Exactly these products of the store with their batches of the supplier in stock. */
+  const productsById = (ids: readonly string[]) =>
+    queryClient.fetchQuery({
+      queryKey: [
+        'stock-products',
+        storeId,
+        'ids',
+        supplierId,
+        [...ids].sort().join(','),
+      ],
+      queryFn: ({ signal }) =>
+        apiRequest('stock.products', {
+          params: { storeId },
+          query: { ids: [...new Set(ids)].join(','), supplierId },
+          signal,
+        }),
+      staleTime: 0,
+    });
   const editable = (!doc || doc.status === 'draft') && access.canUpdate;
 
   const suppliers = useQuery({
@@ -88,32 +102,64 @@ export function SupplierReturnEditor({
     enabled: Boolean(supplierId && storeId),
   });
 
+  // a saved document reopens with its own products, whatever the page of the store list
   useEffect(() => {
-    if (loaded || !doc || products.isPending) return;
-    setLines(toEditableLines(doc.lines, products.byId));
-    setLoaded(true);
-  }, [doc, loaded, products.isPending, products.byId]);
+    if (loaded || !doc) return;
+    let cancelled = false;
+    void productsById(doc.lines.map((l) => l.productId)).then((found) => {
+      if (cancelled) return;
+      setLines(
+        toEditableLines(
+          doc.lines,
+          new Map<string, StockProductOption>(found.map((p) => [p.id, p])),
+        ),
+      );
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [doc, loaded]);
 
+  /** After a rejected posting: the lines take the current stock, so a short row shows at itself. */
+  const refreshBatches = async () => {
+    const fresh = new Map(
+      (await productsById(lines.map((l) => l.productId))).map((p) => [p.id, p]),
+    );
+    setLines((current) =>
+      current.map((line) => {
+        const product = fresh.get(line.productId);
+        return product
+          ? {
+              ...line,
+              batches: product.batches.filter(
+                (b) => b.quantityPieces > 0 || b.id === line.batchId,
+              ),
+            }
+          : line;
+      }),
+    );
+  };
+
+  // the batches of the receipt still in stock (reading the receipt needs the cost right)
   const fromReceipt = useMutation({
     mutationFn: () =>
-      apiRequest('goodsReceipts.get', { params: { id: receiptId ?? '' } }),
-    onSuccess: (receipt) => {
+      apiRequest('stock.products', {
+        params: { storeId },
+        query: { receiptId: receiptId ?? '', supplierId },
+      }),
+    onSuccess: (found) => {
       const present = new Set(lines.map((l) => l.batchId));
       const added: EditableStockLine[] = [];
-      for (const line of receipt.lines) {
-        const product = products.byId.get(line.productId);
-        const batch = product?.batches.find(
-          (b) => b.number === line.batchNumber,
-        );
-        if (
-          !product ||
-          !batch ||
-          batch.quantityPieces <= 0 ||
-          present.has(batch.id)
-        )
-          continue;
-        const editableLine = lineOf(product, { batch, includeExpired: true });
-        if (editableLine) added.push(editableLine);
+      for (const product of found) {
+        for (const batch of product.batches) {
+          if (batch.quantityPieces <= 0 || present.has(batch.id)) continue;
+          const editableLine = lineOf(product, {
+            batch,
+            includeExpired: true,
+          });
+          if (editableLine) added.push(editableLine);
+        }
       }
       setLines([...lines, ...added]);
     },
@@ -125,7 +171,7 @@ export function SupplierReturnEditor({
     storeId,
     receiptId,
     reason,
-    createClaim,
+    comment: comment.trim(),
     lines: lines.map((l) => ({
       productId: l.productId,
       batchId: l.batchId,
@@ -155,13 +201,24 @@ export function SupplierReturnEditor({
     },
   });
   const post = useMutation({
-    mutationFn: async () =>
-      apiRequest('supplierReturns.post', {
-        params: { id: (await saveDoc()).id },
-      }),
+    mutationFn: async () => {
+      const saved = await saveDoc();
+      // the draft exists now: a rejected posting must not create another one
+      setDoc(saved);
+      return apiRequest('supplierReturns.post', { params: { id: saved.id } });
+    },
     onSuccess: (posted) => {
       setDoc(posted);
       void invalidate();
+    },
+    // the stock may have moved: the short lines show it at themselves
+    onError: (failure) => {
+      void invalidate();
+      if (
+        apiFieldErrors(failure).some((e) => e.code === 'stock_insufficient')
+      ) {
+        void refreshBatches();
+      }
     },
   });
   const unpost = useMutation({
@@ -176,6 +233,9 @@ export function SupplierReturnEditor({
   const error = useApiErrorMessage(
     save.error ?? post.error ?? fromReceipt.error,
   );
+  const dateError = apiFieldErrors(post.error ?? save.error).find(
+    (e) => e.field === 'date',
+  )?.code;
   const valid =
     Boolean(supplierId) &&
     lines.length > 0 &&
@@ -191,14 +251,6 @@ export function SupplierReturnEditor({
         size="xl"
         footer={
           <>
-            <Button
-              variant="secondary"
-              iconStart="printer"
-              disabled
-              title={tDocs('soonHint')}
-            >
-              {t('printClaim')}
-            </Button>
             {doc?.status === 'posted' && access.canUnpost && (
               <Button
                 variant="secondary"
@@ -241,7 +293,6 @@ export function SupplierReturnEditor({
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <DocumentStatusPill status={doc?.status ?? 'draft'} />
-            {doc && <ClaimStatusPill claim={doc.claim} />}
           </div>
           {error && (
             <Alert tone="danger" live="assertive">
@@ -252,7 +303,7 @@ export function SupplierReturnEditor({
             <Select
               label={t('supplier')}
               required
-              disabled={!editable}
+              disabled={!editable || lines.length > 0}
               placeholder={t('supplierPlaceholder')}
               value={supplierId}
               error={touched && !supplierId ? t('supplierRequired') : undefined}
@@ -293,6 +344,13 @@ export function SupplierReturnEditor({
               type="date"
               max={today}
               disabled={!editable}
+              error={
+                dateError === 'period_closed'
+                  ? t('periodClosed')
+                  : dateError
+                    ? tDocs('checkValue')
+                    : undefined
+              }
               value={date}
               onChange={(event) => setDate(event.target.value)}
             />
@@ -308,12 +366,13 @@ export function SupplierReturnEditor({
                 label: tReasons(value),
               }))}
             />
-            <Switch
-              label={t('claim')}
-              description={t('claimHint')}
+            <TextField
+              label={t('comment')}
+              placeholder={t('commentPlaceholder')}
+              maxLength={500}
               disabled={!editable}
-              checked={createClaim}
-              onCheckedChange={setCreateClaim}
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
             />
           </div>
           {editable && receiptId && (
@@ -331,15 +390,20 @@ export function SupplierReturnEditor({
           {touched && lines.length === 0 && (
             <Alert tone="warning">{t('linesRequired')}</Alert>
           )}
+          {editable && !supplierId && (
+            <Alert tone="info">{t('supplierFirst')}</Alert>
+          )}
           {loaded ? (
             <StockLinesEditor
               storeId={storeId}
+              supplierId={supplierId || undefined}
               lines={lines}
               onChange={setLines}
-              editable={editable}
+              editable={editable && Boolean(supplierId)}
               showCost={access.canSeeCost}
               withNote
               touched={touched}
+              totalMinor={doc?.status === 'posted' ? doc.totalMinor : undefined}
             />
           ) : (
             <Spinner size="md" label={tDocs('loading')} />

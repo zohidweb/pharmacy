@@ -3,7 +3,11 @@ import { type RawBuilder, sql } from 'kysely';
 import { newId, type TenantTransaction } from '../../core/database';
 
 export type StockDocumentType =
-  'goods_receipt' | 'opening_balance' | 'write_off' | 'inventory';
+  | 'goods_receipt'
+  | 'opening_balance'
+  | 'write_off'
+  | 'inventory'
+  | 'supplier_return';
 
 // The line table of each document type (constants: never user input).
 const LINES: Record<StockDocumentType, RawBuilder<unknown>> = {
@@ -11,6 +15,7 @@ const LINES: Record<StockDocumentType, RawBuilder<unknown>> = {
   opening_balance: sql.raw('pharmacy.opening_balance_lines'),
   write_off: sql.raw('pharmacy.write_off_lines'),
   inventory: sql.raw('pharmacy.inventory_lines'),
+  supplier_return: sql.raw('pharmacy.supplier_return_lines'),
 };
 
 export interface DocumentRow {
@@ -31,6 +36,9 @@ export interface DocumentRow {
   paymentDueDate: string | null;
   purchaseOrderId: string | null;
   writeOffReason: string | null;
+  supplierReturnReason: string | null;
+  /** A supplier return → its goods receipt. */
+  sourceDocumentId: string | null;
   inventoryScope: 'all' | 'category' | null;
   inventoryCategoryId: string | null;
   inventoryStartedAt: Date | null;
@@ -78,6 +86,8 @@ export interface HeaderValues {
   paymentDueDate: string | null;
   purchaseOrderId: string | null;
   writeOffReason?: string | null;
+  supplierReturnReason?: string | null;
+  sourceDocumentId?: string | null;
   inventoryScope?: 'all' | 'category' | null;
   inventoryCategoryId?: string | null;
   inventoryStartedAt?: Date | null;
@@ -105,7 +115,8 @@ export interface ForeignMovementRow {
 const HEADER = sql`d.id, d.store_id, d.type, d.number, d.document_date::text as document_date,
   d.status, d.created_by, d.created_at, d.posted_by, d.posted_at, d.comment, d.total_dirams,
   d.supplier_id, d.supplier_invoice_number, d.payment_due_date::text as payment_due_date,
-  d.purchase_order_id, d.write_off_reason, d.inventory_scope, d.inventory_category_id,
+  d.purchase_order_id, d.write_off_reason, d.supplier_return_reason, d.source_document_id,
+  d.inventory_scope, d.inventory_category_id,
   d.inventory_started_at, d.cancelled_by, d.cancelled_at`;
 
 // Stock documents, their lines, batches and movements (data model 03). The header and its lines
@@ -181,6 +192,7 @@ export class DocumentsRepository {
       status?: string;
       supplierId?: string;
       writeOffReason?: string;
+      supplierReturnReason?: string;
     },
     page: { limit: number; offset: number },
   ): Promise<{
@@ -203,6 +215,7 @@ export class DocumentsRepository {
         ${filter.status ? sql`and d.status = ${filter.status}` : sql``}
         ${filter.supplierId ? sql`and d.supplier_id = ${filter.supplierId}` : sql``}
         ${filter.writeOffReason ? sql`and d.write_off_reason = ${filter.writeOffReason}` : sql``}
+        ${filter.supplierReturnReason ? sql`and d.supplier_return_reason = ${filter.supplierReturnReason}` : sql``}
       order by d.document_date desc, d.number desc
       limit ${page.limit} offset ${page.offset}`.execute(trx);
     return {

@@ -205,7 +205,14 @@ export class StockService {
 
   async productOptions(
     storeId: string,
-    query: { query?: string; limit?: number; expired?: boolean; ids?: string },
+    query: {
+      query?: string;
+      limit?: number;
+      expired?: boolean;
+      ids?: string;
+      supplierId?: string;
+      receiptId?: string;
+    },
   ): Promise<StockProductOption[]> {
     const { tenantId, storeScope, permissions } = requirePrincipal();
     const canSeeCost = hasPermissions(permissions, 'finance:view-cost');
@@ -218,30 +225,69 @@ export class StockService {
       const today = query.expired
         ? (await this.inventory.settings(trx, tenantId)).today
         : '';
+      const receiptId = query.receiptId?.toLowerCase();
+      const supplierId = query.supplierId?.toLowerCase();
+      // a supplier return searches among the products with batches of the supplier in stock: the
+      // page limit applies to them, not to the whole catalog
+      const ofSupplier = async (): Promise<string[]> => {
+        const own = new Set(
+          (await this.stock.batchStock(trx, tenantId, [id], null))
+            .filter((b) => b.qty > 0 && b.supplierId === supplierId)
+            .map((b) => b.productId),
+        );
+        const ranked = query.query
+          ? (
+              await this.products.listForPricing(trx, tenantId, {
+                q: query.query,
+                limit: 500,
+                offset: 0,
+              })
+            ).items.map((p) => p.id)
+          : [...own];
+        return ranked
+          .filter((productId) => own.has(productId))
+          .slice(0, query.limit ?? 20);
+      };
       const ids = query.ids
         ? [...new Set(query.ids.toLowerCase().split(','))]
-        : query.expired
+        : receiptId
           ? [
               ...new Set(
                 (await this.stock.batchStock(trx, tenantId, [id], null))
-                  .filter((b) => b.qty > 0 && b.expiryDate < today)
+                  .filter((b) => b.qty > 0 && b.sourceDocumentId === receiptId)
                   .map((b) => b.productId),
               ),
             ]
-          : (
-              await this.products.listForPricing(trx, tenantId, {
-                q: query.query,
-                limit: query.limit ?? 20,
-                offset: 0,
-              })
-            ).items.map((p) => p.id);
+          : query.expired
+            ? [
+                ...new Set(
+                  (await this.stock.batchStock(trx, tenantId, [id], null))
+                    .filter((b) => b.qty > 0 && b.expiryDate < today)
+                    .map((b) => b.productId),
+                ),
+              ]
+            : supplierId
+              ? await ofSupplier()
+              : (
+                  await this.products.listForPricing(trx, tenantId, {
+                    q: query.query,
+                    limit: query.limit ?? 20,
+                    offset: 0,
+                  })
+                ).items.map((p) => p.id);
       const products = await this.products.findForStock(trx, tenantId, ids);
       const byId = new Map(products.map((p) => [p.id, p]));
       const batches = (
         await this.stock.batchStock(trx, tenantId, [id], ids)
-      ).filter((b) => !query.expired || b.expiryDate < today);
+      ).filter(
+        (b) =>
+          (!query.expired || b.expiryDate < today) &&
+          (!supplierId || b.supplierId === supplierId) &&
+          (!receiptId || b.sourceDocumentId === receiptId),
+      );
       const prices = await this.prices.pricesAt(trx, tenantId, [id], ids);
       return ids.flatMap((productId): StockProductOption[] => {
+        // `ids` reopens saved lines: a product stays even when its batch went back whole
         const product = byId.get(productId);
         if (!product) return [];
         return [

@@ -18,6 +18,10 @@ import { StockCountsRepository } from './stock-counts.repository';
 import { StockCountsService } from './stock-counts.service';
 import { StockFreeze } from './stock-freeze';
 import { StoreAccess } from './store-access';
+import { SupplierReturnPosting } from './supplier-return-posting';
+import { SupplierReturnsController } from './supplier-returns.controller';
+import { SupplierReturnsRepository } from './supplier-returns.repository';
+import { SupplierReturnsService } from './supplier-returns.service';
 import { StockRepository } from './stock.repository';
 import { StockService } from './stock.service';
 import { UnpostingCheckController } from './unposting-check.controller';
@@ -39,6 +43,7 @@ import { WriteOffsService } from './write-offs.service';
     DeficitController,
     WriteOffsController,
     StockCountsController,
+    SupplierReturnsController,
   ],
   providers: [
     InventoryRepository,
@@ -56,6 +61,9 @@ import { WriteOffsService } from './write-offs.service';
     WriteOffsRepository,
     WriteOffPosting,
     WriteOffsService,
+    SupplierReturnsRepository,
+    SupplierReturnPosting,
+    SupplierReturnsService,
   ],
 })
 export class InventoryModule {}

@@ -15,10 +15,13 @@ import { useBarcodeScanner } from '@/shared/lib/scanner';
  */
 export function ProductSearch({
   storeId,
+  supplierId,
   onPick,
   disabled = false,
 }: {
   storeId: string;
+  /** Only the batches of this supplier (a supplier return). */
+  supplierId?: string;
   onPick: (product: StockProductOption) => void;
   disabled?: boolean;
 }) {
@@ -26,11 +29,11 @@ export function ProductSearch({
   const [query, setQuery] = useState('');
   const trimmed = query.trim();
   const results = useQuery({
-    queryKey: ['stock-products', storeId, trimmed],
+    queryKey: ['stock-products', storeId, trimmed, supplierId ?? ''],
     queryFn: ({ signal }) =>
       apiRequest('stock.products', {
         params: { storeId },
-        query: { query: trimmed, limit: 8 },
+        query: { query: trimmed, limit: 8, supplierId },
         signal,
       }),
     enabled: trimmed.length >= 2 && !disabled,
@@ -40,7 +43,7 @@ export function ProductSearch({
     async (code) => {
       const found = await apiRequest('stock.products', {
         params: { storeId },
-        query: { query: code, limit: 1 },
+        query: { query: code, limit: 1, supplierId },
       });
       if (found[0]) onPick(found[0]);
       else setQuery(code);

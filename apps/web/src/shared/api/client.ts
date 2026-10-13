@@ -210,6 +210,12 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'writeOffs.update',
   'writeOffs.post',
   'writeOffs.unpost',
+  'supplierReturns.list',
+  'supplierReturns.get',
+  'supplierReturns.create',
+  'supplierReturns.update',
+  'supplierReturns.post',
+  'supplierReturns.unpost',
   'stockCounts.list',
   'stockCounts.get',
   'stockCounts.start',
@@ -226,7 +232,8 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
 
 /**
  * Routes shared by several kinds of documents that apps/api serves only for some of them: the
- * unposting check of goods receipts, opening balances, write-offs and stock counts is real, of
+ * unposting check of goods receipts, opening balances, write-offs, stock counts and supplier returns
+ * is real, of
  * the other documents — mocks.
  */
 export const REAL_API_WHEN: Partial<
@@ -238,6 +245,7 @@ export const REAL_API_WHEN: Partial<
       'opening-balances',
       'write-offs',
       'stock-counts',
+      'supplier-returns',
     ].includes((params as { kind?: string } | undefined)?.kind ?? ''),
 };
 

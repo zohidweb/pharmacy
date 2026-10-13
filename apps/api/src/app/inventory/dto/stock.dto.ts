@@ -93,6 +93,16 @@ export class StockProductsQueryDto {
   @IsOptional()
   @Matches(/^[0-9a-fA-F-]{36}(,[0-9a-fA-F-]{36}){0,499}$/)
   ids?: string;
+
+  /** Only the batches of this supplier (a supplier return); products without them are left out. */
+  @IsOptional()
+  @IsUUID()
+  supplierId?: string;
+
+  /** Only the batches of this goods receipt still in stock; no search, no page limit. */
+  @IsOptional()
+  @IsUUID()
+  receiptId?: string;
 }
 
 /** GET /api/v1/purchase-orders/deficit. */

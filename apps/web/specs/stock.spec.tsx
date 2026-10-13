@@ -184,7 +184,7 @@ describe('WriteOffsPage', () => {
 });
 
 describe('SupplierReturnsPage', () => {
-  it('posts a return and sends the claim', async () => {
+  it('posts a return with the claim in its comment', async () => {
     await signInAs('manizha', 'store-1');
     renderWithProviders(<SupplierReturnsPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'ВП-000012' }));
@@ -192,7 +192,13 @@ describe('SupplierReturnsPage', () => {
     await within(editor).findByText('Ибуфен сусп. 100 мг/5 мл, 100 мл');
     fireEvent.click(within(editor).getByRole('button', { name: 'Провести' }));
     expect(await within(editor).findByText('Проведён')).toBeTruthy();
-    expect(within(editor).getByText('Отправлена')).toBeTruthy();
+    expect(
+      (
+        within(editor).getByLabelText(
+          'Комментарий, претензия',
+        ) as HTMLInputElement
+      ).value,
+    ).toMatch(/зачёт в следующую поставку/);
   });
 });
 

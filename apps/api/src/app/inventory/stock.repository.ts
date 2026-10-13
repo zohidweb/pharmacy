@@ -6,6 +6,9 @@ export interface BatchStockRow {
   batchId: string;
   storeId: string;
   productId: string;
+  supplierId: string | null;
+  /** The document that created the batch. */
+  sourceDocumentId: string;
   lotNumber: string | null;
   expiryDate: string;
   purchasePricePerPackDirams: bigint;
@@ -29,7 +32,8 @@ export class StockRepository {
     )
       return [];
     const result = await sql<BatchStockRow>`
-      select b.id as batch_id, b.store_id, b.product_id, b.lot_number,
+      select b.id as batch_id, b.store_id, b.product_id, b.supplier_id, b.source_document_id,
+             b.lot_number,
              b.expiry_date::text as expiry_date, b.purchase_price_per_pack_dirams,
              s.qty
       from pharmacy.batches b

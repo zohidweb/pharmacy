@@ -2,7 +2,6 @@
 
 import type { StockState } from '@pharmacy/shared-domain';
 import type {
-  ClaimStatus,
   DocumentStatus,
   TransferRequestStatus,
   TransferStatus,
@@ -90,21 +89,6 @@ export function TransferStatusPill({ status }: { status: TransferStatus }) {
   return (
     <StatusPill tone={tone} icon={icon}>
       {t(status)}
-    </StatusPill>
-  );
-}
-
-export function ClaimStatusPill({ claim }: { claim: ClaimStatus }) {
-  const t = useTranslations('supplierReturns.claim');
-  if (claim === 'none') return <span className="text-fg-subtle">—</span>;
-  return (
-    <StatusPill
-      tone={
-        claim === 'accepted' ? 'success' : claim === 'sent' ? 'info' : 'neutral'
-      }
-      icon={null}
-    >
-      {t(claim)}
     </StatusPill>
   );
 }

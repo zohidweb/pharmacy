@@ -1,0 +1,200 @@
+import { Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
+import { newId, type TenantTransaction } from '../../core/database';
+
+export interface SupplierReturnLineValues {
+  batchId: string;
+  productId: string;
+  qtyPieces: number;
+  unit: 'pack' | 'piece';
+  note: string | null;
+}
+
+export interface SupplierReturnLineRow {
+  id: string;
+  lineNo: number;
+  batchId: string;
+  productId: string;
+  qtyPieces: number;
+  unit: 'pack' | 'piece';
+  note: string | null;
+  amountDirams: bigint | null;
+  lotNumber: string | null;
+  expiryDate: string;
+  purchasePricePerPackDirams: bigint;
+  costPerPieceDirams: bigint;
+  piecesPerPack: number;
+}
+
+export interface ReturnBatch {
+  id: string;
+  storeId: string;
+  productId: string;
+  supplierId: string | null;
+  purchasePricePerPackDirams: bigint;
+  costPerPieceDirams: bigint;
+}
+
+/**
+ * Amount of a line at the purchase price of its batch (spec 2026-10-12-supplier-returns-transfers,
+ * R2): the formula of the amount of a goods receipt — pieces × price of a pack / pieces per pack.
+ */
+export const returnAmount = (line: {
+  qtyPieces: number;
+  purchasePricePerPackDirams: bigint;
+  piecesPerPack: number;
+}): number =>
+  Math.round(
+    (line.qtyPieces * Number(line.purchasePricePerPackDirams)) /
+      line.piecesPerPack,
+  );
+
+// The lines of supplier returns (spec 2026-10-12-supplier-returns-transfers, section 3.1): a batch
+// of the store and of the supplier of the document; the header lives in DocumentsRepository.
+@Injectable()
+export class SupplierReturnsRepository {
+  async batches(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, ReturnBatch>> {
+    if (ids.length === 0) return new Map();
+    const rows = await trx
+      .selectFrom('batches')
+      .select([
+        'id',
+        'storeId',
+        'productId',
+        'supplierId',
+        'purchasePricePerPackDirams',
+        'costPerPieceDirams',
+      ])
+      .where('tenantId', '=', tenantId)
+      .where('id', 'in', [...ids])
+      .execute();
+    return new Map(rows.map((r) => [r.id, r]));
+  }
+
+  /** The lines of the document become exactly `lines`, numbered in order. */
+  async replaceLines(
+    trx: TenantTransaction,
+    tenantId: string,
+    documentId: string,
+    lines: readonly SupplierReturnLineValues[],
+  ): Promise<void> {
+    await trx
+      .deleteFrom('supplierReturnLines')
+      .where('tenantId', '=', tenantId)
+      .where('documentId', '=', documentId)
+      .execute();
+    if (lines.length === 0) return;
+    await trx
+      .insertInto('supplierReturnLines')
+      .values(
+        lines.map((line, index) => ({
+          tenantId,
+          id: newId(),
+          documentId,
+          lineNo: index + 1,
+          ...line,
+        })),
+      )
+      .execute();
+  }
+
+  async lines(
+    trx: TenantTransaction,
+    tenantId: string,
+    documentId: string,
+  ): Promise<SupplierReturnLineRow[]> {
+    const result = await sql<SupplierReturnLineRow>`
+      select l.id, l.line_no, l.batch_id, l.product_id, l.qty_pieces, l.unit, l.note,
+             l.amount_dirams, b.lot_number, b.expiry_date::text as expiry_date,
+             b.purchase_price_per_pack_dirams, b.cost_per_piece_dirams,
+             p.pieces_per_pack
+      from pharmacy.supplier_return_lines l
+      join pharmacy.batches b on b.tenant_id = l.tenant_id and b.id = l.batch_id
+      join pharmacy.products p on p.tenant_id = l.tenant_id and p.id = l.product_id
+      where l.tenant_id = ${tenantId} and l.document_id = ${documentId}
+      order by l.line_no`.execute(trx);
+    return result.rows;
+  }
+
+  /** Fixes the amounts of the lines at posting (amendment 2.1 p. 2). */
+  async setAmounts(
+    trx: TenantTransaction,
+    tenantId: string,
+    amounts: ReadonlyArray<{ id: string; amountDirams: number }>,
+  ): Promise<void> {
+    for (const line of amounts) {
+      await trx
+        .updateTable('supplierReturnLines')
+        .set({ amountDirams: BigInt(line.amountDirams) })
+        .where('tenantId', '=', tenantId)
+        .where('id', '=', line.id)
+        .execute();
+    }
+  }
+
+  /** Posted returns of the month of `today` in the stores: count and amount. */
+  async kpi(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeIds: readonly string[] | null,
+    today: string,
+  ): Promise<{ documents: number; amountDirams: bigint }> {
+    if (storeIds !== null && storeIds.length === 0) {
+      return { documents: 0, amountDirams: 0n };
+    }
+    const result = await sql<{ documents: number; amountDirams: bigint }>`
+      select count(*)::integer as documents,
+             coalesce(sum(total_dirams), 0)::bigint as amount_dirams
+      from pharmacy.documents
+      where tenant_id = ${tenantId} and type = 'supplier_return' and status = 'posted'
+        and date_trunc('month', document_date) = date_trunc('month', ${today}::date)
+        ${storeIds === null ? sql`` : sql`and store_id in (${sql.join([...storeIds])})`}`.execute(
+      trx,
+    );
+    return result.rows[0];
+  }
+
+  /** Numbers of documents by id (the goods receipts of returns). */
+  async numbers(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await trx
+      .selectFrom('documents')
+      .select(['id', 'number'])
+      .where('tenantId', '=', tenantId)
+      .where('id', 'in', [...ids])
+      .execute();
+    return new Map(rows.map((r) => [r.id, r.number]));
+  }
+
+  /**
+   * The goods receipt each batch came from: the source document of a `goods_receipt` batch; null
+   * for a batch of another origin (opening balance, stock count surplus).
+   */
+  async receiptsOfBatches(
+    trx: TenantTransaction,
+    tenantId: string,
+    batchIds: readonly string[],
+  ): Promise<Map<string, string | null>> {
+    if (batchIds.length === 0) return new Map();
+    const rows = await trx
+      .selectFrom('batches')
+      .select(['id', 'origin', 'sourceDocumentId'])
+      .where('tenantId', '=', tenantId)
+      .where('id', 'in', [...batchIds])
+      .execute();
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        r.origin === 'goods_receipt' ? r.sourceDocumentId : null,
+      ]),
+    );
+  }
+}

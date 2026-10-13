@@ -60,7 +60,12 @@ export function ledgerEntries(rows: readonly LedgerRow[]): Array<{
       sourceId: row.sourceId,
       entry: {
         date: row.businessDate,
-        kind: payment ? 'payment' : 'receipt',
+        // a return and the reversal of its unposting are both «return»
+        kind: payment
+          ? 'payment'
+          : row.documentType === 'supplier_return'
+            ? 'return'
+            : 'receipt',
         document: row.documentNumber ?? '',
         comment: row.paymentComment ?? '',
         ...(payment

@@ -31,7 +31,7 @@ import { StoreModeBadge } from '@/entities/store';
 import { can, canWrite, useSession } from '@/entities/session';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
-import { QueryState } from '@/shared/ui';
+import { DemoDataNotice, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { CloseStoreDialog, StoreDialog } from './StoreDialogs';
 
@@ -228,55 +228,60 @@ function ServicesTab() {
     ) : null;
 
   return (
-    <QueryState query={services}>
-      {(data) => (
-        <div className="flex flex-col gap-4">
-          {error && (
-            <Alert tone="danger" live="assertive">
-              {error}
-            </Alert>
-          )}
-          <div className="grid grid-cols-3 gap-4">
-            {SERVICE_ORDER.map((key) => data.find((s) => s.key === key))
-              .filter((s): s is TenantService => s !== undefined)
-              .map((service) => (
-                <Card key={service.key} className="flex flex-col gap-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-md font-bold">
-                      {t(`items.${service.key}.title`)}
-                    </h3>
-                    {stateOf(service)}
-                  </div>
-                  <p className="flex-1 text-sm text-fg-muted">
-                    {t(`items.${service.key}.description`)}
-                  </p>
-                  {service.state === 'requested' && service.requestedAt && (
-                    <p className="text-xs text-fg-subtle">
-                      {t('requestedAt', {
-                        date: formatDateOnly(service.requestedAt.slice(0, 10)),
-                      })}
+    <div className="flex flex-col gap-4">
+      <DemoDataNotice routes={['services.list']} />
+      <QueryState query={services}>
+        {(data) => (
+          <div className="flex flex-col gap-4">
+            {error && (
+              <Alert tone="danger" live="assertive">
+                {error}
+              </Alert>
+            )}
+            <div className="grid grid-cols-3 gap-4">
+              {SERVICE_ORDER.map((key) => data.find((s) => s.key === key))
+                .filter((s): s is TenantService => s !== undefined)
+                .map((service) => (
+                  <Card key={service.key} className="flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-md font-bold">
+                        {t(`items.${service.key}.title`)}
+                      </h3>
+                      {stateOf(service)}
+                    </div>
+                    <p className="flex-1 text-sm text-fg-muted">
+                      {t(`items.${service.key}.description`)}
                     </p>
-                  )}
-                  {service.state === 'available' && (
-                    <Button
-                      variant="secondary"
-                      className="self-start"
-                      disabled={!canRequest}
-                      loading={
-                        request.isPending && request.variables === service.key
-                      }
-                      onClick={() => request.mutate(service.key)}
-                    >
-                      {t('request')}
-                    </Button>
-                  )}
-                </Card>
-              ))}
+                    {service.state === 'requested' && service.requestedAt && (
+                      <p className="text-xs text-fg-subtle">
+                        {t('requestedAt', {
+                          date: formatDateOnly(
+                            service.requestedAt.slice(0, 10),
+                          ),
+                        })}
+                      </p>
+                    )}
+                    {service.state === 'available' && (
+                      <Button
+                        variant="secondary"
+                        className="self-start"
+                        disabled={!canRequest}
+                        loading={
+                          request.isPending && request.variables === service.key
+                        }
+                        onClick={() => request.mutate(service.key)}
+                      >
+                        {t('request')}
+                      </Button>
+                    )}
+                  </Card>
+                ))}
+            </div>
+            <p className="text-xs text-fg-subtle">{t('scopeHint')}</p>
           </div>
-          <p className="text-xs text-fg-subtle">{t('scopeHint')}</p>
-        </div>
-      )}
-    </QueryState>
+        )}
+      </QueryState>
+    </div>
   );
 }
 
@@ -327,49 +332,52 @@ function BillingTab() {
     },
   ];
   return (
-    <QueryState query={billing}>
-      {(data) => (
-        <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">
-          <Card padding="none">
-            <CardHeader title={t('history')} inset />
-            <DataTable
-              caption={t('history')}
-              rowKey={(row) => row.number}
-              rows={data.history}
-              columns={columns}
-            />
-          </Card>
-          <Card className="flex flex-col gap-2">
-            <span className="text-sm text-fg-muted">{t('current')}</span>
-            <b className="text-2xl tabular-nums">
-              {formatMoney(data.current.amountMinor)}
-            </b>
-            <span className="text-sm text-fg-muted">
-              {t('formula', {
-                period: period(data.current.period),
-                stores: data.current.activeStores,
-                price: formatMoney(data.current.pricePerStoreMinor),
-              })}
-            </span>
-            <span className="text-sm">
-              {t('dueOn', { date: formatDateOnly(data.current.dueOn) })}
-            </span>
-            <Button
-              variant="secondary"
-              iconStart="download"
-              className="self-start"
-              disabled
-              aria-describedby="invoice-pdf-pending"
-            >
-              {t('pdf')}
-            </Button>
-            <p id="invoice-pdf-pending" className="text-xs text-fg-subtle">
-              {t('pdfPending')}
-            </p>
-          </Card>
-        </div>
-      )}
-    </QueryState>
+    <div className="flex flex-col gap-4">
+      <DemoDataNotice routes={['billing.get']} />
+      <QueryState query={billing}>
+        {(data) => (
+          <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">
+            <Card padding="none">
+              <CardHeader title={t('history')} inset />
+              <DataTable
+                caption={t('history')}
+                rowKey={(row) => row.number}
+                rows={data.history}
+                columns={columns}
+              />
+            </Card>
+            <Card className="flex flex-col gap-2">
+              <span className="text-sm text-fg-muted">{t('current')}</span>
+              <b className="text-2xl tabular-nums">
+                {formatMoney(data.current.amountMinor)}
+              </b>
+              <span className="text-sm text-fg-muted">
+                {t('formula', {
+                  period: period(data.current.period),
+                  stores: data.current.activeStores,
+                  price: formatMoney(data.current.pricePerStoreMinor),
+                })}
+              </span>
+              <span className="text-sm">
+                {t('dueOn', { date: formatDateOnly(data.current.dueOn) })}
+              </span>
+              <Button
+                variant="secondary"
+                iconStart="download"
+                className="self-start"
+                disabled
+                aria-describedby="invoice-pdf-pending"
+              >
+                {t('pdf')}
+              </Button>
+              <p id="invoice-pdf-pending" className="text-xs text-fg-subtle">
+                {t('pdfPending')}
+              </p>
+            </Card>
+          </div>
+        )}
+      </QueryState>
+    </div>
   );
 }
 

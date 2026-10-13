@@ -123,7 +123,11 @@ export function AuditLogPage() {
 
   return (
     <>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PageHeader
+        demoRoutes={['operatorAudit.list']}
+        title={t('title')}
+        subtitle={t('subtitle')}
+      />
       <div className="flex flex-col gap-4 p-6">
         <Card className="flex flex-col gap-4">
           <div className="grid grid-cols-4 items-end gap-4">

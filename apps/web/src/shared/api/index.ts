@@ -63,6 +63,20 @@ export function isApiRouteAvailable(route: ApiRouteKey): boolean {
 }
 
 /**
+ * Whether a screen (or a part of it) built on these routes shows mock data in the `partial` mode:
+ * one of them is not served by apps/api yet. Such data is marked «Демо-данные» so its figures are
+ * not taken for the network's own; the mark goes away once the routes reach apps/api.
+ */
+export function servedByMocks(...routes: readonly ApiRouteKey[]): boolean {
+  return (
+    apiMocksMode === 'partial' &&
+    routes.some(
+      (route) => !REAL_API_ROUTES.has(route) && !(route in REAL_API_WHEN),
+    )
+  );
+}
+
+/**
  * Whether two routes answer from the same place (both apps/api or both mocks). In the `partial`
  * mode a screen offers a step that connects them only then: an id from the mocks is unknown to
  * apps/api (a purchase order of a real goods receipt, a payment of a real supplier).

@@ -20,6 +20,7 @@ import {
 } from '@/entities/event';
 import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
+import { DemoDataNotice } from '@/shared/ui';
 
 const PREVIEW = 5;
 
@@ -60,6 +61,10 @@ export function NotificationsBell() {
           <p className="border-b border-border px-4 py-3 text-sm font-bold">
             {t('notifications')}
           </p>
+          <DemoDataNotice
+            routes={['notifications.list']}
+            className="mx-4 my-3"
+          />
           {items.length === 0 ? (
             <EmptyState icon="bell-off" title={t('noNotifications')} />
           ) : (

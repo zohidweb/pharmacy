@@ -504,7 +504,11 @@ export function SettingsPage() {
   });
   return (
     <>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PageHeader
+        demoRoutes={['settings.get']}
+        title={t('title')}
+        subtitle={t('subtitle')}
+      />
       <div className="flex flex-col gap-4 p-6">
         <QueryState query={settings}>
           {(data) => <SettingsForm settings={data} />}

@@ -415,6 +415,7 @@ export function LicensesPage() {
   return (
     <>
       <PageHeader
+        demoRoutes={['licenses.list']}
         title={t('title')}
         subtitle={t('subtitle')}
         actions={

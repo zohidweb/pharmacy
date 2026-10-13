@@ -1,3 +1,4 @@
+export { DemoDataNotice, type DemoDataNoticeProps } from './DemoDataNotice';
 export { QueryState, type QueryStateProps } from './QueryState';
 export {
   StateScreen,

@@ -369,6 +369,7 @@ function OfflinePageView() {
     <>
       <PageHeader
         title={t('title')}
+        demoRoutes={['sync.status', 'sync.stores', 'sync.queue']}
         subtitle={
           offlineStore && store
             ? t('storeSubtitle', { store: store.name })

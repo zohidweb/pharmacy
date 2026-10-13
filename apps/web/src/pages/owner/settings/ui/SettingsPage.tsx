@@ -20,7 +20,7 @@ import { useTranslations } from 'use-intl';
 import { canWrite, useSession } from '@/entities/session';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
-import { QueryState } from '@/shared/ui';
+import { DemoDataNotice, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { CategoriesCard } from './CategoriesCard';
 
@@ -93,6 +93,7 @@ function NetworkCard({
     <>
       <Card className="flex flex-col gap-4">
         <CardHeader title={t('network.title')} />
+        <DemoDataNotice routes={['settings.get']} />
         {error && (
           <Alert tone="danger" live="assertive">
             {error}
@@ -148,6 +149,7 @@ function NetworkCard({
           title={t('notifications.title')}
           description={t('notifications.hint')}
         />
+        <DemoDataNotice routes={['settings.get']} />
         <div className="grid grid-cols-2 gap-4">
           {NOTIFICATIONS.map((kind) => (
             <Switch

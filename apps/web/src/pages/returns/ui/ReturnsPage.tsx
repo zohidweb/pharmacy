@@ -27,10 +27,12 @@ import {
   useToast,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useSyncExternalStore } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslations } from 'use-intl';
+import { useCatalog } from '@/entities/catalog';
 import { can, canWrite, currentStoreOf, useSession } from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
+import { useTerminalRuntime } from '@/entities/terminal';
 import {
   ApiError,
   apiRequest,
@@ -43,21 +45,32 @@ import { PageHeader } from '@/widgets/app-shell';
 import {
   refundOf,
   refundPayments,
-  returnedSubtotal,
   type ReturnQuantities,
 } from '../lib/refund';
 import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 10;
-const RETURN_WINDOW_DAYS = 14;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type Lookup = { number?: string; id?: string; productId?: string };
+
+/** The policy of the network closes the kind for a return at the customer's wish (R3). */
+const closedByPolicy = (line: ReturnableLine, reason: ReturnReason) =>
+  reason === 'customer' && !line.customerReturnAllowed;
+
+/** A defect and an expired batch are written off by the return (E9). */
+const writtenOff = (line: ReturnableLine, reason: ReturnReason) =>
+  reason === 'defect' || line.batchExpired;
 
 function ReceiptLines({
   receipt,
   quantities,
+  reason,
   onChange,
 }: {
   receipt: ReturnableReceipt;
   quantities: ReturnQuantities;
+  reason: ReturnReason;
   onChange: (lineId: string, quantity: number) => void;
 }) {
   const t = useTranslations('returns');
@@ -81,7 +94,7 @@ function ReceiptLines({
                   {t('pickLine', { name: line.productName })}
                 </span>
               }
-              disabled={left(line) === 0}
+              disabled={left(line) === 0 || closedByPolicy(line, reason)}
               checked={(quantities[line.lineId] ?? 0) > 0}
               onChange={(event) =>
                 onChange(line.lineId, event.target.checked ? 1 : 0)
@@ -93,7 +106,21 @@ function ReceiptLines({
           key: 'product',
           header: t('product'),
           cell: (line) => (
-            <span className="font-medium">{line.productName}</span>
+            <span className="flex flex-col gap-1">
+              <span className="font-medium">{line.productName}</span>
+              {closedByPolicy(line, reason) && (
+                <span className="text-xs text-fg-subtle">
+                  {t('notAllowedKind')}
+                </span>
+              )}
+              {left(line) > 0 &&
+                !closedByPolicy(line, reason) &&
+                writtenOff(line, reason) && (
+                  <StatusPill tone="warning" icon="triangle-alert">
+                    {t('writtenOff')}
+                  </StatusPill>
+                )}
+            </span>
           ),
         },
         { key: 'batch', header: t('batch'), cell: (line) => line.batchNumber },
@@ -231,9 +258,25 @@ function Journal() {
           {
             key: 'method',
             header: t('method'),
-            cell: (r) => tPos(`methods.${r.method}`),
+            cell: (r) => r.methods.map((m) => tPos(`methods.${m}`)).join(', '),
           },
           { key: 'cashier', header: t('cashier'), cell: (r) => r.cashierName },
+          {
+            key: 'notes',
+            header: t('notes'),
+            cell: (r) => (
+              <span className="flex flex-col gap-1">
+                {r.foundWithoutReceipt && (
+                  <StatusPill tone="attention">{t('withoutReceiptPill')}</StatusPill>
+                )}
+                {r.writeOffNumber && (
+                  <span className="text-xs">
+                    {t('writeOffRef', { number: r.writeOffNumber })}
+                  </span>
+                )}
+              </span>
+            ),
+          },
         ]}
       />
       {list.data && list.data.total > PAGE && (
@@ -276,16 +319,28 @@ function ReturnsPageView() {
   const [receipt, setReceipt] = useState<ReturnableReceipt | null>(null);
   const [quantities, setQuantities] = useState<ReturnQuantities>({});
   const [reason, setReason] = useState<ReturnReason>('customer');
+  // the product of the search when the sale was found without the receipt (R8)
+  const [foundProductId, setFoundProductId] = useState<string | null>(null);
+  // one key per return of the opened receipt: a repeat after a network error is the same return (E1)
+  const returnKey = useRef<string | null>(null);
   const withoutReceipt = can(session, 'returns:without-receipt');
+  const runtime = useTerminalRuntime();
+  const windowDays =
+    useCatalog(runtime, storeId).data?.snapshot.settings.returnWindowDays ??
+    null;
 
   const lookup = useMutation({
-    mutationFn: (value: string) =>
-      apiRequest('receipts.returnable', { query: { number: value } }),
-    onSuccess: (found) => {
+    mutationFn: (query: Lookup) =>
+      apiRequest('receipts.returnable', { query }),
+    onSuccess: (found, query) => {
       setReceipt(found);
       setQuantities({});
+      setFoundProductId(query.productId ?? null);
+      returnKey.current = null;
     },
   });
+  const findByCode = (code: string) =>
+    lookup.mutate(UUID.test(code) ? { id: code } : { number: code });
   const search = useMutation({
     mutationFn: () =>
       apiRequest('returns.salesSearch', { query: { query: product, date } }),
@@ -297,7 +352,8 @@ function ReturnsPageView() {
       const lines = Object.entries(quantities)
         .filter(([, quantity]) => quantity > 0)
         .map(([lineId, quantity]) => ({ lineId, quantity }));
-      const id = uuidv7();
+      returnKey.current ??= uuidv7();
+      const id = returnKey.current;
       return apiRequest('returns.create', {
         idempotencyKey: id,
         body: {
@@ -312,18 +368,27 @@ function ReturnsPageView() {
           reason,
           refunds: refundPayments(receipt.payments, refund.refundMinor),
           refundMinor: refund.refundMinor,
+          foundProductId,
         },
       });
     },
     onSuccess: (created) => {
       toast.show(
-        t('done', {
-          number: created.number,
-          amount: formatMoney(created.refundMinor),
-        }),
+        created.writeOffNumber
+          ? t('doneWithWriteOff', {
+              number: created.number,
+              amount: formatMoney(created.refundMinor),
+              writeOff: created.writeOffNumber,
+            })
+          : t('done', {
+              number: created.number,
+              amount: formatMoney(created.refundMinor),
+            }),
       );
+      returnKey.current = null;
       setReceipt(null);
       setQuantities({});
+      setFoundProductId(null);
       setNumber('');
       void queryClient.invalidateQueries({ queryKey: ['returns'] });
       void queryClient.invalidateQueries({ queryKey: shiftQueryKey(storeId) });
@@ -332,7 +397,7 @@ function ReturnsPageView() {
   const lookupError =
     lookup.error instanceof ApiError &&
     lookup.error.code === 'return_window_expired'
-      ? t('windowExpired', { days: RETURN_WINDOW_DAYS })
+      ? t('windowExpired')
       : lookup.error instanceof ApiError && lookup.error.status === 404
         ? t('notFound')
         : null;
@@ -344,17 +409,28 @@ function ReturnsPageView() {
   useBarcodeScanner(
     (code) => {
       setNumber(code);
-      lookup.mutate(code);
+      findByCode(code);
     },
     { minLength: 3, enabled: online },
   );
 
-  const picked = receipt ? returnedSubtotal(receipt, quantities) : 0;
-  const refund = receipt && picked > 0 ? refundOf(receipt, quantities) : null;
+  const picked = Object.values(quantities).some((quantity) => quantity > 0);
+  const refund = receipt && picked ? refundOf(receipt, quantities) : null;
   const payments =
     receipt && refund
       ? refundPayments(receipt.payments, refund.refundMinor)
       : [];
+  const cashOut = payments.find((p) => p.method === 'cash')?.amountMinor ?? 0;
+  // the drawer holds less cash than the return gives back: a warning only (R6)
+  const cashShort =
+    shift.data !== undefined &&
+    shift.data !== null &&
+    cashOut > shift.data.cash.expectedMinor;
+  const willWriteOff =
+    receipt?.lines.some(
+      (line) =>
+        (quantities[line.lineId] ?? 0) > 0 && writtenOff(line, reason),
+    ) ?? false;
   const blocked = !online
     ? t('offline')
     : !shift.data
@@ -367,7 +443,9 @@ function ReturnsPageView() {
     <>
       <PageHeader
         title={t('title')}
-        subtitle={t('subtitle', { days: RETURN_WINDOW_DAYS })}
+        subtitle={
+          windowDays === null ? undefined : t('subtitle', { days: windowDays })
+        }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">
         {!online && <Alert tone="warning">{t('offline')}</Alert>}
@@ -381,7 +459,7 @@ function ReturnsPageView() {
             className="grid grid-cols-(--ph-search-columns) items-end gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (number.trim()) lookup.mutate(number.trim());
+              if (number.trim()) findByCode(number.trim());
             }}
           >
             <TextField
@@ -452,7 +530,7 @@ function ReturnsPageView() {
             <DataTable<SaleSearchItem>
               caption={t('salesFound')}
               minWidth="none"
-              rowKey={(row) => `${row.receiptId}-${row.productName}`}
+              rowKey={(row) => `${row.receiptId}-${row.productId}`}
               rows={search.data}
               empty={<EmptyState icon="search" title={t('salesEmpty')} />}
               columns={[
@@ -488,7 +566,10 @@ function ReturnsPageView() {
                       variant="secondary"
                       onClick={() => {
                         setNumber(r.receiptNumber);
-                        lookup.mutate(r.receiptNumber);
+                        lookup.mutate({
+                          id: r.receiptId,
+                          productId: r.productId,
+                        });
                       }}
                     >
                       {t('open')}
@@ -522,9 +603,15 @@ function ReturnsPageView() {
                 }
                 inset
               />
+              {foundProductId && (
+                <div className="px-(--ph-card-padding) pb-2">
+                  <Alert tone="info">{t('foundWithoutReceipt')}</Alert>
+                </div>
+              )}
               <ReceiptLines
                 receipt={receipt}
                 quantities={quantities}
+                reason={reason}
                 onChange={(lineId, quantity) =>
                   setQuantities((current) => ({
                     ...current,
@@ -536,9 +623,21 @@ function ReturnsPageView() {
                 <Select
                   label={t('reason')}
                   value={reason}
-                  onChange={(event) =>
-                    setReason(event.target.value as ReturnReason)
-                  }
+                  onChange={(event) => {
+                    const next = event.target.value as ReturnReason;
+                    setReason(next);
+                    // a kind closed for a return at the customer's wish leaves the return (R3)
+                    setQuantities((current) =>
+                      Object.fromEntries(
+                        Object.entries(current).filter(([lineId]) => {
+                          const line = receipt.lines.find(
+                            (l) => l.lineId === lineId,
+                          );
+                          return line !== undefined && !closedByPolicy(line, next);
+                        }),
+                      ),
+                    );
+                  }}
                   options={[
                     { value: 'customer', label: t('reasons.customer') },
                     { value: 'defect', label: t('reasons.defect') },
@@ -560,9 +659,7 @@ function ReturnsPageView() {
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt>
-                    {t('discountApplied', { percent: receipt.discountPercent })}
-                  </dt>
+                  <dt>{t('discountOfReceipt')}</dt>
                   <dd className="m-0 tabular-nums">
                     −{formatMoney(receipt.discountMinor)}
                   </dd>
@@ -570,13 +667,13 @@ function ReturnsPageView() {
                 <div className="flex justify-between">
                   <dt>{t('returnAmount')}</dt>
                   <dd className="m-0 tabular-nums">
-                    {formatMoney(refund?.returnedMinor ?? 0)}
+                    {formatMoney(refund?.amountMinor ?? 0)}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt>{t('discountRecalc')}</dt>
+                  <dt>{t('discountShare')}</dt>
                   <dd className="m-0 tabular-nums">
-                    −{formatMoney(refund?.discountRecalcMinor ?? 0)}
+                    −{formatMoney(refund?.discountMinor ?? 0)}
                   </dd>
                 </div>
                 <div className="flex items-baseline justify-between border-t border-border pt-2">
@@ -586,11 +683,13 @@ function ReturnsPageView() {
                   </dd>
                 </div>
               </dl>
-              {refund &&
-                refund.keptDiscountMinor === 0 &&
-                receipt.discountMinor > 0 && (
-                  <Alert tone="warning">{t('discountLost')}</Alert>
-                )}
+              {cashShort && (
+                <Alert tone="warning">
+                  {t('cashShort', {
+                    amount: formatMoney(shift.data?.cash.expectedMinor ?? 0),
+                  })}
+                </Alert>
+              )}
               {payments.length > 0 && (
                 <div className="flex flex-col gap-1 text-sm">
                   <span className="text-fg-subtle">{t('refundMethod')}</span>
@@ -604,7 +703,9 @@ function ReturnsPageView() {
                   ))}
                 </div>
               )}
-              <p className="text-xs text-fg-subtle">{t('sameBatch')}</p>
+              <p className="text-xs text-fg-subtle">
+                {willWriteOff ? t('writeOffNote') : t('sameBatch')}
+              </p>
               {blocked && <Alert tone="info">{blocked}</Alert>}
               {createError && (
                 <Alert tone="danger" live="assertive">

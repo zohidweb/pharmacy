@@ -1,48 +1,52 @@
 /*
- * Refund of a customer return (ТЗ «Возвраты»): the discount is recalculated for what the customer
- * keeps (shared-domain), money goes back the way it was paid — along the receipt payments in order.
+ * Refund of a customer return (spec 2026-10-13-customer-returns, R1, E6, E7): the price of the
+ * returned goods less their share of the discount (the same `returnLineRefund` the server checks),
+ * the money back along the ways the receipt was paid — cash, card, QR, NFC — never above what is
+ * left to refund of a way.
  */
-import { returnRefund, type ReturnRefund } from '@pharmacy/shared-domain';
-import type { ReceiptPayment, ReturnableReceipt } from '@pharmacy/shared-dto';
+import {
+  returnRefundTotal,
+  type ReturnLineRefund,
+} from '@pharmacy/shared-domain';
+import type {
+  ReceiptPayment,
+  ReceiptPaymentMethod,
+  ReturnableReceipt,
+} from '@pharmacy/shared-dto';
 
 export type ReturnQuantities = Record<string, number>;
-
-export function returnedSubtotal(
-  receipt: ReturnableReceipt,
-  quantities: ReturnQuantities,
-): number {
-  return receipt.lines.reduce(
-    (sum, line) => sum + (quantities[line.lineId] ?? 0) * line.unitPriceMinor,
-    0,
-  );
-}
 
 export function refundOf(
   receipt: ReturnableReceipt,
   quantities: ReturnQuantities,
-): ReturnRefund {
-  return returnRefund({
-    subtotalMinor: receipt.subtotalMinor,
-    discountMinor: receipt.discountMinor,
-    previouslyReturnedSubtotalMinor: receipt.returnedSubtotalMinor,
-    returnedSubtotalMinor:
-      receipt.returnedSubtotalMinor + returnedSubtotal(receipt, quantities),
-    percent: receipt.discountPercent,
-    minSubtotalMinor: receipt.discountMinSubtotalMinor,
-  });
+): ReturnLineRefund {
+  return returnRefundTotal(
+    receipt.lines
+      .filter((line) => (quantities[line.lineId] ?? 0) > 0)
+      .map((line) => ({
+        soldQuantity: line.quantity,
+        unitPriceMinor: line.unitPriceMinor,
+        discountShareMinor: line.discountShareMinor,
+        returnedQuantity: line.returnedQuantity,
+        quantity: quantities[line.lineId] ?? 0,
+      })),
+  );
 }
 
-/** Splits the refund over the payments of the receipt (same methods, never above what was paid). */
+const ORDER: readonly ReceiptPaymentMethod[] = ['cash', 'card', 'qr', 'nfc'];
+
+/** Splits the refund over what is left to refund by way of payment, in the order of E7. */
 export function refundPayments(
-  payments: readonly ReceiptPayment[],
+  refundable: readonly ReceiptPayment[],
   refundMinor: number,
 ): ReceiptPayment[] {
   let left = refundMinor;
   const out: ReceiptPayment[] = [];
-  for (const payment of payments) {
-    if (left <= 0) break;
+  for (const method of ORDER) {
+    const payment = refundable.find((p) => p.method === method);
+    if (!payment || left <= 0) continue;
     const amountMinor = Math.min(left, payment.amountMinor);
-    out.push({ method: payment.method, amountMinor });
+    if (amountMinor > 0) out.push({ method, amountMinor });
     left -= amountMinor;
   }
   return out;

@@ -3,6 +3,7 @@ import type {
   HeldReceipt,
   PosProduct,
   ReceiptPayment,
+  ReceiptPaymentMethod,
   ReceiptLineInput,
   ReturnListItem,
   Shift,
@@ -16,6 +17,8 @@ export interface MockReceiptLine extends ReceiptLineInput {
   productName: string;
   batchNumber: string;
   returnedQuantity: number;
+  /** The discount share of the line (receipt_lines.discount_share_dirams). */
+  discountShareMinor: number;
 }
 
 export interface MockReceipt {
@@ -28,10 +31,10 @@ export interface MockReceipt {
   lines: MockReceiptLine[];
   subtotalMinor: number;
   discountMinor: number;
-  discountPercent: number;
-  discountMinSubtotalMinor: number;
-  returnedSubtotalMinor: number;
+  /** Paid by kind; cash — net of change. */
   payments: ReceiptPayment[];
+  /** Refunded by kind by the returns of the receipt (E7). */
+  refunded: Partial<Record<ReceiptPaymentMethod, number>>;
 }
 
 /** A shift of the mock: one open per terminal (spec 2026-10-13-pos-shift-sale, K5). */
@@ -99,6 +102,12 @@ function openShift(): MockShift {
       nfc: zero(),
     },
     returns: { count: 2, amountMinor: returns },
+    returnsByMethod: {
+      cash: { count: 2, amountMinor: returns },
+      card: zero(),
+      qr: zero(),
+      nfc: zero(),
+    },
     revenueMinor: sales + 148_000 + 32_950 - returns,
     cash: {
       openingMinor: opening,
@@ -127,6 +136,7 @@ function line(
   batchNumber: string,
   quantity: number,
   unitPriceMinor: number,
+  discountShareMinor = 0,
 ): MockReceiptLine {
   return {
     lineId,
@@ -143,6 +153,7 @@ function line(
     batchChosenManually: false,
     controlled: null,
     returnedQuantity: 0,
+    discountShareMinor,
   };
 }
 
@@ -187,10 +198,8 @@ function initialReceipts(): MockReceipt[] {
       ],
       subtotalMinor: 15_310,
       discountMinor: 0,
-      discountPercent: 0,
-      discountMinSubtotalMinor: 0,
-      returnedSubtotalMinor: 0,
       payments: [{ method: 'cash', amountMinor: 15_310 }],
+      refunded: {},
     },
     {
       id: 'rc-1035',
@@ -208,6 +217,7 @@ function initialReceipts(): MockReceipt[] {
           'V-9021',
           8,
           6_500,
+          1_560,
         ),
         line(
           'l-5',
@@ -217,14 +227,13 @@ function initialReceipts(): MockReceipt[] {
           'N-4471',
           2,
           1_900,
+          114,
         ),
       ],
       subtotalMinor: 55_800,
       discountMinor: 1_674,
-      discountPercent: 3,
-      discountMinSubtotalMinor: 50_000,
-      returnedSubtotalMinor: 0,
       payments: [{ method: 'card', amountMinor: 54_126 }],
+      refunded: {},
     },
     {
       id: 'rc-0950',
@@ -246,10 +255,8 @@ function initialReceipts(): MockReceipt[] {
       ],
       subtotalMinor: 1_900,
       discountMinor: 0,
-      discountPercent: 0,
-      discountMinSubtotalMinor: 0,
-      returnedSubtotalMinor: 0,
       payments: [{ method: 'cash', amountMinor: 1_900 }],
+      refunded: {},
     },
   ];
 }
@@ -324,8 +331,10 @@ function initialReturns(): ReturnListItem[] {
       summary: 'Витамин D3 2000 МЕ №60 · 1 уп.',
       reason: 'customer',
       refundMinor: 3_800,
-      method: 'cash',
+      methods: ['cash'],
       cashierName: 'Зарина Р.',
+      foundWithoutReceipt: false,
+      writeOffNumber: null,
     },
     {
       id: 'ret-41',
@@ -336,8 +345,10 @@ function initialReturns(): ReturnListItem[] {
       summary: 'Нурофен 200 мг №10 · 2 уп.',
       reason: 'defect',
       refundMinor: 3_800,
-      method: 'card',
+      methods: ['card'],
       cashierName: 'Манижа К.',
+      foundWithoutReceipt: false,
+      writeOffNumber: null,
     },
     {
       id: 'ret-40',
@@ -348,8 +359,10 @@ function initialReturns(): ReturnListItem[] {
       summary: 'Парацетамол 500 мг №10 · 1 уп.',
       reason: 'customer',
       refundMinor: 450,
-      method: 'cash',
+      methods: ['cash'],
       cashierName: 'Далер С.',
+      foundWithoutReceipt: false,
+      writeOffNumber: null,
     },
   ];
 }

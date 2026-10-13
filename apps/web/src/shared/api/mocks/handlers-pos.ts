@@ -4,12 +4,13 @@
  * (prices of the snapshot are accepted, differences are counted for the manager), expired batches
  * never sold, ПКУ only with the right and prescription data, the return window of the network.
  */
-import { hasPermissions, returnRefund } from '@pharmacy/shared-domain';
+import { hasPermissions, returnRefundTotal } from '@pharmacy/shared-domain';
 import type {
   CatalogSnapshot,
   CreatedReceipt,
   CreatedReturn,
   PosProduct,
+  PrescriptionKind,
   ReceiptPaymentMethod,
   Shift,
   ZReport,
@@ -23,10 +24,10 @@ import { stores } from './fixtures';
 import { categories, storeSettings } from './fixtures-pos';
 import {
   activeDiscountThresholds,
-  discountThresholdById,
   piecePrice,
   storePrice,
 } from './pricing';
+import { writeOffReturned } from './handlers-stock';
 import { authorize } from './session';
 import type { MockHandlers } from './types';
 
@@ -93,7 +94,11 @@ function openShiftOf(
 }
 
 /** Numbers of the server: `<prefix>-<store code>-<year>-<6 digits>` (spec 2026-10-13, E2). */
-function posNumber(prefix: 'ЧК' | 'СМ', storeId: string, n: number): string {
+function posNumber(
+  prefix: 'ЧК' | 'СМ' | 'ВЗ',
+  storeId: string,
+  n: number,
+): string {
   const code = storeId.replace(/\D/g, '').padStart(2, '0');
   return `${prefix}-${code}-${new Date().getFullYear()}-${String(n).padStart(6, '0')}`;
 }
@@ -176,13 +181,53 @@ function networkSettingsOf(storeName: string, storeAddress: string) {
   return {
     ...base,
     networkName: network.networkName,
-    returnWindowDays: network.returnWindowDays,
+    returnWindowDays: mockDb().owner.returnPolicy.returnWindowDays,
     ...(store && {
       taxId:
         mockDb().owner.legalEntities.find((e) => e.id === store.legalEntityId)
           ?.taxId ?? base.taxId,
     }),
   };
+}
+
+/** A receipt of the stores of the session, by number or id, within the return window (E4). */
+function findReturnable(
+  by: { number?: string; id?: string },
+  sessionStores: ReadonlyArray<{ id: string }>,
+  correlationId: string,
+): MockReceipt {
+  const number = by.number?.replace(/^№\s*/, '').trim();
+  const receipt = pos().receipts.find(
+    (r) =>
+      (by.id ? r.id === by.id : r.number === number) &&
+      sessionStores.some((s) => s.id === r.storeId),
+  );
+  if (!receipt) throw new ApiError(404, 'not_found', correlationId);
+  const window = mockDb().owner.returnPolicy.returnWindowDays;
+  if (daysBetween(toAppDate(new Date(receipt.soldAt)), today()) > window) {
+    throw new ApiError(422, 'return_window_expired', correlationId);
+  }
+  return receipt;
+}
+
+/** What is left to refund by kind: paid − refunded (E7). */
+function refundable(receipt: MockReceipt) {
+  return receipt.payments
+    .map((p) => ({
+      method: p.method,
+      amountMinor: p.amountMinor - (receipt.refunded[p.method] ?? 0),
+    }))
+    .filter((p) => p.amountMinor > 0);
+}
+
+const kindOf = (productId: string): PrescriptionKind =>
+  pos().products.find((p) => p.id === productId)?.prescription ?? 'none';
+
+function batchExpired(productId: string, batchId: string): boolean {
+  const batch = pos()
+    .products.find((p) => p.id === productId)
+    ?.batches.find((b) => b.id === batchId);
+  return batch !== undefined && batch.expiresOn < today();
 }
 
 export const posHandlers: Pick<MockHandlers, PosRoute> = {
@@ -265,7 +310,21 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
           productName: item.name,
           batchNumber: batch.number,
           returnedQuantity: 0,
+          discountShareMinor: 0,
         };
+      });
+      // the discount share of a line: proportional to its amount, the rest on the last line (the
+      // shares of the server, spec 2026-10-13-pos-shift-sale, E9)
+      let shared = 0;
+      lines.forEach((line, i) => {
+        line.discountShareMinor =
+          i === lines.length - 1
+            ? body.discountMinor - shared
+            : Math.floor(
+                (body.discountMinor * line.amountMinor) /
+                  Math.max(1, body.subtotalMinor),
+              );
+        shared += line.discountShareMinor;
       });
       const paid = body.payments.reduce((sum, p) => sum + p.amountMinor, 0);
       if (paid !== body.totalMinor) {
@@ -276,7 +335,6 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       if (body.cashTenderedMinor < cashPart) {
         throw validation(correlationId, 'cashTenderedMinor', 'too_small');
       }
-      const rule = discountThresholdById(body.discountRuleId);
       const number = posNumber('ЧК', body.storeId, pos().nextReceipt++);
       const receipt: MockReceipt = {
         id: body.id,
@@ -288,10 +346,8 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         lines,
         subtotalMinor: body.subtotalMinor,
         discountMinor: body.discountMinor,
-        discountPercent: rule?.percent ?? 0,
-        discountMinSubtotalMinor: rule?.minSubtotalMinor ?? 0,
-        returnedSubtotalMinor: 0,
         payments: body.payments,
+        refunded: {},
       };
       pos().receipts.unshift(receipt);
       shift.receipts += 1;
@@ -369,6 +425,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         receipts: 0,
         byMethod: { cash: zero(), card: zero(), qr: zero(), nfc: zero() },
         returns: zero(),
+        returnsByMethod: { cash: zero(), card: zero(), qr: zero(), nfc: zero() },
         revenueMinor: 0,
         cash: {
           openingMinor: body.openingCashMinor,
@@ -451,7 +508,9 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         terminalDiff: Object.fromEntries(
           methods.map((m) => [
             m,
-            body.terminalTotals[m] - shift.byMethod[m].amountMinor,
+            body.terminalTotals[m] -
+              (shift.byMethod[m].amountMinor -
+                shift.returnsByMethod[m].amountMinor),
           ]),
         ) as ZReport['terminalDiff'],
         // the closing is a fact: a discrepancy without a reason is accepted and marked (E24)
@@ -470,43 +529,42 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
   },
 
   'receipts.returnable': ({ query, correlationId }) => {
-    const { session } = authorize(correlationId, 'returns:view');
-    const number = query.number.replace(/^№\s*/, '').trim();
-    const receipt = pos().receipts.find(
-      (r) =>
-        r.number === number && session.stores.some((s) => s.id === r.storeId),
-    );
-    if (!receipt) throw new ApiError(404, 'not_found', correlationId);
-    const store = stores.find((s) => s.id === receipt.storeId);
-    const window = mockDb().owner.settings.returnWindowDays;
+    const { session } = authorize(correlationId, 'returns:create');
+    if (query.productId) authorize(correlationId, 'returns:without-receipt');
+    const receipt = findReturnable(query, session.stores, correlationId);
+    const window = mockDb().owner.returnPolicy.returnWindowDays;
     const age = daysBetween(toAppDate(new Date(receipt.soldAt)), today());
-    if (age > window) {
-      throw new ApiError(422, 'return_window_expired', correlationId);
-    }
     return {
       id: receipt.id,
       number: receipt.number,
       soldAt: receipt.soldAt,
-      storeName: store?.name ?? '—',
+      storeName: stores.find((s) => s.id === receipt.storeId)?.name ?? '—',
       cashierName: receipt.cashierName,
       daysLeft: window - age,
       subtotalMinor: receipt.subtotalMinor,
       discountMinor: receipt.discountMinor,
-      discountPercent: receipt.discountPercent,
-      discountMinSubtotalMinor: receipt.discountMinSubtotalMinor,
-      returnedSubtotalMinor: receipt.returnedSubtotalMinor,
-      payments: receipt.payments,
-      lines: receipt.lines.map((l) => ({
-        lineId: l.lineId,
-        productId: l.productId,
-        productName: l.productName,
-        batchId: l.batchId,
-        batchNumber: l.batchNumber,
-        unit: l.unit,
-        quantity: l.quantity,
-        returnedQuantity: l.returnedQuantity,
-        unitPriceMinor: l.unitPriceMinor,
-      })),
+      payments: refundable(receipt),
+      lines: receipt.lines
+        .filter((l) => !query.productId || l.productId === query.productId)
+        .map((l) => {
+          const kind = kindOf(l.productId);
+          return {
+            lineId: l.lineId,
+            productId: l.productId,
+            productName: l.productName,
+            batchId: l.batchId,
+            batchNumber: l.batchNumber,
+            unit: l.unit,
+            quantity: l.quantity,
+            returnedQuantity: l.returnedQuantity,
+            unitPriceMinor: l.unitPriceMinor,
+            discountShareMinor: l.discountShareMinor,
+            kind,
+            customerReturnAllowed:
+              mockDb().owner.returnPolicy.customerReturns[kind],
+            batchExpired: batchExpired(l.productId, l.batchId),
+          };
+        }),
     };
   },
   'returns.salesSearch': ({ query, correlationId }) => {
@@ -525,70 +583,123 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
             receiptId: r.id,
             receiptNumber: r.number,
             soldAt: r.soldAt,
+            productId: l.productId,
             productName: l.productName,
             quantity: l.quantity,
             unit: l.unit,
             amountMinor: l.amountMinor,
           })),
-      );
+      )
+      .slice(0, 50);
   },
   'returns.create': ({ body, correlationId }) => {
     const { session } = authorize(correlationId, 'returns:create', {
       write: true,
     });
+    if (body.foundProductId) {
+      authorize(correlationId, 'returns:without-receipt');
+    }
     return idempotent(body.id, body, correlationId, (): CreatedReturn => {
       const shift = requireShift(body.shiftId, correlationId);
-      const receipt = pos().receipts.find((r) => r.id === body.receiptId);
-      if (!receipt) throw new ApiError(404, 'not_found', correlationId);
-      let returnedNow = 0;
-      for (const item of body.lines) {
+      const receipt = findReturnable(
+        { id: body.receiptId },
+        session.stores,
+        correlationId,
+      );
+      const policy = mockDb().owner.returnPolicy.customerReturns;
+      const picked = body.lines.map((item, i) => {
         const line = receipt.lines.find((l) => l.lineId === item.lineId);
-        if (
-          !line ||
-          item.quantity <= 0 ||
-          item.quantity > line.quantity - line.returnedQuantity
-        ) {
-          throw new ApiError(422, 'return_quantity_exceeded', correlationId);
+        if (!line) {
+          throw validation(correlationId, `lines.${i}.lineId`, 'unknown_line');
         }
-        returnedNow += item.quantity * line.unitPriceMinor;
-      }
-      const refund = returnRefund({
-        subtotalMinor: receipt.subtotalMinor,
-        discountMinor: receipt.discountMinor,
-        returnedSubtotalMinor: receipt.returnedSubtotalMinor + returnedNow,
-        previouslyReturnedSubtotalMinor: receipt.returnedSubtotalMinor,
-        percent: receipt.discountPercent,
-        minSubtotalMinor: receipt.discountMinSubtotalMinor,
+        if (item.quantity > line.quantity - line.returnedQuantity) {
+          throw new ApiError(409, 'return_exceeds_sold', correlationId, [
+            { field: `lines.${i}.quantity`, code: 'return_exceeds_sold' },
+          ]);
+        }
+        if (body.foundProductId && line.productId !== body.foundProductId) {
+          throw new ApiError(422, 'return_not_allowed', correlationId, [
+            { field: `lines.${i}.lineId`, code: 'other_product' },
+          ]);
+        }
+        if (body.reason === 'customer' && !policy[kindOf(line.productId)]) {
+          throw new ApiError(422, 'return_not_allowed', correlationId, [
+            { field: `lines.${i}.lineId`, code: 'return_not_allowed' },
+          ]);
+        }
+        return { line, quantity: item.quantity };
       });
+      const refund = returnRefundTotal(
+        picked.map(({ line, quantity }) => ({
+          soldQuantity: line.quantity,
+          unitPriceMinor: line.unitPriceMinor,
+          discountShareMinor: line.discountShareMinor,
+          returnedQuantity: line.returnedQuantity,
+          quantity,
+        })),
+      );
+      if (refund.refundMinor !== body.refundMinor) {
+        throw validation(correlationId, 'refundMinor', 'total_mismatch');
+      }
+      const left = refundable(receipt);
+      for (const r of body.refunds) {
+        const can = left.find((p) => p.method === r.method)?.amountMinor ?? 0;
+        if (r.amountMinor > can) {
+          throw validation(correlationId, 'refunds', 'refund_exceeds_paid');
+        }
+      }
       const refunds = body.refunds.reduce((sum, r) => sum + r.amountMinor, 0);
-      if (
-        refund.refundMinor !== body.refundMinor ||
-        refunds !== body.refundMinor
-      ) {
-        throw validation(correlationId, 'refundMinor', 'mismatch');
+      if (refunds !== body.refundMinor) {
+        throw validation(correlationId, 'refunds', 'total_mismatch');
       }
-      for (const item of body.lines) {
-        const line = receipt.lines.find((l) => l.lineId === item.lineId);
-        if (!line) continue;
-        line.returnedQuantity += item.quantity;
-        // goods go back into the same batch (ТЗ)
-        const perUnit =
-          line.unit === 'pack'
-            ? (pos().products.find((p) => p.id === line.productId)
-                ?.piecesPerPack ?? 1)
-            : 1;
-        move(receipt.storeId, line.batchId, 'return', item.quantity * perUnit);
+      const number = posNumber('ВЗ', receipt.storeId, pos().nextReturn++);
+      const cashier = shortNameOf(session.employee.id);
+      const toWriteOff = picked.filter(
+        ({ line }) =>
+          body.reason === 'defect' ||
+          batchExpired(line.productId, line.batchId),
+      );
+      for (const { line, quantity } of picked) {
+        line.returnedQuantity += quantity;
+        // goods go back into the batch of the line (ТЗ)
+        const perUnit = line.unit === 'pack' ? line.piecesPerPack : 1;
+        move(receipt.storeId, line.batchId, number, quantity * perUnit);
       }
-      receipt.returnedSubtotalMinor += returnedNow;
-      const number = `ВЗ-${String(pos().nextReturn++).padStart(6, '0')}`;
-      const cashRefund =
-        body.refunds.find((r) => r.method === 'cash')?.amountMinor ?? 0;
+      // a defect and an expired batch leave the batch again by a write-off (E9)
+      const written =
+        toWriteOff.length > 0
+          ? writeOffReturned({
+              storeId: receipt.storeId,
+              reason:
+                body.reason === 'defect'
+                  ? 'customer_return_defect'
+                  : 'customer_return_expired',
+              customerReturnId: body.id,
+              customerReturnNumber: number,
+              authorName: cashier,
+              lines: toWriteOff.map(({ line, quantity }) => ({
+                productId: line.productId,
+                productName: line.productName,
+                batchId: line.batchId,
+                unit: line.unit,
+                quantity,
+              })),
+              correlationId,
+            })
+          : null;
+      for (const r of body.refunds) {
+        receipt.refunded[r.method] =
+          (receipt.refunded[r.method] ?? 0) + r.amountMinor;
+        const total = shift.returnsByMethod[r.method];
+        total.count += 1;
+        total.amountMinor += r.amountMinor;
+      }
       shift.returns.count += 1;
       shift.returns.amountMinor += body.refundMinor;
       shift.revenueMinor -= body.refundMinor;
-      shift.cash.returnsMinor += cashRefund;
+      shift.cash.returnsMinor +=
+        body.refunds.find((r) => r.method === 'cash')?.amountMinor ?? 0;
       recomputeCash(shift);
-      const cashier = shortNameOf(session.employee.id);
       shift.events.unshift({
         id: `e-${body.id}`,
         at: body.occurredAt,
@@ -598,24 +709,28 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         amountMinor: -body.refundMinor,
         flagged: false,
       });
-      const first = receipt.lines.find(
-        (l) => l.lineId === body.lines[0]?.lineId,
-      );
+      const first = picked[0]?.line;
+      const more = picked.length > 1 ? ` +${picked.length - 1}` : '';
       pos().returns.unshift({
         id: body.id,
         number,
         at: body.occurredAt,
         storeName: stores.find((s) => s.id === receipt.storeId)?.name ?? '—',
         receiptNumber: receipt.number,
-        summary: first
-          ? `${first.productName} · ${body.lines[0].quantity}`
-          : '—',
+        summary: first ? `${first.productName}${more}` : '—',
         reason: body.reason,
         refundMinor: body.refundMinor,
-        method: body.refunds[0]?.method ?? 'cash',
+        methods: body.refunds.map((r) => r.method),
         cashierName: cashier,
+        foundWithoutReceipt: body.foundProductId !== null,
+        writeOffNumber: written?.number ?? null,
       });
-      return { id: body.id, number, refundMinor: body.refundMinor };
+      return {
+        id: body.id,
+        number,
+        refundMinor: body.refundMinor,
+        writeOffNumber: written?.number ?? null,
+      };
     });
   },
   'returns.list': ({ query, correlationId }) => {

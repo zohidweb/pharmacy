@@ -638,7 +638,6 @@ function settingsInput(body: NetworkSettings, correlationId: string) {
   if (!body.networkName.trim()) {
     throw validation(correlationId, 'networkName', 'required');
   }
-  range('returnWindowDays', 0, 365);
   range('posSessionTimeoutMinutes', 1, 240);
   range('minPinLength', 4, 8);
   range('expiryNoticeDays', 1, 365);
@@ -1047,6 +1046,35 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
     });
     mockDb().pos.catalogVersion += 1;
     return owner().settings;
+  },
+  'settings.returns': ({ correlationId }) => {
+    context(correlationId, 'settings:view');
+    return owner().returnPolicy;
+  },
+  'settings.updateReturns': ({ body, correlationId }) => {
+    const { session } = context(correlationId, 'settings:update', {
+      write: true,
+    });
+    const days = body.returnWindowDays;
+    if (!Number.isInteger(days) || days < 0 || days > 365) {
+      throw validation(correlationId, 'returnWindowDays', 'range');
+    }
+    owner().returnPolicy = {
+      returnWindowDays: days,
+      customerReturns: {
+        none: Boolean(body.customerReturns.none),
+        rx: Boolean(body.customerReturns.rx),
+        controlled: Boolean(body.customerReturns.controlled),
+      },
+    };
+    appendAudit(session, {
+      action: 'settings_change',
+      object: 'Возвраты покупателей',
+      details: '—',
+      storeName: null,
+    });
+    mockDb().pos.catalogVersion += 1;
+    return owner().returnPolicy;
   },
   'settings.markups': ({ correlationId }) => {
     context(correlationId, 'settings:view');

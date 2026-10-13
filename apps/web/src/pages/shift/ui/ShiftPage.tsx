@@ -396,6 +396,7 @@ function ShiftPageView() {
         receipts: 0,
         byMethod: { cash: zero(), card: zero(), qr: zero(), nfc: zero() },
         returns: zero(),
+        returnsByMethod: { cash: zero(), card: zero(), qr: zero(), nfc: zero() },
         revenueMinor: 0,
         cash: {
           openingMinor: openingCashMinor,
@@ -460,9 +461,19 @@ function ShiftPageView() {
         actualCashMinor: input.actualCashMinor,
         discrepancyMinor: input.actualCashMinor - current.cash.expectedMinor,
         terminalDiff: {
-          card: input.terminalTotals.card - current.byMethod.card.amountMinor,
-          qr: input.terminalTotals.qr - current.byMethod.qr.amountMinor,
-          nfc: input.terminalTotals.nfc - current.byMethod.nfc.amountMinor,
+          // the sales less the returns of a kind (E13 of the returns spec)
+          card:
+            input.terminalTotals.card -
+            current.byMethod.card.amountMinor +
+            current.returnsByMethod.card.amountMinor,
+          qr:
+            input.terminalTotals.qr -
+            current.byMethod.qr.amountMinor +
+            current.returnsByMethod.qr.amountMinor,
+          nfc:
+            input.terminalTotals.nfc -
+            current.byMethod.nfc.amountMinor +
+            current.returnsByMethod.nfc.amountMinor,
         },
         discrepancyReasonMissing:
           input.actualCashMinor !== current.cash.expectedMinor &&

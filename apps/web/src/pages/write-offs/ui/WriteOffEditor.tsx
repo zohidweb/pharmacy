@@ -92,7 +92,8 @@ export function WriteOffEditor({
       staleTime: 0,
     });
   // the write-off of a transfer shortage is made by the acceptance: only shown (spec T6)
-  const fromTransfer = Boolean(doc?.transferId);
+  // made by an acceptance or a customer return: never changed by hand (T6; returns spec E9)
+  const fromTransfer = Boolean(doc?.transferId ?? doc?.customerReturnId);
   const editable =
     (!doc || doc.status === 'draft') && access.canUpdate && !fromTransfer;
 
@@ -285,6 +286,17 @@ export function WriteOffEditor({
         }
       >
         <div className="flex flex-col gap-4">
+          {doc?.customerReturnNumber && (
+            <Alert tone="info">
+              {t('fromReturn', { number: doc.customerReturnNumber })}{' '}
+              <Link
+                href={routes.returns()}
+                className="font-medium text-primary underline"
+              >
+                {t('openReturns')}
+              </Link>
+            </Alert>
+          )}
           {doc?.transferNumber && (
             <Alert tone="info">
               {t('fromTransfer', { number: doc.transferNumber })}{' '}
@@ -342,7 +354,10 @@ export function WriteOffEditor({
               onChange={(event) =>
                 setReason(event.target.value as WriteOffReason)
               }
-              options={WRITE_OFF_REASONS.map((value) => ({
+              options={(WRITE_OFF_REASONS.includes(reason)
+                ? WRITE_OFF_REASONS
+                : [...WRITE_OFF_REASONS, reason]
+              ).map((value) => ({
                 value,
                 label: tReasons(value),
               }))}

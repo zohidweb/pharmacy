@@ -515,6 +515,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         postedBy: null,
         transferId: null,
         transferNumber: null,
+        customerReturnId: null,
+        customerReturnNumber: null,
       },
       {
         id: 'wo-17',
@@ -542,6 +544,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         postedBy: author('Зарина Р.', 9),
         transferId: null,
         transferNumber: null,
+        customerReturnId: null,
+        customerReturnNumber: null,
       },
       {
         id: 'wo-18',
@@ -569,6 +573,8 @@ export function createStockDb(products: PosProduct[]): StockMockDb {
         postedBy: author('Манижа К.', 4),
         transferId: null,
         transferNumber: null,
+        customerReturnId: null,
+        customerReturnNumber: null,
       },
     ],
     supplierReturns: [

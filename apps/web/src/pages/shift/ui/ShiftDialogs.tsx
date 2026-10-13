@@ -4,6 +4,7 @@ import type {
   CashInReason,
   CashMovementKind,
   CashOutReason,
+  ReceiptPaymentMethod,
   Shift,
 } from '@pharmacy/shared-dto';
 import { formatMoney, parseMoneyToMinor } from '@pharmacy/shared-util';
@@ -22,6 +23,17 @@ function useMoney(initial = '') {
   const [text, setText] = useState(initial);
   const minor = text.trim() === '' ? null : parseMoneyToMinor(text);
   return { text, setText, minor };
+}
+
+/**
+ * What the bank terminal of a kind should show: the sales less the returns made by that kind
+ * (spec 2026-10-13-customer-returns, E13).
+ */
+function systemOf(shift: Shift, method: ReceiptPaymentMethod): number {
+  return (
+    shift.byMethod[method].amountMinor -
+    shift.returnsByMethod[method].amountMinor
+  );
 }
 
 export function OpenShiftDialog({
@@ -219,7 +231,7 @@ export function CloseShiftDialog({
       Object.fromEntries(
         TERMINAL_METHODS.map((m) => [
           m,
-          formatMoney(shift.byMethod[m].amountMinor, { withSign: false }),
+          formatMoney(systemOf(shift, m), { withSign: false }),
         ]),
       ) as Record<TerminalMethod, string>,
   );
@@ -353,7 +365,7 @@ export function CloseShiftDialog({
                 key: 'system',
                 header: t('bySystem'),
                 numeric: true,
-                cell: (m) => formatMoney(shift.byMethod[m].amountMinor),
+                cell: (m) => formatMoney(systemOf(shift, m)),
               },
               {
                 key: 'terminal',
@@ -386,7 +398,7 @@ export function CloseShiftDialog({
                   const value = terminalMinor(m);
                   return value === null
                     ? '—'
-                    : formatMoney(value - shift.byMethod[m].amountMinor);
+                    : formatMoney(value - systemOf(shift, m));
                 },
               },
             ]}

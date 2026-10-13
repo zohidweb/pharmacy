@@ -62,7 +62,11 @@ function option(argv, name) {
 }
 
 function parseArgs(argv) {
-  if (argv.includes('--help')) throw new UserError(USAGE);
+  if (argv.includes('--help')) {
+    // Asked for, not an error: stdout and exit code 0, as generate-store-secrets does.
+    console.log(USAGE);
+    process.exit(0);
+  }
   const rawLogin = option(argv, '--login');
   const rawName = option(argv, '--name');
   if (!rawLogin || !rawName) throw new UserError(USAGE);

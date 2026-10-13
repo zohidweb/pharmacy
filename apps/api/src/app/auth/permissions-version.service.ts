@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { requireTenantId } from '../../common/context/request-context';
+import {
+  getRequestContext,
+  requireTenantId,
+} from '../../common/context/request-context';
 import { afterCommitBestEffort } from '../../common/errors/after-commit';
 import type { TenantTransaction } from '../../core/database';
 import { PermissionsVersionCache } from '../../core/sessions';
@@ -31,6 +34,12 @@ export class PermissionsVersionService {
     if (ids.length === 0) return async () => undefined;
 
     const bumped = await this.repository.bump(trx, tenantId, ids);
+    if (bumped.length < ids.length) {
+      // An id of no employee of the network: a caller passed a wrong one, nothing to bump for it.
+      this.logger.warn(
+        `Permissions version bumped for ${bumped.length} of ${ids.length} employees [correlationId=${getRequestContext()?.correlationId}]`,
+      );
+    }
     // A failed cache write leaves an older version cached until its short TTL (minutes), the
     // staleness the design accepts; the change itself has committed, so the failure is logged and
     // the request still succeeds. A caller that must end sessions (blocking) does it on its own.

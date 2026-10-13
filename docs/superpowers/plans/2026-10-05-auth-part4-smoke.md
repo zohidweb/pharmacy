@@ -16,8 +16,7 @@ Review Focus 1–5. Команды — для bash (Git Bash), запускат�
    APP_ENV=test AUTH_TEST_COOKIES=true STORE_MODE=offline OFFLINE_TENANT_ID=$TENANT node --env-file=.env apps/api/dist/main.js
    ```
 
-   В панели браузера то же самое делает конфигурация `api-offline` в `.claude/launch.json` (id сети
-   там свой). `REDIS_URL` из `.env` в офлайн-режиме не используется: Redis-клиент не создаётся.
+   `REDIS_URL` из `.env` в офлайн-режиме не используется: Redis-клиент не создаётся.
 4. Во втором терминале задайте переменные:
 
    ```bash

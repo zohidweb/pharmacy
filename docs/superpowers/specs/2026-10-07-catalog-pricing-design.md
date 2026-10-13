@@ -43,8 +43,9 @@
 
 Все таблицы — класс `tenant` (манифест `table-classes.ts`): `tenant_id` и составной ключ
 `(tenant_id, id)`, составные внешние ключи, RLS `enable` + `force`, политика `tenant_isolation` для
-`pharmacy_app`, явные гранты (`select, insert, update`; `delete` — только `product_barcodes`,
-`discount_rule_tiers`, `discount_rule_stores`, которые заменяются набором). Колонки — из
+`pharmacy_app`, явные гранты (`select, insert, update, delete` на все 8 таблиц — решение R1 плана:
+манифест требует полный набор на тенантных таблицах; товары, категории и правила приложение не
+удаляет, а архивирует). Колонки — из
 `02-catalog-prices.md`; вводятся только те, у которых есть потребитель сейчас. Колонки
 синхронизации, справочника препаратов, прихода и склада (`origin`, `created_at_store_id`,
 `merged_into_product_id`, `drug_reference_id`, `draft_price_*`, `store_products.min_stock_pieces`)

@@ -39,10 +39,6 @@ export function setDeviceCookie(
   });
 }
 
-export function clearDeviceCookie(res: Response, env: SessionCookieEnv): void {
-  res.clearCookie(deviceCookieName(env), baseOptions(env));
-}
-
 /** The device secret of this browser, or null when there is none or it is malformed. */
 export function readDeviceSecret(
   req: Request,

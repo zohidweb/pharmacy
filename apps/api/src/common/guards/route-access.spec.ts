@@ -1,8 +1,9 @@
 import { Reflector } from '@nestjs/core';
-import { httpContext } from '../../../test/guards';
-import { RequirePermission } from '../../app/auth/decorators';
+import { httpContext, testRequirePermission } from '../../../test/guards';
 import { Authenticated, Public } from './decorators';
 import { resolveRouteAccess } from './route-access';
+
+const RequirePermission = testRequirePermission;
 
 // resolveRouteAccess: the nearest level wins; several markers on one level resolve to the
 // strictest; no marker anywhere is 'none' (deny by default).

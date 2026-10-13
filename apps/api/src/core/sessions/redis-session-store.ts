@@ -47,9 +47,13 @@ return 0`;
 
 // Set if greater: writes only when the key is missing or holds a lower version, and refreshes the
 // lifetime whenever it writes. Atomic, so concurrent writers end at the greatest version.
-// A non-numeric stored value is treated as missing.
+// A stored value that is not a whole number (as parseVersion reads it) is treated as missing.
 const SET_IF_GREATER = `
-local current = tonumber(redis.call('GET', KEYS[1]))
+local stored = redis.call('GET', KEYS[1])
+local current = nil
+if stored and string.match(stored, '^%d+$') then
+  current = tonumber(stored)
+end
 if current == nil or current < tonumber(ARGV[1]) then
   redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
   return 1
@@ -81,6 +85,18 @@ if ARGV[3] == '' then
   redis.call('DEL', KEYS[1])
 else
   redis.call('SET', KEYS[1], ARGV[3], 'PX', ARGV[4])
+end
+return 1`;
+
+// Drops the ids of sessions that have expired from an employee's set (KEYS[1]; ARGV[1] the session
+// key prefix): a session ends by expiry without a destroy, and the set of an employee who signs in
+// every day would otherwise only grow. The session keys are built here from the prefix (a single
+// Redis node; no cluster slots to declare), as in SWAP_TERMINAL_SESSION.
+const PRUNE_EXPIRED = `
+for _, id in ipairs(redis.call('SMEMBERS', KEYS[1])) do
+  if redis.call('EXISTS', ARGV[1] .. id) == 0 then
+    redis.call('SREM', KEYS[1], id)
+  end
 end
 return 1`;
 
@@ -117,7 +133,8 @@ export class RedisSessionStore extends SessionStore {
 
   async create(record: SessionRecord): Promise<void> {
     const ttl = lifetimeMs(record.idleTtlSeconds, record.absoluteExpiresAt);
-    if (ttl === null) return;
+    // Never silently: the caller would hand out a cookie of a session that does not exist.
+    if (ttl === null) throw new Error('The session to store has already expired');
     const setKey = employeeSessionsKey(record.tenantId, record.employeeId);
     const absoluteMs = Math.ceil(Date.parse(record.absoluteExpiresAt) - Date.now());
     const multi = readyMulti(this.redis);
@@ -132,6 +149,7 @@ export class RedisSessionStore extends SessionStore {
         ],
       });
     }
+    multi.eval(PRUNE_EXPIRED, { keys: [setKey], arguments: [SESSION_PREFIX] });
     await multi
       .set(sessionKey(record.sessionId), JSON.stringify(record), {
         expiration: { type: 'PX', value: ttl },

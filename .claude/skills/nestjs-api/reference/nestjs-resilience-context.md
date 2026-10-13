@@ -62,7 +62,7 @@ export function runWithContext<T>(context: RequestContext, fn: () => T): T {
 ```
 
 - Создаёт контекст `CorrelationIdMiddleware` (`nestjs-templates-core.md`): валидирует входящий ID (`/^[A-Za-z0-9-]{8,64}$/` — защита от инъекций в логи), возвращает его в заголовке ответа, запускает `requestContextStorage.run({ correlationId }, next)`.
-- Guard дополняет **тот же** объект один раз (Middleware выполняется раньше Guards) и затем **замораживает** его: после guard контекст неизменяем, иначе любой код мог бы подменить `tenantId` посреди запроса. Сейчас `getRequestContext()` возвращает изменяемый объект — заморозку ввести **до** реализации guards (follow-up плана B).
+- Принципал строит `SessionMiddleware` (после `CorrelationIdMiddleware`, раньше guard'ов): проверяет cookie-сессию и запускает остаток запроса в `runWithContext` с **замороженной** копией контекста — его нельзя подменить посреди запроса. Guard'ы только читают (`getPrincipal()`, `requireTenantId()`) и решают.
 - Нет тенанта — нет запроса к прикладным данным (fail closed). Кросс-тенантный путь — `PlatformDatabase` в `app/platform/**` (ADR-0013, `nestjs-config-data-access.md`).
 - Готовые библиотеки контекста (nestjs-cls и т.п.) — только через ADR; `node:async_hooks` достаточно.
 

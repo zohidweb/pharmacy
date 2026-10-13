@@ -112,8 +112,10 @@ describe('RedisSessionStore (integration)', () => {
     expect((await store.lookup('sid-1', TENANT, EMPLOYEE)).session).toBeNull();
   });
 
-  it('an already expired session is not stored', async () => {
-    await store.create(record({ absoluteExpiresAt: new Date(Date.now() - 1000).toISOString() }));
+  it('an already expired session is refused, not stored', async () => {
+    await expect(
+      store.create(record({ absoluteExpiresAt: new Date(Date.now() - 1000).toISOString() })),
+    ).rejects.toThrow('already expired');
     expect(await redis.exists('sess:sid-1')).toBe(0);
   });
 

@@ -19,7 +19,12 @@ export async function createTestRedis(): Promise<RedisClient> {
   return client;
 }
 
-// Empties database 15 only (the URL is always forced to it).
+// Empties database 15 only: the URL is forced to it, and the connection is checked before the flush
+// (a client created elsewhere must not empty the dev data).
 export async function flushTestRedis(client: RedisClient): Promise<void> {
+  const { db } = await client.clientInfo();
+  if (db !== TEST_REDIS_DATABASE) {
+    throw new Error(`Refusing to flush Redis database ${db}: tests use ${TEST_REDIS_DATABASE}`);
+  }
   await client.flushDb();
 }

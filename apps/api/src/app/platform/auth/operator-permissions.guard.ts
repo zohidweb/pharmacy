@@ -3,8 +3,10 @@ import {
   type ExecutionContext,
   Injectable,
   Logger,
+  type OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { OPERATOR_ROLE_PERMISSIONS } from '@pharmacy/shared-domain';
 import type { Request } from 'express';
@@ -24,16 +26,31 @@ import { PlatformAuditService } from '../audit/platform-audit.service';
 // @Authenticated() and tenant permissions included, is denied by default. An operator marker on
 // any route needs an operator holding the permission; a tenant route never has one (401).
 @Injectable()
-export class OperatorPermissionsGuard implements CanActivate {
+export class OperatorPermissionsGuard implements CanActivate, OnModuleInit {
   private readonly logger = new Logger(OperatorPermissionsGuard.name);
+  private readonly cloud: boolean;
 
   constructor(
     private readonly reflector: Reflector,
+    config: ConfigService,
     // Absent on an offline store, which has no operator contour (every request there is denied
     // before an audit would be written: no operator principal ever exists).
     @Optional() private readonly db?: PlatformDatabase,
     @Optional() private readonly audit?: PlatformAuditService,
-  ) {}
+  ) {
+    this.cloud = config.getOrThrow<string>('STORE_MODE') === 'cloud';
+  }
+
+  // The dependencies are optional for the offline store only. In the cloud a wiring mistake (the
+  // operator module not registered) would refuse every operator silently, with no audit: the
+  // process does not start instead.
+  onModuleInit(): void {
+    if (this.cloud && (!this.db || !this.audit)) {
+      throw new Error(
+        'The operator contour is not wired in cloud mode: PlatformDatabase or PlatformAuditService is missing',
+      );
+    }
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const access = resolveRouteAccess(this.reflector, context);

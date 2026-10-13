@@ -3,9 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/guards/decorators';
 import { ActivationsService } from './activations.service';
 import { ActivationDto } from './dto/activation.dto';
-
-// Per IP and minute; the code check shares the login limiter's per-identifier lockout.
-const AUTH_ROUTE_LIMIT = { limit: 60, ttl: 60_000 };
+import { AUTH_ROUTE_LIMIT } from '../../common/throttling/auth-route-limit';
 
 // Activation of an owner by a one-time code (auth design 2026-10-02, section 6). No cookie: the
 // client signs in with POST /sessions afterwards.

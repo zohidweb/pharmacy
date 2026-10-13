@@ -176,9 +176,7 @@ export class SessionMiddleware implements NestMiddleware {
     req: Request,
     correlationId: string,
   ): Promise<EmployeePrincipal | null> {
-    if (isOperatorPath(req.originalUrl)) return null;
-
-    // Step 1: the token of the web contour.
+    // Step 1: the token of the web contour (use() sends the operator contour elsewhere).
     const token = this.extractor.extract(req);
     if (token === null) return null;
 

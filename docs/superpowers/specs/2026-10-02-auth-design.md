@@ -185,7 +185,8 @@ sequenceDiagram
 **Активация и сброс пароля владельца:** `POST /api/v1/activations { login, code, newPassword }`
 (`@Public`). Код — 128 бит из `randomBytes`, показывается оператору один раз, в
 `employee_credentials.one_time_code_hash` — только hex SHA-256 (энтропия кода делает scrypt и pepper
-лишними; как секрет терминала), срок `ACTIVATION_CODE_TTL_HOURS` (72); сверка — `timingSafeEqual`.
+лишними; как секрет терминала), срок `ACTIVATION_CODE_TTL_HOURS` (72); сверка — равенство hex SHA-256
+в условии `UPDATE`, который тем же оператором гасит код.
 Код гасится в той же транзакции, где задаётся пароль; лимиты — как у пароля; ответ 204, затем
 обычный вход. Оператор выдаёт код при создании сети и для сброса пароля владельца (часть 3);
 `CreateTenantResponse` дополняется полем `activationCode` (поправка контракта).
@@ -233,7 +234,8 @@ sequenceDiagram
    `requestContextStorage.run(context, next)`. `requireTenantId()` и `TenantDatabase` не меняются.
 
 Гостевой контекст не отклоняет запрос — решают guard'ы. На офлайн-точке шаг 3 — один запрос к
-PostgreSQL в `withTenant(tid из токена)` (раздел 10).
+PostgreSQL в `withTenant(OFFLINE_TENANT_ID)`; `tid` токена сверяется с сетью точки, чужой — гость
+(раздел 10, поправка P1).
 
 **Guard'ы** (глобальные, порядок важен):
 1. `AuthGuard` — без принципала `401 unauthenticated`, кроме `@Public()`.
@@ -394,7 +396,8 @@ revoked_at)`; нет или отозван → `404 not_bound`. В `withTenant`:
   памяти (один процесс, ADR-0008); маршруты `/operator/*` не регистрируются.
 - Таблица `sessions` (класс `tenant`): ключ `(tenant_id, jti)`, `employee_id`, `terminal_id`,
   `auth_method`, `authenticated_at`, `idle_expires_at`, `absolute_expires_at`, снимок прав и версия.
-  Поиск — в `withTenant(tid из JWT)` под RLS; в том же запросе — `employees.permissions_version` и
+  Поиск — в `withTenant(OFFLINE_TENANT_ID)` под RLS, `tid` из JWT сверяется с сетью точки (чужой —
+  гость, поправка P1); в том же запросе — `employees.permissions_version` и
   `terminals.revoked_at` (флаг отзыва в Redis не нужен). Просроченные строки не принимаются и
   удаляются при каждом создании сессии (поправка 2026-10-05, план части 4, P2: планировщика нет).
   Резолвер `resolve_session` не нужен.
@@ -468,7 +471,7 @@ reverse proxy (ADR-0012) без него `req.ip` — адрес прокси, �
 
 | Часть | Изменение |
 |---|---|
-| 1 | `employees`: `email text`, `last_login_at timestamptz`; глобальные уникальные индексы `lower(login)`, `phone` (E.164), `lower(email)` вместо `employees_login_uq (tenant_id, lower(login))`; `check` формата телефона; резолвер `resolve_login(kind text, value text)` (владелец `pharmacy_resolver`, `stable`, `set search_path = ''`, `EXECUTE` только `pharmacy_app`); `audit_log` с секционированием по месяцам (секции на 3 месяца вперёд + плановая задача) |
+| 1 | `employees`: `email text`, `last_login_at timestamptz`; глобальные уникальные индексы `lower(login)`, `phone` (E.164), `lower(email)` вместо `employees_login_uq (tenant_id, lower(login))`; `check` формата телефона; резолвер `resolve_login(kind text, value text)` (владелец `pharmacy_resolver`, `stable`, `set search_path = ''`, `EXECUTE` только `pharmacy_app`); `audit_log` с секционированием по месяцам (секции созданы статически до 2027-12; плановая задача, создающая следующие, — follow-up до 2027-11, `plans/2026-09-30-data-layer-followups.md`) |
 | 2 | резолвер `resolve_terminal(credential_hash bytea)` |
 | 3 | `operators`, `operator_credentials`, `platform_audit_log` |
 | 4 | `sessions` (только офлайн-точка) |

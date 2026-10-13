@@ -21,12 +21,9 @@ import {
   cookieEnvFrom,
 } from '../../auth/session-cookie';
 import { RequireOperatorPermission } from './decorators';
-import { OperatorActivationDto, OperatorLoginDto } from './dto/operator.dto';
-import { OperatorActivationsService } from './operator-activations.service';
+import { OperatorLoginDto } from './dto/operator.dto';
 import { OperatorSessionsService } from './operator-sessions.service';
-
-// Per IP, on top of the per-login limiter; the same bound as employee sign-in.
-const AUTH_ROUTE_LIMIT = { limit: 60, ttl: 60_000 };
+import { AUTH_ROUTE_LIMIT } from '../../../common/throttling/auth-route-limit';
 
 // Sign-in and the session of a platform operator (auth design 2026-10-02, section 9).
 @Controller({ path: 'operator/sessions', version: '1' })
@@ -70,20 +67,5 @@ export class OperatorSessionsController {
   async logout(@Res({ passthrough: true }) res: Response): Promise<void> {
     await this.operatorSessions.logout();
     clearOperatorCookie(res, this.cookieEnv);
-  }
-}
-
-// The first password of an operator by a one-time code (plan decision P1).
-@Controller({ path: 'operator/activations', version: '1' })
-export class OperatorActivationsController {
-  constructor(private readonly activations: OperatorActivationsService) {}
-
-  /** 204; 401 `invalid_code`, 422 `password_policy`, 429 `login_locked`. */
-  @Public()
-  @Throttle({ default: AUTH_ROUTE_LIMIT })
-  @Post()
-  @HttpCode(HttpStatus.NO_CONTENT)
-  activate(@Body() body: OperatorActivationDto): Promise<void> {
-    return this.activations.activate(body.login, body.code, body.newPassword);
   }
 }

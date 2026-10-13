@@ -354,6 +354,12 @@ export interface WriteOff {
   totalMinor?: number;
   createdBy: DocumentAuthor;
   postedBy: DocumentAuthor | null;
+  /**
+   * The transfer whose shortage this write-off records (made by the acceptance, spec T6): it is
+   * not edited, posted or unposted by hand — 409 `write_off_from_transfer`.
+   */
+  transferId: string | null;
+  transferNumber: string | null;
 }
 
 export type StockLineInput = Pick<
@@ -622,6 +628,11 @@ export interface StockCountListItem {
 
 /* ---------------- Transfers (ЗП / ПМ) ---------------- */
 
+/**
+ * draft → sent → in_progress (a transfer draft is made by it) → done / partial (the transfer is
+ * sent: all or less than asked) or rejected. One request — one transfer (spec
+ * 2026-10-12-supplier-returns-transfers, T2).
+ */
 export type TransferRequestStatus =
   'draft' | 'sent' | 'in_progress' | 'partial' | 'done' | 'rejected';
 
@@ -630,31 +641,57 @@ export type RejectionReason = 'no_stock' | 'order_from_supplier' | 'other';
 export interface TransferRequest {
   id: string;
   number: string;
+  /** Business date of the creation, YYYY-MM-DD. */
   date: string;
+  /** The store that needs the goods (the receiver). */
   requesterStoreId: string;
   requesterStoreName: string;
+  /** The store asked to send them. */
   fromStoreId: string;
   fromStoreName: string;
   status: TransferRequestStatus;
+  /** Packs. */
   lines: Array<{ productId: string; productName: string; quantity: number }>;
   comment: string;
   rejection: { reason: RejectionReason; comment: string } | null;
+  /** The not cancelled transfer by the request. */
+  transferId: string | null;
+  transferNumber: string | null;
 }
 
-/** POST /api/v1/transfer-requests — a draft or sent at once. */
+/**
+ * POST /api/v1/transfer-requests, PUT /api/v1/transfer-requests/{id} (a draft) — `inventory:create`
+ * / `inventory:update`; `send` sends it at once. 400 at `lines.i.productId` (`duplicate`,
+ * `product_archived`); 409 `offline_store_read_only` / `document_posted`. DELETE — a draft only;
+ * POST …/{id}/sending — `draft` → `sent`.
+ */
 export interface TransferRequestInput {
   fromStoreId: string;
+  /** The requesting store. */
   toStoreId: string;
   comment: string;
   send: boolean;
+  /** Packs, 1–100 000. */
   lines: Array<{ productId: string; quantity: number }>;
 }
 
 /**
- * in_transit — sent; awaiting — arrived at an offline store, its confirmation comes with the sync
- * (ADR-0014); accepted — confirmed by the receiver with the actual quantities.
+ * POST /api/v1/transfer-requests/{id}/rejection — `inventory:post` of the asked store: a `sent` or
+ * `in_progress` request (its transfer draft is cancelled); `comment` is required for `other`.
+ * 409 `request_not_open`.
  */
-export type TransferStatus = 'draft' | 'in_transit' | 'awaiting' | 'accepted';
+export interface RejectTransferRequest {
+  reason: RejectionReason;
+  comment: string;
+}
+
+/**
+ * in_transit — sent (the sender's stock went down); awaiting — sent to an offline store, confirmed
+ * with the sync (ADR-0014; not served by the API yet); accepted — confirmed by the receiver with
+ * the actual quantities; cancelled — a draft dropped (it may have been sent and recalled).
+ */
+export type TransferStatus =
+  'draft' | 'in_transit' | 'awaiting' | 'accepted' | 'cancelled';
 
 export interface TransferLine {
   productId: string;
@@ -662,17 +699,17 @@ export interface TransferLine {
   batchId: string;
   batchNumber: string;
   expiresOn: string;
-  /** Packs sent. */
+  /** The unit of the quantities of the line. */
+  unit: SaleUnit;
   sentQuantity: number;
-  /** Packs received; null until the receiver confirms. */
+  /** Null until the receiver confirms. */
   receivedQuantity: number | null;
 }
-
-export type DiscrepancyResolution = 'write_off' | 'resend';
 
 export interface Transfer {
   id: string;
   number: string;
+  /** Business date of the dispatch (of the creation while a draft). */
   date: string;
   requestId: string | null;
   requestNumber: string | null;
@@ -684,25 +721,44 @@ export interface Transfer {
   lines: TransferLine[];
   sentBy: DocumentAuthor | null;
   receivedBy: DocumentAuthor | null;
-  /** A shortage at acceptance; until resolved the missing packs stay «в пути». */
+  /**
+   * A shortage at acceptance: the sender's write-off (`transfer_discrepancy`) made by the system
+   * (spec T6); the comment of the receiver.
+   */
   discrepancy: {
     comment: string;
-    resolution: DiscrepancyResolution | null;
-    /** СП or ПМ created by the resolution. */
-    documentNumber: string | null;
+    writeOffId: string;
+    writeOffNumber: string;
   } | null;
 }
 
-/** POST /api/v1/transfers — FEFO batches within the sender stock (picked from a request or new). */
+/**
+ * POST /api/v1/transfers, PUT /api/v1/transfers/{id} (a draft) — `inventory:create` /
+ * `inventory:update`; `send` (needs `inventory:post`) sends it at once. By a request: only its
+ * products, not more than asked (400 `not_requested` / `exceeds_request` at the lines), 409
+ * `request_not_open` / `request_has_transfer`. POST …/{id}/sending — `inventory:post`: 409
+ * `stock_insufficient` (at `lines.i.quantity`) / `stock_count_in_progress`; …/recall —
+ * `inventory:unpost`, `in_transit` → `draft`; …/cancellation — `inventory:delete`, a draft →
+ * `cancelled`. Both stores — active cloud stores (409 `offline_store_read_only`).
+ */
 export interface TransferInput {
   requestId: string | null;
   fromStoreId: string;
   toStoreId: string;
   send: boolean;
-  lines: Array<{ productId: string; batchId: string; quantity: number }>;
+  lines: Array<{
+    productId: string;
+    batchId: string;
+    unit: SaleUnit;
+    quantity: number;
+  }>;
 }
 
-/** POST /api/v1/transfers/{id}/acceptance — `inventory:receive`: the store stock changes only now. */
+/**
+ * POST /api/v1/transfers/{id}/acceptance — `inventory:receive` of the receiver: every line once,
+ * 0…sent in the unit of the line; the receiver gets its own batches, a shortage becomes a posted
+ * write-off of the sender. 409 `transfer_not_in_transit` / `stock_count_in_progress`.
+ */
 export interface AcceptTransferRequest {
   comment: string;
   lines: Array<{ batchId: string; receivedQuantity: number }>;
@@ -712,23 +768,32 @@ export interface TransferListItem {
   id: string;
   number: string;
   date: string;
+  fromStoreId: string;
   fromStoreName: string;
+  toStoreId: string;
   toStoreName: string;
   requestNumber: string | null;
   positions: number;
   status: TransferStatus;
   sentByName: string | null;
-  openDiscrepancy: boolean;
+  /** Accepted with a shortage (written off at the sender). */
+  shortage: boolean;
 }
 
+/**
+ * GET /api/v1/transfers/overview?storeId= — the requests and transfers of the stores of the scope:
+ * open ones and those closed in the last 30 days, newest first, ≤ 200 of each.
+ */
 export interface TransferOverview {
   requests: TransferRequest[];
   transfers: TransferListItem[];
   kpi: {
+    /** Sent requests to my stores. */
     newRequests: number;
     requestsInProgress: number;
+    /** In transit to or from my stores. */
     inTransit: number;
-    awaiting: number;
-    openDiscrepancies: number;
   };
+  /** The active stores of the network, to pick the other side; the scope does not limit them. */
+  stores: Array<{ id: string; name: string; mode: StoreMode }>;
 }

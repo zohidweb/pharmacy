@@ -7,7 +7,22 @@ export type StockDocumentType =
   | 'opening_balance'
   | 'write_off'
   | 'inventory'
-  | 'supplier_return';
+  | 'supplier_return'
+  | 'transfer'
+  | 'transfer_request';
+
+/** Statuses of the documents table (a transfer and a request have their own, data model 03). */
+export type DocumentStatusValue =
+  | 'draft'
+  | 'posted'
+  | 'cancelled'
+  | 'in_transit'
+  | 'received'
+  | 'sent'
+  | 'in_progress'
+  | 'partial'
+  | 'done'
+  | 'rejected';
 
 // The line table of each document type (constants: never user input).
 const LINES: Record<StockDocumentType, RawBuilder<unknown>> = {
@@ -16,6 +31,8 @@ const LINES: Record<StockDocumentType, RawBuilder<unknown>> = {
   write_off: sql.raw('pharmacy.write_off_lines'),
   inventory: sql.raw('pharmacy.inventory_lines'),
   supplier_return: sql.raw('pharmacy.supplier_return_lines'),
+  transfer: sql.raw('pharmacy.transfer_lines'),
+  transfer_request: sql.raw('pharmacy.transfer_request_lines'),
 };
 
 export interface DocumentRow {
@@ -24,7 +41,7 @@ export interface DocumentRow {
   type: StockDocumentType;
   number: string;
   documentDate: string;
-  status: 'draft' | 'posted' | 'cancelled';
+  status: DocumentStatusValue;
   createdBy: string;
   createdAt: Date;
   postedBy: string | null;
@@ -44,6 +61,17 @@ export interface DocumentRow {
   inventoryStartedAt: Date | null;
   cancelledBy: string | null;
   cancelledAt: Date | null;
+  /** The receiver of a transfer, the store asked by a request. */
+  destinationStoreId: string | null;
+  /** A transfer → its request. */
+  requestDocumentId: string | null;
+  dispatchedAt: Date | null;
+  dispatchedBy: string | null;
+  receivedAt: Date | null;
+  receivedBy: string | null;
+  receivedComment: string | null;
+  rejectionReason: string | null;
+  rejectionComment: string | null;
 }
 
 export interface LineRow {
@@ -88,6 +116,8 @@ export interface HeaderValues {
   writeOffReason?: string | null;
   supplierReturnReason?: string | null;
   sourceDocumentId?: string | null;
+  destinationStoreId?: string | null;
+  requestDocumentId?: string | null;
   inventoryScope?: 'all' | 'category' | null;
   inventoryCategoryId?: string | null;
   inventoryStartedAt?: Date | null;
@@ -112,12 +142,15 @@ export interface ForeignMovementRow {
   sourceNumber: string | null;
 }
 
-const HEADER = sql`d.id, d.store_id, d.type, d.number, d.document_date::text as document_date,
+/** The columns of a document header as `DocumentRow` reads them (`d` — pharmacy.documents). */
+export const HEADER = sql`d.id, d.store_id, d.type, d.number, d.document_date::text as document_date,
   d.status, d.created_by, d.created_at, d.posted_by, d.posted_at, d.comment, d.total_dirams,
   d.supplier_id, d.supplier_invoice_number, d.payment_due_date::text as payment_due_date,
   d.purchase_order_id, d.write_off_reason, d.supplier_return_reason, d.source_document_id,
   d.inventory_scope, d.inventory_category_id,
-  d.inventory_started_at, d.cancelled_by, d.cancelled_at`;
+  d.inventory_started_at, d.cancelled_by, d.cancelled_at, d.destination_store_id,
+  d.request_document_id, d.dispatched_at, d.dispatched_by, d.received_at, d.received_by,
+  d.received_comment, d.rejection_reason, d.rejection_comment`;
 
 // Stock documents, their lines, batches and movements (data model 03). The header and its lines
 // are one aggregate; movements are append-only.
@@ -340,6 +373,8 @@ export class DocumentsRepository {
       origin: StockDocumentType | 'inventory_surplus';
       sourceDocumentId: string;
       isStarting: boolean;
+      /** The batch of the sender (`origin = 'transfer'`). */
+      sourceBatchId?: string | null;
     },
   ): Promise<void> {
     await trx
@@ -527,6 +562,140 @@ export class DocumentsRepository {
         unpostedAt: sql`now()`,
         updatedAt: sql`now()`,
       })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** The status of a request (`sent`, `in_progress`, `done`, `partial`) or of a document. */
+  async setStatus(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    status: DocumentStatusValue,
+  ): Promise<void> {
+    await trx
+      .updateTable('documents')
+      .set({ status, updatedAt: sql`now()` })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** A transfer is sent: dated by the day of the dispatch (E4). */
+  async markDispatched(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    employeeId: string,
+    documentDate: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('documents')
+      .set({
+        status: 'in_transit',
+        documentDate,
+        dispatchedAt: sql`now()`,
+        dispatchedBy: employeeId,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** A recalled transfer is a draft again. */
+  async markRecalled(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('documents')
+      .set({
+        status: 'draft',
+        dispatchedAt: null,
+        dispatchedBy: null,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  async markReceived(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    employeeId: string,
+    comment: string | null,
+  ): Promise<void> {
+    await trx
+      .updateTable('documents')
+      .set({
+        status: 'received',
+        receivedAt: sql`now()`,
+        receivedBy: employeeId,
+        receivedComment: comment,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  async markRejected(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    reason: string,
+    comment: string | null,
+  ): Promise<void> {
+    await trx
+      .updateTable('documents')
+      .set({
+        status: 'rejected',
+        rejectionReason: reason,
+        rejectionComment: comment,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** A transfer draft is dropped (E3): final, no movements. */
+  async markCancelled(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    employeeId: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('documents')
+      .set({
+        status: 'cancelled',
+        cancelledBy: employeeId,
+        cancelledAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** A document nothing refers to (a request draft, E3): its lines, then the header. */
+  async deleteDocument(
+    trx: TenantTransaction,
+    tenantId: string,
+    type: StockDocumentType,
+    id: string,
+  ): Promise<void> {
+    await sql`delete from ${LINES[type]} where tenant_id = ${tenantId} and document_id = ${id}`.execute(
+      trx,
+    );
+    await trx
+      .deleteFrom('documents')
       .where('tenantId', '=', tenantId)
       .where('id', '=', id)
       .execute();

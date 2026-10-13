@@ -236,7 +236,9 @@
       "commentPlaceholder": "Необязательно",
       "addExpired": "Добавить просроченные партии",
       "linesRequired": "Добавьте хотя бы одну строку",
-      "periodClosed": "Период закрыт для этой даты"
+      "periodClosed": "Период закрыт для этой даты",
+      "fromTransfer": "Недостача при перемещении {number}: списание создано при приёмке и не меняется вручную.",
+      "openTransfers": "Перемещения"
     }
   },
   "supplierReturns": {
@@ -382,7 +384,6 @@
     "route": "Маршрут",
     "byRequest": "По заявке",
     "sentBy": "Отправил",
-    "discrepancy": "Расхождение",
     "pick": "Собрать",
     "pickNamed": "Собрать заявку {number}",
     "reject": {
@@ -395,15 +396,14 @@
       },
       "comment": "Комментарий",
       "commentPlaceholder": "Необязательно",
-      "confirm": "Отклонить"
+      "confirm": "Отклонить",
+      "commentRequired": "Опишите причину отклонения"
     },
     "rejectNamed": "Отклонить заявку {number}",
     "kpi": {
       "newRequests": "Новые заявки",
       "inTransit": "В пути",
-      "awaiting": "Ждут подтверждения",
-      "awaitingHint": "офлайн-точка подтвердит при синхронизации",
-      "discrepancies": "Открытые расхождения"
+      "requestsInProgress": "Заявки в работе"
     },
     "requestStatus": {
       "draft": "Черновик",
@@ -417,7 +417,8 @@
       "draft": "Черновик",
       "in_transit": "В пути",
       "awaiting": "Ждёт подтверждения",
-      "accepted": "Принято"
+      "accepted": "Принято",
+      "cancelled": "Отменено"
     },
     "request": {
       "title": "Новая заявка на перемещение",
@@ -434,7 +435,16 @@
       "linesRequired": "Добавьте хотя бы одну строку",
       "empty": "Строк пока нет",
       "comment": "Комментарий",
-      "commentPlaceholder": "Например: закончился Парацетамол"
+      "commentPlaceholder": "Например: закончился Парацетамол",
+      "editTitle": "Заявка {number}",
+      "delete": "Удалить черновик",
+      "transfer": "Перемещение {number}",
+      "rejected": "Заявка отклонена",
+      "rejectReasons": {
+        "no_stock": "Нет остатка",
+        "order_from_supplier": "Заказать у поставщика",
+        "other": "Другое"
+      }
     },
     "transfer": {
       "newTitle": "Новое перемещение",
@@ -446,14 +456,20 @@
       "product": "Товар",
       "batch": "Партия (FEFO)",
       "requested": "Запрошено, уп.",
-      "senderStock": "У отправителя, уп.",
-      "quantity": "Отправить, уп.",
+      "senderStock": "У отправителя",
+      "quantity": "Отправить",
       "batchOf": "Партия: {name}",
       "quantityOf": "Отправить: {name}",
       "overStock": "Больше остатка отправителя",
       "lessThanRequested": "Меньше, чем запрошено",
       "empty": "Строк пока нет",
-      "fefoHint": "Партия подставляется по FEFO, количество ограничено остатком отправителя."
+      "fefoHint": "Партия подставляется по FEFO, количество ограничено остатком отправителя.",
+      "editTitle": "Перемещение {number}",
+      "cancelDraft": "Отменить черновик",
+      "overRequest": "Больше, чем запрошено",
+      "notRequested": "Товара «{name}» нет в заявке",
+      "noBatch": "У отправителя нет другой партии «{name}» с остатком",
+      "missingStock": "Нет на остатке отправителя: {names}"
     },
     "detail": {
       "title": "Перемещение {number}",
@@ -470,25 +486,26 @@
         "product": "Товар",
         "batch": "Партия",
         "sent": "Отправлено",
-        "received": "Принято, уп.",
+        "received": "Принято",
         "diff": "Разница"
       },
-      "packs": "{count} уп.",
       "receivedOf": "Принято: {name}",
       "comment": "Комментарий к приёмке",
-      "commentRequiredHint": "Опишите расхождение: оно уйдёт в разбор",
+      "commentRequiredHint": "Опишите расхождение: недостачу спишет отправитель",
       "accept": "Подтвердить приёмку",
       "stockAfterAccept": "Остаток точки изменится только после подтверждения",
-      "discrepancyTitle": "Расхождение: −{count} уп.",
-      "discrepancyHint": "До решения недостающие упаковки числятся «в пути».",
-      "writeOff": "Списать",
-      "resend": "Дослать",
-      "resolved": {
-        "write_off": "Создано списание {document} · расхождение при перемещении",
-        "resend": "Создано перемещение {document} на недостающие упаковки"
-      }
+      "discrepancyTitle": "Расхождение: {amount}",
+      "writtenOff": "Недостачу списал отправитель: {document}",
+      "recall": "Отозвать",
+      "recallHint": "Товар вернётся на остаток отправителя, перемещение станет черновиком",
+      "overSent": "Больше, чем отправлено",
+      "quantityRequired": "Укажите принятое количество",
+      "confirmShortageTitle": "Принять с недостачей?",
+      "confirmShortageText": "Недостачу {amount} спишет отправитель, и отменить это нельзя. Проверьте фактические количества.",
+      "confirmShortage": "Принять и списать недостачу"
     },
-    "rejectAction": "Отклонить"
+    "rejectAction": "Отклонить",
+    "shortage": "Недостача"
   },
   "openingBalances": {
     "title": "Ввод начальных остатков",

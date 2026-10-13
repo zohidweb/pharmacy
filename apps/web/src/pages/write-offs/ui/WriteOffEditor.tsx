@@ -17,6 +17,7 @@ import {
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
 import {
@@ -29,6 +30,7 @@ import {
   type StockAccess,
 } from '@/features/stock-document';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
+import { routes } from '@/shared/config';
 
 export const WRITE_OFF_REASONS: WriteOffReason[] = [
   'expired',
@@ -89,7 +91,10 @@ export function WriteOffEditor({
         }),
       staleTime: 0,
     });
-  const editable = (!doc || doc.status === 'draft') && access.canUpdate;
+  // the write-off of a transfer shortage is made by the acceptance: only shown (spec T6)
+  const fromTransfer = Boolean(doc?.transferId);
+  const editable =
+    (!doc || doc.status === 'draft') && access.canUpdate && !fromTransfer;
 
   // a saved document reopens with its own products, whatever the page of the store list (I2)
   useEffect(() => {
@@ -241,7 +246,7 @@ export function WriteOffEditor({
         size="xl"
         footer={
           <>
-            {doc?.status === 'posted' && access.canUnpost && (
+            {doc?.status === 'posted' && access.canUnpost && !fromTransfer && (
               <Button
                 variant="secondary"
                 iconStart="undo-2"
@@ -280,6 +285,17 @@ export function WriteOffEditor({
         }
       >
         <div className="flex flex-col gap-4">
+          {doc?.transferNumber && (
+            <Alert tone="info">
+              {t('fromTransfer', { number: doc.transferNumber })}{' '}
+              <Link
+                href={routes.transfers()}
+                className="font-medium text-primary underline"
+              >
+                {t('openTransfers')}
+              </Link>
+            </Alert>
+          )}
           <div className="flex items-center gap-2">
             <DocumentStatusPill status={doc?.status ?? 'draft'} />
             {doc?.postedBy && (

@@ -36,6 +36,13 @@ const notFound = () => new ProblemException(404, 'not_found');
 const badLine = (field: string, code: string) =>
   new FieldProblemException(400, 'validation_failed', [{ field, code }]);
 
+/** The write-off of a transfer shortage is made by the acceptance (spec T6): 409 by hand. */
+function notFromTransfer(doc: DocumentRow): void {
+  if (doc.sourceDocumentId !== null) {
+    throw new ProblemException(409, 'write_off_from_transfer');
+  }
+}
+
 // Write-offs (spec 2026-10-12-write-offs-stock-counts, section 4): a pharmacist drafts, a manager
 // posts. Writing a draft needs no cost right; amounts are sent only with `finance:view-cost`. A
 // write-off is seen and written only in the stores of the employee scope.
@@ -148,7 +155,7 @@ export class WriteOffsService {
     });
   }
 
-  /** Only a draft: 409 `document_posted`. */
+  /** Only a draft: 409 `document_posted` / `write_off_from_transfer`. */
   async update(id: string, input: WriteOffInput): Promise<WriteOff> {
     const { tenantId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
@@ -172,6 +179,7 @@ export class WriteOffsService {
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.visible(trx, tenantId, id, true);
+      notFromTransfer(doc);
       const store = await this.stores.writableStore(trx, tenantId, doc.storeId);
       await this.posting.unpost(trx, { tenantId, employeeId }, doc, store);
       return this.toDto(trx, tenantId, await this.read(trx, tenantId, doc.id));
@@ -182,6 +190,7 @@ export class WriteOffsService {
     const { tenantId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.visible(trx, tenantId, id);
+      notFromTransfer(doc);
       const blockers =
         doc.status === 'posted'
           ? await this.posting.blockers(trx, tenantId, doc)
@@ -224,6 +233,8 @@ export class WriteOffsService {
     id: string,
   ): Promise<DocumentRow> {
     const doc = await this.visible(trx, tenantId, id, true);
+    // a write-off of a transfer shortage is never edited or posted by hand, whatever its status
+    notFromTransfer(doc);
     if (doc.status !== 'draft')
       throw new ProblemException(409, 'document_posted');
     return doc;
@@ -408,6 +419,14 @@ export class WriteOffsService {
         doc.createdAt,
       )) as DocumentAuthor,
       postedBy: await this.author(trx, tenantId, doc.postedBy, doc.postedAt),
+      transferId: doc.sourceDocumentId,
+      transferNumber: doc.sourceDocumentId
+        ? ((
+            await this.inventory.documentNumbers(trx, tenantId, [
+              doc.sourceDocumentId,
+            ])
+          ).get(doc.sourceDocumentId) ?? null)
+        : null,
     };
   }
 }

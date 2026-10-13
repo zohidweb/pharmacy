@@ -236,7 +236,9 @@
       "commentPlaceholder": "Ихтиёрӣ",
       "addExpired": "Илова кардани партияҳои мӯҳлаташон гузашта",
       "linesRequired": "Ақаллан як сатр илова кунед",
-      "periodClosed": "Давра барои ин сана пӯшида аст"
+      "periodClosed": "Давра барои ин сана пӯшида аст",
+      "fromTransfer": "Камбудӣ ҳангоми интиқоли {number}: аз ҳисоб баровардан ҳангоми қабул сохта шуд ва дастӣ тағйир дода намешавад.",
+      "openTransfers": "Интиқолҳо"
     }
   },
   "supplierReturns": {
@@ -382,7 +384,6 @@
     "route": "Масир",
     "byRequest": "Аз рӯи дархост",
     "sentBy": "Фиристод",
-    "discrepancy": "Фарқият",
     "pick": "Ҷамъ кардан",
     "pickNamed": "Ҷамъ кардани дархости {number}",
     "reject": {
@@ -395,15 +396,14 @@
       },
       "comment": "Шарҳ",
       "commentPlaceholder": "Ихтиёрӣ",
-      "confirm": "Рад кардан"
+      "confirm": "Рад кардан",
+      "commentRequired": "Сабаби радкуниро нависед"
     },
     "rejectNamed": "Рад кардани дархости {number}",
     "kpi": {
       "newRequests": "Дархостҳои нав",
       "inTransit": "Дар роҳ",
-      "awaiting": "Тасдиқро интизоранд",
-      "awaitingHint": "нуқтаи офлайн ҳангоми ҳамоҳангсозӣ тасдиқ мекунад",
-      "discrepancies": "Фарқиятҳои кушода"
+      "requestsInProgress": "Дархостҳо дар кор"
     },
     "requestStatus": {
       "draft": "Пешнавис",
@@ -417,7 +417,8 @@
       "draft": "Пешнавис",
       "in_transit": "Дар роҳ",
       "awaiting": "Тасдиқро интизор аст",
-      "accepted": "Қабул шуд"
+      "accepted": "Қабул шуд",
+      "cancelled": "Бекор шуд"
     },
     "request": {
       "title": "Дархости нав барои интиқол",
@@ -434,7 +435,16 @@
       "linesRequired": "Ақаллан як сатр илова кунед",
       "empty": "Ҳанӯз сатр нест",
       "comment": "Шарҳ",
-      "commentPlaceholder": "Масалан: Парацетамол тамом шуд"
+      "commentPlaceholder": "Масалан: Парацетамол тамом шуд",
+      "editTitle": "Дархости {number}",
+      "delete": "Нест кардани пешнавис",
+      "transfer": "Интиқоли {number}",
+      "rejected": "Дархост рад карда шуд",
+      "rejectReasons": {
+        "no_stock": "Бақия нест",
+        "order_from_supplier": "Аз таъминкунанда фармоиш додан",
+        "other": "Дигар"
+      }
     },
     "transfer": {
       "newTitle": "Интиқоли нав",
@@ -446,14 +456,20 @@
       "product": "Мол",
       "batch": "Партия (FEFO)",
       "requested": "Дархост шуд, қут.",
-      "senderStock": "Дар фиристанда, қут.",
-      "quantity": "Фиристодан, қут.",
+      "senderStock": "Дар фиристанда",
+      "quantity": "Фиристодан",
       "batchOf": "Партия: {name}",
       "quantityOf": "Фиристодан: {name}",
       "overStock": "Аз бақияи фиристанда зиёд",
       "lessThanRequested": "Аз дархостшуда кам",
       "empty": "Ҳанӯз сатр нест",
-      "fefoHint": "Партия аз рӯи FEFO гузошта мешавад, миқдор бо бақияи фиристанда маҳдуд аст."
+      "fefoHint": "Партия аз рӯи FEFO гузошта мешавад, миқдор бо бақияи фиристанда маҳдуд аст.",
+      "editTitle": "Интиқоли {number}",
+      "cancelDraft": "Бекор кардани пешнавис",
+      "overRequest": "Аз дархостшуда зиёд",
+      "notRequested": "Моли «{name}» дар дархост нест",
+      "noBatch": "Дар фиристанда партияи дигари «{name}» бо бақия нест",
+      "missingStock": "Дар бақияи фиристанда нест: {names}"
     },
     "detail": {
       "title": "Интиқоли {number}",
@@ -470,25 +486,26 @@
         "product": "Мол",
         "batch": "Партия",
         "sent": "Фиристода шуд",
-        "received": "Қабул шуд, қут.",
+        "received": "Қабул шуд",
         "diff": "Фарқ"
       },
-      "packs": "{count} қут.",
       "receivedOf": "Қабул шуд: {name}",
       "comment": "Шарҳ ба қабул",
-      "commentRequiredHint": "Фарқиятро шарҳ диҳед: он ба баррасӣ меравад",
+      "commentRequiredHint": "Фарқиятро шарҳ диҳед: камбудиро фиристанда аз ҳисоб мебарорад",
       "accept": "Тасдиқи қабул",
       "stockAfterAccept": "Бақияи нуқта танҳо баъди тасдиқ тағйир меёбад",
-      "discrepancyTitle": "Фарқият: −{count} қут.",
-      "discrepancyHint": "То қарор қуттиҳои норасида «дар роҳ» ҳисоб мешаванд.",
-      "writeOff": "Аз ҳисоб баровардан",
-      "resend": "Фиристодани боқимонда",
-      "resolved": {
-        "write_off": "Аз ҳисоб баровардани {document} сохта шуд · фарқият ҳангоми интиқол",
-        "resend": "Интиқоли {document} барои қуттиҳои норасида сохта шуд"
-      }
+      "discrepancyTitle": "Фарқият: {amount}",
+      "writtenOff": "Камбудиро фиристанда аз ҳисоб баровард: {document}",
+      "recall": "Бозхонд",
+      "recallHint": "Мол ба бақияи фиристанда бармегардад, интиқол пешнавис мешавад",
+      "overSent": "Аз фиристодашуда зиёд",
+      "quantityRequired": "Миқдори қабулшударо нишон диҳед",
+      "confirmShortageTitle": "Бо камбудӣ қабул мекунед?",
+      "confirmShortageText": "Камбудии {amount}-ро фиристанда аз ҳисоб мебарорад ва онро бекор кардан мумкин нест. Миқдорҳои воқеиро санҷед.",
+      "confirmShortage": "Қабул ва аз ҳисоб баровардани камбудӣ"
     },
-    "rejectAction": "Рад кардан"
+    "rejectAction": "Рад кардан",
+    "shortage": "Камбудӣ"
   },
   "openingBalances": {
     "title": "Ворид кардани бақияи ибтидоӣ",

@@ -175,8 +175,9 @@ export class SupplierReturnsRepository {
   }
 
   /**
-   * The goods receipt each batch came from: the source document of a `goods_receipt` batch; null
-   * for a batch of another origin (opening balance, stock count surplus).
+   * The goods receipt each batch came from: a batch of a transfer leads to the batch of the sender
+   * (`source_batch_id`), the root of the chain is a `goods_receipt` batch (its source document);
+   * null for a root of another origin (opening balance, stock count surplus).
    */
   async receiptsOfBatches(
     trx: TenantTransaction,
@@ -184,15 +185,26 @@ export class SupplierReturnsRepository {
     batchIds: readonly string[],
   ): Promise<Map<string, string | null>> {
     if (batchIds.length === 0) return new Map();
-    const rows = await trx
-      .selectFrom('batches')
-      .select(['id', 'origin', 'sourceDocumentId'])
-      .where('tenantId', '=', tenantId)
-      .where('id', 'in', [...batchIds])
-      .execute();
+    const result = await sql<{
+      startId: string;
+      origin: string;
+      sourceDocumentId: string;
+    }>`
+      with recursive chain as (
+        select b.id as start_id, b.origin, b.source_document_id, b.source_batch_id, 0 as depth
+        from pharmacy.batches b
+        where b.tenant_id = ${tenantId} and b.id in (${sql.join([...batchIds])})
+        union all
+        select c.start_id, p.origin, p.source_document_id, p.source_batch_id, c.depth + 1
+        from chain c
+        join pharmacy.batches p on p.tenant_id = ${tenantId} and p.id = c.source_batch_id
+        where c.depth < 100
+      )
+      select start_id, origin, source_document_id from chain
+      where source_batch_id is null`.execute(trx);
     return new Map(
-      rows.map((r) => [
-        r.id,
+      result.rows.map((r) => [
+        r.startId,
         r.origin === 'goods_receipt' ? r.sourceDocumentId : null,
       ]),
     );

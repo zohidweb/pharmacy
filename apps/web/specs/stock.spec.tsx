@@ -1,7 +1,7 @@
 /*
  * Stock screens against the in-memory API mocks: stock by batch and its states, posting writes
  * movements and unposting is blocked by later movements, write-off of expired batches, return to
- * a supplier, stock count with sold-since, transfer acceptance with a discrepancy, read-only rules.
+ * a supplier, stock count with sold-since, transfer acceptance with a shortage, read-only rules.
  */
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { axe } from 'jest-axe';
@@ -235,7 +235,7 @@ describe('StockCountsPage', () => {
 });
 
 describe('TransfersPage', () => {
-  it('accepts a transfer with a shortage and resends the missing packs', async () => {
+  it('accepts a transfer with a shortage written off at the sender', async () => {
     await signInAs('manizha', 'store-3');
     renderWithProviders(<TransfersPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'ПМ-000015' }));
@@ -249,11 +249,19 @@ describe('TransfersPage', () => {
     fireEvent.click(
       within(card).getByRole('button', { name: 'Подтвердить приёмку' }),
     );
+    // the shortage is written off for good: the receiver confirms it first
+    const confirm = await dialog('Принять с недостачей?');
+    fireEvent.click(
+      within(confirm).getByRole('button', {
+        name: 'Принять и списать недостачу',
+      }),
+    );
     expect(await within(card).findByText('Расхождение: −2 уп.')).toBeTruthy();
-    fireEvent.click(within(card).getByRole('button', { name: 'Дослать' }));
+    // the system writes the shortage off at the sender — no «дослать»
     expect(
-      await within(card).findByText(/Создано перемещение ПМ-000016/),
+      within(card).getByText('Недостачу списал отправитель: СП-000021'),
     ).toBeTruthy();
+    expect(within(card).queryByRole('button', { name: 'Дослать' })).toBeNull();
   });
 
   it('picks a request by FEFO within the sender stock', async () => {
@@ -263,16 +271,20 @@ describe('TransfersPage', () => {
       await screen.findByRole('button', { name: 'Собрать заявку ЗП-000007' }),
     );
     const picking = await dialog('Сборка по заявке ЗП-000007');
+    // a requested product may take several lines: its FEFO batches
     expect(
-      await within(picking).findByText('Парацетамол 500 мг, таб. №10'),
-    ).toBeTruthy();
+      (await within(picking).findAllByText('Парацетамол 500 мг, таб. №10'))
+        .length,
+    ).toBeGreaterThan(0);
     fireEvent.click(within(picking).getByRole('button', { name: 'Отправить' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    // the request goes «в работе» and a new transfer appears in transit
+    // a new transfer is in transit; the request closes — done or partial (one request, one transfer)
     expect(
       await screen.findByRole('button', { name: 'ПМ-000016' }),
     ).toBeTruthy();
-    expect(screen.getAllByText('В работе').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/^(Выполнена|Частично)$/).length,
+    ).toBeGreaterThan(0);
   });
 });
 

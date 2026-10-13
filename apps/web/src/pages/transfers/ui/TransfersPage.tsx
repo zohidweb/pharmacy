@@ -21,19 +21,19 @@ import {
 } from '@/entities/stock-document';
 import { StockNotices, useStockAccess } from '@/features/stock-document';
 import { apiRequest } from '@/shared/api';
+import { WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
-import {
-  RejectDialog,
-  RequestDialog,
-  TransferDetailDialog,
-  TransferDialog,
-} from './TransferDialogs';
-import { WithMessages } from '@/shared/i18n';
+import { RejectDialog, RequestDialog } from './RequestDialogs';
+import { TransferDetailDialog, TransferDialog } from './TransferDialogs';
 
 type Open =
-  | { kind: 'request' }
-  | { kind: 'transfer'; request: TransferRequest | null }
+  | { kind: 'request'; request: TransferRequest | null }
+  | {
+      kind: 'transfer';
+      request: TransferRequest | null;
+      transferId: string | null;
+    }
   | { kind: 'reject'; request: TransferRequest }
   | { kind: 'detail'; id: string }
   | null;
@@ -48,13 +48,33 @@ function TransfersPageView() {
     queryKey: ['transfers', 'overview'],
     queryFn: ({ signal }) => apiRequest('transfers.overview', { signal }),
   });
-  const canAnswer = (request: TransferRequest) =>
+  const stores = overview.data?.stores ?? [];
+  const isSender = (storeId: string) =>
+    access.writableStores.some((s) => s.id === storeId);
+  // the asked store picks a sent request or rejects it (also while its transfer is a draft)
+  const canPick = (request: TransferRequest) =>
     request.status === 'sent' &&
     access.canCreate &&
-    access.writableStores.some((s) => s.id === request.fromStoreId);
+    isSender(request.fromStoreId);
+  const canReject = (request: TransferRequest) =>
+    (request.status === 'sent' || request.status === 'in_progress') &&
+    access.canPost &&
+    isSender(request.fromStoreId);
 
   const requestColumns: DataTableColumn<TransferRequest>[] = [
-    { key: 'number', header: '№', cell: (r) => <b>{r.number}</b> },
+    {
+      key: 'number',
+      header: '№',
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setOpen({ kind: 'request', request: r })}
+          className="min-h-touch font-bold text-primary underline"
+        >
+          {r.number}
+        </button>
+      ),
+    },
     {
       key: 'date',
       header: tDocs('date'),
@@ -76,33 +96,53 @@ function TransfersPageView() {
     {
       key: 'status',
       header: tDocs('statusHeader'),
-      cell: (r) => <RequestStatusPill status={r.status} />,
+      cell: (r) => (
+        <span className="flex flex-col items-start gap-1">
+          <RequestStatusPill status={r.status} />
+          {r.transferNumber && (
+            <span className="text-xs text-fg-subtle">{r.transferNumber}</span>
+          )}
+        </span>
+      ),
     },
     {
       key: 'actions',
       header: <span className="ph-visually-hidden">{tDocs('actions')}</span>,
       align: 'end',
       cell: (r) =>
-        canAnswer(r) ? (
+        canPick(r) || canReject(r) ? (
           <span className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              aria-label={t('pickNamed', { number: r.number })}
-              onClick={() => setOpen({ kind: 'transfer', request: r })}
-            >
-              {t('pick')}
-            </Button>
-            <Button
-              variant="tertiary"
-              aria-label={t('rejectNamed', { number: r.number })}
-              onClick={() => setOpen({ kind: 'reject', request: r })}
-            >
-              {t('rejectAction')}
-            </Button>
+            {canPick(r) && (
+              <Button
+                variant="secondary"
+                aria-label={t('pickNamed', { number: r.number })}
+                onClick={() =>
+                  setOpen({ kind: 'transfer', request: r, transferId: null })
+                }
+              >
+                {t('pick')}
+              </Button>
+            )}
+            {canReject(r) && (
+              <Button
+                variant="tertiary"
+                aria-label={t('rejectNamed', { number: r.number })}
+                onClick={() => setOpen({ kind: 'reject', request: r })}
+              >
+                {t('rejectAction')}
+              </Button>
+            )}
           </span>
         ) : null,
     },
   ];
+  // a draft is edited by its sender; any other transfer opens its card
+  const openTransfer = (row: TransferListItem) =>
+    setOpen(
+      row.status === 'draft' && isSender(row.fromStoreId) && access.canUpdate
+        ? { kind: 'transfer', request: null, transferId: row.id }
+        : { kind: 'detail', id: row.id },
+    );
   const transferColumns: DataTableColumn<TransferListItem>[] = [
     {
       key: 'number',
@@ -110,7 +150,7 @@ function TransfersPageView() {
       cell: (r) => (
         <button
           type="button"
-          onClick={() => setOpen({ kind: 'detail', id: r.id })}
+          onClick={() => openTransfer(r)}
           className="min-h-touch font-bold text-primary underline"
         >
           {r.number}
@@ -145,8 +185,8 @@ function TransfersPageView() {
       cell: (r) => (
         <span className="flex flex-col items-start gap-1">
           <TransferStatusPill status={r.status} />
-          {r.openDiscrepancy && (
-            <StatusPill tone="warning">{t('discrepancy')}</StatusPill>
+          {r.shortage && (
+            <StatusPill tone="warning">{t('shortage')}</StatusPill>
           )}
         </span>
       ),
@@ -163,15 +203,17 @@ function TransfersPageView() {
             <Button
               variant="secondary"
               iconStart="clipboard-list"
-              disabled={!access.canCreate}
-              onClick={() => setOpen({ kind: 'request' })}
+              disabled={!access.canCreate || overview.isPending}
+              onClick={() => setOpen({ kind: 'request', request: null })}
             >
               {t('newRequest')}
             </Button>
             <Button
               iconStart="truck"
-              disabled={!access.canCreate}
-              onClick={() => setOpen({ kind: 'transfer', request: null })}
+              disabled={!access.canCreate || overview.isPending}
+              onClick={() =>
+                setOpen({ kind: 'transfer', request: null, transferId: null })
+              }
             >
               {t('newTransfer')}
             </Button>
@@ -183,28 +225,21 @@ function TransfersPageView() {
         <QueryState query={overview}>
           {(data) => (
             <>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <KpiTile
                   label={t('kpi.newRequests')}
                   value={data.kpi.newRequests}
                   icon="inbox"
                 />
                 <KpiTile
+                  label={t('kpi.requestsInProgress')}
+                  value={data.kpi.requestsInProgress}
+                  icon="clipboard-list"
+                />
+                <KpiTile
                   label={t('kpi.inTransit')}
                   value={data.kpi.inTransit}
                   icon="truck"
-                />
-                <KpiTile
-                  label={t('kpi.awaiting')}
-                  value={data.kpi.awaiting}
-                  hint={t('kpi.awaitingHint')}
-                  icon="refresh-cw"
-                />
-                <KpiTile
-                  label={t('kpi.discrepancies')}
-                  value={data.kpi.openDiscrepancies}
-                  tone={data.kpi.openDiscrepancies > 0 ? 'warning' : 'default'}
-                  icon="triangle-alert"
                 />
               </div>
               <Card padding="none">
@@ -245,12 +280,19 @@ function TransfersPageView() {
         </QueryState>
       </div>
       {open?.kind === 'request' && (
-        <RequestDialog access={access} onClose={() => setOpen(null)} />
+        <RequestDialog
+          access={access}
+          request={open.request}
+          stores={stores}
+          onClose={() => setOpen(null)}
+        />
       )}
       {open?.kind === 'transfer' && (
         <TransferDialog
           access={access}
           request={open.request}
+          transferId={open.transferId}
+          stores={stores}
           onClose={() => setOpen(null)}
         />
       )}

@@ -369,7 +369,15 @@ function report(
           .reduce((sum, t) => {
             const moved = t.lines
               .filter((l) => l.productId === product.id)
-              .reduce((s, l) => s + (l.receivedQuantity ?? l.sentQuantity), 0);
+              .reduce((s, l) => {
+                const quantity = l.receivedQuantity ?? l.sentQuantity;
+                return (
+                  s +
+                  (l.unit === 'piece'
+                    ? quantity / product.piecesPerPack
+                    : quantity)
+                );
+              }, 0);
             const sign =
               (ids.includes(t.toStoreId) ? 1 : 0) -
               (ids.includes(t.fromStoreId) ? 1 : 0);
@@ -838,6 +846,7 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
         .map((b) => ({
           productId: product.id,
           batchId: b.id,
+          unit: 'pack' as const,
           quantity: Math.floor(
             (stockAt(store.id)[b.id] ?? 0) / product.piecesPerPack,
           ),

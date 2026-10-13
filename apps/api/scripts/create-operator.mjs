@@ -66,8 +66,9 @@ function parseArgs(argv) {
   const rawLogin = option(argv, '--login');
   const rawName = option(argv, '--name');
   if (!rawLogin || !rawName) throw new UserError(USAGE);
-  const login = rawLogin.trim().toLowerCase();
-  if (login.length > MAX_EMAIL_LENGTH || !EMAIL.test(login)) {
+  // As identifier.ts of the API: compatibility forms normalized, invisible characters refused.
+  const login = rawLogin.normalize('NFKC').trim().toLowerCase();
+  if (login.length > MAX_EMAIL_LENGTH || !EMAIL.test(login) || /\p{Cf}/u.test(login)) {
     throw new UserError('The login must be a work e-mail.');
   }
   const name = rawName.trim();

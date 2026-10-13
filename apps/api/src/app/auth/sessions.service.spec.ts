@@ -192,6 +192,7 @@ function setup() {
     status: 'active',
     passwordHash: '$scrypt$stored',
     passwordPepperVersion: 1,
+    passwordChangedAt: null,
   };
   let stores: ProfileStore[] = [store(STORE_1, 'Store one')];
   const repository = {
@@ -204,6 +205,10 @@ function setup() {
     activeStores: jest.fn(async () => stores),
     recordLogin: jest.fn(async () => undefined),
     updatePasswordHash: jest.fn(async () => undefined),
+    // The password change time at the issue: the verified one unless a test changes it meanwhile.
+    lockPasswordChange: jest.fn(async () => ({
+      changedAt: credentials.passwordChangedAt,
+    })),
   };
   const snapshot: PrincipalSnapshot = {
     status: 'active',

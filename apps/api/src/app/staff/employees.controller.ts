@@ -9,10 +9,12 @@ import {
   Post,
   Put,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { EmployeeCard, EmployeeListResponse } from '@pharmacy/shared-dto';
 import { RequireFreshAuth } from '../../common/guards/decorators';
 import { RequirePermission } from '../auth/decorators';
+import { AccessDeniedAudit } from './access-denied-audit.interceptor';
 import {
   CreateEmployeeDto,
   EmployeeListQueryDto,
@@ -24,8 +26,9 @@ import {
 import { EmployeesService } from './employees.service';
 
 // Employees of the network (spec 2026-10-06-staff-design, section 4). Every change needs a fresh
-// password sign-in (auth design, guard 5).
+// password sign-in (auth design, guard 5). The services' own refusals are audited (ADR-0018, p. 9).
 @Controller({ path: 'employees', version: '1' })
+@UseInterceptors(AccessDeniedAudit)
 export class EmployeesController {
   constructor(private readonly employees: EmployeesService) {}
 

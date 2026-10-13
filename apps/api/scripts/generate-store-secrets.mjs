@@ -7,8 +7,8 @@
 // The values are never printed. A file that already defines any of them is left untouched (exit 1):
 // replacing a pepper makes every stored password unverifiable, and a key rotation needs the old key
 // kept in the list. Back up the pepper separately from the database backup.
-import { randomBytes } from 'node:crypto';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { appendFileSync, chmodSync, existsSync, readFileSync } from 'node:fs';
 
 const NAMES = [
   'SESSION_JWT_KEYS',
@@ -16,6 +16,13 @@ const NAMES = [
   'PASSWORD_PEPPERS',
   'PASSWORD_PEPPER_ACTIVE',
 ];
+
+// SHA-256 of the key material of the public development keys in .env.example (the same list as
+// apps/api/src/core/crypto/key-ring.ts): an env file copied from it must not keep them.
+const PUBLIC_DEVELOPMENT_KEYS = new Set([
+  'f4a93ffde842c2c2be34f26a6064e95c5770a69e11d3f540ab155be35af6680b',
+  '163f791e6e5d7ece06a1d3f0e584c0ddb67bd0ca587569d23a4d03c3596cdcdb',
+]);
 
 class UserError extends Error {}
 
@@ -40,10 +47,37 @@ function definedNames(content) {
   );
 }
 
+// Whether a key list of the file (`id:base64url,…` after `NAME=` or `NAME:`) holds a public
+// development key.
+function holdsPublicDevelopmentKey(content) {
+  return ['SESSION_JWT_KEYS', 'PASSWORD_PEPPERS'].some((name) => {
+    const match = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*[=:]\\s*(.*)$`, 'm').exec(content);
+    if (!match) return false;
+    return match[1]
+      .trim()
+      .replace(/^["']|["']$/g, '')
+      .split(',')
+      .some((entry) => {
+        const encoded = entry.trim().split(':')[1] ?? '';
+        const digest = createHash('sha256')
+          .update(Buffer.from(encoded, 'base64url'))
+          .digest('hex');
+        return PUBLIC_DEVELOPMENT_KEYS.has(digest);
+      });
+  });
+}
+
 function main() {
   const { file } = parseArgs(process.argv.slice(2));
   const content = existsSync(file) ? readFileSync(file, 'utf8') : '';
   const present = definedNames(content);
+  if (present.length > 0 && holdsPublicDevelopmentKey(content)) {
+    // Copied from .env.example: the store would run on public keys (the API refuses them in
+    // production). Not replaced here: if the store already ran, its passwords depend on the pepper.
+    throw new UserError(
+      `The file holds the public development keys of .env.example. On a store that has not run yet, delete the lines ${NAMES.join(', ')} and run this again; nothing was written.`,
+    );
+  }
   if (present.length > 0) {
     throw new UserError(
       `The file already defines ${present.join(', ')}; nothing was written.`,
@@ -57,8 +91,16 @@ function main() {
     'PASSWORD_PEPPER_ACTIVE=1',
   ];
   const separator = content === '' || content.endsWith('\n') ? '' : '\n';
+  // The mode of appendFileSync applies to a new file only: an existing one is narrowed first, so a
+  // refusal (a file of another owner) stops the script before any key is written.
+  const posix = process.platform !== 'win32';
+  if (posix && existsSync(file)) chmodSync(file, 0o600);
   appendFileSync(file, `${separator}${lines.join('\n')}\n`, { mode: 0o600 });
-  console.log(`Wrote ${NAMES.join(', ')} to the env file.`);
+  console.log(
+    posix
+      ? `Wrote ${NAMES.join(', ')} to the env file (mode 600).`
+      : `Wrote ${NAMES.join(', ')} to the env file. Allow only the account of the service to read it.`,
+  );
 }
 
 try {

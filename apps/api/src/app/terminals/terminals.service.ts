@@ -160,6 +160,7 @@ export class TerminalsService {
         action: 'terminal.bound',
         entityType: 'terminal',
         entityId: terminalId,
+        storeId: store,
         details: { storeId: store, name },
       });
       const view = await this.view(trx, principal.tenantId, terminalId);
@@ -232,11 +233,14 @@ export class TerminalsService {
     terminalId: string,
     revokedBy: string,
   ): Promise<void> {
-    if (await this.repository.revoke(trx, tenantId, terminalId, revokedBy)) {
+    const storeId = await this.repository.revoke(trx, tenantId, terminalId, revokedBy);
+    if (storeId !== null) {
+      // The store column too, so the audit screen's store filter finds the event.
       await this.audit.append(trx, {
         action: 'terminal.revoked',
         entityType: 'terminal',
         entityId: terminalId,
+        storeId,
       });
     }
   }

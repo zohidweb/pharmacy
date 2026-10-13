@@ -107,7 +107,10 @@ export class MeService {
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
     );
-    if (credentials === null) throw unauthenticated();
+    // A blocked employee whose session has not ended yet does not change the password.
+    if (credentials === null || credentials.status !== 'active') {
+      throw unauthenticated();
+    }
     const { passwordHash: phc, passwordPepperVersion: pepperVersion } =
       credentials;
     if (phc === null || pepperVersion === null) throw invalidCurrentPassword();

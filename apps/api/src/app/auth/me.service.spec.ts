@@ -199,6 +199,7 @@ function setup() {
     status: 'active',
     passwordHash: '$scrypt$stored',
     passwordPepperVersion: 1,
+    passwordChangedAt: null,
   };
   let stores: ProfileStore[] = [
     store(STORE_1, 'Store one'),
@@ -447,6 +448,7 @@ describe('MeService.changePassword — rejections', () => {
       status: 'active',
       passwordHash: null,
       passwordPepperVersion: null,
+      passwordChangedAt: null,
     });
 
     const problem = await problemOf(

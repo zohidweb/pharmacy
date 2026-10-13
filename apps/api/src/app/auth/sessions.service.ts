@@ -3,10 +3,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EmployeeSession } from '@pharmacy/shared-dto';
 import {
+  getPrincipal,
   getRequestContext,
   requirePrincipal,
   runWithContext,
 } from '../../common/context/request-context';
+import { afterCommitBestEffort } from '../../common/errors/after-commit';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { PasswordHasher } from '../../core/crypto';
@@ -43,18 +45,36 @@ export interface LoginResult {
 /** Why a sign-in of a known employee failed: audit details, never shown to the client. */
 type FailureReason =
   | 'invalid_password'
+  | 'password_changed'
   | 'no_password'
   | 'unknown_employee'
   | 'tenant_blocked'
   | 'employee_inactive';
 
 type PasswordCheck =
-  | { ok: true; status: string; phc: string; pepperVersion: number }
+  | {
+      ok: true;
+      status: string;
+      phc: string;
+      pepperVersion: number;
+      changedAt: Date | null;
+    }
   | { ok: false; reason: FailureReason };
+
+const sameInstant = (a: Date | null, b: Date | null): boolean =>
+  a === null || b === null ? a === b : a.getTime() === b.getTime();
 
 // One answer for every failure: an unknown identifier and a wrong password are indistinguishable.
 const invalidCredentials = () =>
   new ProblemException(401, 'invalid_credentials');
+
+// The password was changed between its check and the session: the checked one is no longer it.
+class PasswordChangedError extends Error {
+  constructor() {
+    super('The password changed after it was verified');
+    this.name = 'PasswordChangedError';
+  }
+}
 
 // Sign-in by password, the session profile, the working store and sign-out (auth design
 // 2026-10-02, section 6). Passwords, hashes, tokens and identifier values are never logged or
@@ -81,9 +101,20 @@ export class SessionsService {
   }
 
   async login(raw: string, password: string, ip: string): Promise<LoginResult> {
+    // The session this browser already holds: its cookie is replaced, so it ends with the sign-in
+    // instead of living on unseen until its idle timeout (as the PIN sign-in does).
+    const previousSessionId = getPrincipal()?.sessionId ?? null;
     const started = this.clock.now();
     try {
-      return await this.attemptLogin(raw, password, ip);
+      const result = await this.attemptLogin(raw, password, ip);
+      if (previousSessionId !== null) {
+        await afterCommitBestEffort(
+          this.logger,
+          'Ending the replaced session',
+          () => this.sessions.destroy(previousSessionId),
+        );
+      }
+      return result;
     } catch (error) {
       // Every 401 invalid_credentials takes at least the floor (plus jitter) from the start, so
       // the timing does not tell an unknown identifier, a wrong password, a blocked employee or
@@ -264,6 +295,17 @@ export class SessionsService {
     let issued: IssuedSession;
     try {
       issued = await this.db.tenantTransaction(async (trx) => {
+        const current = await this.repository.lockPasswordChange(
+          trx,
+          tenantId,
+          employeeId,
+        );
+        if (
+          current === null ||
+          !sameInstant(current.changedAt, verified.changedAt)
+        ) {
+          throw new PasswordChangedError();
+        }
         if (rehash !== null) {
           await this.repository.updatePasswordHash(
             trx,
@@ -295,6 +337,9 @@ export class SessionsService {
       }
       if (error instanceof EmployeeGoneError) {
         return this.fail(employeeId, 'unknown_employee', ip);
+      }
+      if (error instanceof PasswordChangedError) {
+        return this.fail(employeeId, 'password_changed', ip);
       }
       throw error;
     }
@@ -332,7 +377,13 @@ export class SessionsService {
     }
     const ok = await this.hasher.verify(password, phc, pepperVersion);
     return ok
-      ? { ok: true, status, phc, pepperVersion }
+      ? {
+          ok: true,
+          status,
+          phc,
+          pepperVersion,
+          changedAt: credentials.passwordChangedAt,
+        }
       : { ok: false, reason: 'invalid_password' };
   }
 

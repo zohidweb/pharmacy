@@ -1,12 +1,23 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  UseInterceptors,
+} from '@nestjs/common';
 import type { Role } from '@pharmacy/shared-dto';
 import { RequireFreshAuth } from '../../common/guards/decorators';
 import { RequirePermission } from '../auth/decorators';
+import { AccessDeniedAudit } from './access-denied-audit.interceptor';
 import { RoleInputDto } from './dto/staff.dto';
 import { RolesService } from './roles.service';
 
 // Roles of the network (spec 2026-10-06-staff-design, section 4; ADR-0018, п. 2).
 @Controller({ path: 'roles', version: '1' })
+@UseInterceptors(AccessDeniedAudit)
 export class RolesController {
   constructor(private readonly roles: RolesService) {}
 

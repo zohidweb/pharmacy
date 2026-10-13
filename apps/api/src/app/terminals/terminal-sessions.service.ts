@@ -132,11 +132,18 @@ export class TerminalSessionsService {
           entityType: 'employee',
           entityId: employeeId,
           storeId,
+          terminalId,
           details: { terminalId, attempts: reserved.attempts },
         }),
       );
       throw reserved.locked ? pinLocked() : invalidPin();
     }
+    // A PIN hashed with older parameters or a retired pepper is hashed again, as a password is at
+    // sign-in; no transaction is held open during scrypt.
+    const verifiedPinHash = candidate.pinHash;
+    const rehash = this.hasher.needsRehash(verifiedPinHash, candidate.pinPepperVersion)
+      ? await this.hasher.hash(pin)
+      : null;
 
     // The role's permissions and the version; the scope becomes the terminal's store.
     const snapshot = await this.loader.reload(tenantId, employeeId);
@@ -151,6 +158,15 @@ export class TerminalSessionsService {
     let issued: IssuedSession;
     try {
       issued = await this.db.tenantTransaction(async (trx) => {
+        if (rehash !== null) {
+          await this.repository.updatePinHash(
+            trx,
+            tenantId,
+            employeeId,
+            verifiedPinHash,
+            rehash,
+          );
+        }
         await this.repository.clearPinFailures(trx, tenantId, employeeId);
         await this.repository.touchLastSeen(trx, tenantId, terminalId);
         await this.audit.append(trx, {
@@ -158,6 +174,7 @@ export class TerminalSessionsService {
           entityType: 'employee',
           entityId: employeeId,
           storeId,
+          terminalId,
           details: { terminalId },
         });
         const result = await this.issuer.issue(trx, {
@@ -207,6 +224,7 @@ export class TerminalSessionsService {
             entityType: 'employee',
             entityId: employeeId,
             storeId: device.storeId,
+            terminalId: device.terminalId,
             details: { terminalId: device.terminalId, reason },
           }),
         );

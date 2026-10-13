@@ -47,6 +47,14 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     supplier_return_allocations: 'tenant',
     purchase_orders: 'tenant',
     purchase_order_lines: 'tenant',
+    shifts: 'tenant',
+    shift_cash_operations: 'tenant',
+    held_receipts: 'tenant',
+    receipts: 'tenant',
+    receipt_lines: 'tenant',
+    payments: 'tenant',
+    controlled_sale_records: 'tenant',
+    idempotency_keys: 'tenant',
     audit_log: 'tenant',
     sessions: 'tenant',
     operators: 'platform',
@@ -60,6 +68,11 @@ export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
   'audit_log',
   'stock_movements',
   'supplier_ledger_entries',
+  'shift_cash_operations',
+  'receipts',
+  'receipt_lines',
+  'payments',
+  'controlled_sale_records',
 ]);
 
 // SECURITY DEFINER resolver functions owned by pharmacy_resolver (ADR-0013 p. 3 and its

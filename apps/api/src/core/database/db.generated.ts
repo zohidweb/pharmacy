@@ -70,6 +70,18 @@ export interface Categories {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface ControlledSaleRecords {
+  createdAt: Generated<Timestamp>;
+  id: string;
+  prescriptionFileId: string | null;
+  prescriptionNote: Json | null;
+  prescriptionPurgedAt: Timestamp | null;
+  receiptLineId: string;
+  recordedAt: Timestamp;
+  recordedBy: string;
+  tenantId: string;
+}
+
 export interface DictionaryValues {
   archivedAt: Timestamp | null;
   code: string | null;
@@ -221,6 +233,29 @@ export interface GoodsReceiptLines {
   tenantId: string;
 }
 
+export interface HeldReceipts {
+  createdAt: Generated<Timestamp>;
+  heldAt: Timestamp;
+  heldBy: string;
+  id: string;
+  payload: Json;
+  shiftId: string;
+  storeId: string;
+  subtotalDirams: bigint;
+  tenantId: string;
+}
+
+export interface IdempotencyKeys {
+  createdAt: Generated<Timestamp>;
+  expiresAt: Timestamp;
+  key: string;
+  requestHash: Buffer;
+  response: Json | null;
+  scope: string;
+  statusCode: number | null;
+  tenantId: string;
+}
+
 export interface InventoryCountEntries {
   documentId: string;
   enteredAt: Generated<Timestamp>;
@@ -241,6 +276,7 @@ export interface InventoryLines {
   isFound: Generated<boolean>;
   lineNo: number;
   productId: string;
+  soldAfterCountPieces: number | null;
   soldSinceStartPieces: number | null;
   surplusBatchId: string | null;
   surplusExpiryDate: string | null;
@@ -303,6 +339,15 @@ export interface Operators {
   login: string;
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
+}
+
+export interface Payments {
+  amountDirams: bigint;
+  createdAt: Generated<Timestamp>;
+  id: string;
+  kind: string;
+  receiptId: string;
+  tenantId: string;
 }
 
 export interface PlatformAuditLog {
@@ -380,6 +425,55 @@ export interface PurchaseOrders {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface ReceiptLines {
+  batchChosenManually: Generated<boolean>;
+  batchId: string;
+  costDirams: bigint;
+  createdAt: Generated<Timestamp>;
+  currentPriceDirams: bigint | null;
+  discountShareDirams: Generated<bigint>;
+  id: string;
+  lineAmountDirams: bigint;
+  lineNo: number;
+  piecesPerPack: number;
+  productId: string;
+  qtyPieces: number;
+  receiptId: string;
+  saleUnit: string;
+  shortfallPieces: Generated<number>;
+  tenantId: string;
+  unitPriceDirams: bigint;
+}
+
+export interface Receipts {
+  businessDate: string;
+  cashierId: string;
+  cashTenderedDirams: Generated<bigint>;
+  changeDirams: Generated<bigint>;
+  correlationId: string;
+  createdAt: Generated<Timestamp>;
+  discountDirams: Generated<bigint>;
+  discountMinTotalDirams: bigint | null;
+  discountPercentBp: Generated<number>;
+  discountRuleId: string | null;
+  discrepancyKinds: Generated<string[]>;
+  fiscalData: Json | null;
+  fiscalStatus: Generated<string>;
+  id: string;
+  language: string;
+  number: string;
+  origin: string;
+  receivedAt: Timestamp;
+  shiftId: string;
+  soldAt: Timestamp;
+  status: Generated<string>;
+  storeId: string;
+  subtotalDirams: bigint;
+  tenantId: string;
+  terminalId: string;
+  totalDirams: bigint;
+}
+
 export interface RolePermissions {
   createdAt: Generated<Timestamp>;
   permission: string;
@@ -416,6 +510,45 @@ export interface Sessions {
   tenantId: string;
   terminalCredentialHash: string | null;
   terminalId: string | null;
+}
+
+export interface ShiftCashOperations {
+  amountDirams: bigint;
+  authorFlagged: Generated<boolean>;
+  comment: string | null;
+  createdAt: Generated<Timestamp>;
+  employeeId: string;
+  id: string;
+  kind: string;
+  occurredAt: Timestamp;
+  reason: string;
+  receivedAt: Timestamp;
+  shiftId: string;
+  tenantId: string;
+}
+
+export interface Shifts {
+  closedAt: Timestamp | null;
+  closedAuthorFlagged: Generated<boolean>;
+  closedBy: string | null;
+  countedCashDirams: bigint | null;
+  createdAt: Generated<Timestamp>;
+  discrepancyDirams: bigint | null;
+  discrepancyReason: string | null;
+  expectedCashDirams: bigint | null;
+  id: string;
+  number: string;
+  openedAt: Timestamp;
+  openedAuthorFlagged: Generated<boolean>;
+  openedBy: string;
+  openingCashDirams: bigint;
+  receivedAt: Timestamp;
+  status: Generated<string>;
+  storeId: string;
+  tenantId: string;
+  terminalId: string;
+  terminalTotals: Json | null;
+  zReport: Json | null;
 }
 
 export interface StockMovements {
@@ -635,6 +768,7 @@ export interface DB {
   auditLog: AuditLog;
   batches: Batches;
   categories: Categories;
+  controlledSaleRecords: ControlledSaleRecords;
   dictionaryValues: DictionaryValues;
   discountRules: DiscountRules;
   discountRuleStores: DiscountRuleStores;
@@ -645,20 +779,27 @@ export interface DB {
   employees: Employees;
   employeeStores: EmployeeStores;
   goodsReceiptLines: GoodsReceiptLines;
+  heldReceipts: HeldReceipts;
+  idempotencyKeys: IdempotencyKeys;
   inventoryCountEntries: InventoryCountEntries;
   inventoryLines: InventoryLines;
   legalEntities: LegalEntities;
   openingBalanceLines: OpeningBalanceLines;
   operatorCredentials: OperatorCredentials;
   operators: Operators;
+  payments: Payments;
   platformAuditLog: PlatformAuditLog;
   productBarcodes: ProductBarcodes;
   products: Products;
   purchaseOrderLines: PurchaseOrderLines;
   purchaseOrders: PurchaseOrders;
+  receiptLines: ReceiptLines;
+  receipts: Receipts;
   rolePermissions: RolePermissions;
   roles: Roles;
   sessions: Sessions;
+  shiftCashOperations: ShiftCashOperations;
+  shifts: Shifts;
   stockMovements: StockMovements;
   storeProducts: StoreProducts;
   stores: Stores;

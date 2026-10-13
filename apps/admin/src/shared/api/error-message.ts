@@ -23,6 +23,9 @@ const knownCodes = [
   'fresh_auth_required',
   'already_blocked',
   'not_blocked',
+  'invalid_code',
+  'password_policy',
+  'login_locked',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

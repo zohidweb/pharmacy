@@ -12,6 +12,7 @@ import type {
   TenantListFilter,
   TenantListItem,
 } from '@pharmacy/shared-dto';
+import { passwordProblems } from '@pharmacy/shared-domain';
 import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { billingHandlers } from './handlers-billing';
@@ -19,7 +20,7 @@ import { systemHandlers } from './handlers-system';
 import { audit, findStore, findTenant } from './helpers';
 import type { MockHandlers, MockRequest } from './types';
 import { mockDb, mockStats } from './db';
-import { demoOperator } from './fixtures';
+import { demoActivationCode, demoOperator } from './fixtures';
 
 const SESSION_KEY = 'pharmacy-admin-mock-session';
 /** Simulated network latency in development; none in tests (fast, deterministic). */
@@ -115,6 +116,22 @@ const handlers: MockHandlers = {
     writeSession(session);
     return session;
   },
+  // As apps/api: the policy first (a 422 tells nothing about the account), then one 401 for an
+  // unknown login and a wrong code alike.
+  'operator.activations.create': ({ body, correlationId }) => {
+    if (passwordProblems(body?.newPassword ?? '').length > 0) {
+      throw new ApiError(422, 'password_policy', correlationId);
+    }
+    const canonical = (code: string) =>
+      code.replace(/[-\s]/g, '').toUpperCase();
+    if (
+      body?.login.trim().toLowerCase() !== demoOperator.login ||
+      canonical(body.code) !== canonical(demoActivationCode)
+    ) {
+      throw new ApiError(401, 'invalid_code', correlationId);
+    }
+    mockDb().system.password = body.newPassword;
+  },
   'operator.sessions.current': ({ correlationId }) => {
     const session = readSession();
     if (!session) throw new ApiError(401, 'unauthenticated', correlationId);
@@ -123,23 +140,6 @@ const handlers: MockHandlers = {
   'operator.sessions.delete': () => {
     writeSession(null);
   },
-  'operator.impersonations.create': ({ body, correlationId }) => {
-    const tenant = findTenant(body.tenantId, correlationId);
-    if (tenant.status === 'blocked') {
-      throw new ApiError(409, 'tenant_blocked', correlationId);
-    }
-    audit(
-      tenant.id,
-      `Начат сеанс «от имени» владельца. Причина: ${body.reason}`,
-    );
-    // No client-product origin in mock mode: the screen reports the started session instead.
-    return {
-      impersonationId: `imp-${Date.now()}`,
-      handoffCode: 'mock',
-      handoffUrl: '',
-    };
-  },
-
   'tenants.list': ({ query }) => {
     const filter = query?.filter ?? 'all';
     const q = (query?.q ?? '').trim().toLocaleLowerCase('ru');

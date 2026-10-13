@@ -376,7 +376,8 @@ revoked_at)`; нет или отозван → `404 not_bound`. В `withTenant`:
 - Первый оператор — `node scripts/create-operator.mjs --login <e-mail> --name "<ФИО>"` в образе API:
   скрипт создаёт оператора и печатает одноразовый код (как у владельца, раздел 6); пароль оператор
   задаёт сам через `POST /api/v1/operator/activations { login, code, newPassword }` (поправка
-  2026-10-05, план части 3, решение P1: без повторения scrypt и pepper вне `PasswordHasher`).
+  2026-10-05, план части 3, решение P1: без повторения scrypt и pepper вне `PasswordHasher`) — в
+  админке экран «Первый вход» (`/activate`, 2026-10-13).
   Остальные операторы — из админки позже.
 - `POST /api/v1/operator/sessions { login, password }` → 201 `OperatorSession`; хеширование, лимиты,
   фиктивный хеш — как у сотрудника. Сессия в Redis, `aud=admin`, cookie `__Host-op_sid`,

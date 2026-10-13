@@ -5,6 +5,7 @@
 export const routes = {
   dashboard: () => '/',
   login: () => '/login',
+  activate: () => '/activate',
   statistics: () => '/statistics',
   companies: () => '/companies',
   companyCreate: () => '/companies/new',

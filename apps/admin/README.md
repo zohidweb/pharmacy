@@ -14,7 +14,8 @@ npx nx fsd admin
 Пока `apps/api` не реализует эндпоинты оператора, `nx dev admin` запускается с
 `NEXT_PUBLIC_API_MOCKS=true` (таргет `dev` в `package.json`): запросы обслуживает
 `src/shared/api/mocks` по тем же маршрутам и кодам ошибок, что и будущий API. Синтетический
-демо-оператор (логин и пароль) — в `src/shared/api/mocks/fixtures.ts`. Сборки (`nx build admin`)
+демо-оператор (логин, пароль и одноразовый код для экрана «Первый вход» `/activate`) — в
+`src/shared/api/mocks/fixtures.ts`. Сборки (`nx build admin`)
 флаг не получают: код моков в `out/` не попадает.
 
 ## i18n

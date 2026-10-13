@@ -15,6 +15,8 @@ import {
 
 export interface LoginFormProps {
   onSuccess: () => void;
+  /** Login to start with (right after the activation). */
+  defaultLogin?: string;
 }
 
 /**
@@ -22,9 +24,10 @@ export interface LoginFormProps {
  * a wrong pair is reported by the server (401 invalid_credentials) as one message without
  * telling which field was wrong. Focus moves to the first invalid field on submit (RHF default).
  */
-export function LoginForm({ onSuccess }: LoginFormProps) {
+export function LoginForm({ onSuccess, defaultLogin = '' }: LoginFormProps) {
   const t = useTranslations('auth');
   const tErrors = useTranslations('errors');
+  const tApi = useTranslations('apiErrors');
   const [showPassword, setShowPassword] = useState(false);
   const login = useLogin();
   const {
@@ -33,7 +36,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { login: '', password: '' },
+    defaultValues: { login: defaultLogin, password: '' },
   });
 
   const fieldError = (message: string | undefined) =>
@@ -44,6 +47,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     if (!error) return null;
     if (error instanceof ApiError && error.status === 401) {
       return t('invalidCredentials');
+    }
+    if (error instanceof ApiError && error.code === 'login_locked') {
+      return tApi('login_locked');
     }
     if (
       error instanceof ApiError &&

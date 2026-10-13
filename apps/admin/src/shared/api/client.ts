@@ -122,6 +122,7 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
  * mocks mode they go to the API, every other route to the mocks.
  */
 export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
+  'operator.activations.create',
   'operator.sessions.create',
   'operator.sessions.current',
   'operator.sessions.delete',

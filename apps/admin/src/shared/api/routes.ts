@@ -54,9 +54,8 @@ import type {
   CreateTenantRequest,
   CreateTenantResponse,
   IssueOwnerCodeResponse,
-  ImpersonationHandoff,
-  ImpersonationRequest,
   MigrateStoreToCloudRequest,
+  OperatorActivationRequest,
   OperatorLoginRequest,
   OperatorSession,
   AuditEntry,
@@ -114,10 +113,10 @@ export const apiRoutes = {
     'DELETE',
     () => '/operator/sessions/current',
   ),
-  'operator.impersonations.create': route<
-    ImpersonationHandoff,
-    ImpersonationRequest
-  >('POST', () => '/operator/impersonations'),
+  'operator.activations.create': route<void, OperatorActivationRequest>(
+    'POST',
+    () => '/operator/activations',
+  ),
 
   'tenants.list': route<
     TenantListResponse,

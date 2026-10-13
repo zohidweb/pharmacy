@@ -8,7 +8,10 @@ import {
   getRequestContext,
   requirePrincipal,
 } from '../../common/context/request-context';
-import { ProblemException } from '../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { PasswordHasher, SessionTokenService } from '../../core/crypto';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
@@ -73,9 +76,11 @@ export class MeService {
         principal.employeeId,
         dbLanguage(locale),
       );
-      // Last inside the transaction: if the session cannot be updated, the language rolls back.
+      const me = await this.buildMe(trx, principal, locale);
+      // Last inside the transaction: if the session cannot be updated, the language rolls back. Only
+      // the commit itself can still fail after it, leaving the session ahead by a locale.
       await this.sessions.update(principal.sessionId, { locale });
-      return this.buildMe(trx, principal, locale);
+      return me;
     });
   }
 
@@ -100,12 +105,16 @@ export class MeService {
     // The attempt is reserved atomically before any hashing or database call (see LoginLimiter).
     const limiterKey = `password-change:${tenantId}:${employeeId}`;
     const attempt = await this.limiter.tryAcquire(limiterKey);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed)
+      throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
     );
-    if (credentials === null) throw unauthenticated();
+    // A blocked employee whose session has not ended yet does not change the password.
+    if (credentials === null || credentials.status !== 'active') {
+      throw unauthenticated();
+    }
     const { passwordHash: phc, passwordPepperVersion: pepperVersion } =
       credentials;
     if (phc === null || pepperVersion === null) throw invalidCurrentPassword();
@@ -146,24 +155,39 @@ export class MeService {
       ).toISOString(),
     };
 
-    await this.db.tenantTransaction(async (trx) => {
-      const changed = await this.repository.changePassword(
-        trx,
-        tenantId,
-        employeeId,
-        phc,
-        next,
-      );
-      // The stored hash is not the verified one any more: the password changed meanwhile.
-      if (!changed) throw new ProblemException(409, 'conflict');
-      await this.audit.append(trx, {
-        action: 'auth.password-changed',
-        entityType: 'employee',
-        entityId: employeeId,
+    const stored = { session: false };
+    try {
+      await this.db.tenantTransaction(async (trx) => {
+        const changed = await this.repository.changePassword(
+          trx,
+          tenantId,
+          employeeId,
+          phc,
+          next,
+        );
+        // The stored hash is not the verified one any more: the password changed meanwhile.
+        if (!changed) throw new ProblemException(409, 'conflict');
+        await this.audit.append(trx, {
+          action: 'auth.password-changed',
+          entityType: 'employee',
+          entityId: employeeId,
+        });
+        // Last inside the transaction: if the session cannot be stored, the password rolls back.
+        await this.sessions.create(record);
+        stored.session = true;
       });
-      // Last inside the transaction: if the session cannot be stored, the password rolls back.
-      await this.sessions.create(record);
-    });
+    } catch (error) {
+      // A commit that fails after the new session was stored leaves it with no password behind
+      // it; nobody holds its token, so it is removed rather than left to expire.
+      if (stored.session) {
+        try {
+          await this.sessions.destroy(sessionId);
+        } catch (cleanup) {
+          this.logDestroyFailure('the uncommitted session', cleanup);
+        }
+      }
+      throw error;
+    }
 
     await this.endPreviousSessions(principal, sessionId);
     return { token, maxAgeSeconds: this.absoluteTtlSeconds };

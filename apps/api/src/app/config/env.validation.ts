@@ -13,7 +13,11 @@ import {
   validateSync,
   IsUUID,
 } from 'class-validator';
-import { type KeyRing, parseKeyRing } from '../../core/crypto/key-ring';
+import {
+  holdsPublicDevelopmentKey,
+  type KeyRing,
+  parseKeyRing,
+} from '../../core/crypto/key-ring';
 
 // Fail-fast validation of process env. The database variables come from the data layer (ADR-0006);
 // the auth variables from ADR-0008 (sessions, JWT, password pepper) and the auth design spec, section 11.
@@ -103,7 +107,11 @@ class EnvironmentVariables {
   STORE_MODE: 'cloud' | 'offline' = 'cloud';
 
   // The one network an offline store serves (plan auth-part4, decision P1); required with
-  // STORE_MODE=offline, refused in the cloud (cross-field check in validateEnv).
+  // STORE_MODE=offline, refused in the cloud (cross-field check in validateEnv). Kept in lower case,
+  // the form the database returns ids in: it is compared with them as a string.
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toLowerCase() : value,
+  )
   @IsUUID()
   @IsOptional()
   OFFLINE_TENANT_ID?: string;
@@ -254,6 +262,8 @@ function parseRing(
   return ring;
 }
 
+const REDACTED = '[redacted]';
+
 // Cross-field rules, checked once the fields themselves are valid.
 function checkCrossFields(env: EnvironmentVariables): string[] {
   const problems: string[] = [];
@@ -296,6 +306,21 @@ function checkCrossFields(env: EnvironmentVariables): string[] {
   } catch (e) {
     problems.push((e as Error).message);
   }
+  // A production copy of .env.example would sign sessions and pepper passwords with public keys.
+  // Development and the e2e process (APP_ENV=test on a developer's .env) may keep them.
+  if (env.APP_ENV === 'prod') {
+    const rings = [
+      ['SESSION_JWT_KEYS', env.jwtKeyRing],
+      ['PASSWORD_PEPPERS', env.pepperRing],
+    ] as const;
+    for (const [name, ring] of rings) {
+      if (ring !== undefined && holdsPublicDevelopmentKey(ring)) {
+        problems.push(
+          `${name} holds the public development key of .env.example; generate own keys`,
+        );
+      }
+    }
+  }
   return problems;
 }
 
@@ -318,5 +343,9 @@ export function validateEnv(
       `Invalid environment configuration: ${problems.join('; ')}`,
     );
   }
+  // The key lists live on as the parsed rings only: a config object logged or serialized by
+  // mistake must not carry key material (the rings print their ids only).
+  env.SESSION_JWT_KEYS = REDACTED;
+  env.PASSWORD_PEPPERS = REDACTED;
   return env;
 }

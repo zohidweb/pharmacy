@@ -149,20 +149,25 @@ export class StaffRepository {
   }
 
   /**
-   * The last events of the employee in the network's audit log: what the employee did and what
-   * concerns the employee (sign-ins are written before a session exists, with the employee as the
-   * entity; blocking and password resets by a manager too).
+   * The last events of the given actions of the employee in the network's audit log: what the
+   * employee did and what concerns the employee (sign-ins are written before a session exists,
+   * with the employee as the entity; blocking and password resets by a manager too).
    */
   async activity(
     trx: TenantTransaction,
     tenantId: string,
     employeeId: string,
+    actions: readonly string[],
     limit: number,
   ): Promise<ActivityRow[]> {
+    // The actions the card shows are filtered before the limit: otherwise the employee's other
+    // events (stock documents, sales) could fill it and leave the card empty.
+    if (actions.length === 0) return [];
     return trx
       .selectFrom('auditLog')
       .select(['recordedAt', 'action', 'entityType'])
       .where('tenantId', '=', tenantId)
+      .where('action', 'in', actions)
       .where((eb) =>
         eb.or([
           eb('employeeId', '=', employeeId),
@@ -438,6 +443,16 @@ export class StaffRepository {
   async findRole(trx: TenantTransaction, tenantId: string, id: string): Promise<RoleRow | null> {
     const row = await this.roleQuery(trx, tenantId).where('r.id', '=', id).executeTakeFirst();
     return row ? { ...row, employees: Number(row.employees) } : null;
+  }
+
+  /**
+   * Serialises the role name checks of the network until the commit: two writes with the same new
+   * name cannot both find it free (the check compares names in code; no unique index can).
+   */
+  async lockRoleNames(trx: TenantTransaction, tenantId: string): Promise<void> {
+    await sql`select pg_advisory_xact_lock(hashtextextended(${`role-names:${tenantId}`}, 0))`.execute(
+      trx,
+    );
   }
 
   /**

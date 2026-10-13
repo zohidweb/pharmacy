@@ -77,7 +77,9 @@ export function draftOf(product: CatalogProduct): ProductDraft {
 
 export function draftProblems(draft: ProductDraft) {
   return {
-    nameRu: draft.nameRu.trim() === '',
+    // A name in either language: the API requires the one of the network's default language and
+    // shows its own error at that field.
+    name: draft.nameRu.trim() === '' && draft.nameTj.trim() === '',
     piecesPerPack: draft.piecesPerPack < 1,
     maxPrice:
       draft.regulated && (parseMoneyToMinor(draft.maxPriceText) ?? 0) <= 0,
@@ -172,11 +174,10 @@ export function ProductForm({
       <div className="grid grid-cols-2 gap-4">
         <TextField
           label={t('nameRu')}
-          required
           disabled={disabled}
           value={draft.nameRu}
           error={
-            touched && problems.nameRu
+            touched && problems.name
               ? t('nameRequired')
               : serverError('nameRu')
           }
@@ -187,7 +188,11 @@ export function ProductForm({
           lang="tg"
           disabled={disabled}
           value={draft.nameTj}
-          error={serverError('nameTj')}
+          error={
+            touched && problems.name
+              ? t('nameRequired')
+              : serverError('nameTj')
+          }
           onChange={(event) => set('nameTj', event.target.value)}
         />
         <TextField

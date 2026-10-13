@@ -12,6 +12,8 @@ interface KeyState {
   lockedUntil: number;
   /** End of the remembered lock history (ms), 0 when none. */
   historyUntil: number;
+  /** The current lock started the history: a success of the locking attempt forgets both. */
+  lockStartedHistory: boolean;
 }
 
 /** Keys kept at most; the least recently used are evicted first. */
@@ -53,6 +55,7 @@ export class MemoryLoginLimiter extends LoginLimiter {
 
     if (state.attempts >= this.options.maxFailures) {
       const repeated = state.historyUntil > now;
+      state.lockStartedHistory = !repeated;
       state.lockedUntil =
         now +
         (repeated ? this.options.repeatLockSeconds : this.options.lockSeconds) * 1000;
@@ -67,10 +70,12 @@ export class MemoryLoginLimiter extends LoginLimiter {
   reset(key: string): Promise<void> {
     const state = this.keys.get(key);
     if (state) {
+      // The succeeding attempt placed the lock itself: nobody was locked out, nothing to remember.
+      if (state.lockedUntil > this.now() && state.lockStartedHistory) state.historyUntil = 0;
       state.attempts = 0;
       state.windowEndsAt = 0;
       state.lockedUntil = 0;
-      // The lock history stays until it expires, as in Redis.
+      // Otherwise the lock history stays until it expires, as in Redis.
       if (state.historyUntil <= this.now()) this.keys.delete(key);
     }
     return Promise.resolve();
@@ -85,14 +90,30 @@ export class MemoryLoginLimiter extends LoginLimiter {
         return state;
       }
     }
-    return { attempts: 0, windowEndsAt: 0, lockedUntil: 0, historyUntil: 0 };
+    return {
+      attempts: 0,
+      windowEndsAt: 0,
+      lockedUntil: 0,
+      historyUntil: 0,
+      lockStartedHistory: false,
+    };
   }
 
-  // Re-inserted last, so a Map's insertion order keeps the least recently used key first.
+  // Re-inserted last, so a Map's insertion order keeps the least recently used key first. When
+  // full, the least recently used key without an active lock goes first: a flood of new keys must
+  // not evict a lock.
   private keep(key: string, state: KeyState): void {
     if (this.keys.size >= MEMORY_LIMITER_MAX_KEYS) {
-      const oldest = this.keys.keys().next();
-      if (!oldest.done) this.keys.delete(oldest.value);
+      const now = this.now();
+      let victim: string | undefined;
+      for (const [candidate, candidateState] of this.keys) {
+        if (candidateState.lockedUntil <= now) {
+          victim = candidate;
+          break;
+        }
+      }
+      victim ??= this.keys.keys().next().value;
+      if (victim !== undefined) this.keys.delete(victim);
     }
     this.keys.set(key, state);
   }

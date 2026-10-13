@@ -3,11 +3,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EmployeeSession } from '@pharmacy/shared-dto';
 import {
+  getPrincipal,
   getRequestContext,
   requirePrincipal,
   runWithContext,
 } from '../../common/context/request-context';
-import { ProblemException } from '../../common/errors/problem.exception';
+import { afterCommitBestEffort } from '../../common/errors/after-commit';
+import {
+  LockedException,
+  ProblemException,
+} from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { PasswordHasher } from '../../core/crypto';
 import {
@@ -26,7 +31,11 @@ import { normalizeIdentifier } from './identifier';
 import { LoginClock, padFailure } from './login-clock';
 import { LoginLimiter, loginLimiterKey } from './login-limiter';
 import { PrincipalLoader } from './principal-loader';
-import { SessionIssuer } from './session-issuer';
+import {
+  EmployeeGoneError,
+  type IssuedSession,
+  SessionIssuer,
+} from './session-issuer';
 import { buildEmployeeSession, type SessionView } from './session-profile';
 
 export interface LoginResult {
@@ -39,18 +48,36 @@ export interface LoginResult {
 /** Why a sign-in of a known employee failed: audit details, never shown to the client. */
 type FailureReason =
   | 'invalid_password'
+  | 'password_changed'
   | 'no_password'
   | 'unknown_employee'
   | 'tenant_blocked'
   | 'employee_inactive';
 
 type PasswordCheck =
-  | { ok: true; status: string; phc: string; pepperVersion: number }
+  | {
+      ok: true;
+      status: string;
+      phc: string;
+      pepperVersion: number;
+      changedAt: Date | null;
+    }
   | { ok: false; reason: FailureReason };
+
+const sameInstant = (a: Date | null, b: Date | null): boolean =>
+  a === null || b === null ? a === b : a.getTime() === b.getTime();
 
 // One answer for every failure: an unknown identifier and a wrong password are indistinguishable.
 const invalidCredentials = () =>
   new ProblemException(401, 'invalid_credentials');
+
+// The password was changed between its check and the session: the checked one is no longer it.
+class PasswordChangedError extends Error {
+  constructor() {
+    super('The password changed after it was verified');
+    this.name = 'PasswordChangedError';
+  }
+}
 
 // Sign-in by password, the session profile, the working store and sign-out (auth design
 // 2026-10-02, section 6). Passwords, hashes, tokens and identifier values are never logged or
@@ -77,9 +104,20 @@ export class SessionsService {
   }
 
   async login(raw: string, password: string, ip: string): Promise<LoginResult> {
+    // The session this browser already holds: its cookie is replaced, so it ends with the sign-in
+    // instead of living on unseen until its idle timeout (as the PIN sign-in does).
+    const previousSessionId = getPrincipal()?.sessionId ?? null;
     const started = this.clock.now();
     try {
-      return await this.attemptLogin(raw, password, ip);
+      const result = await this.attemptLogin(raw, password, ip);
+      if (previousSessionId !== null) {
+        await afterCommitBestEffort(
+          this.logger,
+          'Ending the replaced session',
+          () => this.sessions.destroy(previousSessionId),
+        );
+      }
+      return result;
     } catch (error) {
       // Every 401 invalid_credentials takes at least the floor (plus jitter) from the start, so
       // the timing does not tell an unknown identifier, a wrong password, a blocked employee or
@@ -115,7 +153,7 @@ export class SessionsService {
     const key = loginLimiterKey(identifier.kind, identifier.value);
     const attempt = await this.limiter.tryAcquire(key);
     if (!attempt.allowed) {
-      throw new ProblemException(429, 'login_locked');
+      throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
     }
 
     // Step 4: the tenant of the identifier.
@@ -189,7 +227,8 @@ export class SessionsService {
     // Reserved atomically before any hashing or database call (see LoginLimiter).
     const limiterKey = `reconfirm:${tenantId}:${employeeId}`;
     const attempt = await this.limiter.tryAcquire(limiterKey);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed)
+      throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
@@ -256,30 +295,58 @@ export class SessionsService {
       ? await this.hasher.hash(password)
       : null;
 
-    const issued = await this.db.tenantTransaction(async (trx) => {
-      if (rehash !== null) {
-        await this.repository.updatePasswordHash(
+    const stored: { sessionId?: string } = {};
+    let issued: IssuedSession;
+    try {
+      issued = await this.db.tenantTransaction(async (trx) => {
+        const current = await this.repository.lockPasswordChange(
           trx,
           tenantId,
           employeeId,
-          verified.phc,
-          rehash,
         );
+        if (
+          current === null ||
+          !sameInstant(current.changedAt, verified.changedAt)
+        ) {
+          throw new PasswordChangedError();
+        }
+        if (rehash !== null) {
+          await this.repository.updatePasswordHash(
+            trx,
+            tenantId,
+            employeeId,
+            verified.phc,
+            rehash,
+          );
+        }
+        // The success audit, last_login_at and the session commit together.
+        await this.audit.append(trx, {
+          action: 'auth.login-succeeded',
+          entityType: 'employee',
+          entityId: employeeId,
+          details: { ip },
+        });
+        const result = await this.issuer.issue(trx, {
+          tenantId,
+          employeeId,
+          auth: 'password',
+          snapshot,
+        });
+        stored.sessionId = result.record.sessionId;
+        return result;
+      });
+    } catch (error) {
+      if (stored.sessionId !== undefined) {
+        await this.issuer.discard(stored.sessionId);
       }
-      // The success audit, last_login_at and the session commit together.
-      await this.audit.append(trx, {
-        action: 'auth.login-succeeded',
-        entityType: 'employee',
-        entityId: employeeId,
-        details: { ip },
-      });
-      return this.issuer.issue(trx, {
-        tenantId,
-        employeeId,
-        auth: 'password',
-        snapshot,
-      });
-    });
+      if (error instanceof EmployeeGoneError) {
+        return this.fail(employeeId, 'unknown_employee', ip);
+      }
+      if (error instanceof PasswordChangedError) {
+        return this.fail(employeeId, 'password_changed', ip);
+      }
+      throw error;
+    }
     await this.issuer.seedVersion(
       tenantId,
       employeeId,
@@ -314,7 +381,13 @@ export class SessionsService {
     }
     const ok = await this.hasher.verify(password, phc, pepperVersion);
     return ok
-      ? { ok: true, status, phc, pepperVersion }
+      ? {
+          ok: true,
+          status,
+          phc,
+          pepperVersion,
+          changedAt: credentials.passwordChangedAt,
+        }
       : { ok: false, reason: 'invalid_password' };
   }
 

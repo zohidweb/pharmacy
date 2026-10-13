@@ -52,12 +52,13 @@ export function PriceDialog({
       costMinor: row.costMinor,
       maxPriceMinor: row.maxPriceMinor,
     });
-  const aboveMax = row.prices.some((p) =>
-    warningsOf(p.storeId).includes('above_max'),
-  );
   // a store without a price stays without one until a price is typed
   const changed = row.prices.filter(
     (p) => value(p.storeId) > 0 && value(p.storeId) !== p.priceMinor,
+  );
+  // only a price being set asks for the confirmation, not one already above the limit and kept
+  const aboveMax = changed.some((p) =>
+    warningsOf(p.storeId).includes('above_max'),
   );
   const save = useMutation({
     mutationFn: () =>

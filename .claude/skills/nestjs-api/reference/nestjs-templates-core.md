@@ -1,8 +1,8 @@
 # NestJS Core Templates — main.ts, AppModule, глобальные модули ядра
 
 Шаблоны точки входа и корневого модуля `apps/api` (Express-адаптер). Основа — реальные
-`apps/api/src/main.ts` и `apps/api/src/app/app.module.ts`; строки с пометкой «to be added»
-появятся вместе с аутентификацией (ADR-0008), Redis и лимитами. Перед правкой сверяйтесь с файлами.
+`apps/api/src/main.ts` и `apps/api/src/app/app.module.ts` (аутентификация ADR-0008, Redis и лимиты
+уже в коде). Шаблон сокращён — перед правкой сверяйтесь с файлами.
 
 ## main.ts (apps/api/src/main.ts)
 
@@ -10,7 +10,7 @@
 import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import helmet from 'helmet'; // to be added with ADR-0008 security headers
+import helmet from 'helmet';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
@@ -47,21 +47,24 @@ bootstrap();
 ## AppModule (apps/api/src/app/app.module.ts)
 
 ```typescript
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { DatabaseModule } from '../core/database';
-import { RedisModule } from '../core/redis/redis.module';                          // to be added
-import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware'; // to be added
-import { ProblemDetailsFilter } from '../common/filters/problem-details.filter';  // to be added
-import { TenantAwareThrottlerGuard } from '../common/throttling/tenant-aware-throttler.guard'; // to be added
+import { RedisModule } from '../core/redis/redis.module';
+import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
+import { SessionMiddleware } from '../common/middleware/session.middleware';
+import { ProblemDetailsFilter } from '../common/filters/problem-details.filter';
+import { PrincipalThrottlerGuard } from '../common/throttling/principal-throttler.guard';
+import { CsrfGuard } from '../common/guards/csrf.guard';
+import { FreshAuthGuard } from '../common/guards/fresh-auth.guard';
 import { validateEnv } from './config/env.validation';
 import { HealthController } from './health/health.controller';
-import { AuthModule } from './auth/auth.module';                                   // to be added
-import { AuthGuard } from '../common/guards/auth.guard';              // to be added
-import { PermissionsGuard } from './auth/guards/permissions.guard';               // to be added
+import { AuthModule } from './auth/auth.module';
+import { AuthGuard } from '../common/guards/auth.guard';
+import { PermissionsGuard } from './auth/permissions.guard';
+import { OperatorPermissionsGuard } from './platform/auth/operator-permissions.guard';
 import { CatalogModule } from './catalog/catalog.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { PosModule } from './pos/pos.module';
@@ -79,7 +82,6 @@ import { AuditModule } from './audit/audit.module';
     ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
     DatabaseModule,
     RedisModule,
-    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({ throttlers: [{ name: 'default', ttl: 60_000, limit: 300 }] }),
     AuthModule,
     CatalogModule,
@@ -96,16 +98,23 @@ import { AuditModule } from './audit/audit.module';
   ],
   controllers: [HealthController],
   providers: [
-    { provide: APP_FILTER, useClass: ProblemDetailsFilter },
-    // Order matters: authenticate (fills tenant/employee context) -> throttle per employee -> authorize
+    // Global guards run in registration order: the session principal (built by SessionMiddleware),
+    // CSRF, the throttler (by principal), the permission, the operator contour, the step-up last.
     { provide: APP_GUARD, useClass: AuthGuard },
-    { provide: APP_GUARD, useClass: TenantAwareThrottlerGuard },
+    { provide: APP_GUARD, useClass: CsrfGuard },
+    { provide: APP_GUARD, useClass: PrincipalThrottlerGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_GUARD, useClass: OperatorPermissionsGuard },
+    { provide: APP_GUARD, useClass: FreshAuthGuard },
+    { provide: APP_FILTER, useClass: ProblemDetailsFilter },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    // The correlation id first, then the frozen session context for every route.
+    consumer
+      .apply(CorrelationIdMiddleware, SessionMiddleware)
+      .forRoutes({ path: '*path', method: RequestMethod.ALL });
   }
 }
 ```
@@ -150,17 +159,28 @@ export class CorrelationIdMiddleware implements NestMiddleware {
 
 ## Глобальные модули ядра
 
-`DatabaseModule` уже есть (`apps/api/src/core/database/database.module.ts`, `@Global`,
-экспортирует только `TenantDatabase`) и подключён в `AppModule`. Redis и health добавляются
-своими модулями по тому же образцу:
+`DatabaseModule` (`apps/api/src/core/database/database.module.ts`, `@Global`, экспортирует
+`TenantDatabase`) и `RedisModule` (`apps/api/src/core/redis/redis.module.ts`, `@Global`) подключены в
+`AppModule`. Redis — один клиент node-redis 6 под токеном `REDIS_CLIENT` (`createRedisClient` в
+`redis.tokens.ts`: без офлайн-очереди, MULTI — через `readyMulti`); на офлайн-точке клиента нет
+(`null`):
 
 ```typescript
-// apps/api/src/core/redis/redis.module.ts (to be added with sessions)
-import { Global, Module } from '@nestjs/common';
-import { RedisService } from './redis.service'; // node-redis 6 client, the project's only Redis client
-
+// apps/api/src/core/redis/redis.module.ts (abridged)
 @Global()
-@Module({ providers: [RedisService], exports: [RedisService] })
+@Module({
+  providers: [
+    {
+      provide: REDIS_CLIENT,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): RedisClient | null =>
+        config.getOrThrow<string>('STORE_MODE') === 'cloud'
+          ? createRedisClient(config.getOrThrow<string>('REDIS_URL'))
+          : null,
+    },
+  ],
+  exports: [REDIS_CLIENT],
+})
 export class RedisModule {}
 ```
 

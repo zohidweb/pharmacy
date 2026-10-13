@@ -85,4 +85,4 @@
 Решения архитектора по спецификации `docs/superpowers/specs/2026-10-02-auth-design.md` (ADR-0008 и ADR-0013, поправки той же даты).
 
 - `sessions` (офлайн-точка): ключ `(tenant_id, jti)` вместо `token_hash`; токен сессии — JWT, значение cookie в таблице не хранится.
-- `audit_log` секционируется по месяцам с первой миграции аутентификации: секции создаются статически на период вперёд, плановая задача (роль-владелец) создаёт последующие — см. `docs/superpowers/plans/2026-09-30-data-layer-followups.md`. События входа: `auth.login-succeeded`, `auth.login-failed`, `auth.pin-succeeded`, `auth.pin-failed`, `auth.pin-locked`, `access.denied`, `terminal.bound`, `terminal.revoked`.
+- `audit_log` секционируется по месяцам с первой миграции аутентификации: секции созданы статически до 2027-12; плановая задача (роль-владелец), создающая последующие, ещё не сделана — нужна до 2027-11, см. `docs/superpowers/plans/2026-09-30-data-layer-followups.md`. События входа: `auth.login-succeeded`, `auth.login-failed`, `auth.pin-succeeded`, `auth.pin-failed`, `auth.pin-locked`, `access.denied`, `terminal.bound`, `terminal.revoked`.

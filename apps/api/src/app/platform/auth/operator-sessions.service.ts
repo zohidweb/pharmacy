@@ -6,7 +6,10 @@ import {
   getRequestContext,
   requireOperator,
 } from '../../../common/context/request-context';
-import { ProblemException } from '../../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../../common/errors/problem.exception';
 import { PasswordHasher, SessionTokenService, sha256Hex } from '../../../core/crypto';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { OperatorSessionStore } from '../../../core/sessions';
@@ -14,7 +17,10 @@ import { normalizeIdentifier } from '../../auth/identifier';
 import { LoginClock, padFailure } from '../../auth/login-clock';
 import { LoginLimiter } from '../../auth/login-limiter';
 import { PlatformAuditService } from '../audit/platform-audit.service';
-import { OperatorAuthRepository } from './operator-auth.repository';
+import {
+  OperatorAuthRepository,
+  type OperatorProfileRow,
+} from './operator-auth.repository';
 
 export interface OperatorLoginResult {
   /** Operator JWT for the cookie; never in a response body or a log. */
@@ -30,6 +36,14 @@ type FailureReason =
   | 'operator_blocked';
 
 const SIGN_IN_JOB = { kind: 'system', job: 'operator-auth' } as const;
+
+// The operator of a verified password is gone between the check and the session.
+class OperatorGoneError extends Error {
+  constructor() {
+    super('The operator of a verified password is gone');
+    this.name = 'OperatorGoneError';
+  }
+}
 
 // One answer for every failure: an unknown login and a wrong password are indistinguishable.
 const invalidCredentials = () => new ProblemException(401, 'invalid_credentials');
@@ -113,7 +127,7 @@ export class OperatorSessionsService {
     // The attempt is reserved atomically before any hashing or database call.
     const key = `operator:${sha256Hex(login)}`;
     const attempt = await this.limiter.tryAcquire(key);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed) throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     const found = await this.db.platformTransaction(SIGN_IN_JOB, (trx) =>
       this.repository.findByLogin(trx, login),
@@ -147,32 +161,44 @@ export class OperatorSessionsService {
     );
     const authenticatedAt = new Date(now).toISOString();
 
-    const profile = await this.db.platformTransaction(
-      { kind: 'operator', operatorId },
-      async (trx) => {
-        if (rehash !== null) {
-          await this.repository.updatePasswordHash(trx, operatorId, verifiedPhc, rehash);
-        }
-        await this.repository.recordLogin(trx, operatorId);
-        await this.audit.append(trx, {
-          action: 'auth.operator-login-succeeded',
-          entityType: 'operator',
-          entityId: operatorId,
-          details: { ip },
-        });
-        const row = await this.repository.findProfile(trx, operatorId);
-        if (row === null) throw new ProblemException(401, 'unauthenticated');
-        // Last inside the transaction: if the session cannot be stored, the audit rolls back.
-        await this.sessions.create({
-          sessionId,
-          operatorId,
-          authenticatedAt,
-          idleTtlSeconds: this.idleTtlSeconds,
-          absoluteExpiresAt: new Date(now + this.absoluteTtlSeconds * 1000).toISOString(),
-        });
-        return row;
-      },
-    );
+    const stored = { session: false };
+    let profile: OperatorProfileRow;
+    try {
+      profile = await this.db.platformTransaction(
+        { kind: 'operator', operatorId },
+        async (trx) => {
+          if (rehash !== null) {
+            await this.repository.updatePasswordHash(trx, operatorId, verifiedPhc, rehash);
+          }
+          await this.repository.recordLogin(trx, operatorId);
+          await this.audit.append(trx, {
+            action: 'auth.operator-login-succeeded',
+            entityType: 'operator',
+            entityId: operatorId,
+            details: { ip },
+          });
+          const row = await this.repository.findProfile(trx, operatorId);
+          if (row === null) throw new OperatorGoneError();
+          // Last inside the transaction: if the session cannot be stored, the audit rolls back.
+          await this.sessions.create({
+            sessionId,
+            operatorId,
+            authenticatedAt,
+            idleTtlSeconds: this.idleTtlSeconds,
+            absoluteExpiresAt: new Date(now + this.absoluteTtlSeconds * 1000).toISOString(),
+          });
+          stored.session = true;
+          return row;
+        },
+      );
+    } catch (error) {
+      // A commit that fails after the session was stored leaves it with nothing behind it; nobody
+      // holds its token, so it is removed rather than left to expire.
+      if (stored.session) await this.discard(sessionId);
+      // The operator of the verified password is gone: the same answer as an unknown login.
+      if (error instanceof OperatorGoneError) return this.fail(operatorId, 'unknown_login', ip);
+      throw error;
+    }
 
     await this.limiter.reset(key);
     return {
@@ -188,6 +214,16 @@ export class OperatorSessionsService {
         authenticatedAt,
       },
     };
+  }
+
+  private async discard(sessionId: string): Promise<void> {
+    try {
+      await this.sessions.destroy(sessionId);
+    } catch (error) {
+      this.logger.warn(
+        `Uncommitted operator session was not removed (${error instanceof Error ? error.name : typeof error}) [correlationId=${getRequestContext()?.correlationId}]`,
+      );
+    }
   }
 
   // A failed sign-in (already counted by tryAcquire): audited on the platform, answered as 401.

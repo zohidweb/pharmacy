@@ -162,6 +162,7 @@ export class TerminalsService {
         action: 'terminal.bound',
         entityType: 'terminal',
         entityId: terminalId,
+        storeId: store,
         details: { storeId: store, name },
       });
       const view = await this.view(trx, principal.tenantId, terminalId);
@@ -170,7 +171,13 @@ export class TerminalsService {
     });
 
     if (previous !== null) {
-      await this.afterRevoke(principal.tenantId, previous);
+      try {
+        await this.afterRevoke(principal.tenantId, previous);
+      } catch {
+        // Logged by afterRevoke. Not answered here: the new cookie replaces this browser's old
+        // one, so the old terminal's PIN session no longer matches its device anyway, and an
+        // error would leave the new terminal bound, holding its name, with no cookie to use it.
+      }
     }
     return { secret, terminal };
   }
@@ -244,11 +251,14 @@ export class TerminalsService {
     await this.repository.lockTerminal(trx, tenantId, terminalId, 'update');
     // e.g. 409 `shift_open` of the POS (spec 2026-10-13-pos-shift-sale, E14)
     await this.revocationChecks.run(trx, tenantId, terminalId);
-    if (await this.repository.revoke(trx, tenantId, terminalId, revokedBy)) {
+    const storeId = await this.repository.revoke(trx, tenantId, terminalId, revokedBy);
+    if (storeId !== null) {
+      // The store column too, so the audit screen's store filter finds the event.
       await this.audit.append(trx, {
         action: 'terminal.revoked',
         entityType: 'terminal',
         entityId: terminalId,
+        storeId,
       });
     }
   }

@@ -100,16 +100,18 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
       );
     },
   });
-  const fieldErrors = apiFieldErrors(save.error);
+  const saveFieldErrors = apiFieldErrors(save.error);
+  // a restore into an archived category is refused at the category field
+  const statusFieldErrors = apiFieldErrors(setStatus.error);
+  const fieldErrors = [...saveFieldErrors, ...statusFieldErrors];
   // a rejected field is shown at the field itself
   const error = useApiErrorMessage(
-    shownAtFields(fieldErrors)
-      ? setStatus.error
-      : (save.error ?? setStatus.error),
+    (shownAtFields(saveFieldErrors) ? null : save.error) ??
+      (shownAtFields(statusFieldErrors) ? null : setStatus.error),
   );
   const problems = draftProblems(draft);
   const valid =
-    !problems.nameRu && !problems.piecesPerPack && !problems.maxPrice;
+    !problems.name && !problems.piecesPerPack && !problems.maxPrice;
 
   return (
     <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">

@@ -1,12 +1,31 @@
-import type { ExecutionContext } from '@nestjs/common';
+import { type ExecutionContext, SetMetadata } from '@nestjs/common';
+import type { Permission } from '@pharmacy/shared-domain';
 import { ProblemException } from '../src/common/errors/problem.exception';
 import {
   type EmployeePrincipal,
   runWithContext,
 } from '../src/common/context/request-context';
+import {
+  type PermissionRequirement,
+  REQUIRED_PERMISSION_KEY,
+  type StoreScopeOptions,
+} from '../src/common/guards/decorators';
 
 // Test helpers for guards: an HTTP ExecutionContext over a plain request object and a principal
 // factory. Guards read the principal from the request context, so runAs runs them inside one.
+
+/**
+ * The marker @RequirePermission (app/auth/decorators.ts) sets, built here: the tests of common do
+ * not import the auth module.
+ */
+export const testRequirePermission = (
+  permission: Permission,
+  scope?: StoreScopeOptions,
+) =>
+  SetMetadata<string, PermissionRequirement>(
+    REQUIRED_PERMISSION_KEY,
+    scope === undefined ? { permission } : { permission, scope },
+  );
 
 export const TEST_TENANT = '0197a1b2-0000-7000-8000-00000000a001';
 export const TEST_EMPLOYEE = '0197a1b2-0000-7000-8000-00000000a002';

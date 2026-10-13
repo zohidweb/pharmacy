@@ -453,7 +453,9 @@ export class CatalogRepository {
           .execute()
       ).map((row) => row.barcode),
     );
-    const added = codes.filter((code) => !kept.has(code));
+    // Inserted in one order everywhere: two products adding the same free codes at once wait for
+    // each other on the primary key instead of deadlocking (the loser gets barcode_taken).
+    const added = codes.filter((code) => !kept.has(code)).sort();
     if (added.length === 0) return;
     await trx
       .insertInto('productBarcodes')
@@ -567,16 +569,49 @@ export class CatalogRepository {
       .execute();
   }
 
-  /** Locks the category row so that an archive and a new product of it do not race. */
+  /**
+   * Locks the category row so that an archive and a product written into it do not race: the
+   * archive takes it for update, a product write for share, so product writes of one category do
+   * not queue behind each other.
+   */
   async lockCategory(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    mode: 'update' | 'share' = 'update',
+  ): Promise<{ status: string } | null> {
+    const row = await sql<{ status: string }>`
+      select status from pharmacy.categories
+      where tenant_id = ${tenantId} and id = ${id}
+      ${sql.raw(mode === 'share' ? 'for share' : 'for update')}`.execute(trx);
+    return row.rows[0] ?? null;
+  }
+
+  /**
+   * Locks the product row before it is read and changed, so that two edits, or an edit and an
+   * archive, apply one after the other. FOR NO KEY UPDATE: rows referencing the product (barcodes,
+   * prices, batches, document lines) are still inserted meanwhile, their foreign key check takes
+   * FOR KEY SHARE. Locked before its category (product, then category).
+   */
+  async lockProduct(
     trx: TenantTransaction,
     tenantId: string,
     id: string,
   ): Promise<{ status: string } | null> {
     const row = await sql<{ status: string }>`
-      select status from pharmacy.categories
-      where tenant_id = ${tenantId} and id = ${id} for update`.execute(trx);
+      select status from pharmacy.products
+      where tenant_id = ${tenantId} and id = ${id} for no key update`.execute(trx);
     return row.rows[0] ?? null;
+  }
+
+  /**
+   * Serialises the category name checks of the network until the commit: two writes with the same
+   * new name cannot both find it free (names are compared in code across languages).
+   */
+  async lockCategoryNames(trx: TenantTransaction, tenantId: string): Promise<void> {
+    await sql`select pg_advisory_xact_lock(hashtextextended(${`category-names:${tenantId}`}, 0))`.execute(
+      trx,
+    );
   }
 
   async setMarkups(
@@ -584,7 +619,11 @@ export class CatalogRepository {
     tenantId: string,
     markups: ReadonlyArray<{ categoryId: string; markupBp: number }>,
   ): Promise<void> {
-    for (const markup of markups) {
+    // Rows are updated in one order everywhere: two saves at once wait instead of deadlocking.
+    const ordered = [...markups].sort((a, b) =>
+      a.categoryId < b.categoryId ? -1 : a.categoryId > b.categoryId ? 1 : 0,
+    );
+    for (const markup of ordered) {
       await trx
         .updateTable('categories')
         .set({ markupBp: markup.markupBp, updatedAt: sql`now()` })

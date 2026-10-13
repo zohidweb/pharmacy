@@ -25,9 +25,7 @@ import {
   cookieEnvFrom,
 } from './session-cookie';
 import { SessionsService } from './sessions.service';
-
-// Per IP and minute; the per-identifier lockout (LoginLimiter) is the main brute-force guard.
-const AUTH_ROUTE_LIMIT = { limit: 60, ttl: 60_000 };
+import { AUTH_ROUTE_LIMIT } from '../../common/throttling/auth-route-limit';
 
 // Employee sessions of the web contour (auth design 2026-10-02, section 6): sign-in by password,
 // the session profile, the working store and sign-out. The JWT travels only in the session cookie.

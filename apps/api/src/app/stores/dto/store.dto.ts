@@ -16,6 +16,7 @@ import {
   Length,
   Matches,
   MaxLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -71,21 +72,25 @@ export class LegalEntityInputDto implements LegalEntityInput {
   bankDetails!: string | null;
 }
 
+// A required field of a partial update: it may be left out, but null cannot clear it (400, not a
+// not-null violation of the database).
+const unlessOmitted = ValidateIf((_object, value) => value !== undefined);
+
 /** PATCH /api/v1/legal-entities/{id}: only the fields that are sent change. */
 export class UpdateLegalEntityDto implements UpdateLegalEntityRequest {
-  @IsOptional()
+  @unlessOmitted
   @Transform(trim)
   @IsString()
   @Length(1, 120)
   name?: string;
 
-  @IsOptional()
+  @unlessOmitted
   @Transform(trim)
   @IsString()
   @Matches(TAX_ID)
   taxId?: string;
 
-  @IsOptional()
+  @unlessOmitted
   @Transform(trim)
   @IsString()
   @Length(1, 300)

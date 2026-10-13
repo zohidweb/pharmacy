@@ -130,7 +130,6 @@ export class TerminalsRepository {
       .execute();
   }
 
-  /** Revokes an active terminal; false when it was already revoked or does not exist. */
   /**
    * Locks the row of a terminal: `update` — its revocation, `share` — an opening of a shift on it
    * (final review M7: a shift is never opened on a terminal being revoked). False — revoked or absent.
@@ -148,20 +147,22 @@ export class TerminalsRepository {
     return result.rows.length > 0;
   }
 
+  /** Revokes an active terminal; its store, or null when it was revoked already or is unknown. */
   async revoke(
     trx: TenantTransaction,
     tenantId: string,
     terminalId: string,
     revokedBy: string,
-  ): Promise<boolean> {
-    const result = await trx
+  ): Promise<string | null> {
+    const row = await trx
       .updateTable('terminals')
       .set({ revokedAt: sql<Date>`now()`, revokedBy })
       .where('tenantId', '=', tenantId)
       .where('id', '=', terminalId)
       .where('revokedAt', 'is', null)
+      .returning('storeId')
       .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+    return row?.storeId ?? null;
   }
 
   async touchLastSeen(
@@ -340,6 +341,30 @@ export class TerminalsRepository {
     };
   }
 
+  /**
+   * Replaces the PIN hash after a successful check, only while the stored hash is still the
+   * verified one: a PIN changed meanwhile is never overwritten with the old secret.
+   */
+  async updatePinHash(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+    verifiedPhc: string,
+    next: { phc: string; pepperVersion: number },
+  ): Promise<void> {
+    await trx
+      .updateTable('employeeCredentials')
+      .set({
+        pinHash: next.phc,
+        pinPepperVersion: next.pepperVersion,
+        updatedAt: sql<Date>`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('employeeId', '=', employeeId)
+      .where('pinHash', '=', verifiedPhc)
+      .execute();
+  }
+
   /** Sets the PIN and clears the failure counter and the lock; creates the credentials row. */
   async setPin(
     trx: TenantTransaction,
@@ -369,7 +394,10 @@ export class TerminalsRepository {
       .execute();
   }
 
-  /** Terminals the employee signed in on by PIN within MY_TERMINALS_DAYS, latest first. */
+  /**
+   * Active terminals the employee signed in on by PIN within MY_TERMINALS_DAYS, latest first. A
+   * revoked terminal is left out: it cannot be signed in on or unbound any more.
+   */
   async myTerminals(
     trx: TenantTransaction,
     tenantId: string,
@@ -412,6 +440,7 @@ export class TerminalsRepository {
         'terminals.boundAt',
         'signIns.lastSignInAt',
       ])
+      .where('terminals.revokedAt', 'is', null)
       .orderBy('signIns.lastSignInAt', 'desc')
       .execute();
     return rows.map((row) => ({

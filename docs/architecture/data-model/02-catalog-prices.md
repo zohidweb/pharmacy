@@ -6,7 +6,7 @@
 > `categories`, `dictionary_values`, `products`, `product_barcodes`, `store_products`, `discount_rules`,
 > `discount_rule_tiers`, `discount_rule_stores` — только колонки, у которых есть потребитель. Колонки синхронизации,
 > справочника препаратов, прихода и склада (`products.origin`, `created_at_store_id`, `merged_into_product_id`,
-> `drug_reference_id`, `store_products.draft_*`, `min_stock_pieces`) добавят миграции своих модулей; `drug_reference`
+> `drug_reference_id`, `min_stock_pieces`) добавят миграции своих модулей; `drug_reference`
 > и `payment_methods` — тоже. Решения при реализации:
 > - розничная цена есть только у пары «товар × точка» (подтверждено 2026-10-07): цены сети нет, экран «Цены» задаёт
 >   цену нескольким точкам одним запросом;
@@ -104,10 +104,11 @@ erDiagram
 | `retail_price_per_piece_dirams` | bigint null | Своя цена штуки (решение 2026-09-30). Пусто — `ceil(цена упаковки / pieces_per_pack)` до шага `tenant_settings.piece_price_rounding_dirams`. Имеет смысл только при `products.sold_by_piece` |
 | `price_version` | integer | Растёт при каждом изменении; основа конфликта цен (ADR-0014) |
 | `price_changed_at`, `price_changed_by`, `price_source` | | `cloud` / `store` (локальное изменение офлайн-точки) |
-| `draft_price_per_pack_dirams` | bigint null | Черновик после прихода по наценке (КП 6.1); применяется подтверждением |
-| `draft_source_document_id` | uuid null | Приход, который предложил цену |
 | `min_stock_pieces` | integer null | Переопределение для точки; пусто — `products.default_min_stock_pieces`. Порог для «Мало на складе» и «заполнить по дефициту» |
 | `updated_at` | | |
+
+Черновых цен после прихода (`draft_price_per_pack_dirams`, `draft_source_document_id`) нет: розница из строки прихода
+применяется при его проведении (поправка 2026-10-09, `APPROVAL.md`; `03-batches-warehouse.md`).
 
 Синхронизация: цена сети — облако → точка; локальное изменение — точка → облако (`price.changed-locally`). Предупреждения «выше предельной» и «ниже закупочной» — в приложении, база их не блокирует. История цен — в `audit_log`.
 

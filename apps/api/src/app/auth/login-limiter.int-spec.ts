@@ -26,11 +26,17 @@ type Attempt = Awaited<ReturnType<LoginLimiter['tryAcquire']>>;
 const retryAfter = (attempt: Attempt): number | null =>
   attempt.allowed ? null : attempt.retryAfterSeconds;
 
+const KEY_SECRET = Buffer.alloc(32, 7);
+
 describe('LoginLimiter (integration)', () => {
   let redis: RedisClient;
 
   const limiter = (overrides: Partial<LoginLimiterOptions> = {}) =>
-    new RedisLoginLimiter(redis, { ...LOGIN_LIMITER_DEFAULTS, ...overrides });
+    new RedisLoginLimiter(
+      redis,
+      { ...LOGIN_LIMITER_DEFAULTS, ...overrides },
+      KEY_SECRET,
+    );
 
   async function acquire(
     target: LoginLimiter,

@@ -4,13 +4,11 @@ import { PlatformDatabaseModule } from '../../../core/database/platform';
 import { SessionsModule } from '../../../core/sessions';
 import { AuthModule } from '../../auth/auth.module';
 import { PlatformAuditModule } from '../audit/platform-audit.module';
+import { OperatorActivationsController } from './operator-activations.controller';
 import { OperatorActivationsService } from './operator-activations.service';
 import { OperatorAuthRepository } from './operator-auth.repository';
 import { OperatorSessionResolver } from './operator-session-resolver';
-import {
-  OperatorActivationsController,
-  OperatorSessionsController,
-} from './operator-sessions.controller';
+import { OperatorSessionsController } from './operator-sessions.controller';
 import { OperatorSessionsService } from './operator-sessions.service';
 
 // Authentication of platform operators, the admin contour (auth design 2026-10-02, section 9).

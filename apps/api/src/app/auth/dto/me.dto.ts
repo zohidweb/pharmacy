@@ -9,6 +9,13 @@ import { IsIn, IsString, MaxLength } from 'class-validator';
 /** UI locales of the contract (`UiLocale`); the type has no runtime value in shared-dto. */
 export const uiLocales = ['ru', 'tg'] as const satisfies readonly UiLocale[];
 
+/** Does not compile while the contract has a locale the list above does not name. */
+export const UI_LOCALES_COMPLETE: [
+  Exclude<UiLocale, (typeof uiLocales)[number]>,
+] extends [never]
+  ? true
+  : false = true;
+
 /** PATCH /api/v1/me. */
 export class UpdateMeDto implements UpdateEmployeeMeRequest {
   @IsIn(uiLocales)

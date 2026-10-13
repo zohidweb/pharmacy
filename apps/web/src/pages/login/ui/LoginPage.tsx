@@ -48,8 +48,12 @@ export function LoginPage() {
   }
 
   // A network without stores: the owner creates the first one (spec 2026-10-06-owner-stores, S4).
+  // An employee scoped to a list of stores could not work in a store created now: it is not in
+  // the list.
   if (session.data && session.data.stores.length === 0) {
-    const owner = canWrite(session.data, 'stores:create');
+    const owner =
+      canWrite(session.data, 'stores:create') &&
+      session.data.scope === 'network';
     return (
       <LoginCard
         wide={owner}

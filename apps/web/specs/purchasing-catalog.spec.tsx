@@ -270,9 +270,10 @@ describe('CatalogPage and ProductPage', () => {
     await clickWhenEnabled('Новый товар');
     const editor = await dialog('Новый товар');
     fireEvent.click(within(editor).getByRole('button', { name: 'Сохранить' }));
+    // a name in either language is enough: both fields ask for it
     expect(
-      await within(editor).findByText('Укажите наименование'),
-    ).toBeTruthy();
+      await within(editor).findAllByText('Укажите наименование'),
+    ).toHaveLength(2);
     fireEvent.change(
       within(editor).getByRole('textbox', { name: /Наименование \(RU\)/ }),
       {

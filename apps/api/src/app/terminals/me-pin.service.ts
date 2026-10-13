@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { checkPin } from '@pharmacy/shared-domain';
 import type { MyTerminal } from '@pharmacy/shared-dto';
 import { requirePrincipal } from '../../common/context/request-context';
-import { ProblemException } from '../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { PasswordHasher } from '../../core/crypto';
 import { TenantDatabase } from '../../core/database';
@@ -48,7 +51,7 @@ export class MePinService {
       // Reserved atomically before hashing, like a password change.
       const key = `pin-change:${tenantId}:${employeeId}`;
       const attempt = await this.limiter.tryAcquire(key);
-      if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+      if (!attempt.allowed) throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
       if (
         currentPin === null ||
         !(await this.hasher.verify(currentPin, state.pinHash, state.pinPepperVersion))

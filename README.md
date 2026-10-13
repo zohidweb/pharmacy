@@ -37,7 +37,8 @@ npm run dev                          # api + web + admin с hot reload
 
 ```
 npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs> [service…] [--skip-checks]
-npm run stack -- test init     # env-файл из примера со случайными паролями (один раз)
+npm run stack -- test init     # env-файл из примера со случайными паролями; на готовом файле — дописывает
+                               #   переменные, появившиеся в примере позже (существующие не меняет)
 npm run test-env:build         # lint + test + static web/admin + образы с тегом <git sha>
 npm run test-env:up            # запуск и ожидание healthy;  test-env:down — остановка
 npm run prod:build / prod:up / prod:down

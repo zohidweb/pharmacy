@@ -7,6 +7,8 @@ export interface LoginCredentials {
   status: string;
   passwordHash: string | null;
   passwordPepperVersion: number | null;
+  /** Set by every change, reset or activation of the password; not by a re-hash. */
+  passwordChangedAt: Date | null;
 }
 
 /** Rows the session profile is built from (session-profile.ts). */
@@ -63,6 +65,7 @@ export class EmployeeAuthRepository {
         'employees.status',
         'employeeCredentials.passwordHash',
         'employeeCredentials.passwordPepperVersion',
+        'employeeCredentials.passwordChangedAt',
       ])
       .where('employees.tenantId', '=', tenantId)
       .where('employees.id', '=', employeeId)
@@ -72,6 +75,35 @@ export class EmployeeAuthRepository {
       status: row.status,
       passwordHash: row.passwordHash ?? null,
       passwordPepperVersion: row.passwordPepperVersion ?? null,
+      passwordChangedAt:
+        row.passwordChangedAt === null || row.passwordChangedAt === undefined
+          ? null
+          : new Date(row.passwordChangedAt),
+    };
+  }
+
+  /**
+   * When the password was last changed, its row locked until the commit: a password change waits
+   * for the sign-in that verified the previous password (and then ends its session), and a
+   * sign-in that started before a change committed sees the new time. Null: no credentials row.
+   * A re-hash does not move the time, so concurrent sign-ins that re-hash do not refuse each other.
+   */
+  async lockPasswordChange(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<{ changedAt: Date | null } | null> {
+    const row = await trx
+      .selectFrom('employeeCredentials')
+      .select('passwordChangedAt')
+      .where('tenantId', '=', tenantId)
+      .where('employeeId', '=', employeeId)
+      .forNoKeyUpdate()
+      .executeTakeFirst();
+    if (!row) return null;
+    return {
+      changedAt:
+        row.passwordChangedAt === null ? null : new Date(row.passwordChangedAt),
     };
   }
 

@@ -4,10 +4,12 @@ import {
   problemOf,
   runAs,
   testPrincipal,
+  testRequirePermission,
 } from '../../../test/guards';
-import { RequirePermission } from '../../app/auth/decorators';
 import { AuthGuard } from './auth.guard';
 import { Authenticated, Public } from './decorators';
+
+const RequirePermission = testRequirePermission;
 
 // A class marker applies only to handlers without a marker of their own: the nearest level wins.
 @Public()

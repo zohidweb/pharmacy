@@ -4,7 +4,8 @@
 //   npm run stack -- <env> <command> [service...] [--skip-checks]
 //
 //   env:      dev | test | prod
-//   commands: init    create the env file from its example with random passwords and keys (test, prod)
+//   commands: init    create the env file from its example with random passwords and keys (test, prod);
+//                     on an existing file, append the variables the example gained since
 //             build   quality gate (lint, test, build) + static web/admin + Docker images
 //             up      start containers (detached) and wait until they are healthy
 //             down    stop containers (data volumes are kept)
@@ -14,7 +15,7 @@
 // Checks run manually until CI/CD is chosen by an ADR (CLAUDE.md, "CI/CD").
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -67,13 +68,35 @@ function composeArgs(envName, env) {
 
 function init(envName, env) {
   if (envName === 'dev') fail('dev uses the root .env — copy it from .env.example.');
-  if (existsSync(join(root, env.envFile))) fail(`${env.envFile} already exists — not overwriting it.`);
+  const target = join(root, env.envFile);
   // `generate-key` placeholders (JWT keys, password peppers) get 32 random bytes; passwords get 18.
   const content = readFileSync(join(root, env.example), 'utf8')
     .replace(/generate-key/g, () => randomBytes(32).toString('base64url'))
     .replace(/change-me/g, () => randomBytes(18).toString('base64url'));
-  writeFileSync(join(root, env.envFile), content, { mode: 0o600 });
-  console.log(`✔ Created ${env.envFile} with random passwords and keys. Keep it out of git and chats.`);
+  if (!existsSync(target)) {
+    writeFileSync(target, content, { mode: 0o600 });
+    console.log(`✔ Created ${env.envFile} with random passwords and keys. Keep it out of git and chats.`);
+    return;
+  }
+  // A file of an earlier init: the variables the example gained since are appended, with fresh
+  // random values for their placeholders. Existing variables are never changed; names only are
+  // printed, never values.
+  const current = readFileSync(target, 'utf8');
+  const defined = new Set(
+    [...current.matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)].map((match) => match[1]),
+  );
+  const missing = content.split(/\r?\n/).filter((line) => {
+    const name = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(line)?.[1];
+    return name !== undefined && !defined.has(name);
+  });
+  if (missing.length === 0) {
+    console.log(`✔ ${env.envFile} already has every variable of ${env.example}; nothing changed.`);
+    return;
+  }
+  const separator = current === '' || current.endsWith('\n') ? '' : '\n';
+  appendFileSync(target, `${separator}${missing.join('\n')}\n`);
+  const names = missing.map((line) => line.slice(0, line.indexOf('=')));
+  console.log(`✔ Added to ${env.envFile}: ${names.join(', ')}.`);
 }
 
 function build(envName, env, skipChecks) {

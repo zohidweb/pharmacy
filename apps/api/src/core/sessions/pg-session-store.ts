@@ -1,6 +1,6 @@
 import type { Permission } from '@pharmacy/shared-domain';
-import { sql } from 'kysely';
-import type { TenantDatabase } from '../database';
+import { sql, type Updateable } from 'kysely';
+import type { DB, TenantDatabase } from '../database';
 import {
   PermissionsVersionCache,
   SessionStore,
@@ -35,6 +35,9 @@ const iso = (value: Date | string): string => new Date(value).toISOString();
 // An offline store serves exactly one network (plan decision P1): a token or record of another
 // tenant is reported as missing. Expired rows never authenticate and are deleted on every create
 // (P2). The terminal's revocation is read from terminals.revoked_at in the same query (P3).
+// Every method runs its own withTenant transaction on its own pool connection, outside the
+// caller's: a sign-in holds two connections while it stores its session, and a row stored before
+// the caller's transaction rolls back stays behind unless the caller discards it, as in Redis.
 export class PgSessionStore extends SessionStore {
   constructor(
     private readonly db: TenantDatabase,
@@ -50,7 +53,8 @@ export class PgSessionStore extends SessionStore {
     const now = Date.now();
     const absolute = Date.parse(record.absoluteExpiresAt);
     const idle = Math.min(now + record.idleTtlSeconds * 1000, absolute);
-    if (!(idle > now)) return;
+    // Never silently: the caller would hand out a cookie of a session that does not exist.
+    if (!(idle > now)) throw new Error('The session to store has already expired');
     await this.db.withTenant(this.tenantId, async (trx) => {
       await trx
         .deleteFrom('sessions')
@@ -62,6 +66,20 @@ export class PgSessionStore extends SessionStore {
           ]),
         )
         .execute();
+      if (record.terminalId !== null) {
+        // One PIN session per terminal, as in the Redis store: the terminal's other sessions end in
+        // the transaction that stores the new one, under a lock of the terminal, so overlapping PIN
+        // sign-ins leave only the last one. An advisory lock, not the terminals row: the caller's
+        // transaction (another connection) may hold that row while it waits for this one.
+        await sql`select pg_advisory_xact_lock(hashtextextended(${`terminal-sessions:${this.tenantId}:${record.terminalId}`}, 0))`.execute(
+          trx,
+        );
+        await trx
+          .deleteFrom('sessions')
+          .where('tenantId', '=', this.tenantId)
+          .where('terminalId', '=', record.terminalId)
+          .execute();
+      }
       await trx
         .insertInto('sessions')
         .values({
@@ -146,7 +164,7 @@ export class PgSessionStore extends SessionStore {
   }
 
   async update(sessionId: string, patch: SessionPatch): Promise<void> {
-    const values: Record<string, unknown> = {};
+    const values: Updateable<DB['sessions']> = {};
     if (patch.permissions !== undefined) values.permissions = [...patch.permissions];
     if (patch.permissionsVersion !== undefined) {
       values.permissionsVersion = BigInt(patch.permissionsVersion);

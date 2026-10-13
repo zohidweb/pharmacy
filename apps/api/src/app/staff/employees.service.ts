@@ -33,6 +33,7 @@ import {
   sameScope,
   scopeWithinEditor,
 } from './assignment-rules';
+import { MissingPermissionException } from './access-denied-audit.interceptor';
 import { loadEditor } from './roles.service';
 import { type EmployeeRow, type Hash, StaffRepository } from './staff.repository';
 
@@ -168,16 +169,23 @@ export class EmployeesService {
       const card = await this.db.tenantTransaction(async (trx) => {
         const editor = await loadEditor(this.repository, trx);
         const employee = await this.editable(trx, editor, employeeId);
-        const assigned = body.storeIds === null ? null : body.storeIds.map((s) => s.toLowerCase());
-        const changed =
-          employee.roleId !== body.roleId.toLowerCase() ||
-          !sameScope(scopeOfRow(employee), assigned);
+        const sameRole = employee.roleId === body.roleId.toLowerCase();
+        // The scope as checkAssignment would store it: the owner role always has the whole network,
+        // a list names each store once. A form repeating the stored assignment changes nothing (no
+        // audit, no version bump, no own_assignment refusal).
+        const assigned =
+          sameRole && employee.roleIsOwner
+            ? null
+            : body.storeIds === null
+              ? null
+              : [...new Set(body.storeIds.map((s) => s.toLowerCase()))];
+        const changed = !sameRole || !sameScope(scopeOfRow(employee), assigned);
         if (changed) {
           if (employee.id === principal.employeeId) {
             throw new ProblemException(403, 'own_assignment');
           }
           if (!principal.permissions.includes('employees:assign-role')) {
-            throw new ProblemException(403, 'forbidden');
+            throw new MissingPermissionException('employees:assign-role');
           }
           const { roleId, scope, isOwner } = await this.checkAssignment(trx, editor, body);
           if (
@@ -225,6 +233,9 @@ export class EmployeesService {
     });
     const hash = await this.hasher.hash(newPassword);
     await this.db.tenantTransaction(async (trx) => {
+      // Checked again where it is written: the employee may have been raised above the editor
+      // while the hash was computed.
+      await this.othersEditable(trx, await loadEditor(this.repository, trx), employeeId);
       await this.repository.setPassword(trx, tenantId, employeeId, hash);
       await this.audit.append(trx, {
         action: 'employee.password-reset',
@@ -247,6 +258,8 @@ export class EmployeesService {
     checkEmployeePin(pin, minLength, 'pin');
     const hash: Hash = await this.hasher.hash(pin);
     await this.db.tenantTransaction(async (trx) => {
+      // Checked again where it is written (see resetPassword).
+      await this.othersEditable(trx, await loadEditor(this.repository, trx), employeeId);
       await this.repository.setPin(trx, tenantId, employeeId, hash);
       await this.audit.append(trx, {
         action: 'employee.pin-set',
@@ -261,7 +274,6 @@ export class EmployeesService {
     const { tenantId } = requirePrincipal();
     const employeeId = id.toLowerCase();
     let afterCommit: () => Promise<void> = async () => undefined;
-    let blocked = false;
     const card = await this.db.tenantTransaction(async (trx) => {
       const editor = await loadEditor(this.repository, trx);
       const employee = await this.othersEditable(trx, editor, employeeId);
@@ -275,7 +287,6 @@ export class EmployeesService {
         }
         await this.repository.setStatus(trx, tenantId, employee.id, status);
         afterCommit = await this.versions.bump(trx, [employee.id]);
-        blocked = status === 'blocked';
         await this.audit.append(trx, {
           action: status === 'blocked' ? 'employee.blocked' : 'employee.unblocked',
           entityType: 'employee',
@@ -284,12 +295,11 @@ export class EmployeesService {
       }
       return this.card(trx, await this.read(trx, employee.id));
     });
-    try {
-      await afterCommit();
-    } finally {
-      // A failed cache write of the version must not keep a blocked employee signed in.
-      if (blocked) await this.sessions.destroyAllFor(tenantId, employeeId);
-    }
+    await afterCommit();
+    // Ended here, not only through the version: a failed cache write of the version (logged by
+    // afterCommit) must not keep a blocked employee signed in. Also when the employee was already
+    // blocked, so a retry after a failure here completes the cleanup.
+    if (status === 'blocked') await this.sessions.destroyAllFor(tenantId, employeeId);
     return card;
   }
 
@@ -314,13 +324,14 @@ export class EmployeesService {
       : body.storeIds === null
         ? null
         : [...new Set(body.storeIds.map((s) => s.toLowerCase()))];
-    if (scope !== null) {
-      if (scope.length === 0) throw invalid('storeIds', 'required');
-      const active = await this.repository.activeStoreIds(trx, tenantId, scope);
-      if (active.length !== scope.length) throw invalid('storeIds', 'unknown_store');
-    }
+    if (scope !== null && scope.length === 0) throw invalid('storeIds', 'required');
+    // The scope first: a store outside the editor's own is refused before its existence is told.
     if (!scopeWithinEditor(editor, scope)) {
       throw new ProblemException(403, 'store_not_in_scope');
+    }
+    if (scope !== null) {
+      const active = await this.repository.activeStoreIds(trx, tenantId, scope);
+      if (active.length !== scope.length) throw invalid('storeIds', 'unknown_store');
     }
     return { roleId: role.id, scope, isOwner: role.isOwner };
   }
@@ -378,7 +389,13 @@ export class EmployeesService {
   private async card(trx: TenantTransaction, employee: EmployeeRow): Promise<EmployeeCard> {
     const { tenantId } = requirePrincipal();
     const context = await this.viewContext(trx);
-    const activity = await this.repository.activity(trx, tenantId, employee.id, ACTIVITY_LIMIT);
+    const activity = await this.repository.activity(
+      trx,
+      tenantId,
+      employee.id,
+      Object.keys(ACTIVITY_KINDS),
+      ACTIVITY_LIMIT,
+    );
     return {
       ...context.toItem(employee),
       activity: activity.flatMap((entry) => {

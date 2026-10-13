@@ -37,7 +37,13 @@ import {
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 const STATUSES: EmployeeStatus[] = ['active', 'blocked'];
-const LOCALES: UiLocale[] = ['ru', 'tg'];
+const LOCALES = ['ru', 'tg'] as const satisfies readonly UiLocale[];
+/** Does not compile while the contract has a locale LOCALES does not name. */
+export const STAFF_LOCALES_COMPLETE: [
+  Exclude<UiLocale, (typeof LOCALES)[number]>,
+] extends [never]
+  ? true
+  : false = true;
 const MAX_STORES = 500;
 
 /** GET /api/v1/employees. */

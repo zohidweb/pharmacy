@@ -1,5 +1,5 @@
 export { CryptoModule } from './crypto.module';
-export { parseKeyRing, type KeyRing } from './key-ring';
+export { deriveRingKey, parseKeyRing, type KeyRing } from './key-ring';
 export { PasswordHasher } from './password-hasher';
 export { runCryptoSelfCheck } from './self-check';
 export {

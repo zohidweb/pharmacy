@@ -1,7 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { passwordProblems } from '@pharmacy/shared-domain';
-import { ProblemException } from '../../../common/errors/problem.exception';
+import { afterCommitBestEffort } from '../../../common/errors/after-commit';
+import {
+  LockedException,
+  ProblemException,
+} from '../../../common/errors/problem.exception';
 import { PasswordHasher, sha256Hex } from '../../../core/crypto';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { OperatorSessionStore } from '../../../core/sessions';
@@ -25,6 +29,7 @@ const invalidCode = () => new ProblemException(401, 'invalid_code');
 // codes, hashes and login values are never logged or audited.
 @Injectable()
 export class OperatorActivationsService {
+  private readonly logger = new Logger(OperatorActivationsService.name);
   private readonly failureFloorMs: number;
 
   constructor(
@@ -67,7 +72,7 @@ export class OperatorActivationsService {
     // Reserved atomically before hashing; never shared with the sign-in keys.
     const key = `activation:operator:${sha256Hex(login)}`;
     const attempt = await this.limiter.tryAcquire(key);
-    if (!attempt.allowed) throw new ProblemException(429, 'login_locked');
+    if (!attempt.allowed) throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
 
     // The same scrypt cost whether the login exists or not; no transaction held open meanwhile.
     const next = await this.hasher.hash(newPassword);
@@ -84,8 +89,14 @@ export class OperatorActivationsService {
       return consumed;
     });
 
-    // After the commit: sessions opened with an old password end, the attempts are forgotten.
-    await this.sessions.destroyAllFor(operatorId);
-    await this.limiter.reset(key);
+    // After the commit: sessions opened with an old password end, the attempts are forgotten. The
+    // password is set and the code is spent, so a retry would only meet 401 invalid_code: a failure
+    // here is logged, not answered.
+    await afterCommitBestEffort(this.logger, 'Ending the sessions of an activated operator', () =>
+      this.sessions.destroyAllFor(operatorId),
+    );
+    await afterCommitBestEffort(this.logger, 'Resetting the activation attempts', () =>
+      this.limiter.reset(key),
+    );
   }
 }

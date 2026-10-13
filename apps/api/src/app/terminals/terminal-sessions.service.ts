@@ -1,14 +1,24 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { EmployeeSession } from '@pharmacy/shared-dto';
-import { getRequestContext } from '../../common/context/request-context';
-import { ProblemException } from '../../common/errors/problem.exception';
+import {
+  getPrincipal,
+  getRequestContext,
+} from '../../common/context/request-context';
+import {
+  LockedException,
+  ProblemException,
+} from '../../common/errors/problem.exception';
 import { PasswordHasher } from '../../core/crypto';
 import { TenantDatabase } from '../../core/database';
 import { SessionStore } from '../../core/sessions';
 import { AuditService } from '../audit/audit.service';
 import type { LoginLimiter } from '../auth/login-limiter';
 import { PrincipalLoader } from '../auth/principal-loader';
-import { SessionIssuer } from '../auth/session-issuer';
+import {
+  EmployeeGoneError,
+  type IssuedSession,
+  SessionIssuer,
+} from '../auth/session-issuer';
 import { TerminalsRepository } from './terminals.repository';
 import { type DeviceTerminal, TerminalsService } from './terminals.service';
 
@@ -60,7 +70,7 @@ export class TerminalSessionsService {
   ): Promise<PinLoginResult> {
     // The session this browser already holds (a password session or another cashier's PIN
     // session) ends with the sign-in.
-    const previousSessionId = getRequestContext()?.principal?.sessionId ?? null;
+    const previousSessionId = getPrincipal()?.sessionId ?? null;
 
     // Step 1: the terminal.
     const device = await this.terminals.resolveDevice(deviceSecret);
@@ -68,7 +78,7 @@ export class TerminalSessionsService {
     // Step 2: the terminal's counter, reserved before any hashing.
     const key = `terminal-pin:${device.terminalId}`;
     const attempt = await this.limiter.tryAcquire(key);
-    if (!attempt.allowed) throw new ProblemException(423, 'terminal_locked');
+    if (!attempt.allowed) throw new LockedException(423, 'terminal_locked', attempt.retryAfterSeconds);
 
     const result = await this.terminals.inTerminalTenant(device, () =>
       this.loginInTenant(device, employeeId.toLowerCase(), pin),
@@ -128,11 +138,18 @@ export class TerminalSessionsService {
           entityType: 'employee',
           entityId: employeeId,
           storeId,
+          terminalId,
           details: { terminalId, attempts: reserved.attempts },
         }),
       );
       throw reserved.locked ? pinLocked() : invalidPin();
     }
+    // A PIN hashed with older parameters or a retired pepper is hashed again, as a password is at
+    // sign-in; no transaction is held open during scrypt.
+    const verifiedPinHash = candidate.pinHash;
+    const rehash = this.hasher.needsRehash(verifiedPinHash, candidate.pinPepperVersion)
+      ? await this.hasher.hash(pin)
+      : null;
 
     // The role's permissions and the version; the scope becomes the terminal's store.
     const snapshot = await this.loader.reload(tenantId, employeeId);
@@ -143,28 +160,52 @@ export class TerminalSessionsService {
     // One PIN session per terminal: the previous cashier's session ends before the new one starts.
     await this.sessions.destroyForTerminal(tenantId, terminalId);
 
-    const issued = await this.db.tenantTransaction(async (trx) => {
-      await this.repository.clearPinFailures(trx, tenantId, employeeId);
-      await this.repository.touchLastSeen(trx, tenantId, terminalId);
-      await this.audit.append(trx, {
-        action: 'auth.pin-succeeded',
-        entityType: 'employee',
-        entityId: employeeId,
-        storeId,
-        details: { terminalId },
-      });
-      return this.issuer.issue(trx, {
-        tenantId,
-        employeeId,
-        auth: 'pin',
-        snapshot,
-        terminal: {
-          terminalId,
+    const stored: { sessionId?: string } = {};
+    let issued: IssuedSession;
+    try {
+      issued = await this.db.tenantTransaction(async (trx) => {
+        if (rehash !== null) {
+          await this.repository.updatePinHash(
+            trx,
+            tenantId,
+            employeeId,
+            verifiedPinHash,
+            rehash,
+          );
+        }
+        await this.repository.clearPinFailures(trx, tenantId, employeeId);
+        await this.repository.touchLastSeen(trx, tenantId, terminalId);
+        await this.audit.append(trx, {
+          action: 'auth.pin-succeeded',
+          entityType: 'employee',
+          entityId: employeeId,
           storeId,
-          credentialHash: device.credentialHash,
-        },
+          terminalId,
+          details: { terminalId },
+        });
+        const result = await this.issuer.issue(trx, {
+          tenantId,
+          employeeId,
+          auth: 'pin',
+          snapshot,
+          terminal: {
+            terminalId,
+            storeId,
+            credentialHash: device.credentialHash,
+          },
+        });
+        stored.sessionId = result.record.sessionId;
+        return result;
       });
-    });
+    } catch (error) {
+      if (stored.sessionId !== undefined) {
+        await this.issuer.discard(stored.sessionId);
+      }
+      if (error instanceof EmployeeGoneError) {
+        return this.fail(device, employeeId, 'unknown_employee');
+      }
+      throw error;
+    }
     await this.issuer.seedVersion(tenantId, employeeId, snapshot.permissionsVersion);
 
     return {
@@ -189,6 +230,7 @@ export class TerminalSessionsService {
             entityType: 'employee',
             entityId: employeeId,
             storeId: device.storeId,
+            terminalId: device.terminalId,
             details: { terminalId: device.terminalId, reason },
           }),
         );

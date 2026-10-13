@@ -62,12 +62,17 @@ function option(argv, name) {
 }
 
 function parseArgs(argv) {
-  if (argv.includes('--help')) throw new UserError(USAGE);
+  if (argv.includes('--help')) {
+    // Asked for, not an error: stdout and exit code 0, as generate-store-secrets does.
+    console.log(USAGE);
+    process.exit(0);
+  }
   const rawLogin = option(argv, '--login');
   const rawName = option(argv, '--name');
   if (!rawLogin || !rawName) throw new UserError(USAGE);
-  const login = rawLogin.trim().toLowerCase();
-  if (login.length > MAX_EMAIL_LENGTH || !EMAIL.test(login)) {
+  // As identifier.ts of the API: compatibility forms normalized, invisible characters refused.
+  const login = rawLogin.normalize('NFKC').trim().toLowerCase();
+  if (login.length > MAX_EMAIL_LENGTH || !EMAIL.test(login) || /\p{Cf}/u.test(login)) {
     throw new UserError('The login must be a work e-mail.');
   }
   const name = rawName.trim();

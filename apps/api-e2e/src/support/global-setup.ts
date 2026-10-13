@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { createClient } from 'redis';
 import {
   ADMIN_ORIGIN,
   API_BASE_URL,
@@ -23,11 +24,34 @@ const REQUIRED_ENV = [
   'PASSWORD_PEPPER_ACTIVE',
 ];
 
+// The API and the seed of a run use their own logical database of the developer's Redis, emptied
+// before every run: counters of the IP throttler and of the sign-in limiter left by earlier runs,
+// or by the dev API on database 0, do not leak into a run (integration tests use database 15).
+const E2E_REDIS_DATABASE = 14;
+
 const START_TIMEOUT_MS = 60_000;
 const POLL_INTERVAL_MS = 500;
 const LOG_TAIL_LINES = 40;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function prepareRedis(redisUrl: string): Promise<string> {
+  const url = new URL(redisUrl);
+  url.pathname = `/${E2E_REDIS_DATABASE}`;
+  const client = createClient({ url: url.toString() });
+  client.on('error', () => undefined);
+  await client.connect();
+  try {
+    const { db } = await client.clientInfo();
+    if (db !== E2E_REDIS_DATABASE) {
+      throw new Error(`Refusing to flush Redis database ${db}: api-e2e uses ${E2E_REDIS_DATABASE}`);
+    }
+    await client.flushDb();
+  } finally {
+    await client.close();
+  }
+  return url.toString();
+}
 
 async function healthy(): Promise<boolean> {
   try {
@@ -51,6 +75,9 @@ module.exports = async function () {
       `api-e2e needs these variables in the environment (copy them from .env.example into .env): ${missing.join(', ')}`,
     );
   }
+
+  // Read by the API below and by the seed of the test files (workers inherit the environment).
+  process.env['REDIS_URL'] = await prepareRedis(process.env['REDIS_URL'] as string);
 
   const root = join(__dirname, '..', '..', '..', '..');
   const main = join(root, 'apps', 'api', 'dist', 'main.js');

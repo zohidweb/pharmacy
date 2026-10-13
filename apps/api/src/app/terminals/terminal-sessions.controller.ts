@@ -12,9 +12,7 @@ import {
 } from '../auth/session-cookie';
 import { PinLoginDto } from './dto/terminal.dto';
 import { TerminalSessionsService } from './terminal-sessions.service';
-
-// Per IP, on top of the per-terminal PIN failure limit; the same bound as password sign-in.
-const AUTH_ROUTE_LIMIT = { limit: 60, ttl: 60_000 };
+import { AUTH_ROUTE_LIMIT } from '../../common/throttling/auth-route-limit';
 
 // PIN sign-in on a bound terminal (auth design 2026-10-02, section 8).
 @Controller({ path: 'terminal-sessions', version: '1' })

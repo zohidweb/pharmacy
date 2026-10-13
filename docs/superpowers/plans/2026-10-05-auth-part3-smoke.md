@@ -17,8 +17,6 @@
    npx nx build api
    APP_ENV=test AUTH_TEST_COOKIES=true node --env-file=.env apps/api/dist/main.js
    ```
-
-   В панели браузера это конфигурация `api-test-cookies` из `.claude/launch.json`.
 3. Во втором терминале задать переменные:
 
    ```bash

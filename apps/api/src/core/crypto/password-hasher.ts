@@ -81,7 +81,12 @@ export class PasswordHasher implements OnModuleInit {
 
   constructor(private readonly peppers: KeyRing) {
     const version = Number(peppers.activeId);
-    if (!Number.isSafeInteger(version) || version < 1) {
+    // "01" would hash with version 1 while the ring knows the key as "01": no pepper found later.
+    if (
+      !Number.isSafeInteger(version) ||
+      version < 1 ||
+      String(version) !== peppers.activeId
+    ) {
       throw new Error(
         'The active password pepper id must be a positive integer',
       );
@@ -120,7 +125,10 @@ export class PasswordHasher implements OnModuleInit {
   ): Promise<boolean> {
     try {
       const parsed = parsePhc(phc);
-      if (!parsed) {
+      // A corrupt hash or a retired pepper costs the time of a real check too: the answer time
+      // must not tell such an account apart.
+      if (!parsed || !this.peppers.keys.has(String(pepperVersion))) {
+        await this.verifyDummy(secret);
         return false;
       }
       const derived = await this.derive(

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { deriveRingKey, type KeyRing } from '../../core/crypto';
 import { REDIS_CLIENT, type RedisClient } from '../../core/redis/redis.tokens';
 import { SessionsModule } from '../../core/sessions';
 import { AuditModule } from '../audit/audit.module';
@@ -8,6 +9,7 @@ import { ActivationsService } from './activations.service';
 import { EmployeeAuthRepository } from './employee-auth.repository';
 import { LoginClock, SystemLoginClock } from './login-clock';
 import {
+  LIMITER_KEY_PURPOSE,
   LOGIN_LIMITER_DEFAULTS,
   LoginLimiter,
   RedisLoginLimiter,
@@ -51,7 +53,14 @@ import { SessionsService } from './sessions.service';
         // No Redis on an offline store: the counters live in the single API process.
         return client === null
           ? new MemoryLoginLimiter(options)
-          : new RedisLoginLimiter(client, options);
+          : new RedisLoginLimiter(
+              client,
+              options,
+              deriveRingKey(
+                config.getOrThrow<KeyRing>('pepperRing'),
+                LIMITER_KEY_PURPOSE,
+              ),
+            );
       },
     },
   ],

@@ -65,6 +65,8 @@ erDiagram
 | `piece_price_rounding_dirams` | integer ≥ 1 | 10 | Шаг округления вверх расчётной цены штуки (решение 2026-09-30) |
 | `backdating_max_days` | integer ≥ 0 | 30 | На сколько дней назад можно поставить дату документа (решение 2026-10-01) |
 | `prescription_retention_days` | integer 1…3650 | 90 | Срок хранения данных рецептов ПКУ (решение 2026-09-30; подтвердить с юристом) |
+| `warn_below_cost` | boolean | true | Предупреждать о розничной цене ниже закупочной на экране цен (кабинет владельца, E15; миграция `owner-cabinet`) |
+| `disabled_notifications` | text[] | `{}` | Выключенные виды уведомлений сети (E13): только известные виды — `batch_expiring`, `low_stock`, `supplier_payment_due`, `transfer_in_transit`, `shift_discrepancy`, `negative_stock`, `sync_conflict`, `license_expiring` (миграция `owner-cabinet`) |
 | `updated_at`, `updated_by` | | | |
 
 ## `legal_entities` — юрлица сети (класс `tenant`, D5)

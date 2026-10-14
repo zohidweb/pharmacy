@@ -29,7 +29,12 @@ export interface EmployeeProfile {
     templateKey: string | null;
   };
   tenant: { id: string; name: string };
-  settings: { defaultLanguage: string; cashierSessionIdleMin: number };
+  settings: {
+    defaultLanguage: string;
+    cashierSessionIdleMin: number;
+    /** The price warning of the network (spec 2026-10-14-owner-cabinet, E15); absent — on. */
+    warnBelowCost?: boolean;
+  };
 }
 
 export interface ProfileStore {
@@ -256,6 +261,7 @@ export class EmployeeAuthRepository {
         'tenants.name as tenantName',
         'tenantSettings.defaultLanguage',
         'tenantSettings.cashierSessionIdleMin',
+        'tenantSettings.warnBelowCost',
       ])
       .where('employees.tenantId', '=', tenantId)
       .where('employees.id', '=', employeeId)
@@ -280,6 +286,7 @@ export class EmployeeAuthRepository {
         defaultLanguage: row.defaultLanguage ?? DEFAULT_LANGUAGE,
         cashierSessionIdleMin:
           row.cashierSessionIdleMin ?? DEFAULT_IDLE_MINUTES,
+        warnBelowCost: row.warnBelowCost ?? true,
       },
     };
   }

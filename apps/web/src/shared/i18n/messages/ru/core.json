@@ -249,7 +249,8 @@
   "reminder": {
     "batch_expiring": {
       "title": "{product} · партия {batch}",
-      "detail": "Срок годности истекает через {days, plural, one {# день} few {# дня} other {# дней}} · {quantity} уп. · {store}"
+      "detail": "Срок годности истекает через {days, plural, one {# день} few {# дня} other {# дней}} · {quantity} уп. · {store}",
+      "expired": "Срок годности истёк {days, plural, one {# день} few {# дня} other {# дней}} назад · {quantity} уп. · {store}"
     },
     "supplier_payment_due": {
       "title": "«{supplier}» · оплатить до {dueDate}",
@@ -261,15 +262,23 @@
     },
     "low_stock": {
       "title": "{positions, plural, one {# позиция} few {# позиции} other {# позиций}} ниже минимального остатка",
-      "detail": "Пора оформить заказ поставщику"
+      "detail": "{store} · пора оформить заказ поставщику"
     },
     "license_expiring": {
       "title": "Лицензионный ключ точки истекает",
       "detail": "{store} · через {days, plural, one {# день} few {# дня} other {# дней}}; после истечения новые операции блокируются"
     },
-    "impersonation": {
-      "title": "Оператор платформы входил от вашего имени",
-      "detail": "{operator} · только просмотр, записано в журнал"
+    "shift_discrepancy": {
+      "title": "Смена {shift} закрыта с расхождением",
+      "detail": "{store} · {amount}"
+    },
+    "negative_stock": {
+      "title": "{positions, plural, one {# строка продана} few {# строки проданы} other {# строк продано}} при нехватке остатка",
+      "detail": "{store} · проверьте приход и остатки"
+    },
+    "sync_conflict": {
+      "title": "Конфликт синхронизации",
+      "detail": "{store} · нужно решение владельца"
     }
   },
   "signOut": {
@@ -337,5 +346,123 @@
     "wrong": "Неверный пароль",
     "submit": "Подтвердить",
     "cancel": "Отмена"
+  },
+  "auditGroups": {
+    "sale": "Продажа",
+    "return": "Возврат покупателя",
+    "shift": "Смены",
+    "goods_receipt": "Приход",
+    "supplier_return": "Возврат поставщику",
+    "transfer": "Перемещения",
+    "write_off": "Списание",
+    "stock_count": "Инвентаризация",
+    "unpost": "Отмена проведения",
+    "price_change": "Цены и скидки",
+    "catalog": "Каталог",
+    "purchasing": "Закупки и оплаты",
+    "sign_in": "Вход",
+    "access_denied": "Отказ в доступе",
+    "employee": "Сотрудники",
+    "employee_block": "Блокировка",
+    "password_reset": "Пароль и PIN",
+    "role_change": "Роли и права",
+    "store": "Точки и терминалы",
+    "settings_change": "Настройки"
+  },
+  "auditEvents": {
+    "receipt_completed": "Продажа",
+    "return_completed": "Возврат покупателя",
+    "shift_opened": "Смена открыта",
+    "shift_cash_in": "Внесение наличных",
+    "shift_cash_out": "Изъятие наличных",
+    "shift_closed": "Смена закрыта",
+    "document_created": "Документ создан",
+    "document_updated": "Документ изменён",
+    "document_posted": "Документ проведён",
+    "document_unposted": "Проведение отменено",
+    "document_deleted": "Документ удалён",
+    "transfer_dispatched": "Перемещение отправлено",
+    "transfer_recalled": "Перемещение отозвано",
+    "transfer_received": "Перемещение принято",
+    "transfer_cancelled": "Перемещение отменено",
+    "transfer_request_sent": "Заявка на перемещение отправлена",
+    "transfer_request_rejected": "Заявка на перемещение отклонена",
+    "stock_count_started": "Инвентаризация начата",
+    "stock_count_found_line_added": "Найден товар вне учёта",
+    "stock_count_cancelled": "Инвентаризация отменена",
+    "price_changed": "Изменена цена",
+    "markups_updated": "Изменены наценки категорий",
+    "discount_rule_created": "Создано правило скидки",
+    "discount_rule_updated": "Изменено правило скидки",
+    "product_created": "Товар добавлен",
+    "product_updated": "Товар изменён",
+    "product_status_changed": "Статус товара изменён",
+    "category_created": "Категория добавлена",
+    "category_updated": "Категория изменена",
+    "category_status_changed": "Статус категории изменён",
+    "supplier_created": "Поставщик добавлен",
+    "supplier_updated": "Поставщик изменён",
+    "supplier_payment": "Оплата поставщику",
+    "payment_allocations_released": "Распределение оплаты снято",
+    "purchase_order_created": "Заказ поставщику создан",
+    "purchase_order_updated": "Заказ поставщику изменён",
+    "purchase_order_confirmed": "Заказ поставщику подтверждён",
+    "auth_login_succeeded": "Вход по паролю",
+    "auth_login_failed": "Неудачный вход",
+    "auth_pin_succeeded": "Вход по PIN",
+    "auth_pin_failed": "Неверный PIN",
+    "auth_pin_locked": "PIN заблокирован",
+    "auth_reconfirmed": "Пароль подтверждён",
+    "auth_reconfirm_failed": "Пароль не подтверждён",
+    "auth_activated": "Первый вход",
+    "auth_password_changed": "Пароль изменён",
+    "auth_pin_changed": "PIN изменён",
+    "access_denied": "Отказ в доступе",
+    "employee_created": "Сотрудник добавлен",
+    "employee_updated": "Данные сотрудника изменены",
+    "employee_assignment_changed": "Роль или точки сотрудника изменены",
+    "employee_password_reset": "Пароль сброшен",
+    "employee_pin_set": "PIN назначен",
+    "employee_blocked": "Сотрудник заблокирован",
+    "employee_unblocked": "Сотрудник разблокирован",
+    "owner_activation_code_issued": "Выдан код первого входа",
+    "role_created": "Роль создана",
+    "role_updated": "Роль изменена",
+    "role_changed": "Роль изменена",
+    "store_created": "Точка добавлена",
+    "store_updated": "Точка изменена",
+    "legal_entity_created": "Юрлицо добавлено",
+    "legal_entity_updated": "Юрлицо изменено",
+    "terminal_bound": "Терминал привязан",
+    "terminal_revoked": "Терминал отвязан",
+    "settings_returns_updated": "Изменены правила возврата",
+    "settings_updated": "Изменены настройки сети",
+    "settings_viewed": "Просмотр настроек"
+  },
+  "auditParams": {
+    "totalMinor": "Сумма",
+    "refundMinor": "К возврату",
+    "amountMinor": "Сумма",
+    "discrepancyMinor": "Расхождение",
+    "expectedMinor": "Ожидалось",
+    "actualCashMinor": "Наличные",
+    "priceMinor": "Цена",
+    "lines": "Строк",
+    "positions": "Позиций",
+    "reason": "Причина",
+    "receipt": "Чек"
+  },
+  "auditReasons": {
+    "expired": "Истёк срок годности",
+    "broken": "Бой",
+    "defect": "Брак",
+    "misgrade": "Пересорт",
+    "transfer_discrepancy": "Недостача при перемещении",
+    "customer": "По желанию покупателя",
+    "customer_return_defect": "Брак из возврата",
+    "customer_return_expired": "Истёкшая партия из возврата",
+    "missing_permission": "нет права",
+    "store_out_of_scope": "точка вне доступа",
+    "store_missing": "точка не указана"
   }
 }

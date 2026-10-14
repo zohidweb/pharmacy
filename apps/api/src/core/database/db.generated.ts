@@ -343,6 +343,32 @@ export interface LegalEntities {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface NotificationReads {
+  employeeId: string;
+  notificationId: string;
+  readAt: Generated<Timestamp>;
+  tenantId: string;
+}
+
+export interface NotificationRefresh {
+  eventsAfter: Generated<Timestamp>;
+  refreshedAt: Timestamp | null;
+  tenantId: string;
+}
+
+export interface Notifications {
+  createdAt: Generated<Timestamp>;
+  dedupeKey: string;
+  entityId: string | null;
+  entityType: string | null;
+  id: string;
+  kind: string;
+  params: Generated<Json>;
+  resolvedAt: Timestamp | null;
+  storeId: string | null;
+  tenantId: string;
+}
+
 export interface OpeningBalanceLines {
   batchId: string | null;
   createdAt: Generated<Timestamp>;
@@ -743,6 +769,7 @@ export interface TenantSettings {
   customerReturnOtc: Generated<boolean>;
   customerReturnRx: Generated<boolean>;
   defaultLanguage: Generated<string>;
+  disabledNotifications: Generated<string[]>;
   expiryReminderDays: Generated<number>;
   piecePriceRoundingDirams: Generated<number>;
   pinMinLength: Generated<number>;
@@ -755,6 +782,7 @@ export interface TenantSettings {
   timezone: Generated<string>;
   updatedAt: Generated<Timestamp>;
   updatedBy: string | null;
+  warnBelowCost: Generated<boolean>;
 }
 
 export interface Terminals {
@@ -830,6 +858,9 @@ export interface DB {
   inventoryCountEntries: InventoryCountEntries;
   inventoryLines: InventoryLines;
   legalEntities: LegalEntities;
+  notificationReads: NotificationReads;
+  notificationRefresh: NotificationRefresh;
+  notifications: Notifications;
   openingBalanceLines: OpeningBalanceLines;
   operatorCredentials: OperatorCredentials;
   operators: Operators;

@@ -16,6 +16,7 @@ import type {
   Export1cRequest,
   Export1cResult,
   NetworkSettings,
+  UpdateNetworkSettingsRequest,
   OfflineQueueResponse,
   OfflineStoreSync,
   OwnerStore,
@@ -133,7 +134,7 @@ import type {
   ZReport,
   ChangePasswordRequest,
   ChangePinRequest,
-  DashboardPeriod,
+  DashboardQuery,
   ActivationRequest,
   EmployeeLoginRequest,
   EmployeeMe,
@@ -207,12 +208,10 @@ export const apiRoutes = {
 
   'sync.status': route<SyncStatus>('GET', () => '/sync/status'),
 
-  'dashboard.get': route<
-    TenantDashboard,
-    undefined,
-    undefined,
-    { period: DashboardPeriod }
-  >('GET', () => '/dashboard'),
+  'dashboard.get': route<TenantDashboard, undefined, undefined, DashboardQuery>(
+    'GET',
+    () => '/dashboard',
+  ),
 
   'notifications.list': route<
     TenantNotificationListResponse,
@@ -562,7 +561,7 @@ export const apiRoutes = {
   ),
 
   'settings.get': route<NetworkSettings>('GET', () => '/settings'),
-  'settings.update': route<NetworkSettings, NetworkSettings>(
+  'settings.update': route<NetworkSettings, UpdateNetworkSettingsRequest>(
     'PUT',
     () => '/settings',
   ),

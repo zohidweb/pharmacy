@@ -1,5 +1,6 @@
 'use client';
 
+import { auditGroups } from '@pharmacy/shared-domain';
 import type { AuditAction, TenantAuditEntry } from '@pharmacy/shared-dto';
 import {
   formatDateOnly,
@@ -21,6 +22,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { useAuditEntryText } from '@/entities/audit-entry';
 import { can, useSession } from '@/entities/session';
 import { apiRequest } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
@@ -28,22 +30,8 @@ import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 const PAGE = 20;
-const ACTIONS: AuditAction[] = [
-  'sale',
-  'return',
-  'goods_receipt',
-  'transfer',
-  'write_off',
-  'stock_count',
-  'price_change',
-  'sign_in',
-  'shift_open',
-  'employee_block',
-  'password_reset',
-  'role_change',
-  'unpost',
-  'settings_change',
-];
+// the groups of the journal filter (spec 2026-10-14-owner-cabinet, 6.4)
+const ACTIONS: readonly AuditAction[] = auditGroups;
 
 const daysAgo = (days: number) =>
   toAppDate(new Date(Date.now() - days * 86_400_000));
@@ -51,7 +39,8 @@ const daysAgo = (days: number) =>
 /** Audit log (UI mockup «Журнал действий»): append-only, read only. */
 function AuditLogPageView() {
   const t = useTranslations('auditLog');
-  const tActions = useTranslations('employees.auditActions');
+  const tActions = useTranslations('auditGroups');
+  const text = useAuditEntryText();
   const { data: session } = useSession();
   const [from, setFrom] = useState(() => daysAgo(30));
   const [to, setTo] = useState(toAppDate);
@@ -112,8 +101,8 @@ function AuditLogPageView() {
       header: t('employee'),
       cell: (row) => (
         <span className="inline-flex items-center gap-2">
-          <Avatar name={row.employeeName} size="sm" />
-          {row.employeeName}
+          {row.employeeName && <Avatar name={row.employeeName} size="sm" />}
+          {row.employeeName ?? '—'}
         </span>
       ),
     },
@@ -125,10 +114,14 @@ function AuditLogPageView() {
     {
       key: 'action',
       header: t('action'),
-      cell: (row) => tActions(row.action),
+      cell: (row) => text(row).title,
     },
-    { key: 'object', header: t('object'), cell: (row) => row.object },
-    { key: 'details', header: t('details'), cell: (row) => row.details },
+    { key: 'object', header: t('object'), cell: (row) => row.object ?? '—' },
+    {
+      key: 'details',
+      header: t('details'),
+      cell: (row) => text(row).details,
+    },
     {
       key: 'source',
       header: t('source'),

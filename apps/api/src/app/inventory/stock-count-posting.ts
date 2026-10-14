@@ -191,6 +191,7 @@ export class StockCountPosting {
       details: {
         type: doc.type,
         number: doc.number,
+        documentDate: doc.documentDate,
         lines: lines.length,
         surplusLines: surplus,
         shortageLines: shortage,
@@ -238,6 +239,7 @@ export class StockCountPosting {
       details: {
         type: doc.type,
         number: doc.number,
+        documentDate: doc.documentDate,
         totalMinor: Number(doc.totalDirams ?? 0n),
       },
     });

@@ -38,6 +38,7 @@ describe('permission catalog', () => {
       'billing',
       'audit',
       'settings',
+      'notifications',
       'sync',
     ]);
     expect(actionsOf('inventory')).toContain('unpost');

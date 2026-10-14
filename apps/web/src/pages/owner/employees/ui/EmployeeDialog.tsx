@@ -65,6 +65,7 @@ export function EmployeeDialog({
 }) {
   const t = useTranslations('employees.dialog');
   const tEmp = useTranslations('employees');
+  const tGroups = useTranslations('auditGroups');
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -182,7 +183,7 @@ export function EmployeeDialog({
     {
       key: 'action',
       header: t('action'),
-      cell: (row) => tEmp(`auditActions.${row.action}`),
+      cell: (row) => tGroups(row.action),
     },
     { key: 'object', header: t('object'), cell: (row) => row.object },
     { key: 'details', header: t('details'), cell: (row) => row.details },

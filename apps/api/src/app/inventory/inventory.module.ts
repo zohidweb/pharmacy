@@ -13,7 +13,9 @@ import { PosStock } from './pos-stock';
 import { ReturnStock } from './return-stock';
 import { OpeningBalancesController } from './opening-balances.controller';
 import { DocumentPosting } from './posting';
+import { PurchasePricesSource } from './purchase-prices-source';
 import { StockDocumentsService } from './stock-documents.service';
+import { StockAlerts } from './stock-alerts';
 import { StockController } from './stock.controller';
 import { StockCountPosting } from './stock-count-posting';
 import { StockCountsController } from './stock-counts.controller';
@@ -84,8 +86,18 @@ import { WriteOffsService } from './write-offs.service';
     PosStock,
     ReturnStock,
     CustomerReturnNumbers,
+    // fills the PurchasePrices port of pricing (spec 2026-10-14-owner-cabinet, E15)
+    PurchasePricesSource,
+    StockAlerts,
   ],
   // the POS reads and moves the stock only through these (spec 2026-10-13-pos-shift-sale)
-  exports: [Numbering, PosStock, ReturnStock, CustomerReturnNumbers],
+  // StockAlerts — the stock signals of the notifications and the home (spec 2026-10-14-owner-cabinet)
+  exports: [
+    Numbering,
+    PosStock,
+    ReturnStock,
+    CustomerReturnNumbers,
+    StockAlerts,
+  ],
 })
 export class InventoryModule {}

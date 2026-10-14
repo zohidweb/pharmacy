@@ -33,6 +33,7 @@ import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
 import type { DiscountRuleRecord, ProductExtras } from './db-catalog';
 import { stores } from './fixtures';
+import { appendAudit } from './handlers-staff';
 import { context, findDoc, page, storeName } from './handlers-stock';
 import { piecePrice, setStorePrice, storePrice } from './pricing';
 import { authorize } from './session';
@@ -557,12 +558,11 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
     for (const price of body.prices) {
       setStorePrice(price.storeId, product.id, price.priceMinor);
     }
-    mockDb().activity.unshift({
-      id: `a-${Date.now()}`,
-      at: new Date().toISOString(),
-      actorName: session.employee.fullName,
+    appendAudit(session, {
+      event: 'price.changed',
+      object: product.name,
+      params: { priceMinor: body.prices[0]?.priceMinor ?? null },
       storeName: null,
-      description: `Цена · ${product.name}`,
     });
     mockDb().pos.catalogVersion += 1;
     return {

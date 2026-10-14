@@ -56,7 +56,10 @@ export function toSession(stored: StoredSession, correlationId: string) {
       login: employee.login,
       phone: employee.phone,
     },
-    tenant,
+    tenant: {
+      ...tenant,
+      warnBelowCost: mockDb().owner.settings.warnBelowCost,
+    },
     role: {
       id: role.id,
       name: role.name,

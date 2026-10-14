@@ -87,7 +87,11 @@ export function buildEmployeeSession(
       login: profile.employee.login,
       phone: profile.employee.phone ?? '',
     },
-    tenant: { id: profile.tenant.id, name: profile.tenant.name },
+    tenant: {
+      id: profile.tenant.id,
+      name: profile.tenant.name,
+      warnBelowCost: profile.settings.warnBelowCost ?? true,
+    },
     role: {
       id: profile.role.id,
       name: roleDisplayName(profile.role.name, view.locale),

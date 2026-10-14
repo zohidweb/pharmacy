@@ -1,32 +1,36 @@
 'use client';
 
-import type { ReminderKind, ReminderParams } from '@pharmacy/shared-dto';
+import type { NotificationKind, ReminderParams } from '@pharmacy/shared-dto';
 import { formatDateOnly, formatMoney } from '@pharmacy/shared-util';
 import type { IconName, StatusTone } from '@pharmacy/ui';
 import { useTranslations } from 'use-intl';
 
-export const reminderIcon: Record<ReminderKind, IconName> = {
+export const reminderIcon: Record<NotificationKind, IconName> = {
   batch_expiring: 'clock',
+  low_stock: 'package',
   supplier_payment_due: 'truck',
   transfer_in_transit: 'arrow-left-right',
-  low_stock: 'package',
+  shift_discrepancy: 'banknote',
+  negative_stock: 'triangle-alert',
+  sync_conflict: 'refresh-cw',
   license_expiring: 'key-round',
-  impersonation: 'user-check',
 };
 
-export const reminderTone: Record<ReminderKind, StatusTone> = {
+export const reminderTone: Record<NotificationKind, StatusTone> = {
   batch_expiring: 'warning',
+  low_stock: 'warning',
   supplier_payment_due: 'danger',
   transfer_in_transit: 'info',
-  low_stock: 'warning',
+  shift_discrepancy: 'danger',
+  negative_stock: 'warning',
+  sync_conflict: 'warning',
   license_expiring: 'warning',
-  impersonation: 'info',
 };
 
 /** Title and detail of a reminder in the interface language (the API sends kind + parameters). */
 export function useReminderText() {
   const t = useTranslations('reminder');
-  return (kind: ReminderKind, params: ReminderParams) => {
+  return (kind: NotificationKind, params: ReminderParams) => {
     const values = {
       product: params.productName ?? '—',
       batch: params.batchNumber ?? '—',
@@ -44,7 +48,15 @@ export function useReminderText() {
       to: params.toStore ?? '—',
       positions: params.positions ?? 0,
       operator: params.operatorName ?? '—',
+      shift: params.shiftNumber ?? '—',
     };
+    // an expired batch counts its days back (the API sends a negative `days`)
+    if (kind === 'batch_expiring' && values.days < 0) {
+      return {
+        title: t('batch_expiring.title', values),
+        detail: t('batch_expiring.expired', { ...values, days: -values.days }),
+      };
+    }
     return {
       title: t(`${kind}.title`, values),
       detail: t(`${kind}.detail`, values),

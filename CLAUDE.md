@@ -67,7 +67,8 @@ ADR-0012 reverse proxy и статика (отложен до выбора хо�
 pharmacy/
 ├── apps/
 │   ├── api/          # NestJS: модульный монолит — src/app/{stores, staff, catalog, inventory,
-│   │                 #   pos, purchasing, pricing, returns, billing, sync, fiscal, export-1c, audit}
+│   │                 #   pos, purchasing, pricing, returns, notifications, reports, billing, sync, fiscal,
+│   │                 #   export-1c, audit}
 │   ├── api-e2e/      # e2e-тесты API (Jest)
 │   ├── web/          # Next.js: клиентский продукт (касса, склад, кабинет владельца)
 │   │                 #   app/ — маршруты (реэкспорты), pages/ — пустая; src/{app,pages,widgets,features,entities,shared} — FSD (ADR-0017)
@@ -95,6 +96,9 @@ pharmacy/
   `ReturnStock`, `Numbering`, `ProductsReader`); итоги возвратов смены и
   номера возвратов `pos` и `inventory` получают через порты `ShiftReturns`, `CustomerReturnNumbers`, которые
   заполняет `returns`.
+  `pos`, `returns`, `inventory`, `purchasing` ← `notifications` ← `reports` (`SalesFigures`, `PosAlerts`,
+  `ReturnFigures`, `StockAlerts`, `SupplierDues`, `Reminders`); `audit` ← все (`AuditService`, журнал `AuditJournal`);
+  цену последнего прихода `pricing` получает через порт `PurchasePrices`, который заполняет `inventory`.
 
 ## Build / test / lint
 
@@ -108,7 +112,8 @@ npx nx dev web                       # http://localhost:4200 (/api/* прокс�
 npx nx run web:dev-api               # то же, но готовые маршруты (вход, точки, сотрудники, роли, каталог, цены, скидки,
                                      #   поставщики и оплаты, заказы поставщикам, приход, начальные остатки, списание,
                                      #   инвентаризация, возврат поставщику, перемещения и заявки, остатки,
-                                     #   касса и смена, возвраты покупателей) — в apps/api
+                                     #   касса и смена, возвраты покупателей, главная, уведомления,
+                                     #   журнал действий, настройки сети) — в apps/api
 npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
 npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети) — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
@@ -293,7 +298,8 @@ npm run prod:build / prod:up / prod:down
   `node --env-file=.env apps/api/scripts/create-operator.mjs --login … --name "…"`.
 - Офлайн-точка (часть 4 аутентификации): `STORE_MODE=offline` и `OFFLINE_TENANT_ID=<сеть точки>`,
   Redis не нужен — сессии в таблице `sessions` PostgreSQL точки, лимиты попыток в памяти процесса,
-  маршрутов оператора нет; модули `stores`, `staff`, `catalog`, `pricing`, `purchasing`, `inventory`, `pos`, `returns` пока
+  маршрутов оператора нет; модули `stores`, `staff`, `catalog`, `pricing`, `purchasing`, `inventory`, `pos`, `returns`,
+  `notifications`, `reports` пока
   регистрируются только в облаке (синхронизация на точку — ADR-0014, отдельной задачей). Ключи JWT и pepper точки
   генерируются на её ПК: `node scripts/generate-store-secrets.mjs --env-file <env-файл точки>`
   (значения не печатает, существующие не перезаписывает; бэкап pepper — отдельно от бэкапа БД).

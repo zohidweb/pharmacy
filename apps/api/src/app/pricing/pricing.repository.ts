@@ -39,15 +39,20 @@ export class PricingRepository {
   async settings(
     trx: TenantTransaction,
     tenantId: string,
-  ): Promise<{ language: 'ru' | 'tj'; timezone: string }> {
+  ): Promise<{
+    language: 'ru' | 'tj';
+    timezone: string;
+    warnBelowCost: boolean;
+  }> {
     const row = await trx
       .selectFrom('tenantSettings')
-      .select(['defaultLanguage', 'timezone'])
+      .select(['defaultLanguage', 'timezone', 'warnBelowCost'])
       .where('tenantId', '=', tenantId)
       .executeTakeFirst();
     return {
       language: row?.defaultLanguage === 'tj' ? 'tj' : 'ru',
       timezone: row?.timezone ?? 'Asia/Dushanbe',
+      warnBelowCost: row?.warnBelowCost ?? true,
     };
   }
 
@@ -136,7 +141,9 @@ export class PricingRepository {
     tenantId: string,
     storeId: string,
     businessDate: string,
-  ): Promise<Array<{ ruleId: string; minTotalDirams: bigint; percentBp: number }>> {
+  ): Promise<
+    Array<{ ruleId: string; minTotalDirams: bigint; percentBp: number }>
+  > {
     const result = await sql<{
       ruleId: string;
       minTotalDirams: bigint;

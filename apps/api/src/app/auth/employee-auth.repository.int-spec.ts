@@ -168,7 +168,11 @@ describe('loadProfile', () => {
         templateKey: 'manager',
       },
       tenant: { id: a.tenantId, name: 'Test network auth-repo-a' },
-      settings: { defaultLanguage: 'tj', cashierSessionIdleMin: 20 },
+      settings: {
+        defaultLanguage: 'tj',
+        cashierSessionIdleMin: 20,
+        warnBelowCost: true,
+      },
     });
   });
 
@@ -184,6 +188,7 @@ describe('loadProfile', () => {
     expect(profile?.settings).toEqual({
       defaultLanguage: 'ru',
       cashierSessionIdleMin: 15,
+      warnBelowCost: true,
     });
   });
 

@@ -6,6 +6,7 @@ import { DiscountRulesService } from './discount-rules.service';
 import { PricesController } from './prices.controller';
 import { PricesService } from './prices.service';
 import { PricingRepository } from './pricing.repository';
+import { PurchasePrices } from './purchase-prices';
 import { StorePriceWriter } from './store-price-writer';
 import { StorePricesReader } from './store-prices-reader';
 
@@ -21,7 +22,9 @@ import { StorePricesReader } from './store-prices-reader';
     DiscountRulesService,
     StorePriceWriter,
     StorePricesReader,
+    PurchasePrices,
   ],
-  exports: [StorePriceWriter, StorePricesReader],
+  // PurchasePrices — a port the inventory module fills (spec 2026-10-14-owner-cabinet, E15)
+  exports: [StorePriceWriter, StorePricesReader, PurchasePrices],
 })
 export class PricingModule {}

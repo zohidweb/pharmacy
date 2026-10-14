@@ -7,14 +7,20 @@
  */
 import {
   checkPin,
+  hasPermissions,
   isTrivialPin,
   passwordProblems,
+  type Permission,
 } from '@pharmacy/shared-domain';
 import type {
-  DashboardPeriod,
+  DashboardQuery,
   EmployeeMe,
+  EmployeeSession,
+  NotificationKind,
   TenantDashboard,
+  TenantNotification,
 } from '@pharmacy/shared-dto';
+import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { mockDb, type MockEmployeeState } from './db';
@@ -41,17 +47,92 @@ const PIN_MAX_FAILURES = 3;
 /** The one-time activation code the mocks accept for any demo login. */
 export const MOCK_ACTIVATION_CODE = 'DEMOACTIVATIONCODE00000000';
 
-const PERIOD_DAYS: Record<DashboardPeriod, number> = {
-  today: 1,
-  week: 7,
-  month: 30,
+// the kinds a notification needs a permission of, besides `notifications:view` (E10)
+const KIND_PERMISSION: Record<NotificationKind, Permission> = {
+  batch_expiring: 'inventory:view',
+  low_stock: 'inventory:view',
+  negative_stock: 'inventory:view',
+  transfer_in_transit: 'inventory:view',
+  supplier_payment_due: 'purchasing:view',
+  shift_discrepancy: 'shifts:view',
+  sync_conflict: 'sync:view',
+  license_expiring: 'stores:view',
 };
 
+/** The notifications the employee receives, newest first, with their own read marks. */
+function notificationsOf(session: EmployeeSession): TenantNotification[] {
+  const enabled = mockDb().owner.settings.notifications;
+  const storeIds = session.stores.map((store) => store.id);
+  const canSeeCost = hasPermissions(session.permissions, 'finance:view-cost');
+  return mockDb()
+    .notifications.filter(
+      (n) =>
+        enabled[n.kind] &&
+        hasPermissions(session.permissions, KIND_PERMISSION[n.kind]) &&
+        (n.storeId === null
+          ? session.scope === 'network'
+          : storeIds.includes(n.storeId)),
+    )
+    .sort((x, y) => y.createdAt.localeCompare(x.createdAt))
+    .map(({ readBy, read, params, ...rest }) => {
+      const { amountMinor, ...shown } = params;
+      return {
+        ...rest,
+        params:
+          canSeeCost && amountMinor !== undefined
+            ? { ...shown, amountMinor }
+            : shown,
+        read: read || readBy.includes(session.employee.id),
+      };
+    });
+}
+
+/** YYYY-MM-DD `days` days before `date`. */
+function daysBefore(date: string, days: number): string {
+  const moment = new Date(`${date}T00:00:00Z`);
+  moment.setUTCDate(moment.getUTCDate() - days);
+  return moment.toISOString().slice(0, 10);
+}
+
+/** The dates of a period of the home (spec 2026-10-14-owner-cabinet, E1, E6). */
+function periodDates(
+  query: DashboardQuery,
+  correlationId: string,
+): { from: string; to: string; chartFrom: string } {
+  const today = toAppDate();
+  if (query.period === 'today') {
+    return { from: today, to: today, chartFrom: daysBefore(today, 6) };
+  }
+  if (query.period === 'week') {
+    const from = daysBefore(today, 6);
+    return { from, to: today, chartFrom: from };
+  }
+  if (query.period === 'month') {
+    const from = `${today.slice(0, 8)}01`;
+    return { from, to: today, chartFrom: from };
+  }
+  const { from, to } = query;
+  if (!from || !to) {
+    throw new ApiError(400, 'validation_failed', correlationId, [
+      { field: from ? 'to' : 'from', code: 'required' },
+    ]);
+  }
+  if (from > to || to > today || daysBetween(from, to) >= 92) {
+    throw new ApiError(422, 'validation_failed', correlationId, [
+      { field: 'from', code: 'range' },
+    ]);
+  }
+  return { from, to, chartFrom: from };
+}
+
 function dashboard(
-  period: DashboardPeriod,
-  storeIds: string[],
+  query: DashboardQuery,
+  session: EmployeeSession,
+  correlationId: string,
 ): TenantDashboard {
-  const days = PERIOD_DAYS[period];
+  const { from, to, chartFrom } = periodDates(query, correlationId);
+  const days = daysBetween(from, to) + 1;
+  const storeIds = session.stores.map((store) => store.id);
   const rows = stores
     .filter((store) => storeIds.includes(store.id))
     .map((store) => ({
@@ -69,10 +150,13 @@ function dashboard(
   const revenueMinor = rows.reduce((sum, row) => sum + row.revenueMinor, 0);
   const dayRevenue = revenueMinor / days;
   const shape = [0.82, 0.95, 0.88, 1.06, 1.12, 0.74, 1];
-  const today = Date.now();
-  const db = mockDb();
+  const chartDays = daysBetween(chartFrom, to) + 1;
+  const visible = notificationsOf(session);
+  const storeNames = session.stores.map((store) => store.name);
   return {
-    period,
+    period: query.period,
+    from,
+    to,
     kpi: {
       revenueMinor,
       revenueChangePercent: rows.length ? 12 : null,
@@ -83,17 +167,26 @@ function dashboard(
       expiringCritical: rows.length ? 3 : 0,
     },
     stores: rows,
-    revenueByDay: shape.map((factor, index) => ({
-      date: new Date(today - (6 - index) * 86_400_000)
-        .toISOString()
-        .slice(0, 10),
-      revenueMinor: Math.round(dayRevenue * factor),
+    revenueByDay: Array.from({ length: chartDays }, (_, index) => ({
+      date: daysBefore(to, chartDays - 1 - index),
+      revenueMinor: Math.round(
+        dayRevenue * shape[(shape.length - chartDays + index + 70) % 7],
+      ),
     })),
-    reminders: db.notifications
-      .filter((n) => n.kind !== 'low_stock')
-      .slice(0, 3)
+    reminders: [...visible]
+      .sort((x, y) => Number(x.read) - Number(y.read))
+      .slice(0, 5)
       .map(({ id, kind, params }) => ({ id, kind, params })),
-    recentActivity: db.activity,
+    recentActivity: mockDb()
+      .owner.audit.filter(
+        (a) =>
+          a.action !== 'sign_in' &&
+          a.action !== 'access_denied' &&
+          (a.storeName === null
+            ? session.scope === 'network'
+            : storeNames.includes(a.storeName)),
+      )
+      .slice(0, 8),
   };
 }
 
@@ -267,15 +360,12 @@ const handlers: MockHandlers = {
 
   'dashboard.get': ({ query, correlationId }) => {
     const { session } = authorize(correlationId, 'reports:view');
-    return dashboard(
-      query.period,
-      session.stores.map((store) => store.id),
-    );
+    return dashboard(query, session, correlationId);
   },
 
   'notifications.list': ({ query, correlationId }) => {
-    current(correlationId);
-    const items = mockDb().notifications;
+    const { session } = authorize(correlationId, 'notifications:view');
+    const items = notificationsOf(session);
     const limit = query?.limit ?? 20;
     const offset = query?.offset ?? 0;
     return {
@@ -287,8 +377,13 @@ const handlers: MockHandlers = {
     };
   },
   'notifications.readAll': ({ correlationId }) => {
-    current(correlationId);
-    for (const item of mockDb().notifications) item.read = true;
+    const { session } = authorize(correlationId, 'notifications:view');
+    const visible = new Set(notificationsOf(session).map((n) => n.id));
+    for (const item of mockDb().notifications) {
+      if (visible.has(item.id) && !item.readBy.includes(session.employee.id)) {
+        item.readBy.push(session.employee.id);
+      }
+    }
   },
 
   'me.get': ({ correlationId }) => toMe(current(correlationId).employee),

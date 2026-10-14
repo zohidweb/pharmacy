@@ -28,6 +28,7 @@ import { StoreAccess } from './store-access';
 import { SupplierReturnPosting } from './supplier-return-posting';
 import {
   returnAmount,
+  withPiecesPerPack,
   type SupplierReturnLineValues,
   SupplierReturnsRepository,
 } from './supplier-returns.repository';
@@ -394,14 +395,16 @@ export class SupplierReturnsService {
     doc: DocumentRow,
   ): Promise<SupplierReturn> {
     const canSeeCost = this.canSeeCost();
-    const lines = await this.lines.lines(trx, tenantId, doc.id);
-    const names = new Map(
+    const rows = await this.lines.lines(trx, tenantId, doc.id);
+    const products = new Map(
       (
         await this.products.findForStock(trx, tenantId, [
-          ...new Set(lines.map((l) => l.productId)),
+          ...new Set(rows.map((l) => l.productId)),
         ])
-      ).map((p) => [p.id, p.name]),
+      ).map((p) => [p.id, p]),
     );
+    const names = new Map([...products].map(([id, p]) => [id, p.name]));
+    const lines = withPiecesPerPack(rows, products);
     const stores = await this.inventory.storeNames(trx, tenantId, [
       doc.storeId,
     ]);

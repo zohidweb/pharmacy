@@ -352,8 +352,10 @@ export class PurchasingRepository {
 
   /**
    * Posted supplier returns with a credit in the supplier × legal entity not allocated yet, the
-   * oldest first. The credit of a return in a pair is minus its ledger entries there; it is
-   * allocated only to receipts of that pair (those the pair still owes by their entries).
+   * oldest first by the date of the return (data model 05) — of its current posting: a return
+   * unposted, moved to another date and posted again takes its new place. The credit of a return in
+   * a pair is minus its ledger entries there; it is allocated only to receipts of that pair (those
+   * the pair still owes by their entries). Only the allocations of these returns are read.
    */
   async returnsWithRest(
     trx: TenantTransaction,
@@ -362,18 +364,23 @@ export class PurchasingRepository {
     legalEntityId: string,
   ): Promise<CreditRest[]> {
     const result = await sql<CreditRest>`
+      with c as (
+        select l.source_id as id, max(d.document_date)::text as date,
+               max(l.recorded_at) filter (where l.kind = 'supplier_return') as at,
+               -sum(l.amount_dirams) as credit
+        from pharmacy.supplier_ledger_entries l
+        join pharmacy.documents d
+          on d.tenant_id = l.tenant_id and d.id = l.source_id and d.type = 'supplier_return'
+        where l.tenant_id = ${tenantId} and l.supplier_id = ${supplierId}
+          and l.legal_entity_id = ${legalEntityId} and l.source_type = 'document'
+        group by l.source_id
+      )
       select c.id, c.date, c.at, (c.credit - coalesce(a.allocated, 0))::bigint as rest_dirams
-      from (select l.source_id as id, min(l.business_date)::text as date, min(l.recorded_at) as at,
-                   -sum(l.amount_dirams) as credit
-            from pharmacy.supplier_ledger_entries l
-            join pharmacy.documents d
-              on d.tenant_id = l.tenant_id and d.id = l.source_id and d.type = 'supplier_return'
-            where l.tenant_id = ${tenantId} and l.supplier_id = ${supplierId}
-              and l.legal_entity_id = ${legalEntityId} and l.source_type = 'document'
-            group by l.source_id) c
+      from c
       left join (select ra.return_document_id, sum(ra.amount_dirams) as allocated
                  from pharmacy.supplier_return_allocations ra
                  where ra.tenant_id = ${tenantId}
+                   and ra.return_document_id in (select id from c)
                    and (select sum(e.amount_dirams) from pharmacy.supplier_ledger_entries e
                         where e.tenant_id = ra.tenant_id and e.source_type = 'document'
                           and e.source_id = ra.goods_receipt_document_id

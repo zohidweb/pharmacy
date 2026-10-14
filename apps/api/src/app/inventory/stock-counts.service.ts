@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { hasPermissions } from '@pharmacy/shared-domain';
+import { sql } from 'kysely';
 import type {
   DocumentAuthor,
   FoundLineInput,
@@ -204,7 +205,7 @@ export class StockCountsService {
             purchaseOrderId: null,
             inventoryScope: input.scope,
             inventoryCategoryId: categoryId,
-            inventoryStartedAt: new Date(),
+            inventoryStartedAt: sql<Date>`now()`,
           },
         );
         const lines =
@@ -243,7 +244,9 @@ export class StockCountsService {
   async saveComment(id: string, comment: string): Promise<StockCount> {
     const { tenantId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
-      const doc = await this.runningCount(trx, tenantId, id);
+      // the header it updates is locked for update at once: two comments taking it FOR SHARE and
+      // then updating it would deadlock
+      const doc = await this.runningCount(trx, tenantId, id, true);
       await this.counts.setComment(
         trx,
         tenantId,
@@ -408,6 +411,23 @@ export class StockCountsService {
       await this.stores.writableStore(trx, tenantId, doc.storeId);
       await this.freeze.lockExclusive(trx, tenantId, doc.storeId);
       this.assertRunning(doc);
+      // What was sold before and after the count is fixed at the cancel, as at the posting: a
+      // cancelled count no longer drifts with every later sale.
+      const lines = await this.counts.lines(trx, tenantId, doc.id);
+      await this.counts.fixSold(
+        trx,
+        tenantId,
+        lines
+          .filter((line) => !line.isFound)
+          .map((line) => {
+            const atFirst = line.stockAtFirstEntryPieces ?? line.stockPieces;
+            return {
+              lineId: line.id,
+              soldSinceStartPieces: line.bookQtyPieces - atFirst,
+              soldAfterCountPieces: atFirst - line.stockPieces,
+            };
+          }),
+      );
       await this.counts.markCancelled(trx, tenantId, doc.id, employeeId);
       await this.audit.append(trx, {
         action: 'stock_count.cancelled',
@@ -524,12 +544,7 @@ export class StockCountsService {
         ),
       ),
     ];
-    const names = new Map<string, string>();
-    for (const categoryId of ids) {
-      const category = await this.products.category(trx, tenantId, categoryId);
-      if (category) names.set(category.id, category.name);
-    }
-    return names;
+    return this.products.categoryNames(trx, tenantId, ids);
   }
 
   private async author(
@@ -618,15 +633,20 @@ export class StockCountsService {
       // sold before the count of the line (book − stock at its first entry) moves the expected
       // stock; sold after it was counted is shown only (K2). Only the POS moves the frozen batches;
       // both are fixed at the posting.
+      // fixed at the posting or the cancel (a count cancelled before the values were fixed is
+      // still computed live)
+      const fixed =
+        posted ||
+        (doc.status === 'cancelled' && line.soldSinceStartPieces !== null);
       const atFirst = line.stockAtFirstEntryPieces ?? line.stockPieces;
       const sold = line.isFound
         ? 0
-        : posted
+        : fixed
           ? (line.soldSinceStartPieces ?? 0)
           : line.bookQtyPieces - atFirst;
       const soldAfter = line.isFound
         ? 0
-        : posted
+        : fixed
           ? (line.soldAfterCountPieces ?? 0)
           : atFirst - line.stockPieces;
       const surplusPrice =

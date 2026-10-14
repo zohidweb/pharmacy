@@ -152,6 +152,26 @@ export class ProductsReader {
     };
   }
 
+  /**
+   * Names of the categories (any status) in the UI language: one read of the categories and one of
+   * the network language for a whole list, not a query per category.
+   */
+  async categoryNames(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, string>> {
+    const names = new Map<string, string>();
+    if (ids.length === 0) return names;
+    const wanted = new Set(ids);
+    const { locale } = requirePrincipal();
+    const language = await this.repository.networkLanguage(trx, tenantId);
+    for (const row of await this.repository.listCategories(trx, tenantId, false)) {
+      if (wanted.has(row.id)) names.set(row.id, localizedName(row.name, locale, language));
+    }
+    return names;
+  }
+
   /** Products of the POS snapshot: all active ones, or the given ids in any status. */
   async listForPos(
     trx: TenantTransaction,

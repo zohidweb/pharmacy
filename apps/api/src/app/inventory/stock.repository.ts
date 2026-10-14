@@ -15,6 +15,15 @@ export interface BatchStockRow {
   qty: number;
 }
 
+/** Narrows the batches in SQL, before their stock is summed. */
+export interface BatchFilter {
+  supplierId?: string;
+  /** The document that created the batch (a goods receipt). */
+  sourceDocumentId?: string;
+  /** Batches that expired before this date. */
+  expiredBefore?: string;
+}
+
 // The stock of batches: the sum of their movements (data model 03 — stock is never stored). The
 // index (tenant_id, store_id, batch_id) include (qty_delta_pieces) answers it without the table.
 @Injectable()
@@ -25,6 +34,7 @@ export class StockRepository {
     tenantId: string,
     storeIds: readonly string[],
     productIds: readonly string[] | null,
+    filter: BatchFilter = {},
   ): Promise<BatchStockRow[]> {
     if (
       storeIds.length === 0 ||
@@ -45,9 +55,40 @@ export class StockRepository {
       where b.tenant_id = ${tenantId}
         and b.store_id in (${sql.join([...storeIds])})
         ${productIds === null ? sql`` : sql`and b.product_id in (${sql.join([...productIds])})`}
+        ${filter.supplierId === undefined ? sql`` : sql`and b.supplier_id = ${filter.supplierId}`}
+        ${filter.sourceDocumentId === undefined ? sql`` : sql`and b.source_document_id = ${filter.sourceDocumentId}`}
+        ${filter.expiredBefore === undefined ? sql`` : sql`and b.expiry_date < ${filter.expiredBefore}::date`}
         and s.qty <> 0
       order by b.expiry_date, b.id`.execute(trx);
     return result.rows;
+  }
+
+  /**
+   * Batches with stock that expired before `today` or expire by `soon` (both dates of the network),
+   * counted in one query: the list KPIs need the counts, not every batch of the stores.
+   */
+  async expiryCounts(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeIds: readonly string[],
+    today: string,
+    soon: string,
+  ): Promise<{ expired: number; expiring: number }> {
+    if (storeIds.length === 0) return { expired: 0, expiring: 0 };
+    const result = await sql<{ expired: number; expiring: number }>`
+      select count(*) filter (where b.expiry_date < ${today}::date)::integer as expired,
+             count(*) filter (where b.expiry_date >= ${today}::date)::integer as expiring
+      from pharmacy.batches b
+      join lateral (
+        select sum(m.qty_delta_pieces) as qty
+        from pharmacy.stock_movements m
+        where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
+      ) s on true
+      where b.tenant_id = ${tenantId}
+        and b.store_id in (${sql.join([...storeIds])})
+        and b.expiry_date <= ${soon}::date
+        and s.qty > 0`.execute(trx);
+    return result.rows[0];
   }
 
   /** Pieces sold at the store by product since a business date (exclusive). */

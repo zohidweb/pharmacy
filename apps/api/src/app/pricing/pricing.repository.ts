@@ -190,6 +190,22 @@ export class PricingRepository {
       .execute();
   }
 
+  /** The price rows of the products at a store, locked in the order of the products. */
+  async lockStoreProducts(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    productIds: readonly string[],
+  ): Promise<void> {
+    if (productIds.length === 0) return;
+    await sql`
+      select 1 from pharmacy.store_products
+      where tenant_id = ${tenantId} and store_id = ${storeId}
+        and product_id in (${sql.join([...new Set(productIds)])})
+      order by product_id
+      for update`.execute(trx);
+  }
+
   /** The current prices of one product at the stores, locked until the transaction ends. */
   async lockPrices(
     trx: TenantTransaction,
@@ -201,6 +217,7 @@ export class PricingRepository {
       select store_id, retail_price_per_pack_dirams as price from pharmacy.store_products
       where tenant_id = ${tenantId} and product_id = ${productId}
         and store_id in (${sql.join([...storeIds])})
+      order by store_id
       for update`.execute(trx);
     return new Map(result.rows.map((row) => [row.storeId, row.price]));
   }

@@ -11,6 +11,7 @@ import {
 import { StorePriceWriter } from '../pricing/store-price-writer';
 import { OrderReceiving } from '../purchasing/order-receiving';
 import { SupplierLedger } from '../purchasing/supplier-ledger';
+import { SuppliersReader } from '../purchasing/suppliers-reader';
 import {
   type DocumentRow,
   DocumentsRepository,
@@ -29,19 +30,33 @@ const DAY_MS = 86_400_000;
 export const packsOf = (line: LineRow, piecesPerPack: number): number =>
   Math.round(line.qtyPieces / piecesPerPack);
 
+/**
+ * Amount of packs × price of a pack in exact integers: 500 lines at the bounds of a line exceed
+ * 2^53, so the sum is a BigInt; a total beyond a safe number is refused (422 at `lines`).
+ */
+export function packsTotal(
+  items: readonly { packs: number; pricePerPack: bigint | number }[],
+): number {
+  const total = items.reduce(
+    (sum, item) => sum + BigInt(item.packs) * BigInt(item.pricePerPack),
+    0n,
+  );
+  if (total > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw invalid('lines', 'total_too_large');
+  }
+  return Number(total);
+}
+
 /** Purchase amount of the lines: packs × purchase price of a pack. */
 export function linesTotal(
   lines: readonly LineRow[],
   piecesPerPack: (productId: string) => number,
 ): number {
-  return lines.reduce(
-    (sum, line) =>
-      sum +
-      Math.round(
-        (line.qtyPieces * Number(line.purchasePricePerPackDirams)) /
-          piecesPerPack(line.productId),
-      ),
-    0,
+  return packsTotal(
+    lines.map((line) => ({
+      packs: packsOf(line, piecesPerPack(line.productId)),
+      pricePerPack: line.purchasePricePerPackDirams,
+    })),
   );
 }
 
@@ -92,6 +107,7 @@ export class DocumentPosting {
     private readonly orders: OrderReceiving,
     private readonly audit: AuditService,
     private readonly freeze: StockFreeze,
+    private readonly suppliers: SuppliersReader,
   ) {}
 
   async post(
@@ -113,6 +129,22 @@ export class DocumentPosting {
     if (doc.type === 'goods_receipt' && !doc.supplierInvoiceNumber) {
       throw invalid('invoiceNumber', 'required');
     }
+    // what the draft checked may have changed since it was saved: the supplier is still active and
+    // the order still open (locked, so a parallel receipt that closes it waits)
+    if (
+      doc.type === 'goods_receipt' &&
+      doc.supplierId !== null &&
+      (await this.suppliers.findActive(trx, tenantId, doc.supplierId)) === null
+    ) {
+      throw invalid('supplierId', 'unknown_supplier');
+    }
+    if (doc.purchaseOrderId !== null) {
+      await this.orders.assertOpen(trx, tenantId, {
+        orderId: doc.purchaseOrderId,
+        supplierId: doc.supplierId,
+        storeId: doc.storeId,
+      });
+    }
     const settings = await this.inventory.settings(trx, tenantId);
     checkDocumentDate(settings, store, doc.documentDate, { backdating: true });
     const products = await this.productMap(trx, tenantId, lines);
@@ -124,7 +156,25 @@ export class DocumentPosting {
       }
     }
 
-    for (const [i, line] of lines.entries()) {
+    // The store prices of the products are locked first, in the order of the products: two postings
+    // (or a posting and a price change) with common products then wait instead of deadlocking.
+    const priced = lines
+      .map((line, i) => ({ line, i }))
+      .filter(({ line }) => line.retailPriceDraftDirams !== null)
+      .sort((a, b) =>
+        a.line.productId < b.line.productId
+          ? -1
+          : a.line.productId > b.line.productId
+            ? 1
+            : 0,
+      );
+    await this.prices.lock(trx, {
+      tenantId,
+      storeId: doc.storeId,
+      productIds: priced.map(({ line }) => line.productId),
+    });
+
+    for (const line of lines) {
       const product = products.get(line.productId) as PricingProduct;
       let batchId = line.batchId;
       if (batchId === null) {
@@ -164,19 +214,20 @@ export class DocumentPosting {
           reversesMovementId: null,
         },
       ]);
-      if (line.retailPriceDraftDirams !== null) {
-        await this.prices.set(trx, {
-          tenantId,
-          productId: line.productId,
-          storeId: doc.storeId,
-          priceMinor: Number(line.retailPriceDraftDirams),
-          maxPriceMinor: product.maxPriceMinor,
-          confirmAboveMax: false,
-          field: `lines.${i}.retailPriceMinor`,
-          source: 'document',
-          documentId: doc.id,
-        });
-      }
+    }
+    for (const { line, i } of priced) {
+      await this.prices.set(trx, {
+        tenantId,
+        productId: line.productId,
+        storeId: doc.storeId,
+        priceMinor: Number(line.retailPriceDraftDirams),
+        maxPriceMinor: (products.get(line.productId) as PricingProduct)
+          .maxPriceMinor,
+        confirmAboveMax: false,
+        field: `lines.${i}.retailPriceMinor`,
+        source: 'document',
+        documentId: doc.id,
+      });
     }
 
     const total = linesTotal(

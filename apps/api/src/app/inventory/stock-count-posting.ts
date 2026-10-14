@@ -259,8 +259,19 @@ export class StockCountPosting {
     lock: boolean,
   ): Promise<UnpostCheck['blockers']> {
     if (doc.postedAt === null) return [];
+    // Only the live movements of the current posting: batches of an earlier posting (already
+    // reversed) do not block undoing this one (B2).
     const own = await this.documents.documentMovements(trx, tenantId, doc.id);
-    const batchIds = [...new Set(own.map((m) => m.batchId))];
+    const reversed = new Set(
+      own.flatMap((m) => (m.reversesMovementId ? [m.reversesMovementId] : [])),
+    );
+    const batchIds = [
+      ...new Set(
+        own
+          .filter((m) => m.kind !== 'reversal' && !reversed.has(m.id))
+          .map((m) => m.batchId),
+      ),
+    ];
     if (lock) await this.documents.lockBatches(trx, tenantId, batchIds);
     const foreign = await this.documents.foreignMovements(
       trx,
@@ -283,11 +294,12 @@ export class StockCountPosting {
       const line = lines.find(
         (l) => l.batchId === batchId || l.surplusBatchId === batchId,
       );
-      if (moves.length === 0 || !line) return [];
+      if (moves.length === 0) return [];
+      // A moved batch without its line still blocks (fail closed), only unnamed.
       return [
         {
-          productName: names.get(line.productId) ?? '',
-          batchNumber: line.lotNumber ?? '',
+          productName: line ? (names.get(line.productId) ?? '') : '',
+          batchNumber: line?.lotNumber ?? '',
           soldPieces: -moves
             .filter((m) => m.kind === 'sale')
             .reduce((sum, m) => sum + m.qtyDeltaPieces, 0),

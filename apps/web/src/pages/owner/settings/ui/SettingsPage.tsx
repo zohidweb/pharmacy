@@ -19,7 +19,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { canWrite, useSession } from '@/entities/session';
+import { canWrite, sessionQueryKey, useSession } from '@/entities/session';
 import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
 import { DemoDataNotice, QueryState } from '@/shared/ui';
@@ -72,6 +72,11 @@ function NetworkCard({
     },
     onSuccess: (saved) => {
       queryClient.setQueryData(['settings'], saved);
+      // the bell, the home and the price warning read the settings: show the change at once
+      // (final review I3)
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
       toast.show(t('saved'));
     },
   });

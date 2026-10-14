@@ -13,8 +13,10 @@ const REFRESH_MS = 5 * 60_000;
 // a receipt committed a little after the moment of the last refresh is not lost: the keys make a
 // repeat harmless
 const EVENTS_OVERLAP_MS = 5 * 60_000;
-// a closing sent from the buffer carries the time of the device: look back two days
+// a closing sent from the buffer carries the time of the device: look back two days at least
 const SHIFT_LOOKBACK_MS = 2 * 86_400_000;
+// the first refresh of a network reads the events of the days the list shows (E12)
+const FIRST_LOOKBACK_MS = 30 * 86_400_000;
 
 const addDays = (date: string, days: number) => {
   const moment = new Date(`${date}T00:00:00Z`);
@@ -51,6 +53,10 @@ export class NotificationsRefresh {
     }
     if (!(await this.repository.tryLock(trx, tenantId))) return;
     const startedAt = new Date();
+    // the facts of the events since the previous refresh, however long ago it was (final review I2)
+    const eventsFrom = context.eventsAfter
+      ? context.eventsAfter.getTime() - EVENTS_OVERLAP_MS
+      : startedAt.getTime() - FIRST_LOOKBACK_MS;
     const enabled = (kind: NotificationKind) =>
       !context.disabled.includes(kind);
     const stores = await this.repository.storeNames(trx, tenantId);
@@ -151,7 +157,7 @@ export class NotificationsRefresh {
       const shifts = await this.pos.closedShiftsWithDiscrepancy(
         trx,
         tenantId,
-        new Date(startedAt.getTime() - SHIFT_LOOKBACK_MS),
+        new Date(Math.min(eventsFrom, startedAt.getTime() - SHIFT_LOOKBACK_MS)),
       );
       await this.repository.upsert(
         trx,
@@ -171,11 +177,10 @@ export class NotificationsRefresh {
       );
     }
     if (enabled('negative_stock')) {
-      const since = context.eventsAfter ?? startedAt;
       const days = await this.pos.shortfallsByDay(
         trx,
         tenantId,
-        new Date(since.getTime() - EVENTS_OVERLAP_MS),
+        new Date(eventsFrom),
       );
       await this.repository.upsert(
         trx,

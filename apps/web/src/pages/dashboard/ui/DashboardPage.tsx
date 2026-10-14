@@ -35,7 +35,7 @@ import {
   reminderTone,
   useReminderText,
 } from '@/entities/reminder';
-import { useSession } from '@/entities/session';
+import { can, useSession } from '@/entities/session';
 import { StoreModeBadge } from '@/entities/store';
 import { apiRequest } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
@@ -351,7 +351,8 @@ function DashboardPageView() {
                 </div>
                 <div className="grid grid-cols-2 items-start gap-4">
                   <Reminders data={data} />
-                  <Activity data={data} />
+                  {/* the journal only for those who may read it (final review I1) */}
+                  {can(session, 'audit:view') && <Activity data={data} />}
                 </div>
               </>
             )}

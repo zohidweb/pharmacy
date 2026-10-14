@@ -4,6 +4,7 @@ import type {
   DashboardStoreRow,
   TenantDashboard,
 } from '@pharmacy/shared-dto';
+import { hasPermissions } from '@pharmacy/shared-domain';
 import {
   type EmployeePrincipal,
   requirePrincipal,
@@ -175,10 +176,13 @@ export class DashboardService {
         stores: rows,
         revenueByDay,
         reminders: await this.reminders.forDashboard(trx, REMINDERS),
-        recentActivity: await this.journal.recent(trx, ACTIVITY, [
-          'sign_in',
-          'access_denied',
-        ]),
+        // the journal of the home only for those who may read the journal (final review I1)
+        recentActivity: hasPermissions(principal.permissions, 'audit:view')
+          ? await this.journal.recent(trx, ACTIVITY, [
+              'sign_in',
+              'access_denied',
+            ])
+          : [],
       };
     });
   }

@@ -98,6 +98,13 @@ export class TransferRequestsService {
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.lockedDraft(trx, tenantId, id);
       await this.stores.writableStore(trx, tenantId, doc.storeId);
+      // checked at saving, but the store asked may have been closed or gone offline since
+      await this.stores.counterpartStore(
+        trx,
+        tenantId,
+        doc.destinationStoreId as string,
+        'fromStoreId',
+      );
       await this.documents.setStatus(trx, tenantId, doc.id, 'sent');
       await this.sentAudit(trx, doc);
       return this.toDto(trx, tenantId, await this.read(trx, tenantId, doc.id));

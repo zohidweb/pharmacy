@@ -233,6 +233,17 @@ export class TransferPosting {
       backdating: false,
     });
     const today = settings.today;
+    const short = lines
+      .map((line, i) => ({ line, missing: line.qtySentPieces - received[i] }))
+      .filter((s) => s.missing > 0);
+    // The sender's batches of the shortage are locked for update before the receiver's batches
+    // reference them (a key-share lock): two acceptances of a common batch then wait instead of
+    // deadlocking.
+    await this.documents.lockBatches(
+      trx,
+      tenantId,
+      short.map((s) => s.line.sourceBatchId),
+    );
 
     // the receiver's batches: the values of the sender's batch (D2)
     const arrivals: Parameters<
@@ -283,9 +294,6 @@ export class TransferPosting {
       documentId: doc.id,
     });
 
-    const short = lines
-      .map((line, i) => ({ line, missing: line.qtySentPieces - received[i] }))
-      .filter((s) => s.missing > 0);
     if (short.length > 0) {
       await this.writeOffShortage(trx, ctx, doc, short, body.comment, today);
     }
@@ -312,7 +320,8 @@ export class TransferPosting {
   /**
    * The shortage, written off at the sender (T6): the dispatch of the missing pieces is reversed
    * (+N) and a posted write-off `transfer_discrepancy` takes them (−N) — the sender's stock does
-   * not change, the loss is a write-off as any other.
+   * not change, the loss is a write-off as any other. The batches of the shortage are locked by
+   * `accept`.
    */
   private async writeOffShortage(
     trx: TenantTransaction,
@@ -325,11 +334,6 @@ export class TransferPosting {
     const { tenantId, employeeId } = ctx;
     const sender = await this.inventory.store(trx, tenantId, doc.storeId);
     if (sender === null) throw new ProblemException(404, 'not_found');
-    await this.documents.lockBatches(
-      trx,
-      tenantId,
-      short.map((s) => s.line.sourceBatchId),
-    );
     const movements = await this.documents.documentMovements(
       trx,
       tenantId,
@@ -386,7 +390,10 @@ export class TransferPosting {
       {
         storeId: doc.storeId,
         documentDate: today,
-        comment: `${doc.number}: ${comment.trim()}`.trim().slice(0, 500),
+        comment: (comment.trim()
+          ? `${doc.number}: ${comment.trim()}`
+          : doc.number
+        ).slice(0, 500),
         totalDirams: total,
         supplierId: null,
         supplierInvoiceNumber: null,

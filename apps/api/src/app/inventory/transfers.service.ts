@@ -407,6 +407,10 @@ export class TransfersService {
     }
     // the batches of the sender; by a request — its products, not more than asked
     const batchIds = input.lines.map((l) => l.batchId.toLowerCase());
+    // Sent at once: the batches are locked for update before the lines reference them. The
+    // reference takes a key-share lock, and two sends of a common batch that each hold one and
+    // then ask for update would deadlock.
+    if (input.send) await this.documents.lockBatches(trx, tenantId, batchIds);
     const batches = await this.writeOffBatches.batches(trx, tenantId, batchIds);
     const products = new Map(
       (

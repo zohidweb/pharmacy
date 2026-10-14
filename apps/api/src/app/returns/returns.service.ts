@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { hasPermissions, returnLineRefund } from '@pharmacy/shared-domain';
 import type {
@@ -173,6 +174,7 @@ export class ReturnsService {
           ).map((p) => [p.id, p]),
         );
         const refused: FieldError[] = [];
+        let controlled = false;
         for (const p of picked) {
           const field = `lines.${p.index}.lineId`;
           if (foundProductId !== null && p.line.productId !== foundProductId) {
@@ -180,6 +182,7 @@ export class ReturnsService {
             continue;
           }
           const kind = kindOf(p.line, products.get(p.line.productId)?.prescription);
+          if (kind === 'controlled') controlled = true;
           if (body.reason === 'customer' && !settings.customerReturns[kind]) {
             refused.push({ field, code: 'return_not_allowed' });
           }
@@ -187,9 +190,10 @@ export class ReturnsService {
         if (refused.length > 0) {
           throw new FieldProblemException(422, 'return_not_allowed', refused);
         }
-        // a ПКУ line is returned only by a cashier who may sell it (E8)
+        // A ПКУ line is returned only by a cashier who may sell it (E8): sold as ПКУ, or ПКУ in the
+        // catalog now (marked after the sale, or sold from the buffer without its record).
         if (
-          picked.some((p) => p.line.controlled) &&
+          controlled &&
           !hasPermissions(principal.permissions, 'pos:sell-controlled')
         ) {
           throw new ProblemException(403, 'forbidden');
@@ -263,7 +267,9 @@ export class ReturnsService {
           foundWithoutReceipt: foundProductId !== null,
           discountReturnedDirams: discountTotal,
           refundDirams: refundTotal,
-          correlationId: getRequestContext()?.correlationId ?? '',
+          // never empty: unreachable today (the principal needs a request), kept so that a
+          // financial operation always carries a correlation id
+          correlationId: getRequestContext()?.correlationId ?? randomUUID(),
         });
         const lineIds = await this.repository.insertLines(
           trx,

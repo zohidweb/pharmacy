@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { hasPermissions, type Permission } from '@pharmacy/shared-domain';
 import type { PosOperationContext } from '@pharmacy/shared-dto';
@@ -116,7 +117,9 @@ export class PosContext {
       author,
       occurredAt,
       receivedAt,
-      correlationId: getRequestContext()?.correlationId ?? '',
+      // never empty: unreachable today (the principal needs a request), kept so that a
+      // financial operation always carries a correlation id
+      correlationId: getRequestContext()?.correlationId ?? randomUUID(),
     };
   }
 

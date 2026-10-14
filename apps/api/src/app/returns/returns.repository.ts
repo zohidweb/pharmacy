@@ -202,6 +202,8 @@ export class ReturnsRepository {
     customerReturnId: string,
     refunds: ReadonlyArray<{ kind: ReceiptPaymentMethod; amountDirams: number }>,
   ): Promise<void> {
+    // a return of nothing to pay back (a price 0, a 100 % discount) has no refunds
+    if (refunds.length === 0) return;
     await trx
       .insertInto('customerReturnRefunds')
       .values(

@@ -27,7 +27,12 @@ import {
   UnpostDialog,
   type StockAccess,
 } from '@/features/stock-document';
-import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiFieldErrors,
+  apiRequest,
+  useApiCodeMessage,
+  useApiErrorMessage,
+} from '@/shared/api';
 
 interface Line {
   key: string;
@@ -113,8 +118,10 @@ export function OpeningBalanceEditor({
           body: input(),
         })
       : apiRequest('openingBalances.create', { body: input() });
+  // one error at a time: a save or a posting clears what the other one left
   const save = useMutation({
     mutationFn: write,
+    onMutate: (): void => post.reset(),
     onSuccess: (saved) => {
       setDoc(saved);
       void invalidate();
@@ -127,6 +134,7 @@ export function OpeningBalanceEditor({
       setDoc(saved);
       return apiRequest('openingBalances.post', { params: { id: saved.id } });
     },
+    onMutate: (): void => save.reset(),
     onSuccess: (posted) => {
       setDoc(posted);
       void invalidate();
@@ -142,7 +150,9 @@ export function OpeningBalanceEditor({
       void invalidate();
     },
   });
-  const fieldErrors = apiFieldErrors(post.error ?? save.error);
+  const failure = post.error ?? save.error;
+  const fieldErrors = apiFieldErrors(failure);
+  const codeMessage = useApiCodeMessage();
   const serverError = (field: string) => {
     const code = fieldErrors.find((e) => e.field === field)?.code;
     if (code === undefined) return undefined;
@@ -151,9 +161,13 @@ export function OpeningBalanceEditor({
     if (code === 'too_old') return t('dateTooOld');
     if (code === 'above_max_price') return t('aboveMax');
     if (code === 'product_archived') return t('productArchived');
+    // the product is in the scope of a running stock count: the reason, not «check the value»
+    if (code === 'stock_count_in_progress') {
+      return codeMessage(code) ?? tDocs('checkValue');
+    }
     return tDocs('checkValue');
   };
-  const error = useApiErrorMessage(save.error ?? post.error);
+  const error = useApiErrorMessage(failure);
 
   const setLine = (key: string, change: (line: Line) => Line) =>
     setDraft((current) => ({

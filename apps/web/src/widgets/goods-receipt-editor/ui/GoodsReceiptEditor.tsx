@@ -178,6 +178,8 @@ export function GoodsReceiptEditor({
             body: input(),
           })
         : apiRequest('goodsReceipts.create', { body: input() }),
+    // one error at a time: a save or a posting clears what the other one left
+    onMutate: (): void => post.reset(),
     onSuccess: (saved) => {
       setDoc(saved);
       void invalidate();
@@ -195,6 +197,7 @@ export function GoodsReceiptEditor({
       setDoc(saved);
       return apiRequest('goodsReceipts.post', { params: { id: saved.id } });
     },
+    onMutate: (): void => save.reset(),
     onSuccess: (posted) => {
       setDoc(posted);
       void invalidate();
@@ -210,7 +213,8 @@ export function GoodsReceiptEditor({
       void invalidate();
     },
   });
-  const fieldErrors = apiFieldErrors(post.error ?? save.error);
+  const failure = post.error ?? save.error;
+  const fieldErrors = apiFieldErrors(failure);
   /** Text of a rejected field of the last save or posting, at the field itself. */
   const serverError = (field: string) => {
     const code = fieldErrors.find((e) => e.field === field)?.code;
@@ -225,7 +229,7 @@ export function GoodsReceiptEditor({
     }
     return tDocs('checkValue');
   };
-  const error = useApiErrorMessage(save.error ?? post.error);
+  const error = useApiErrorMessage(failure);
 
   // without a markup the proposal is the current price of the store, else the cost itself
   const retailOf = (product: StockProductOption | undefined, cost: number) =>

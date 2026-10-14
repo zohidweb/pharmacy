@@ -25,6 +25,8 @@ import {
   stockLineProblem,
   toEditableLines,
   UnpostDialog,
+  useLineErrors,
+  wholeBatchQuantity,
   type EditableStockLine,
   type StockAccess,
 } from '@/features/stock-document';
@@ -158,7 +160,13 @@ export function SupplierReturnEditor({
             batch,
             includeExpired: true,
           });
-          if (editableLine) added.push(editableLine);
+          // the whole rest of the batch, not 1 pack (it may be less than a pack)
+          if (editableLine) {
+            added.push({
+              ...editableLine,
+              ...wholeBatchQuantity(product, batch),
+            });
+          }
         }
       }
       setLines([...lines, ...added]);
@@ -193,8 +201,10 @@ export function SupplierReturnEditor({
           body: input(),
         })
       : apiRequest('supplierReturns.create', { body: input() });
+  // one error at a time: a save or a posting clears what the other one left
   const save = useMutation({
     mutationFn: saveDoc,
+    onMutate: (): void => post.reset(),
     onSuccess: (saved) => {
       setDoc(saved);
       void invalidate();
@@ -207,6 +217,7 @@ export function SupplierReturnEditor({
       setDoc(saved);
       return apiRequest('supplierReturns.post', { params: { id: saved.id } });
     },
+    onMutate: (): void => save.reset(),
     onSuccess: (posted) => {
       setDoc(posted);
       void invalidate();
@@ -228,14 +239,16 @@ export function SupplierReturnEditor({
       setDoc(draft);
       setUnposting(false);
       void invalidate();
+      // the stock came back: the lines show it
+      void refreshBatches();
     },
   });
-  const error = useApiErrorMessage(
-    save.error ?? post.error ?? fromReceipt.error,
-  );
-  const dateError = apiFieldErrors(post.error ?? save.error).find(
+  const failure = post.error ?? save.error;
+  const error = useApiErrorMessage(failure ?? fromReceipt.error);
+  const dateError = apiFieldErrors(failure).find(
     (e) => e.field === 'date',
   )?.code;
+  const lineErrors = useLineErrors(post.error, lines.length);
   const valid =
     Boolean(supplierId) &&
     lines.length > 0 &&
@@ -320,7 +333,11 @@ export function SupplierReturnEditor({
               label={t('store')}
               disabled={!editable || lines.length > 0}
               value={storeId}
-              onChange={(event) => setStoreId(event.target.value)}
+              onChange={(event) => {
+                setStoreId(event.target.value);
+                // the receipt is of the store: picked again for the new one
+                setReceiptId(null);
+              }}
               options={access.writableStores.map((s) => ({
                 value: s.id,
                 label: s.name,
@@ -404,6 +421,7 @@ export function SupplierReturnEditor({
               withNote
               touched={touched}
               totalMinor={doc?.status === 'posted' ? doc.totalMinor : undefined}
+              lineErrors={lineErrors}
             />
           ) : (
             <Spinner size="md" label={tDocs('loading')} />

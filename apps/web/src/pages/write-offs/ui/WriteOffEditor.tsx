@@ -26,6 +26,8 @@ import {
   stockLineProblem,
   toEditableLines,
   UnpostDialog,
+  useLineErrors,
+  wholeBatchQuantity,
   type EditableStockLine,
   type StockAccess,
 } from '@/features/stock-document';
@@ -161,8 +163,10 @@ export function WriteOffEditor({
           body: input(),
         })
       : apiRequest('writeOffs.create', { body: input() });
+  // one error at a time: a save or a posting clears what the other one left
   const save = useMutation({
     mutationFn: saveDoc,
+    onMutate: (): void => post.reset(),
     onSuccess: (saved) => {
       setDoc(saved);
       void invalidate();
@@ -175,6 +179,7 @@ export function WriteOffEditor({
       setDoc(saved);
       return apiRequest('writeOffs.post', { params: { id: saved.id } });
     },
+    onMutate: (): void => save.reset(),
     onSuccess: (posted) => {
       setDoc(posted);
       void invalidate();
@@ -196,12 +201,16 @@ export function WriteOffEditor({
       setDoc(draft);
       setUnposting(false);
       void invalidate();
+      // the stock came back: the lines show it
+      void refreshBatches();
     },
   });
-  const error = useApiErrorMessage(save.error ?? post.error);
-  const dateError = apiFieldErrors(post.error ?? save.error).find(
+  const failure = post.error ?? save.error;
+  const error = useApiErrorMessage(failure);
+  const dateError = apiFieldErrors(failure).find(
     (e) => e.field === 'date',
   )?.code;
+  const lineErrors = useLineErrors(post.error, lines.length);
 
   const addExpired = () => {
     const present = new Set(lines.map((l) => l.batchId));
@@ -216,19 +225,8 @@ export function WriteOffEditor({
           continue;
         }
         const line = lineOf(product, { batch, includeExpired: true });
-        if (line) {
-          // whole packs, or every piece of a divisible product with an opened pack
-          const inPieces =
-            product.divisible &&
-            batch.quantityPieces % product.piecesPerPack !== 0;
-          added.push({
-            ...line,
-            quantity: inPieces
-              ? batch.quantityPieces
-              : Math.floor(batch.quantityPieces / product.piecesPerPack),
-            unit: inPieces ? 'piece' : 'pack',
-          });
-        }
+        if (line)
+          added.push({ ...line, ...wholeBatchQuantity(product, batch) });
       }
     }
     setLines([...lines, ...added]);
@@ -393,6 +391,9 @@ export function WriteOffEditor({
               editable={editable}
               showCost={access.canSeeCost}
               touched={touched}
+              valuation="piece"
+              totalMinor={doc?.status === 'posted' ? doc.totalMinor : undefined}
+              lineErrors={lineErrors}
             />
           ) : (
             <Spinner size="md" label={tDocs('loading')} />

@@ -190,13 +190,14 @@ export class SoldReceipts {
       soldAt: Date;
       productId: string;
       saleUnit: 'pack' | 'piece';
-      qtyPieces: number;
-      piecesPerPack: number;
+      quantity: number;
       amount: string;
     }>`
       select r.id as receipt_id, r.number as receipt_number, r.sold_at, l.product_id,
-             l.sale_unit, sum(l.qty_pieces)::int as qty_pieces,
-             max(l.pieces_per_pack) as pieces_per_pack,
+             l.sale_unit,
+             -- each line in its own unit: the pieces per pack of a snapshot may differ by line
+             sum(case when l.sale_unit = 'pack' then l.qty_pieces / l.pieces_per_pack
+                      else l.qty_pieces end)::int as quantity,
              sum(l.line_amount_dirams)::text as amount
       from pharmacy.receipt_lines l
       join pharmacy.receipts r on r.tenant_id = l.tenant_id and r.id = l.receipt_id
@@ -212,10 +213,7 @@ export class SoldReceipts {
       soldAt: row.soldAt,
       productId: row.productId,
       saleUnit: row.saleUnit,
-      quantity:
-        row.saleUnit === 'pack'
-          ? row.qtyPieces / row.piecesPerPack
-          : row.qtyPieces,
+      quantity: row.quantity,
       amountDirams: Number(row.amount),
     }));
   }

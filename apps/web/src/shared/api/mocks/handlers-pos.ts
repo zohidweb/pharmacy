@@ -583,20 +583,43 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
           session.stores.some((s) => s.id === r.storeId) &&
           toAppDate(new Date(r.soldAt)) === query.date,
       )
-      .flatMap((r) =>
-        r.lines
-          .filter((l) => l.productName.toLocaleLowerCase('ru').includes(needle))
-          .map((l) => ({
-            receiptId: r.id,
-            receiptNumber: r.number,
-            soldAt: r.soldAt,
-            productId: l.productId,
-            productName: l.productName,
-            quantity: l.quantity,
-            unit: l.unit,
-            amountMinor: l.amountMinor,
-          })),
-      )
+      .flatMap((r) => {
+        // as apps/api: one row per receipt, product and sale unit (a sale from two batches is one)
+        const rows = new Map<
+          string,
+          {
+            receiptId: string;
+            receiptNumber: string;
+            soldAt: string;
+            productId: string;
+            productName: string;
+            quantity: number;
+            unit: (typeof r.lines)[number]['unit'];
+            amountMinor: number;
+          }
+        >();
+        for (const l of r.lines) {
+          if (!l.productName.toLocaleLowerCase('ru').includes(needle)) continue;
+          const key = `${l.productId}-${l.unit}`;
+          const row = rows.get(key);
+          if (row) {
+            row.quantity += l.quantity;
+            row.amountMinor += l.amountMinor;
+          } else {
+            rows.set(key, {
+              receiptId: r.id,
+              receiptNumber: r.number,
+              soldAt: r.soldAt,
+              productId: l.productId,
+              productName: l.productName,
+              quantity: l.quantity,
+              unit: l.unit,
+              amountMinor: l.amountMinor,
+            });
+          }
+        }
+        return [...rows.values()];
+      })
       .slice(0, 50);
   },
   'returns.create': ({ body, correlationId }) => {

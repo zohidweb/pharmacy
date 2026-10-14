@@ -1866,9 +1866,12 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = runningCount(params.id, correlationId);
     writable(session, doc.storeId, correlationId);
     const problems = doc.lines.flatMap((l, i) => [
-      ...(l.counted && (l.factPieces ?? 0) >= 0
-        ? []
-        : [{ field: `lines.${i}.counted`, code: 'required' }]),
+      // as apps/api: no entry — required, a negative total — negative
+      ...(!l.counted
+        ? [{ field: `lines.${i}.counted`, code: 'required' }]
+        : (l.factPieces ?? 0) < 0
+          ? [{ field: `lines.${i}.counted`, code: 'negative' }]
+          : []),
       ...(l.isFound && !l.expiresOn
         ? [{ field: `lines.${i}.expiresOn`, code: 'required' }]
         : []),

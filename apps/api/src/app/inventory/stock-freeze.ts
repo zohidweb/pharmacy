@@ -52,9 +52,7 @@ export class StockFreeze {
       select inventory_scope as scope, inventory_category_id as category_id
       from pharmacy.documents
       where tenant_id = ${tenantId} and store_id = ${storeId}
-        and type = 'inventory' and status = 'draft'`.execute(
-      trx,
-    );
+        and type = 'inventory' and status = 'draft'`.execute(trx);
     if (running.rows.length === 0 || productIds.length === 0) return;
     const whole = running.rows.some((r) => r.scope === 'all');
     const categories = new Set(

@@ -58,7 +58,8 @@ export function withPiecesPerPack<T extends { productId: string }>(
 ): Array<T & { piecesPerPack: number }> {
   return lines.map((line) => {
     const product = products.get(line.productId);
-    if (!product) throw new Error('A product of the return lines is not readable');
+    if (!product)
+      throw new Error('A product of the return lines is not readable');
     return { ...line, piecesPerPack: product.piecesPerPack };
   });
 }

@@ -39,7 +39,11 @@ export class StorePriceWriter {
    */
   async lock(
     trx: TenantTransaction,
-    target: { tenantId: string; storeId: string; productIds: readonly string[] },
+    target: {
+      tenantId: string;
+      storeId: string;
+      productIds: readonly string[];
+    },
   ): Promise<void> {
     await this.repository.lockStoreProducts(
       trx,

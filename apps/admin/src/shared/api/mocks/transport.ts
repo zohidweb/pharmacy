@@ -35,6 +35,16 @@ function readSession(): OperatorSession | null {
   }
 }
 
+// As apps/api reads the operator on every request: the name and the language of the profile now.
+function withProfile(session: OperatorSession): OperatorSession {
+  const { me } = mockDb().system;
+  return {
+    ...session,
+    operator: { ...session.operator, fullName: me.fullName },
+    locale: me.locale,
+  };
+}
+
 function writeSession(session: OperatorSession | null): void {
   try {
     if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -112,9 +122,10 @@ const handlers: MockHandlers = {
     const session: OperatorSession = {
       operator: demoOperator,
       authenticatedAt: new Date().toISOString(),
+      locale: mockDb().system.me.locale,
     };
     writeSession(session);
-    return session;
+    return withProfile(session);
   },
   // As apps/api: the policy first (a 422 tells nothing about the account), then one 401 for an
   // unknown login and a wrong code alike.
@@ -135,7 +146,7 @@ const handlers: MockHandlers = {
   'operator.sessions.current': ({ correlationId }) => {
     const session = readSession();
     if (!session) throw new ApiError(401, 'unauthenticated', correlationId);
-    return session;
+    return withProfile(session);
   },
   'operator.sessions.delete': () => {
     writeSession(null);

@@ -21,6 +21,8 @@ import {
   OperatorAuthRepository,
   type OperatorProfileRow,
 } from './operator-auth.repository';
+import { deviceLabel } from './device-label';
+import { operatorSession } from './operator-profile';
 
 export interface OperatorLoginResult {
   /** Operator JWT for the cookie; never in a response body or a log. */
@@ -77,10 +79,15 @@ export class OperatorSessionsService {
     this.failureFloorMs = config.getOrThrow<number>('LOGIN_FAILURE_FLOOR_MS');
   }
 
-  async login(raw: string, password: string, ip: string): Promise<OperatorLoginResult> {
+  async login(
+    raw: string,
+    password: string,
+    ip: string,
+    userAgent: string | undefined,
+  ): Promise<OperatorLoginResult> {
     const started = this.clock.now();
     try {
-      return await this.attemptLogin(raw, password, ip);
+      return await this.attemptLogin(raw, password, ip, userAgent);
     } catch (error) {
       if (error instanceof ProblemException && error.code === 'invalid_credentials') {
         await padFailure(this.clock, this.failureFloorMs, started);
@@ -96,15 +103,7 @@ export class OperatorSessionsService {
       (trx) => this.repository.findProfile(trx, operator.operatorId),
     );
     if (profile === null) throw new ProblemException(401, 'unauthenticated');
-    return {
-      operator: {
-        id: profile.id,
-        fullName: profile.fullName,
-        login: profile.login,
-        role: operator.role,
-      },
-      authenticatedAt: operator.authenticatedAt,
-    };
+    return operatorSession(profile, operator.authenticatedAt);
   }
 
   async logout(): Promise<void> {
@@ -115,6 +114,7 @@ export class OperatorSessionsService {
     raw: string,
     password: string,
     ip: string,
+    userAgent: string | undefined,
   ): Promise<OperatorLoginResult> {
     // An operator login is a work e-mail; anything else cannot match and spends no limiter key.
     const identifier = normalizeIdentifier(raw);
@@ -186,6 +186,8 @@ export class OperatorSessionsService {
             authenticatedAt,
             idleTtlSeconds: this.idleTtlSeconds,
             absoluteExpiresAt: new Date(now + this.absoluteTtlSeconds * 1000).toISOString(),
+            device: deviceLabel(userAgent),
+            lastSeenAt: authenticatedAt,
           });
           stored.session = true;
           return row;
@@ -204,15 +206,7 @@ export class OperatorSessionsService {
     return {
       token,
       maxAgeSeconds: this.absoluteTtlSeconds,
-      session: {
-        operator: {
-          id: profile.id,
-          fullName: profile.fullName,
-          login: profile.login,
-          role: 'full_access',
-        },
-        authenticatedAt,
-      },
+      session: operatorSession(profile, authenticatedAt),
     };
   }
 

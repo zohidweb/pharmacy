@@ -6,6 +6,7 @@
  */
 import type { Page, StoreMode, SyncSchedule } from './platform-tenants.js';
 import type { OperatorProfile } from './operator-auth.js';
+import type { UiLocale } from './tenant-auth.js';
 
 // ── Sidebar counters and dashboard ────────────────────────────────────────────────────────
 
@@ -231,51 +232,76 @@ export interface PlatformSettings {
 
 export type OperatorStatus = 'active' | 'disabled';
 
+/**
+ * GET /operator/operators; 200 from POST /operator/operators/{id}/deactivation — the operator's
+ * sessions end at once. Errors of the deactivation: 404, 409 `cannot_disable_self`, 409
+ * `already_disabled`, 403 `fresh_auth_required`.
+ */
 export interface PlatformOperator extends OperatorProfile {
   lastLoginAt: string | null;
   status: OperatorStatus;
 }
 
-/** POST /operator/operators — the first-login credentials are handed over in person. */
+/**
+ * POST /operator/operators — a new operator with a one-time code for the first sign-in, handed
+ * over in person; the operator sets the password on «Первый вход». Errors: 400 `validation_failed`
+ * (`login` — `email_format`: the login is a work e-mail), 409 `login_taken` (field `login`), 403
+ * `fresh_auth_required`.
+ */
 export interface CreateOperatorRequest {
   fullName: string;
   login: string;
 }
 
-// ── Profile of the signed-in operator ─────────────────────────────────────────────────────
-
-export interface OperatorMe extends OperatorProfile {
-  phone: string;
-  position: string;
-  locale: 'ru' | 'tg';
-  lastLoginAt: string | null;
-  impersonationReminder: boolean;
-}
-
-/** PATCH /operator/me */
-export interface UpdateMeRequest {
-  fullName: string;
-  phone: string;
-  position: string;
-  locale: 'ru' | 'tg';
-  impersonationReminder: boolean;
+/** 201 from POST /operator/operators. The code is shown once: only its hash is stored. */
+export interface CreateOperatorResponse {
+  operator: PlatformOperator;
+  activationCode: string;
+  activationCodeExpiresAt: string;
 }
 
 /**
- * POST /operator/me/password and POST /me/password — ends all other sessions (ADR-0008). Errors of
- * POST /me/password: 422 `invalid_current_password` with `errors: [{ field: 'currentPassword',
- * code: 'invalid_current_password' }]` (not 401: ADR-0015 reserves 401 for a lost session), 422
- * `password_policy`, 403 `fresh_auth_required`, 429 `login_locked` (5 wrong current passwords per
- * 15 minutes per employee).
+ * 201 from POST /operator/operators/{id}/activation-codes — a new one-time code (a lost or expired
+ * code, a forgotten password): the old code stops working, a password stays until the new code is
+ * used. 404, 409 `operator_disabled`, 403 `fresh_auth_required`.
+ */
+export interface IssueOperatorCodeResponse {
+  activationCode: string;
+  activationCodeExpiresAt: string;
+}
+
+// ── Profile of the signed-in operator ─────────────────────────────────────────────────────
+
+/** GET /operator/me */
+export interface OperatorMe extends OperatorProfile {
+  locale: UiLocale;
+  lastLoginAt: string | null;
+}
+
+/** PATCH /operator/me — the name and the interface language. */
+export interface UpdateMeRequest {
+  fullName: string;
+  locale: UiLocale;
+}
+
+/**
+ * POST /operator/me/password and POST /me/password — ends all other sessions (ADR-0008). Errors:
+ * 422 `invalid_current_password` with `errors: [{ field: 'currentPassword', code:
+ * 'invalid_current_password' }]` (not 401: ADR-0015 reserves 401 for a lost session), 422
+ * `password_policy`, 429 `login_locked` (5 wrong current passwords per 15 minutes per person).
+ * POST /me/password also answers 403 `fresh_auth_required`; the operator route does not: the
+ * current password is the confirmation.
  */
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
 }
 
+/** GET /operator/me/sessions — the signed-in operator's sessions, the current one first. */
 export interface OperatorSessionInfo {
+  /** Opaque id of the session (not the session token or its id). */
   id: string;
-  /** Browser and OS from the user agent. */
+  /** Browser and OS from the user agent; empty when they are not recognized. */
   device: string;
   lastSeenAt: string;
   current: boolean;

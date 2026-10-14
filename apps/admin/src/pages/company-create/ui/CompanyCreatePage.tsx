@@ -16,9 +16,10 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
-import { ActivationCodeCard, tenantKeys } from '@/entities/tenant';
+import { tenantKeys } from '@/entities/tenant';
 import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
+import { ActivationCodeCard } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import {
   createTenantSchema,

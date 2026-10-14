@@ -401,6 +401,7 @@ export interface Operators {
   createdAt: Generated<Timestamp>;
   fullName: string;
   id: string;
+  language: Generated<string>;
   lastLoginAt: Timestamp | null;
   login: string;
   status: Generated<string>;

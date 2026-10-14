@@ -160,8 +160,9 @@ erDiagram
 
 ## `operators`, `operator_credentials` (класс `platform`)
 
-- **`operators`:** `login` unique, `full_name`, `status` `active` / `blocked`. В MVP одна роль с полным доступом (АП 6), права оператора — в коде.
-- **`operator_credentials`:** хеш пароля и версия pepper, как у сотрудника.
+- **`operators`:** `login` unique, `full_name`, `status` `active` / `blocked`, `language` `ru` / `tj` (по умолчанию `ru`; язык админки, применяется при входе — миграция `operator-language`, 2026-10-14). В MVP одна роль с полным доступом (АП 6), права оператора — в коде.
+- **`operator_credentials`:** хеш пароля и версия pepper, как у сотрудника; одноразовый код первого входа — только SHA-256 и срок.
+- **Команда и профиль** (2026-10-14). Оператора добавляет другой оператор в админке, `POST /operator/operators`, или скрипт `create-operator.mjs`; код показывается один раз. Новый код — `POST /operator/operators/{id}/activation-codes`: прежний код перестаёт действовать, пароль остаётся до ввода нового кода; себе код не выдаётся. Отключение — `POST /operator/operators/{id}/deactivation`: `status = 'blocked'`, сеансы завершаются; себя отключить нельзя. Эти три действия требуют повторного входа (step-up). Профиль `/operator/me`: имя, язык, смена пароля по текущему паролю (без step-up, другие сеансы завершаются, неиспользованный код сбрасывается), список сеансов и завершение остальных, последние действия из `platform_audit_log`. В журнал пишутся `operator.code-issued` (`created` true/false), `operator.disabled`, `auth.operator-password-changed`.
 
 ## `impersonations` — вход «от имени» (класс `platform`, ADR-0008 E2)
 

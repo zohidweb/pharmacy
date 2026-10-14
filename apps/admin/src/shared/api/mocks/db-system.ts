@@ -222,11 +222,8 @@ export function seedSystem(): SystemDb {
     ],
     me: {
       ...demoOperator,
-      phone: '+992 00 000 00 90',
-      position: 'Оператор платформы',
       locale: 'ru',
       lastLoginAt: '2026-10-01T04:12:00Z',
-      impersonationReminder: true,
     },
     password: demoOperatorPassword,
     sessions: [

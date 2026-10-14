@@ -15,7 +15,3 @@ export {
   type TenantStatusKey,
 } from './lib/tenant-status';
 export { TenantStatusPill } from './ui/TenantStatusPill';
-export {
-  ActivationCodeCard,
-  type ActivationCodeCardProps,
-} from './ui/ActivationCodeCard';

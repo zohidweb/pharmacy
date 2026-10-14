@@ -35,7 +35,7 @@ import {
   isApiRouteAvailable,
   useApiErrorMessage,
 } from '@/shared/api';
-import { QueryState } from '@/shared/ui';
+import { ActivationCodeCard, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 const schedules: SyncSchedule[] = ['daily', 'twice_daily', 'hourly', 'manual'];
@@ -318,38 +318,135 @@ function AddOperator({
       apiRequest('operators.create', {
         body: { fullName: fullName.trim(), login: login.trim().toLowerCase() },
       }),
-    onSuccess: (operator) => {
+    onSuccess: ({ operator }) => {
       void queryClient.invalidateQueries({ queryKey: ['operators'] });
       toast.show(t('added', { name: operator.fullName }));
-      setFullName('');
-      setLogin('');
-      setTouched(false);
-      onClose();
     },
   });
   const error = useApiErrorMessage(create.error);
+  const close = () => {
+    onClose();
+    setFullName('');
+    setLogin('');
+    setTouched(false);
+    create.reset();
+  };
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={close}
       title={t('addTitle')}
-      description={t('addDescription')}
+      description={create.data ? undefined : t('addDescription')}
       closeLabel={tCommon('close')}
       footer={
+        create.data ? (
+          <Button onClick={close}>{tCommon('close')}</Button>
+        ) : (
+          <>
+            <Button variant="tertiary" onClick={close}>
+              {tCommon('cancel')}
+            </Button>
+            <Button
+              loading={create.isPending}
+              onClick={() => {
+                setTouched(true);
+                if (!invalid.fullName && !invalid.login) create.mutate();
+              }}
+            >
+              {t('add')}
+            </Button>
+          </>
+        )
+      }
+    >
+      {create.data ? (
+        // Shown once: only its hash is stored (as the owner's code of a new company).
+        <ActivationCodeCard
+          code={create.data.activationCode}
+          expiresAt={create.data.activationCodeExpiresAt}
+          title={t('codeTitle', { name: create.data.operator.fullName })}
+          recipient="operator"
+        />
+      ) : (
         <>
-          <Button variant="tertiary" onClick={onClose}>
-            {tCommon('cancel')}
-          </Button>
-          <Button
-            loading={create.isPending}
-            onClick={() => {
-              setTouched(true);
-              if (!invalid.fullName && !invalid.login) create.mutate();
-            }}
-          >
-            {t('add')}
-          </Button>
+          {error && (
+            <Alert tone="danger" live="assertive">
+              {error}
+            </Alert>
+          )}
+          <TextField
+            label={t('fullName')}
+            required
+            value={fullName}
+            error={touched && invalid.fullName ? t('fullNameError') : undefined}
+            onChange={(event) => setFullName(event.target.value)}
+          />
+          <TextField
+            label={t('login')}
+            type="email"
+            required
+            value={login}
+            error={touched && invalid.login ? t('loginError') : undefined}
+            onChange={(event) => setLogin(event.target.value)}
+          />
+          <TextField
+            label={t('role')}
+            value={t('roleValue')}
+            readOnly
+            hint={t('roleHint')}
+          />
         </>
+      )}
+    </Dialog>
+  );
+}
+
+/**
+ * A new one-time code for an operator (a lost or expired code, a forgotten password): the old code
+ * stops working, the password stays until the new code is used. Shown once.
+ */
+function IssueOperatorCode({
+  operator,
+  onClose,
+}: {
+  operator: PlatformOperator | null;
+  onClose: () => void;
+}) {
+  const t = useTranslations('settings.team');
+  const tCommon = useTranslations('common');
+  const issue = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest('operators.issueCode', { params: { id } }),
+  });
+  const error = useApiErrorMessage(issue.error);
+  const close = () => {
+    onClose();
+    issue.reset();
+  };
+  return (
+    <Dialog
+      open={operator !== null}
+      onClose={close}
+      title={t('codeDialogTitle', { name: operator?.fullName ?? '' })}
+      description={issue.data ? undefined : t('codeDialogDescription')}
+      closeLabel={tCommon('close')}
+      icon="key-round"
+      footer={
+        issue.data ? (
+          <Button onClick={close}>{tCommon('close')}</Button>
+        ) : (
+          <>
+            <Button variant="tertiary" onClick={close}>
+              {tCommon('cancel')}
+            </Button>
+            <Button
+              loading={issue.isPending}
+              onClick={() => operator && issue.mutate(operator.id)}
+            >
+              {t('codeConfirm')}
+            </Button>
+          </>
+        )
       }
     >
       {error && (
@@ -357,34 +454,21 @@ function AddOperator({
           {error}
         </Alert>
       )}
-      <TextField
-        label={t('fullName')}
-        required
-        value={fullName}
-        error={touched && invalid.fullName ? t('fullNameError') : undefined}
-        onChange={(event) => setFullName(event.target.value)}
-      />
-      <TextField
-        label={t('login')}
-        type="email"
-        required
-        value={login}
-        error={touched && invalid.login ? t('loginError') : undefined}
-        onChange={(event) => setLogin(event.target.value)}
-      />
-      <TextField
-        label={t('role')}
-        value={t('roleValue')}
-        readOnly
-        hint={t('roleHint')}
-      />
+      {issue.data && operator && (
+        <ActivationCodeCard
+          code={issue.data.activationCode}
+          expiresAt={issue.data.activationCodeExpiresAt}
+          title={t('codeTitle', { name: operator.fullName })}
+          recipient="operator"
+        />
+      )}
     </Dialog>
   );
 }
 
-// The team list is on apps/api; adding and disabling come with the team module (partial mode: the
-// actions are not offered where their routes do not answer).
+// Partial mode: the actions are not offered where their routes do not answer.
 const canAddOperators = isApiRouteAvailable('operators.create');
+const canIssueCodes = isApiRouteAvailable('operators.issueCode');
 const canDisableOperators = isApiRouteAvailable('operators.disable');
 
 function TeamCard() {
@@ -395,6 +479,7 @@ function TeamCard() {
   const { data: session } = useSession();
   const [adding, setAdding] = useState(false);
   const [disabling, setDisabling] = useState<PlatformOperator | null>(null);
+  const [issuing, setIssuing] = useState<PlatformOperator | null>(null);
   const operators = useQuery({
     queryKey: ['operators'],
     queryFn: ({ signal }) => apiRequest('operators.list', { signal }),
@@ -409,6 +494,10 @@ function TeamCard() {
     },
   });
   const error = useApiErrorMessage(disable.error);
+  const closeDisabling = () => {
+    setDisabling(null);
+    disable.reset();
+  };
   return (
     <Card as="section" aria-labelledby="team-title">
       <CardHeader
@@ -457,15 +546,30 @@ function TeamCard() {
                     {t('statusDisabled')}
                   </StatusPill>
                 ) : (
-                  canDisableOperators &&
+                  // Not for oneself: the own password is changed in the profile.
                   operator.id !== session?.operator.id && (
-                    <Button
-                      variant="tertiary"
-                      aria-label={t('disableFor', { name: operator.fullName })}
-                      onClick={() => setDisabling(operator)}
-                    >
-                      <span className="text-danger">{t('disable')}</span>
-                    </Button>
+                    <>
+                      {canIssueCodes && (
+                        <Button
+                          variant="tertiary"
+                          aria-label={t('codeFor', { name: operator.fullName })}
+                          onClick={() => setIssuing(operator)}
+                        >
+                          {t('codeAction')}
+                        </Button>
+                      )}
+                      {canDisableOperators && (
+                        <Button
+                          variant="tertiary"
+                          aria-label={t('disableFor', {
+                            name: operator.fullName,
+                          })}
+                          onClick={() => setDisabling(operator)}
+                        >
+                          <span className="text-danger">{t('disable')}</span>
+                        </Button>
+                      )}
+                    </>
                   )
                 )}
               </li>
@@ -474,9 +578,10 @@ function TeamCard() {
         )}
       </QueryState>
       <AddOperator open={adding} onClose={() => setAdding(false)} />
+      <IssueOperatorCode operator={issuing} onClose={() => setIssuing(null)} />
       <Dialog
         open={disabling !== null}
-        onClose={() => setDisabling(null)}
+        onClose={closeDisabling}
         title={t('disableTitle', { name: disabling?.fullName ?? '' })}
         description={t('disableDescription')}
         closeLabel={tCommon('close')}
@@ -484,7 +589,7 @@ function TeamCard() {
         tone="danger"
         footer={
           <>
-            <Button variant="tertiary" onClick={() => setDisabling(null)}>
+            <Button variant="tertiary" onClick={closeDisabling}>
               {tCommon('cancel')}
             </Button>
             <Button

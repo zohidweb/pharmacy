@@ -4,6 +4,7 @@
  * class-validator DTO classes; frontends import these types with `import type` (ADR-0015).
  */
 import type { OperatorRoleKey } from '@pharmacy/shared-domain';
+import type { UiLocale } from './tenant-auth.js';
 
 /** POST /api/v1/operator/sessions */
 export interface OperatorLoginRequest {
@@ -39,4 +40,6 @@ export interface OperatorSession {
   operator: OperatorProfile;
   /** ISO instant of the password authentication (step-up age, ADR-0008). */
   authenticatedAt: string;
+  /** The operator's interface language (profile): the admin switches to it at sign-in. */
+  locale: UiLocale;
 }

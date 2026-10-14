@@ -145,8 +145,8 @@ export function StockLinesEditor({
   /** The amount of a posted document as the server fixed it; else the lines are summed. */
   totalMinor?: number;
   valuation?: StockValuation;
-  /** Server errors of the lines by index (e.g. a product frozen by a running stock count). */
-  lineErrors?: ReadonlyArray<string | undefined>;
+  /** Server errors of the lines by their key (e.g. a product frozen by a running stock count). */
+  lineErrors?: ReadonlyMap<string, string>;
 }) {
   const t = useTranslations('stockDocs.lines');
   const tDocs = useTranslations('stockDocs');
@@ -212,11 +212,11 @@ export function StockLinesEditor({
               </tr>
             </thead>
             <tbody>
-              {lines.map((line, index) => {
+              {lines.map((line) => {
                 const batch = line.batches.find((b) => b.id === line.batchId);
                 const problem = stockLineProblem(line);
                 const cost = unitCostOf(line, valuation);
-                const lineError = lineErrors?.[index];
+                const lineError = lineErrors?.get(line.key);
                 return (
                   <tr
                     key={line.key}
@@ -225,10 +225,7 @@ export function StockLinesEditor({
                     <td className="px-2 py-2">
                       <span className="font-medium">{line.productName}</span>
                       {lineError && (
-                        <span
-                          role="alert"
-                          className="block text-xs text-danger"
-                        >
+                        <span className="block text-xs text-danger">
                           {lineError}
                         </span>
                       )}

@@ -173,7 +173,8 @@ export function WriteOffEditor({
     },
   });
   const post = useMutation({
-    mutationFn: async () => {
+    // the keys of the lines as sent: the errors of the answer go to these lines
+    mutationFn: async (_sent: readonly string[]) => {
       const saved = await saveDoc();
       // the draft exists now: a rejected posting must not create another one
       setDoc(saved);
@@ -210,7 +211,7 @@ export function WriteOffEditor({
   const dateError = apiFieldErrors(failure).find(
     (e) => e.field === 'date',
   )?.code;
-  const lineErrors = useLineErrors(post.error, lines.length);
+  const lineErrors = useLineErrors(post.error, post.variables);
 
   const addExpired = () => {
     const present = new Set(lines.map((l) => l.batchId));
@@ -262,6 +263,8 @@ export function WriteOffEditor({
                 <Button
                   variant="secondary"
                   loading={save.isPending}
+                  // one of the two at a time: each one clears the other's error
+                  disabled={post.isPending}
                   onClick={() => save.mutate()}
                 >
                   {tDocs('saveDraft')}
@@ -270,9 +273,10 @@ export function WriteOffEditor({
                   <Button
                     iconStart="check"
                     loading={post.isPending}
+                    disabled={save.isPending}
                     onClick={() => {
                       setTouched(true);
-                      if (valid) post.mutate();
+                      if (valid) post.mutate(lines.map((l) => l.key));
                     }}
                   >
                     {tDocs('post')}

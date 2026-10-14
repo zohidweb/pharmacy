@@ -13,7 +13,7 @@ import {
 } from '@pharmacy/shared-util';
 import { Alert, Button, Dialog, Select, Switch, TextField } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
 import { UnpostDialog, type StockAccess } from '@/features/stock-document';
@@ -62,52 +62,56 @@ interface PendingEntry {
 function EntryInput({
   docId,
   line,
-  pending,
+  entry,
+  onEntry,
+  onSent,
   focusRequest,
+  onFocused,
   onCounted,
 }: {
   docId: string;
   line: StockCountLine;
-  pending: Map<string, PendingEntry>;
-  /** Changes when a scan picked this line alone: its field takes the focus. */
+  /** The entry typed and not taken yet, kept by the editor. */
+  entry: PendingEntry | undefined;
+  onEntry: (lineId: string, entry: PendingEntry | null) => void;
+  /** The server took the entry with this key: the editor clears it if it is still that one. */
+  onSent: (lineId: string, key: string) => void;
+  /** Set when a scan picked this line alone: its field takes the focus once. */
   focusRequest?: number;
+  onFocused: () => void;
   onCounted: (line: StockCountLine) => void;
 }) {
   const t = useTranslations('stockCounts.editor');
-  const saved = pending.get(line.lineId);
-  const [text, setText] = useState(saved?.text ?? '');
-  const [unit, setUnit] = useState<'pack' | 'piece'>(
-    saved?.unit ?? (line.piecesPerPack > 1 ? 'pack' : 'piece'),
-  );
+  const text = entry?.text ?? '';
+  const unit = entry?.unit ?? (line.piecesPerPack > 1 ? 'pack' : 'piece');
   const field = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (focusRequest !== undefined) field.current?.focus();
-  }, [focusRequest]);
-  // another quantity or unit is another entry: a new key
+    if (focusRequest === undefined) return;
+    field.current?.focus();
+    onFocused();
+  }, [focusRequest, onFocused]);
+  // Another quantity or unit is another entry: a new key. The same one keeps its key (e.g. the
+  // value put back by the scanner after a scan typed into the focused field).
   const change = (next: Partial<Omit<PendingEntry, 'key'>>) => {
-    const entry = {
-      key: null,
-      text: next.text ?? text,
-      unit: next.unit ?? unit,
-    };
-    if (entry.text === '') pending.delete(line.lineId);
-    else pending.set(line.lineId, entry);
-    setText(entry.text);
-    setUnit(entry.unit);
+    const value = { text: next.text ?? text, unit: next.unit ?? unit };
+    const key =
+      entry && entry.text === value.text && entry.unit === value.unit
+        ? entry.key
+        : null;
+    onEntry(
+      line.lineId,
+      value.text === '' && key === null ? null : { key, ...value },
+    );
   };
   const add = useMutation({
-    mutationFn: (pieces: number) => {
-      const entry = pending.get(line.lineId) ?? { key: null, text, unit };
-      const key = entry.key ?? uuidv7();
-      pending.set(line.lineId, { ...entry, key });
-      return apiRequest('stockCounts.addEntry', {
+    mutationFn: (sent: { key: string; pieces: number }) =>
+      apiRequest('stockCounts.addEntry', {
         params: { id: docId },
-        body: { id: key, lineId: line.lineId, pieces },
-      });
-    },
-    onSuccess: (updated) => {
-      pending.delete(line.lineId);
-      setText('');
+        body: { id: sent.key, lineId: line.lineId, pieces: sent.pieces },
+      }),
+    onSuccess: (updated, sent) => {
+      // only the entry sent: a value typed meanwhile stays
+      onSent(line.lineId, sent.key);
       onCounted(updated);
     },
   });
@@ -161,7 +165,12 @@ function EntryInput({
         iconStart="plus"
         loading={add.isPending}
         disabled={pieces === null}
-        onClick={() => pieces !== null && add.mutate(pieces)}
+        onClick={() => {
+          if (pieces === null) return;
+          const key = entry?.key ?? uuidv7();
+          onEntry(line.lineId, { key, text, unit });
+          add.mutate({ key, pieces });
+        }}
       >
         {t('add')}
       </Button>
@@ -228,7 +237,30 @@ export function StockCountEditor({
     at: number;
   } | null>(null);
   // the entries typed and not taken yet, by line: they outlive a row hidden by a filter
-  const [pending] = useState(() => new Map<string, PendingEntry>());
+  const [entries, setEntries] = useState<ReadonlyMap<string, PendingEntry>>(
+    () => new Map(),
+  );
+  const setEntry = useCallback(
+    (lineId: string, entry: PendingEntry | null) =>
+      setEntries((current) => {
+        const next = new Map(current);
+        if (entry) next.set(lineId, entry);
+        else next.delete(lineId);
+        return next;
+      }),
+    [],
+  );
+  const entrySent = useCallback(
+    (lineId: string, key: string) =>
+      setEntries((current) => {
+        if (current.get(lineId)?.key !== key) return current;
+        const next = new Map(current);
+        next.delete(lineId);
+        return next;
+      }),
+    [],
+  );
+  const focusDone = useCallback(() => setFocusLine(null), []);
   const running = doc.status === 'in_progress';
   const editable = running && access.canUpdate;
 
@@ -619,7 +651,10 @@ export function StockCountEditor({
                           <EntryInput
                             docId={doc.id}
                             line={line}
-                            pending={pending}
+                            entry={entries.get(line.lineId)}
+                            onEntry={setEntry}
+                            onSent={entrySent}
+                            onFocused={focusDone}
                             focusRequest={
                               focusLine?.lineId === line.lineId
                                 ? focusLine.at

@@ -1497,6 +1497,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       throw new ApiError(409, 'write_off_from_return', correlationId);
     }
     writable(session, doc.storeId, correlationId);
+    if (doc.status !== 'posted') {
+      throw new ApiError(409, 'document_not_posted', correlationId);
+    }
     assertNotFrozen(
       doc.storeId,
       doc.lines.map((l) => l.productId),
@@ -1609,6 +1612,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = findDoc(db().supplierReturns, params.id, correlationId);
     requireDraft(doc.status, correlationId);
     writable(session, doc.storeId, correlationId);
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     for (const line of doc.lines) {
       const product = productOf(line.productId, correlationId);
       const pieces = piecesOf(product, line.unit, line.quantity);
@@ -1637,6 +1645,14 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     });
     const doc = findDoc(db().supplierReturns, params.id, correlationId);
     writable(session, doc.storeId, correlationId);
+    if (doc.status !== 'posted') {
+      throw new ApiError(409, 'document_not_posted', correlationId);
+    }
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     const check = unpostCheck(doc.number, doc.storeId, doc.lines, doc.postedBy);
     if (!check.allowed)
       throw new ApiError(409, 'unpost_blocked', correlationId);

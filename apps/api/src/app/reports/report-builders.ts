@@ -81,12 +81,24 @@ const byName =
   (a: T, b: T) =>
     name(a).localeCompare(name(b), 'ru');
 
+/**
+ * The expenses of the period for «Продажи по точкам» (spec E16): the shares of the records of the
+ * stores, the share of the network records (the total only) and the cash withdrawals «на расходы».
+ * Positive dirams; `null` — the expense columns are absent.
+ */
+export interface StoreExpenses {
+  byStore: ReadonlyMap<string, number>;
+  networkMinor: number;
+  cash: readonly { storeId: string; amountMinor: number }[];
+}
+
 export function salesByStore(
   stores: readonly Named[],
   sales: readonly SalesOfStore[],
   refunds: readonly RefundsOfStore[],
   losses: readonly LossesOfStore[],
   canSeeCost: boolean,
+  expenses: StoreExpenses | null,
 ): Body {
   const rows: Row[] = stores.map((store) => {
     const sold = sales.find((row) => row.storeId === store.id);
@@ -122,21 +134,43 @@ export function salesByStore(
     Number(total.margin),
     Number(total.revenue) + Number(total.returns),
   );
+  const columns = [
+    col('store', 'text'),
+    col('receipts', 'count'),
+    col('revenue', 'money'),
+    col('returns', 'money'),
+    col('cost', 'money'),
+    col('losses', 'money'),
+    col('margin', 'money'),
+    col('marginPercent', 'percent'),
+  ];
+  // net profit (E16): expenses are negative as the returns and the losses; the network records go
+  // to the total only
+  if (expenses !== null && canSeeCost) {
+    stores.forEach((store, index) => {
+      const row = rows[index];
+      const own = -(expenses.byStore.get(store.id) ?? 0);
+      const cash = -(
+        expenses.cash.find((item) => item.storeId === store.id)?.amountMinor ?? 0
+      );
+      row.expenses = own;
+      row.cashExpenses = cash;
+      row.netProfit = Number(row.margin) + own + cash;
+    });
+    total.expenses = sum(rows, 'expenses') - expenses.networkMinor;
+    total.cashExpenses = sum(rows, 'cashExpenses');
+    total.netProfit =
+      Number(total.margin) +
+      Number(total.expenses) +
+      Number(total.cashExpenses);
+    columns.push(
+      col('expenses', 'money'),
+      col('cashExpenses', 'money'),
+      col('netProfit', 'money'),
+    );
+  }
   return withCost(
-    {
-      columns: [
-        col('store', 'text'),
-        col('receipts', 'count'),
-        col('revenue', 'money'),
-        col('returns', 'money'),
-        col('cost', 'money'),
-        col('losses', 'money'),
-        col('margin', 'money'),
-        col('marginPercent', 'percent'),
-      ],
-      rows,
-      total,
-    },
+    { columns, rows, total },
     ['cost', 'losses', 'margin', 'marginPercent'],
     canSeeCost,
   );

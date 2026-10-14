@@ -205,7 +205,8 @@ function ReportsPageView() {
                     key: column.key,
                     header: t(`columns.${column.key}` as 'columns.store'),
                     numeric: numeric(column),
-                    nowrap: numeric(column),
+                    // a store name stays on one line in the wide «Продажи по точкам»
+                    nowrap: numeric(column) || column.key === 'store',
                     cell: (row: Row) => cell(column, row[column.key], row),
                   }),
                 );
@@ -233,6 +234,11 @@ function ReportsPageView() {
                     {kind === 'supplier_debts' && (
                       <p className="px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
                         {t('debtsToday')}
+                      </p>
+                    )}
+                    {data.columns.some((c) => c.key === 'expenses') && (
+                      <p className="px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
+                        {t('networkExpensesInTotal')}
                       </p>
                     )}
                     {kind === 'controlled' && (

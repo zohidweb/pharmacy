@@ -28,6 +28,7 @@ export const routes = {
   pricing: () => '/pricing',
 
   reports: () => '/reports',
+  expenses: () => '/expenses',
   auditLog: () => '/audit-log',
 
   stores: () => '/stores',

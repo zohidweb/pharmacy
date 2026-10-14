@@ -158,6 +158,12 @@ export const navigation: NavSection[] = [
         ready: true,
       },
       {
+        route: 'expenses',
+        icon: 'wallet',
+        permission: 'expenses:view',
+        ready: true,
+      },
+      {
         route: 'auditLog',
         icon: 'scroll-text',
         permission: 'audit:view',

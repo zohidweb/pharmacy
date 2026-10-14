@@ -157,6 +157,7 @@
       "catalog": "Феҳристи молҳо",
       "pricing": "Нарх ва тахфиф",
       "reports": "Ҳисоботҳо",
+      "expenses": "Хароҷот",
       "auditLog": "Журнали амалҳо",
       "stores": "Нуқтаҳо, хизматҳо, пардохт",
       "employees": "Кормандон ва нақшҳо",
@@ -367,7 +368,8 @@
     "password_reset": "Парол ва PIN",
     "role_change": "Нақшҳо ва ҳуқуқҳо",
     "store": "Нуқтаҳо ва терминалҳо",
-    "settings_change": "Танзимот"
+    "settings_change": "Танзимот",
+    "expense": "Хароҷот"
   },
   "auditEvents": {
     "receipt_completed": "Фурӯш",
@@ -437,7 +439,10 @@
     "terminal_revoked": "Терминал ҷудо карда шуд",
     "settings_returns_updated": "Қоидаҳои бозгашт тағйир ёфт",
     "settings_updated": "Танзимоти шабака тағйир ёфт",
-    "settings_viewed": "Дидани танзимот"
+    "settings_viewed": "Дидани танзимот",
+    "expense_created": "Хароҷот илова шуд",
+    "expense_updated": "Хароҷот тағйир ёфт",
+    "expense_deleted": "Хароҷот нест карда шуд"
   },
   "auditParams": {
     "totalMinor": "Маблағ",
@@ -450,7 +455,9 @@
     "lines": "Сатрҳо",
     "positions": "Мавқеъҳо",
     "reason": "Сабаб",
-    "receipt": "Чек"
+    "receipt": "Чек",
+    "expenseKind": "Намуд",
+    "month": "Моҳ"
   },
   "auditReasons": {
     "expired": "Мӯҳлати истифода гузашт",
@@ -464,5 +471,11 @@
     "missing_permission": "ҳуқуқ нест",
     "store_out_of_scope": "нуқта берун аз дастрасӣ",
     "store_missing": "нуқта нишон дода нашудааст"
+  },
+  "expenseKinds": {
+    "rent": "Иҷора",
+    "salary": "Музди меҳнат",
+    "utilities": "Хизматрасониҳои коммуналӣ",
+    "other": "Дигар"
   }
 }

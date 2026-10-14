@@ -12,6 +12,11 @@ import type {
   EmployeeCard,
   EmployeeListQuery,
   EmployeeListResponse,
+  CreateExpenseRequest,
+  Expense,
+  ExpenseListResponse,
+  ExpenseQuery,
+  UpdateExpenseRequest,
   Export1cPreview,
   Export1cRequest,
   Export1cResult,
@@ -541,6 +546,22 @@ export const apiRoutes = {
     { kind: ReportKind },
     { from: string; to: string; storeId?: string }
   >('GET', (p) => `/reports/${p.kind}`),
+  'expenses.list': route<ExpenseListResponse, undefined, undefined, ExpenseQuery>(
+    'GET',
+    () => '/expenses',
+  ),
+  'expenses.create': route<Expense, CreateExpenseRequest>(
+    'POST',
+    () => '/expenses',
+  ),
+  'expenses.update': route<Expense, UpdateExpenseRequest, { id: string }>(
+    'PUT',
+    (p) => `/expenses/${encodeURIComponent(p.id)}`,
+  ),
+  'expenses.delete': route<void, undefined, { id: string }>(
+    'DELETE',
+    (p) => `/expenses/${encodeURIComponent(p.id)}`,
+  ),
   'export1c.preview': route<
     Export1cPreview,
     undefined,

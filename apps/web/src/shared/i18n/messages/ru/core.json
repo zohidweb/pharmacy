@@ -157,6 +157,7 @@
       "catalog": "Каталог товаров",
       "pricing": "Цены и скидки",
       "reports": "Отчёты",
+      "expenses": "Расходы",
       "auditLog": "Журнал действий",
       "stores": "Точки, услуги, оплата",
       "employees": "Сотрудники и роли",
@@ -367,7 +368,8 @@
     "password_reset": "Пароль и PIN",
     "role_change": "Роли и права",
     "store": "Точки и терминалы",
-    "settings_change": "Настройки"
+    "settings_change": "Настройки",
+    "expense": "Расходы"
   },
   "auditEvents": {
     "receipt_completed": "Продажа",
@@ -437,7 +439,10 @@
     "terminal_revoked": "Терминал отвязан",
     "settings_returns_updated": "Изменены правила возврата",
     "settings_updated": "Изменены настройки сети",
-    "settings_viewed": "Просмотр настроек"
+    "settings_viewed": "Просмотр настроек",
+    "expense_created": "Расход добавлен",
+    "expense_updated": "Расход изменён",
+    "expense_deleted": "Расход удалён"
   },
   "auditParams": {
     "totalMinor": "Сумма",
@@ -450,7 +455,9 @@
     "lines": "Строк",
     "positions": "Позиций",
     "reason": "Причина",
-    "receipt": "Чек"
+    "receipt": "Чек",
+    "expenseKind": "Вид",
+    "month": "Месяц"
   },
   "auditReasons": {
     "expired": "Истёк срок годности",
@@ -464,5 +471,11 @@
     "missing_permission": "нет права",
     "store_out_of_scope": "точка вне доступа",
     "store_missing": "точка не указана"
+  },
+  "expenseKinds": {
+    "rent": "Аренда",
+    "salary": "Зарплата",
+    "utilities": "Коммунальные услуги",
+    "other": "Прочее"
   }
 }

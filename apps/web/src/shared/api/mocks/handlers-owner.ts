@@ -5,9 +5,19 @@
  * a store closes by a transfer of its stock and only when the receiver accepts it; an offline
  * store's stock is not moved from the cloud (ADR-0014); duplicates are decided by the offline store.
  */
-import { checkPin, stockState } from '@pharmacy/shared-domain';
+import {
+  checkPin,
+  daysInMonth,
+  expenseKinds,
+  hasPermissions,
+  prorateExpense,
+  stockState,
+} from '@pharmacy/shared-domain';
 import type {
+  CashExpensesOfStore,
+  CreateExpenseRequest,
   EmployeeSession,
+  Expense,
   NetworkSettings,
   UpdateNetworkSettingsRequest,
   OwnerStore,
@@ -39,6 +49,7 @@ type OwnerRoute = Extract<
   | `services.${string}`
   | 'billing.get'
   | 'reports.get'
+  | `expenses.${string}`
   | `export1c.${string}`
   | `settings.${string}`
   | 'sync.stores'
@@ -178,6 +189,9 @@ const col = (key: string, type: ReportColumn['type']): ReportColumn => ({
 const percentOf = (part: number, whole: number) =>
   whole === 0 ? 0 : Math.round((part * 1000) / whole) / 10;
 
+const sumOf = (rows: Array<Record<string, ReportCell>>, key: string) =>
+  rows.reduce((sum, row) => sum + Number(row[key] ?? 0), 0);
+
 function sumRows(
   rows: Array<Record<string, ReportCell>>,
   keys: string[],
@@ -193,6 +207,93 @@ function sumRows(
 
 const inPeriod = (date: string, from: string, to: string) =>
   date.slice(0, 10) >= from && date.slice(0, 10) <= to;
+
+/* ---------------- other expenses (spec 2026-10-14-owner-cabinet, E16) ---------------- */
+
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** A record the employee may see: of a store of the scope, of the network for the whole network. */
+const expenseVisible = (session: EmployeeSession, storeId: string | null) =>
+  storeId === null
+    ? session.scope === 'network'
+    : session.scope === 'network' || session.stores.some((s) => s.id === storeId);
+
+/** The cash withdrawals «на расходы» of the stores in [from, to], by the store of the shift. */
+function cashExpensesOf(
+  storeIds: readonly string[],
+  from: string,
+  to: string,
+): { storeId: string; amountMinor: number; operations: number }[] {
+  const result = new Map<string, { amountMinor: number; operations: number }>();
+  for (const shift of mockDb().pos.shifts) {
+    if (!storeIds.includes(shift.storeId)) continue;
+    for (const event of shift.events) {
+      const date = toAppDate(new Date(event.at));
+      if (event.kind !== 'cash_out' || event.reference !== 'expense') continue;
+      if (date < from || date > to) continue;
+      const sum = result.get(shift.storeId) ?? { amountMinor: 0, operations: 0 };
+      sum.amountMinor += Math.abs(event.amountMinor);
+      sum.operations += 1;
+      result.set(shift.storeId, sum);
+    }
+  }
+  return [...result].map(([storeId, sum]) => ({ storeId, ...sum }));
+}
+
+function expenseInput(
+  body: CreateExpenseRequest,
+  session: EmployeeSession,
+  correlationId: string,
+): Expense {
+  if (!MONTH.test(body.month)) throw invalid(correlationId, 'month', 'matches');
+  if (!(expenseKinds as readonly string[]).includes(body.kind)) {
+    throw invalid(correlationId, 'kind', 'is_in');
+  }
+  if (!Number.isInteger(body.amountMinor) || body.amountMinor < 1) {
+    throw invalid(correlationId, 'amountMinor', 'min');
+  }
+  const comment = body.comment?.trim() || null;
+  if (comment && comment.length > 500) {
+    throw invalid(correlationId, 'comment', 'max_length');
+  }
+  if (body.month > today().slice(0, 7)) {
+    throw validation(correlationId, 'month', 'range');
+  }
+  if (body.storeId === null ? session.scope !== 'network' : !session.stores.some((st) => st.id === body.storeId)) {
+    throw new ApiError(403, 'store_not_in_scope', correlationId);
+  }
+  return {
+    id: '',
+    month: body.month,
+    storeId: body.storeId,
+    storeName:
+      body.storeId === null
+        ? null
+        : (session.stores.find((st) => st.id === body.storeId)?.name ?? null),
+    kind: body.kind,
+    amountMinor: body.amountMinor,
+    comment,
+  };
+}
+
+function findExpense(
+  id: string,
+  session: EmployeeSession,
+  correlationId: string,
+): Expense {
+  const record = owner().expenses.find((e) => e.id === id);
+  if (!record) throw new ApiError(404, 'not_found', correlationId);
+  if (!expenseVisible(session, record.storeId)) {
+    throw new ApiError(403, 'store_not_in_scope', correlationId);
+  }
+  return record;
+}
+
+const expenseParams = (record: Expense) => ({
+  amountMinor: record.amountMinor,
+  expenseKind: record.kind,
+  month: record.month,
+});
 
 function report(
   kind: ReportKind,
@@ -239,6 +340,40 @@ function report(
         Number(total.margin),
         Number(total.revenue) + Number(total.returns),
       );
+      // net profit (spec E16): with finance:view-cost and expenses:view; the network records go to
+      // the total only, for the whole network without a store filter
+      const canSeeExpenses =
+        canSeeCost && hasPermissions(session.permissions, 'expenses:view');
+      if (canSeeExpenses) {
+        const records = owner().expenses.filter(
+          (e) => e.month >= from.slice(0, 7) && e.month <= to.slice(0, 7),
+        );
+        const cash = cashExpensesOf(
+          scoped.map((st) => st.id),
+          from,
+          to,
+        );
+        scoped.forEach((store, index) => {
+          const row: Record<string, ReportCell> = rows[index];
+          const own = -records
+            .filter((e) => e.storeId === store.id)
+            .reduce((sum, e) => sum + prorateExpense(e.amountMinor, e.month, from, to), 0);
+          const out = -(cash.find((c) => c.storeId === store.id)?.amountMinor ?? 0);
+          row.expenses = own;
+          row.cashExpenses = out;
+          row.netProfit = Number(row.margin) + own + out;
+        });
+        const network =
+          session.scope === 'network' && !storeId
+            ? records
+                .filter((e) => e.storeId === null)
+                .reduce((sum, e) => sum + prorateExpense(e.amountMinor, e.month, from, to), 0)
+            : 0;
+        total.expenses = sumOf(rows, 'expenses') - network;
+        total.cashExpenses = sumOf(rows, 'cashExpenses');
+        total.netProfit =
+          Number(total.margin) + Number(total.expenses) + Number(total.cashExpenses);
+      }
       return {
         columns: [
           col('store', 'text'),
@@ -251,6 +386,13 @@ function report(
             col('margin', 'money'),
             col('marginPercent', 'percent'),
           ),
+          ...(canSeeExpenses
+            ? [
+                col('expenses', 'money'),
+                col('cashExpenses', 'money'),
+                col('netProfit', 'money'),
+              ]
+            : []),
         ],
         rows,
         total,
@@ -1041,6 +1183,101 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       rows: table.rows.map(pick),
       total: table.total ? pick(table.total) : null,
     };
+  },
+
+  'expenses.list': ({ query, correlationId }) => {
+    const { session } = context(correlationId, 'expenses:view');
+    if (!MONTH.test(query.month)) throw invalid(correlationId, 'month', 'matches');
+    if (query.storeId && !session.stores.some((st) => st.id === query.storeId)) {
+      throw new ApiError(403, 'store_not_in_scope', correlationId);
+    }
+    const items = owner()
+      .expenses.filter((e) => e.month === query.month)
+      .filter((e) =>
+        query.storeId
+          ? e.storeId === query.storeId
+          : expenseVisible(session, e.storeId),
+      )
+      .sort(
+        (a, b) =>
+          Number(a.storeId !== null) - Number(b.storeId !== null) ||
+          (a.storeName ?? '').localeCompare(b.storeName ?? '', 'ru') ||
+          expenseKinds.indexOf(a.kind) - expenseKinds.indexOf(b.kind) ||
+          b.amountMinor - a.amountMinor,
+      );
+    const stores = session.stores.filter(
+      (st) => !query.storeId || st.id === query.storeId,
+    );
+    const last = `${query.month}-${String(daysInMonth(query.month)).padStart(2, '0')}`;
+    const cash = cashExpensesOf(
+      stores.map((st) => st.id),
+      `${query.month}-01`,
+      last,
+    );
+    const cashExpenses: CashExpensesOfStore[] = stores.flatMap((st) => {
+      const figure = cash.find((c) => c.storeId === st.id);
+      return figure
+        ? [
+            {
+              storeId: st.id,
+              storeName: st.name,
+              amountMinor: figure.amountMinor,
+              operations: figure.operations,
+            },
+          ]
+        : [];
+    });
+    return {
+      items: items.map((e) => ({ ...e })),
+      totalMinor: items.reduce((sum, e) => sum + e.amountMinor, 0),
+      cashExpenses,
+    };
+  },
+  'expenses.create': ({ body, correlationId }) => {
+    const { session } = context(correlationId, 'expenses:create', {
+      write: true,
+    });
+    const record = {
+      ...expenseInput(body, session, correlationId),
+      id: `exp-${++owner().counters.expense}`,
+    };
+    owner().expenses.push(record);
+    appendAudit(session, {
+      event: 'expense.created',
+      object: null,
+      params: expenseParams(record),
+      storeName: record.storeName,
+    });
+    return { ...record };
+  },
+  'expenses.update': ({ params, body, correlationId }) => {
+    const { session } = context(correlationId, 'expenses:update', {
+      write: true,
+    });
+    const record = findExpense(params.id, session, correlationId);
+    Object.assign(record, expenseInput(body, session, correlationId), {
+      id: record.id,
+    });
+    appendAudit(session, {
+      event: 'expense.updated',
+      object: null,
+      params: expenseParams(record),
+      storeName: record.storeName,
+    });
+    return { ...record };
+  },
+  'expenses.delete': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'expenses:delete', {
+      write: true,
+    });
+    const record = findExpense(params.id, session, correlationId);
+    owner().expenses = owner().expenses.filter((e) => e.id !== record.id);
+    appendAudit(session, {
+      event: 'expense.deleted',
+      object: null,
+      params: expenseParams(record),
+      storeName: record.storeName,
+    });
   },
 
   'export1c.preview': ({ query, correlationId }) => {

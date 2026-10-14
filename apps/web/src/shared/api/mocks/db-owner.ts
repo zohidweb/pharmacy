@@ -11,6 +11,7 @@ import {
   type RoleTemplateKey,
 } from '@pharmacy/shared-domain';
 import type {
+  Expense,
   LegalEntity,
   NetworkSettings,
   OfflineQueueItem,
@@ -21,6 +22,7 @@ import type {
   TenantService,
   TenantTerminal,
 } from '@pharmacy/shared-dto';
+import { toAppDate } from '@pharmacy/shared-util';
 import { DAY_MS, dateIn } from './fixtures-pos';
 
 export interface MockRole {
@@ -63,12 +65,15 @@ export interface OwnerMockDb {
   offlineQueue: OfflineQueueItem[];
   lastSyncAt: string;
   deployment: 'cloud' | 'offline-store';
+  /** The other expenses of the network (spec 2026-10-14-owner-cabinet, E16). */
+  expenses: Expense[];
   counters: {
     store: number;
     role: number;
     employee: number;
     audit: number;
     legalEntity: number;
+    expense: number;
   };
 }
 
@@ -124,6 +129,25 @@ const audit = (
   byOperator: false,
   ...entry,
 });
+
+/** The rent, salaries and utilities of the current month (synthetic). */
+function seedExpenses(): Expense[] {
+  const month = toAppDate().slice(0, 7);
+  const record = (
+    id: string,
+    storeId: string | null,
+    storeName: string | null,
+    kind: Expense['kind'],
+    amountMinor: number,
+    comment: string | null,
+  ): Expense => ({ id, month, storeId, storeName, kind, amountMinor, comment });
+  return [
+    record('exp-1', null, null, 'salary', 4_800_000, 'Зарплата сотрудников'),
+    record('exp-2', 'store-1', 'Аптека №1 · Центр', 'rent', 1_200_000, null),
+    record('exp-3', 'store-2', 'Аптека №2 · Сино', 'rent', 900_000, null),
+    record('exp-4', 'store-1', 'Аптека №1 · Центр', 'utilities', 145_000, 'Свет и вода'),
+  ];
+}
 
 export function createOwnerDb(): OwnerMockDb {
   return {
@@ -424,6 +448,14 @@ export function createOwnerDb(): OwnerMockDb {
     ],
     lastSyncAt: ago(130),
     deployment: 'cloud',
-    counters: { store: 6, role: 1, employee: 1, audit: 12, legalEntity: 3 },
+    expenses: seedExpenses(),
+    counters: {
+      store: 6,
+      role: 1,
+      employee: 1,
+      audit: 12,
+      legalEntity: 3,
+      expense: 4,
+    },
   };
 }

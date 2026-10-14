@@ -1,0 +1,235 @@
+import { Injectable } from '@nestjs/common';
+import { hasPermissions } from '@pharmacy/shared-domain';
+import type { ReportKind, ReportTable } from '@pharmacy/shared-dto';
+import {
+  type EmployeePrincipal,
+  requirePrincipal,
+} from '../../common/context/request-context';
+import { ProblemException } from '../../common/errors/problem.exception';
+import { FieldProblemException } from '../../common/errors/validation-failed.exception';
+import { TenantDatabase, type TenantTransaction } from '../../core/database';
+import { StockFigures } from '../inventory/stock-figures';
+import { SalesFigures } from '../pos/sales-figures';
+import { SupplierDues } from '../purchasing/supplier-dues';
+import { ReturnFigures } from '../returns/return-figures';
+import { daysBetween } from './dashboard-period';
+import { REPORT_KINDS, type ReportQueryDto } from './dto/reports.dto';
+import * as build from './report-builders';
+import { ReportsRepository } from './reports.repository';
+
+/** The longest period of a report (spec 2026-10-14-owner-cabinet, E1). */
+const MAX_REPORT_DAYS = 366;
+
+function scopeOf(principal: EmployeePrincipal): 'all' | readonly string[] {
+  if (principal.auth === 'pin') {
+    return principal.currentStoreId ? [principal.currentStoreId] : [];
+  }
+  return principal.storeScope;
+}
+
+function nameIn(names: unknown, locale: 'ru' | 'tg'): string {
+  if (typeof names !== 'object' || names === null) return '—';
+  const map = names as Record<string, unknown>;
+  for (const key of [locale === 'tg' ? 'tj' : 'ru', 'ru', 'tj']) {
+    const value = map[key];
+    if (typeof value === 'string' && value !== '') return value;
+  }
+  return '—';
+}
+
+// The reports of the owner cabinet (spec 2026-10-14-owner-cabinet, 5.3, E3, E18, E19): one table per
+// kind over a period of business dates and the stores of the scope (or one of them).
+@Injectable()
+export class ReportsService {
+  constructor(
+    private readonly db: TenantDatabase,
+    private readonly repository: ReportsRepository,
+    private readonly sales: SalesFigures,
+    private readonly refunds: ReturnFigures,
+    private readonly stock: StockFigures,
+    private readonly dues: SupplierDues,
+  ) {}
+
+  get(kind: string, query: ReportQueryDto): Promise<ReportTable> {
+    if (!REPORT_KINDS.includes(kind as ReportKind)) {
+      throw new ProblemException(404, 'not_found');
+    }
+    const reportKind = kind as ReportKind;
+    const principal = requirePrincipal();
+    const scope = scopeOf(principal);
+    if (query.storeId && scope !== 'all' && !scope.includes(query.storeId)) {
+      throw new ProblemException(403, 'store_not_in_scope');
+    }
+    return this.db.tenantTransaction(async (trx) => {
+      const { today, expiryDays } = await this.repository.context(
+        trx,
+        principal.tenantId,
+      );
+      const { from, to } = query;
+      if (from > to || to > today || daysBetween(from, to) >= MAX_REPORT_DAYS) {
+        throw new FieldProblemException(422, 'validation_failed', [
+          { field: 'from', code: 'range' },
+        ]);
+      }
+      const stores = (
+        await this.repository.activeStores(trx, principal.tenantId, scope)
+      ).filter((store) => !query.storeId || store.id === query.storeId);
+      const body = await this.body(trx, principal, reportKind, stores, {
+        from,
+        to,
+        today,
+        expiryDays,
+      });
+      return { kind: reportKind, ...body };
+    });
+  }
+
+  private async body(
+    trx: TenantTransaction,
+    principal: EmployeePrincipal,
+    kind: ReportKind,
+    stores: readonly { id: string; name: string; kind: string }[],
+    period: { from: string; to: string; today: string; expiryDays: number },
+  ): Promise<Omit<ReportTable, 'kind'>> {
+    const { tenantId, locale } = principal;
+    const { from, to } = period;
+    const canSeeCost = hasPermissions(
+      principal.permissions,
+      'finance:view-cost',
+    );
+    const storeIds = stores.map((store) => store.id);
+    const storeName = (id: string) =>
+      stores.find((store) => store.id === id)?.name ?? '—';
+    const products = async (ids: readonly string[]) => {
+      const names = await this.repository.productNames(trx, tenantId, [
+        ...new Set(ids),
+      ]);
+      return (id: string) => nameIn(names.get(id), locale);
+    };
+    const employees = async (ids: readonly string[]) => {
+      const names = await this.repository.employeeNames(trx, tenantId, [
+        ...new Set(ids),
+      ]);
+      return (id: string) => names.get(id) ?? '—';
+    };
+
+    switch (kind) {
+      case 'sales_by_store':
+        // every store of the selection: a warehouse sells nothing, but its write-offs and
+        // stock-count differences lower the profit of the network (final review I2)
+        return build.salesByStore(
+          stores,
+          await this.sales.byStore(trx, tenantId, storeIds, from, to),
+          await this.refunds.byStore(trx, tenantId, storeIds, from, to),
+          await this.stock.lossesByStore(trx, tenantId, storeIds, from, to),
+          canSeeCost,
+        );
+      case 'sales_by_category': {
+        const names = await this.repository.categoryNames(trx, tenantId);
+        return build.salesByCategory(
+          [...names].map(([id, name]) => ({ id, name: nameIn(name, locale) })),
+          await this.sales.byCategory(trx, tenantId, storeIds, from, to),
+          await this.refunds.byCategory(trx, tenantId, storeIds, from, to),
+          canSeeCost,
+        );
+      }
+      case 'stock':
+        return build.stock(
+          stores,
+          await this.stock.stockAt(
+            trx,
+            tenantId,
+            storeIds,
+            to,
+            period.expiryDays,
+          ),
+          canSeeCost,
+        );
+      case 'movement': {
+        const rows = await this.stock.movement(
+          trx,
+          tenantId,
+          storeIds,
+          from,
+          to,
+        );
+        return build.movement(
+          rows,
+          await products(rows.map((row) => row.productId)),
+        );
+      }
+      case 'supplier_debts':
+        // today, whatever the period (E18)
+        return build.supplierDebts(
+          await this.dues.debts(trx, tenantId, period.today, storeIds),
+          canSeeCost,
+        );
+      case 'cashiers': {
+        const sold = await this.sales.byCashier(
+          trx,
+          tenantId,
+          storeIds,
+          from,
+          to,
+        );
+        const back = await this.refunds.byCashier(
+          trx,
+          tenantId,
+          storeIds,
+          from,
+          to,
+        );
+        return build.cashiers(
+          sold,
+          back,
+          await employees([...sold, ...back].map((row) => row.cashierId)),
+          storeName,
+        );
+      }
+      case 'losses': {
+        const lines = await this.stock.lossLines(
+          trx,
+          tenantId,
+          storeIds,
+          from,
+          to,
+        );
+        return build.losses(
+          lines,
+          storeName,
+          await products(lines.map((line) => line.productId)),
+          canSeeCost,
+        );
+      }
+      case 'controlled': {
+        const sales = await this.sales.controlledSales(
+          trx,
+          tenantId,
+          storeIds,
+          from,
+          to,
+        );
+        return build.controlled(
+          sales,
+          storeName,
+          await products(sales.map((sale) => sale.productId)),
+          await employees(sales.map((sale) => sale.cashierId)),
+        );
+      }
+      case 'controlled_summary': {
+        const rows = await this.stock.controlledSummary(
+          trx,
+          tenantId,
+          storeIds,
+          from,
+          to,
+        );
+        return build.controlledSummary(
+          rows,
+          await products(rows.map((row) => row.productId)),
+          storeName,
+        );
+      }
+    }
+  }
+}

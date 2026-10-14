@@ -16,6 +16,7 @@ import { DocumentPosting } from './posting';
 import { PurchasePricesSource } from './purchase-prices-source';
 import { StockDocumentsService } from './stock-documents.service';
 import { StockAlerts } from './stock-alerts';
+import { StockFigures } from './stock-figures';
 import { StockController } from './stock.controller';
 import { StockCountPosting } from './stock-count-posting';
 import { StockCountsController } from './stock-counts.controller';
@@ -89,15 +90,18 @@ import { WriteOffsService } from './write-offs.service';
     // fills the PurchasePrices port of pricing (spec 2026-10-14-owner-cabinet, E15)
     PurchasePricesSource,
     StockAlerts,
+    StockFigures,
   ],
   // the POS reads and moves the stock only through these (spec 2026-10-13-pos-shift-sale)
-  // StockAlerts — the stock signals of the notifications and the home (spec 2026-10-14-owner-cabinet)
+  // StockAlerts, StockFigures — the stock signals and figures of the notifications, the home and the
+  // reports (spec 2026-10-14-owner-cabinet)
   exports: [
     Numbering,
     PosStock,
     ReturnStock,
     CustomerReturnNumbers,
     StockAlerts,
+    StockFigures,
   ],
 })
 export class InventoryModule {}

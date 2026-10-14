@@ -1,7 +1,17 @@
 import { Injectable } from '@nestjs/common';
+import { supplierDebt } from '@pharmacy/shared-domain';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
 import { PurchasingRepository } from './purchasing.repository';
+
+export interface SupplierDebtOfToday {
+  supplierId: string;
+  supplierName: string;
+  debtMinor: number;
+  overdueMinor: number;
+  /** YYYY-MM-DD — the earliest due date of the open receipts; null without debt. */
+  nextDueOn: string | null;
+}
 
 export interface SupplierDue {
   supplierId: string;
@@ -59,5 +69,55 @@ export class SupplierDues {
       ...due,
       supplierName: nameOf.get(due.supplierId) ?? '—',
     }));
+  }
+
+  /**
+   * The debts to the suppliers today by the posted receipts of the stores (all stores without
+   * them), as the supplier list counts them (spec 2026-10-14-owner-cabinet, E18).
+   */
+  async debts(
+    trx: TenantTransaction,
+    tenantId: string,
+    today: string,
+    storeIds?: readonly string[],
+  ): Promise<SupplierDebtOfToday[]> {
+    const stores = storeIds === undefined ? null : new Set(storeIds);
+    const receipts = (
+      await this.repository.postedReceipts(trx, tenantId, null)
+    ).filter((receipt) => stores === null || stores.has(receipt.storeId));
+    const bySupplier = new Map<string, typeof receipts>();
+    for (const receipt of receipts) {
+      bySupplier.set(receipt.supplierId, [
+        ...(bySupplier.get(receipt.supplierId) ?? []),
+        receipt,
+      ]);
+    }
+    if (bySupplier.size === 0) return [];
+    const names = await sql<{ id: string; name: string }>`
+      select id, name from pharmacy.suppliers
+      where tenant_id = ${tenantId}
+        and id = any(${sql.val([...bySupplier.keys()])}::uuid[])`.execute(trx);
+    const nameOf = new Map(names.rows.map((row) => [row.id, row.name]));
+    return [...bySupplier].map(([supplierId, ofSupplier]) => {
+      const debt = supplierDebt(
+        ofSupplier
+          .map((receipt) => ({
+            document: receipt.number,
+            dueOn: receipt.dueDate ?? receipt.documentDate,
+            amountMinor:
+              Number(receipt.totalDirams) - Number(receipt.allocatedDirams),
+          }))
+          .filter((invoice) => invoice.amountMinor > 0),
+        0,
+        today,
+      );
+      return {
+        supplierId,
+        supplierName: nameOf.get(supplierId) ?? '—',
+        debtMinor: debt.debtMinor,
+        overdueMinor: debt.overdueMinor,
+        nextDueOn: debt.nextDueOn,
+      };
+    });
   }
 }

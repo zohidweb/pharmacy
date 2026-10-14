@@ -42,6 +42,7 @@ import { PosModule } from './pos/pos.module';
 import { PurchasingModule } from './purchasing/purchasing.module';
 import { PricingModule } from './pricing/pricing.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ReportsModule } from './reports/reports.module';
 import { ReturnsModule } from './returns/returns.module';
 import { BillingModule } from './billing/billing.module';
 import { SyncModule } from './sync/sync.module';
@@ -133,6 +134,10 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     // The notifications of the owner cabinet read the cloud modules (spec 2026-10-14-owner-cabinet).
     ConditionalModule.registerWhen(
       NotificationsModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
+    ConditionalModule.registerWhen(
+      ReportsModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
     BillingModule,

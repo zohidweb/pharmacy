@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { PosModule } from '../pos/pos.module';
+import { ReturnFigures } from './return-figures';
 import { ReturnPolicyController } from './return-policy.controller';
 import { ReturnPolicyService } from './return-policy.service';
 import { ReturnableController } from './returnable.controller';
@@ -20,12 +21,19 @@ import { ReturnsService } from './returns.service';
 // Domain module boundary (ADR-0002). Other modules use only what is listed in `exports`.
 @Module({
   imports: [AuditModule, AuthModule, CatalogModule, InventoryModule, PosModule],
-  controllers: [ReturnsController, ReturnableController, ReturnPolicyController],
+  controllers: [
+    ReturnsController,
+    ReturnableController,
+    ReturnPolicyController,
+  ],
   providers: [
     ReturnsRepository,
     ReturnsService,
     ReturnableService,
     ReturnPolicyService,
+    ReturnFigures,
   ],
+  // the refunds by store and day for the home and the reports (spec 2026-10-14-owner-cabinet)
+  exports: [ReturnFigures],
 })
 export class ReturnsModule {}

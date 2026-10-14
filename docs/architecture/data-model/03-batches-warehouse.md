@@ -156,7 +156,7 @@ erDiagram
 | `claim_text` | text null | Претензия поставщику |
 | **Списание** | | |
 | `write_off_reason` | text null | Причина, одна на документ; обязательна для `write_off` (поправка 2026-10-12) |
-| `source_customer_return_id` | uuid null | Автоматическое списание просроченного товара, возвращённого покупателем ([04](04-pos.md)) |
+| `source_customer_return_id` | uuid null | Автоматическое списание брака или просроченного товара, возвращённого покупателем ([04](04-pos.md)) |
 | **Перемещение, заявка** | | |
 | `destination_store_id` | uuid null | Обязателен для `transfer`, `transfer_request`; ≠ `store_id` |
 | `request_document_id` | uuid null | Перемещение по заявке |

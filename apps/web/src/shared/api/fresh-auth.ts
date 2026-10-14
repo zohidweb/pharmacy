@@ -26,6 +26,8 @@ const isFreshAuthRequired = (error: unknown) =>
   error.code === 'fresh_auth_required';
 
 let pending: Promise<void> | null = null;
+/** Confirmations finished so far: a request started before one ends needs no other. */
+let confirmations = 0;
 let settle: { resolve: () => void; reject: (error: unknown) => void } | null =
   null;
 const listeners = new Set<() => void>();
@@ -49,8 +51,10 @@ function finish(outcome: 'confirmed' | 'cancelled') {
   pending = null;
   settle = null;
   notify();
-  if (outcome === 'confirmed') current?.resolve();
-  else current?.reject(new FreshAuthCancelled());
+  if (outcome === 'confirmed') {
+    confirmations += 1;
+    current?.resolve();
+  } else current?.reject(new FreshAuthCancelled());
 }
 
 /** The dialog store: whether a confirmation is awaited, and how it ends. */
@@ -66,11 +70,13 @@ export const freshAuthStore = {
 
 /** Runs the action; on 403 `fresh_auth_required` waits for the password and repeats it once. */
 export async function withFreshAuth<T>(action: () => Promise<T>): Promise<T> {
+  const before = confirmations;
   try {
     return await action();
   } catch (error) {
     if (!isFreshAuthRequired(error)) throw error;
-    await requestConfirmation();
+    // the password was confirmed while the request was on its way: repeat it, no second dialog
+    if (confirmations === before) await requestConfirmation();
     return action();
   }
 }

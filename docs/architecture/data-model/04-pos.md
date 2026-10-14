@@ -143,21 +143,25 @@ erDiagram
 >   ⌈`discount_share_dirams` × возвращено / продано⌉, так что строка, возвращённая по частям, отдаёт ровно свою долю.
 
 **`customer_returns`:**
-- `store_id`, `shift_id`, `terminal_id`, `cashier_id`;
+- `id` — UUIDv7 операции клиента, он же ключ идемпотентности (отдельного `operation_id` нет);
+- `store_id`, `shift_id` (открытая смена терминала сессии; продажа могла быть в другой смене и другой день), `terminal_id`, `cashier_id`;
 - `receipt_id` — обязателен; ссылка `(tenant_id, store_id, receipt_id) → receipts (tenant_id, store_id, id)`, поэтому возврат на другой точке невозможен;
-- `number` (счётчик `customer_return`), `returned_at`, `business_date`;
+- `number` (`ВЗ-<код точки>-<год>-<6 цифр>`, счётчик `customer_return`), `returned_at`, `business_date`;
+- `reason` — `customer` (по желанию покупателя) / `defect` (брак);
 - `found_without_receipt boolean` — продажа найдена по товару и дате (право `returns:without-receipt`);
-- `discount_returned_dirams` (доля скидки по возвращаемым строкам), `total_dirams`, `operation_id` (уникален), `correlation_id`, `reason_code null`.
+- `discount_returned_dirams` (доля скидки по возвращаемым строкам), `refund_dirams` (к возврату), `correlation_id`.
 
-**`customer_return_lines`:** `receipt_line_id`, `qty_pieces > 0`, `amount_dirams`. Сумма возвратов по строке ≤ проданному: проверка под блокировкой строки чека.
+Возврат — факт: не правится и не отменяется.
 
-**`customer_return_refunds`:** `payment_method_id`, `amount_dirams` — теми же способами, что при оплате (КП 7).
+**`customer_return_lines`:** `receipt_line_id`, `qty_pieces > 0` — штуки (целое число единиц продажи строки чека), `amount_dirams` (по цене, без скидки), `discount_share_dirams` (доля скидки этого возврата, ≤ `amount_dirams`); в одном возврате строка чека — не больше одного раза (по частям её возвращают несколько возвратов). Сумма возвратов по строке ≤ проданному: проверка под транзакционной advisory-блокировкой по чеку (строки чека только для добавления, `FOR UPDATE` на них нет).
+
+**`customer_return_refunds`:** `kind` (`cash` / `card` / `qr` / `nfc`), `amount_dirams > 0`; один вид — одна строка. По виду — не больше оплаченного этим видом (наличные — за вычетом сдачи) минус прежние возвраты (КП 7).
 
 **Правила:**
-- возврат возможен в течение `tenant_settings.return_period_days` от `sold_at`;
+- возврат возможен в течение `tenant_settings.return_period_days` от `business_date` чека;
 - товар возвращается движением `customer_return` в партию строки чека;
-- **если срок партии на момент возврата истёк** (решение 2026-10-01), в той же транзакции создаётся и проводится документ `write_off`: номер `СП`, причина — системное значение `write_off_reason.customer_return_expired`, ссылка `documents.source_customer_return_id` → возврат. На офлайн-точке он входит в операцию `return.completed` (уточнить в ADR-0014);
-- **скидка не пересчитывается по порогам** (решение 2026-09-30): к возврату — сумма возвращаемого количества минус его пропорциональная доля `receipt_lines.discount_share_dirams`; дробные дирамы — вниз, в пользу аптеки. Скидка на оставшуюся часть чека сохраняется.
+- **брак и товар, у партии которого на момент возврата истёк срок** (решения 2026-10-01 и R2), в той же транзакции списываются: создаётся и проводится одно списание `СП` на возврат с причиной `customer_return_defect` или `customer_return_expired`, ссылка `documents.source_customer_return_id` → возврат, только для чтения. На офлайн-точке оно входит в операцию `return.completed` (уточнить в ADR-0014);
+- **скидка не пересчитывается по порогам** (решение 2026-09-30): к возврату — сумма возвращаемого количества минус снятая доля `receipt_lines.discount_share_dirams`. Доля считается накопительно: все возвраты строки снимают ⌈`discount_share_dirams` × возвращено / продано⌉ (E6), поэтому дробные дирамы уходят в пользу аптеки, а строка, возвращённая по частям, отдаёт ровно свою долю. Скидка на оставшуюся часть чека сохраняется.
 
 ## `controlled_sale_records` — продажа ПКУ и рецепт (класс `tenant`)
 

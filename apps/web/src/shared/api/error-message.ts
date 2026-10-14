@@ -13,8 +13,6 @@ const knownCodes = [
   'pin_locked',
   'terminal_locked',
   'pin_trivial',
-  'wrong_password',
-  'wrong_pin',
   'fresh_auth_required',
   'password_session_required',
   'role_name_taken',

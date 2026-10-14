@@ -400,8 +400,8 @@ const handlers: MockHandlers = {
       throw new ApiError(403, 'fresh_auth_required', correlationId);
     }
     if (employee.password !== body.currentPassword) {
-      throw new ApiError(422, 'wrong_password', correlationId, [
-        { field: 'currentPassword', code: 'wrong' },
+      throw new ApiError(422, 'invalid_current_password', correlationId, [
+        { field: 'currentPassword', code: 'invalid_current_password' },
       ]);
     }
     employee.password = body.newPassword;
@@ -414,20 +414,20 @@ const handlers: MockHandlers = {
       throw new ApiError(403, 'fresh_auth_required', correlationId);
     }
     if (employee.pin !== null && employee.pin !== body.currentPin) {
-      throw new ApiError(422, 'wrong_pin', correlationId, [
-        { field: 'currentPin', code: 'wrong' },
+      throw new ApiError(422, 'invalid_current_pin', correlationId, [
+        { field: 'currentPin', code: 'invalid_current_pin' },
       ]);
     }
     if (
       checkPin(body.newPin, mockDb().owner.settings.minPinLength) === 'length'
     ) {
-      throw new ApiError(422, 'validation_failed', correlationId, [
-        { field: 'newPin', code: 'length' },
+      throw new ApiError(422, 'pin_length', correlationId, [
+        { field: 'newPin', code: 'pin_length' },
       ]);
     }
     if (isTrivialPin(body.newPin)) {
       throw new ApiError(422, 'pin_trivial', correlationId, [
-        { field: 'newPin', code: 'trivial' },
+        { field: 'newPin', code: 'pin_trivial' },
       ]);
     }
     employee.pin = body.newPin;

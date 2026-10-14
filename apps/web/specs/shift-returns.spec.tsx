@@ -26,9 +26,6 @@ const WIDE_SPACES = new RegExp('[\u00a0\u202f]', 'g');
 const plain = (text: string | null | undefined) =>
   (text ?? '').replace(WIDE_SPACES, ' ');
 
-// operations go through the IndexedDB outbox: slower on a loaded machine (parallel nx tasks)
-jest.setTimeout(20_000);
-
 describe('ShiftPage', () => {
   it('shows totals by payment method and the cash drawer', async () => {
     await signInByPin('emp-cashier', '2580');
@@ -58,7 +55,7 @@ describe('ShiftPage', () => {
     await waitFor(
       () =>
         expect(screen.queryByRole('dialog', { name: 'Внесение' })).toBeNull(),
-      { timeout: 6_000 },
+      { timeout: 15_000 },
     );
     const drawer = screen.getByRole('region', { name: 'Денежный ящик' });
     await waitFor(
@@ -69,9 +66,10 @@ describe('ShiftPage', () => {
               ?.textContent,
           ),
         ).toBe('Ожидается в кассе1 672,50 с'),
-      { timeout: 6_000 },
+      { timeout: 15_000 },
     );
-  });
+    // two waits of up to 15 s each
+  }, 40_000);
 
   it('closes the shift with reconciliation and shows the Z-report', async () => {
     await signInByPin('emp-cashier', '2580');

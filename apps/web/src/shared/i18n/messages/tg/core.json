@@ -250,7 +250,8 @@
   "reminder": {
     "batch_expiring": {
       "title": "{product} · партияи {batch}",
-      "detail": "Мӯҳлати истифода баъд аз {days} рӯз мегузарад · {quantity} қут. · {store}"
+      "detail": "Мӯҳлати истифода баъд аз {days} рӯз мегузарад · {quantity} қут. · {store}",
+      "expired": "Мӯҳлати истифода {days} рӯз пеш гузашт · {quantity} қут. · {store}"
     },
     "supplier_payment_due": {
       "title": "«{supplier}» · пардохт то {dueDate}",
@@ -460,6 +461,9 @@
     "transfer_discrepancy": "Камбуди интиқол",
     "customer": "Бо хоҳиши харидор",
     "customer_return_defect": "Нуқсон аз бозгашт",
-    "customer_return_expired": "Партияи мӯҳлатгузашта аз бозгашт"
+    "customer_return_expired": "Партияи мӯҳлатгузашта аз бозгашт",
+    "missing_permission": "ҳуқуқ нест",
+    "store_out_of_scope": "нуқта берун аз дастрасӣ",
+    "store_missing": "нуқта нишон дода нашудааст"
   }
 }

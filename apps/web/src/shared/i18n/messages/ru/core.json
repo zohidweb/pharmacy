@@ -250,7 +250,8 @@
   "reminder": {
     "batch_expiring": {
       "title": "{product} · партия {batch}",
-      "detail": "Срок годности истекает через {days, plural, one {# день} few {# дня} other {# дней}} · {quantity} уп. · {store}"
+      "detail": "Срок годности истекает через {days, plural, one {# день} few {# дня} other {# дней}} · {quantity} уп. · {store}",
+      "expired": "Срок годности истёк {days, plural, one {# день} few {# дня} other {# дней}} назад · {quantity} уп. · {store}"
     },
     "supplier_payment_due": {
       "title": "«{supplier}» · оплатить до {dueDate}",
@@ -460,6 +461,9 @@
     "transfer_discrepancy": "Недостача при перемещении",
     "customer": "По желанию покупателя",
     "customer_return_defect": "Брак из возврата",
-    "customer_return_expired": "Истёкшая партия из возврата"
+    "customer_return_expired": "Истёкшая партия из возврата",
+    "missing_permission": "нет права",
+    "store_out_of_scope": "точка вне доступа",
+    "store_missing": "точка не указана"
   }
 }

@@ -50,6 +50,13 @@ export function useReminderText() {
       operator: params.operatorName ?? '—',
       shift: params.shiftNumber ?? '—',
     };
+    // an expired batch counts its days back (the API sends a negative `days`)
+    if (kind === 'batch_expiring' && values.days < 0) {
+      return {
+        title: t('batch_expiring.title', values),
+        detail: t('batch_expiring.expired', { ...values, days: -values.days }),
+      };
+    }
     return {
       title: t(`${kind}.title`, values),
       detail: t(`${kind}.detail`, values),

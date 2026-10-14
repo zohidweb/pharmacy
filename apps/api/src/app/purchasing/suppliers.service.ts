@@ -42,7 +42,7 @@ function valuesOf(input: SupplierInput): SupplierValues {
 }
 
 /**
- * The ledger in the shape of the card, oldest first, with the running debt; each entry keeps its
+ * The ledger in the shape of the card, oldest first, with the running balance; each entry keeps its
  * source for the answer of a payment.
  */
 export function ledgerEntries(rows: readonly LedgerRow[]): Array<{

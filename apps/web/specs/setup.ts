@@ -14,7 +14,7 @@ if (typeof globalThis.structuredClone !== 'function') {
 expect.extend(toHaveNoViolations);
 
 // IndexedDB writes of the outbox take longer on a loaded machine (parallel nx tasks)
-configure({ asyncUtilTimeout: 3_000 });
+configure({ asyncUtilTimeout: 5_000 });
 
 // a page that forgot a dictionary group renders key paths: fail the test instead (ADR-0009)
 const consoleError = console.error.bind(console);

@@ -3,6 +3,7 @@
  * Redis, `__Host-op_sid` cookie on the admin origin). Shapes only: apps/api implements them as
  * class-validator DTO classes; frontends import these types with `import type` (ADR-0015).
  */
+import type { OperatorRoleKey } from '@pharmacy/shared-domain';
 
 /** POST /api/v1/operator/sessions */
 export interface OperatorLoginRequest {
@@ -23,7 +24,8 @@ export interface OperatorActivationRequest {
   newPassword: string;
 }
 
-export type OperatorRole = 'full_access';
+/** The roles of shared-domain `OPERATOR_ROLES`. */
+export type OperatorRole = OperatorRoleKey;
 
 export interface OperatorProfile {
   id: string;

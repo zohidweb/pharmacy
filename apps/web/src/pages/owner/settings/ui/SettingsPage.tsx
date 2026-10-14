@@ -20,30 +20,29 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { canWrite, useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
 import { DemoDataNotice, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { CategoriesCard } from './CategoriesCard';
 
 const NOTIFICATIONS: NotificationKind[] = [
-  'expiry',
+  'batch_expiring',
   'low_stock',
-  'supplier_debt',
-  'transfer',
+  'supplier_payment_due',
+  'transfer_in_transit',
   'shift_discrepancy',
   'sync_conflict',
   'negative_stock',
-  'license_expiry',
+  'license_expiring',
 ];
 
 type NumberField =
-  | 'posSessionTimeoutMinutes'
-  | 'minPinLength'
-  | 'expiryNoticeDays';
+  'posSessionTimeoutMinutes' | 'minPinLength' | 'expiryNoticeDays';
 
 const RANGES: Record<NumberField, [number, number]> = {
-  posSessionTimeoutMinutes: [1, 240],
+  // the API keeps an idle session at least 5 minutes (spec 2026-10-14-owner-cabinet, E14)
+  posSessionTimeoutMinutes: [5, 240],
   minPinLength: [4, 8],
   expiryNoticeDays: [1, 365],
 };
@@ -60,7 +59,17 @@ function NetworkCard({
   const queryClient = useQueryClient();
   const [form, setForm] = useState(settings);
   const save = useMutation({
-    mutationFn: () => apiRequest('settings.update', { body: form }),
+    // the session timeout and the PIN length are security settings: a fresh sign-in (E14)
+    mutationFn: () => {
+      const body = {
+        posSessionTimeoutMinutes: form.posSessionTimeoutMinutes,
+        minPinLength: form.minPinLength,
+        expiryNoticeDays: form.expiryNoticeDays,
+        warnBelowCost: form.warnBelowCost,
+        notifications: form.notifications,
+      };
+      return withFreshAuth(() => apiRequest('settings.update', { body }));
+    },
     onSuccess: (saved) => {
       queryClient.setQueryData(['settings'], saved);
       toast.show(t('saved'));
@@ -69,9 +78,7 @@ function NetworkCard({
   const error = useApiErrorMessage(save.error);
   const outOfRange = (field: NumberField) =>
     form[field] < RANGES[field][0] || form[field] > RANGES[field][1];
-  const invalid =
-    !form.networkName.trim() ||
-    (Object.keys(RANGES) as NumberField[]).some(outOfRange);
+  const invalid = (Object.keys(RANGES) as NumberField[]).some(outOfRange);
   const number = (field: NumberField) => (
     <TextField
       label={t(`network.${field}`)}
@@ -102,16 +109,9 @@ function NetworkCard({
         <div className="grid grid-cols-3 gap-4">
           <TextField
             label={t('network.networkName')}
-            required
-            disabled={!editable}
+            readOnly
             value={form.networkName}
-            error={!form.networkName.trim() ? t('required') : undefined}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                networkName: event.target.value,
-              }))
-            }
+            hint={t('network.networkNameHint')}
           />
           <TextField
             label={t('network.currency')}
@@ -252,7 +252,10 @@ function ReturnsCard({
             onCheckedChange={(checked) =>
               setForm((current) => ({
                 ...current,
-                customerReturns: { ...current.customerReturns, [kind]: checked },
+                customerReturns: {
+                  ...current.customerReturns,
+                  [kind]: checked,
+                },
               }))
             }
           />

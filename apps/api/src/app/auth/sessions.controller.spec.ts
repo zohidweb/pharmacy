@@ -24,7 +24,7 @@ const STORE = '0197a1b2-0000-7000-8000-000000000011';
 
 const session: EmployeeSession = {
   employee: { id: 'e', fullName: 'Farida R.', login: 'farida.r', phone: '' },
-  tenant: { id: 't', name: 'Test network' },
+  tenant: { id: 't', name: 'Test network', warnBelowCost: true },
   role: { id: 'r', name: 'Кассир', system: false, templateKey: 'cashier' },
   permissions: ['pos:view'],
   scope: 'stores',

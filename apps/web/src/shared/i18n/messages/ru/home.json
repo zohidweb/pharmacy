@@ -6,15 +6,17 @@
     "periods": {
       "today": "Сегодня",
       "week": "Неделя",
-      "month": "Месяц"
+      "month": "Месяц",
+      "custom": "Свой период…"
     },
     "kpi": {
       "revenue": {
         "today": "Выручка сегодня",
         "week": "Выручка за неделю",
-        "month": "Выручка за месяц"
+        "month": "Выручка за месяц",
+        "custom": "Выручка за период"
       },
-      "revenueChange": "{change} {period, select, today {к вчера} week {к прошлой неделе} other {к прошлому месяцу}}",
+      "revenueChange": "{change} {period, select, today {к вчера} week {к прошлой неделе} month {к прошлому месяцу} other {к предыдущему периоду}}",
       "noComparison": "Нет данных для сравнения",
       "receipts": "Чеков",
       "averageReceipt": "Средний чек {amount}",
@@ -40,7 +42,11 @@
     "reminders": "Напоминания",
     "noReminders": "Напоминаний нет",
     "activity": "Журнал действий",
-    "noActivity": "Действий пока нет"
+    "noActivity": "Действий пока нет",
+    "revenueByDay": "Выручка по дням",
+    "from": "С",
+    "to": "По",
+    "rangeInvalid": "Период — не длиннее 92 дней и не позже сегодня"
   },
   "profile": {
     "title": "Профиль",

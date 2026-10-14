@@ -5,15 +5,23 @@ import { Button, EmptyState, Icon, IconButton, Popover } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'use-intl';
 import { reminderIcon, useReminderText } from '@/entities/reminder';
-import { canWrite, useSession } from '@/entities/session';
+import { can, canWrite, useSession } from '@/entities/session';
 import { apiRequest } from '@/shared/api';
 import { DemoDataNotice } from '@/shared/ui';
 
 const notificationsKey = ['notifications'] as const;
 const LIMIT = 20;
 
-/** Bell with the latest notifications of the employee: expiring batches, debts, transfers. */
+/**
+ * Bell with the latest notifications of the employee: expiring batches, debts, transfers. Only for
+ * the employees who receive notifications (spec 2026-10-14-owner-cabinet, E10, E12).
+ */
 export function NotificationsBell() {
+  const { data: session } = useSession();
+  return can(session, 'notifications:view') ? <NotificationsBellView /> : null;
+}
+
+function NotificationsBellView() {
   const t = useTranslations('shell');
   const text = useReminderText();
   const queryClient = useQueryClient();

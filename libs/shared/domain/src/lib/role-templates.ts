@@ -67,6 +67,8 @@ const manager: Permission[] = [
   'stores:view',
   'audit:view',
   'settings:view',
+  // the notifications of the stores of the scope (spec 2026-10-14-owner-cabinet, E10)
+  'notifications:view',
   'sync:view',
   'sync:run',
 ];

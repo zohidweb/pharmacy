@@ -6,6 +6,7 @@
  * the cloud shows their synchronisation; an offline store decides its product duplicates itself.
  */
 import type { Page, StoreMode } from './platform-tenants.js';
+import type { NotificationKind } from './tenant-home.js';
 
 /* ---------------- stores ---------------- */
 
@@ -268,20 +269,14 @@ export interface Export1cResult {
 
 /* ---------------- settings ---------------- */
 
-export type NotificationKind =
-  | 'expiry'
-  | 'low_stock'
-  | 'supplier_debt'
-  | 'transfer'
-  | 'shift_discrepancy'
-  | 'sync_conflict'
-  | 'negative_stock'
-  | 'license_expiry';
-
 /** GET/PUT /api/v1/settings — network settings; every change goes to the audit log. */
 export interface NetworkSettings {
+  /** Read only: the operator of the platform changes it (spec 2026-10-14-owner-cabinet, E14). */
   networkName: string;
-  /** Cashier session timeout on the terminal, minutes (CLAUDE.md «Security constraints»). */
+  /**
+   * Idle timeout of the sessions of the employees, minutes, 5–240 (CLAUDE.md «Security
+   * constraints»); applies to new sessions.
+   */
   posSessionTimeoutMinutes: number;
   /** ≥ 4 (ADR-0008). */
   minPinLength: number;
@@ -289,6 +284,9 @@ export interface NetworkSettings {
   warnBelowCost: boolean;
   notifications: Record<NotificationKind, boolean>;
 }
+
+/** PUT /api/v1/settings — needs a fresh sign-in (`fresh_auth_required`). */
+export type UpdateNetworkSettingsRequest = Omit<NetworkSettings, 'networkName'>;
 
 export interface CategoryMarkup {
   categoryId: string;

@@ -231,8 +231,12 @@ export class StockService {
       // page limit applies to them, not to the whole catalog
       const ofSupplier = async (): Promise<string[]> => {
         const own = new Set(
-          (await this.stock.batchStock(trx, tenantId, [id], null))
-            .filter((b) => b.qty > 0 && b.supplierId === supplierId)
+          (
+            await this.stock.batchStock(trx, tenantId, [id], null, {
+              supplierId,
+            })
+          )
+            .filter((b) => b.qty > 0)
             .map((b) => b.productId),
         );
         const ranked = query.query
@@ -253,16 +257,24 @@ export class StockService {
         : receiptId
           ? [
               ...new Set(
-                (await this.stock.batchStock(trx, tenantId, [id], null))
-                  .filter((b) => b.qty > 0 && b.sourceDocumentId === receiptId)
+                (
+                  await this.stock.batchStock(trx, tenantId, [id], null, {
+                    sourceDocumentId: receiptId,
+                  })
+                )
+                  .filter((b) => b.qty > 0)
                   .map((b) => b.productId),
               ),
             ]
           : query.expired
             ? [
                 ...new Set(
-                  (await this.stock.batchStock(trx, tenantId, [id], null))
-                    .filter((b) => b.qty > 0 && b.expiryDate < today)
+                  (
+                    await this.stock.batchStock(trx, tenantId, [id], null, {
+                      expiredBefore: today,
+                    })
+                  )
+                    .filter((b) => b.qty > 0)
                     .map((b) => b.productId),
                 ),
               ]
@@ -277,14 +289,12 @@ export class StockService {
                 ).items.map((p) => p.id);
       const products = await this.products.findForStock(trx, tenantId, ids);
       const byId = new Map(products.map((p) => [p.id, p]));
-      const batches = (
-        await this.stock.batchStock(trx, tenantId, [id], ids)
-      ).filter(
-        (b) =>
-          (!query.expired || b.expiryDate < today) &&
-          (!supplierId || b.supplierId === supplierId) &&
-          (!receiptId || b.sourceDocumentId === receiptId),
-      );
+      // the batches are narrowed in SQL, before their stock is summed
+      const batches = await this.stock.batchStock(trx, tenantId, [id], ids, {
+        ...(query.expired ? { expiredBefore: today } : {}),
+        ...(supplierId ? { supplierId } : {}),
+        ...(receiptId ? { sourceDocumentId: receiptId } : {}),
+      });
       const prices = await this.prices.pricesAt(trx, tenantId, [id], ids);
       return ids.flatMap((productId): StockProductOption[] => {
         // `ids` reopens saved lines: a product stays even when its batch went back whole

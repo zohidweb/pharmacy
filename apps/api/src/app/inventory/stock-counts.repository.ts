@@ -219,6 +219,27 @@ export class StockCountsRepository {
       .execute();
   }
 
+  /** What was sold before and after the count of each line, fixed at a cancel (one statement). */
+  async fixSold(
+    trx: TenantTransaction,
+    tenantId: string,
+    rows: readonly {
+      lineId: string;
+      soldSinceStartPieces: number;
+      soldAfterCountPieces: number;
+    }[],
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await sql`
+      update pharmacy.inventory_lines l
+      set sold_since_start_pieces = v.sold_since, sold_after_count_pieces = v.sold_after
+      from unnest(${rows.map((r) => r.lineId)}::uuid[],
+                  ${rows.map((r) => r.soldSinceStartPieces)}::integer[],
+                  ${rows.map((r) => r.soldAfterCountPieces)}::integer[])
+             as v(id, sold_since, sold_after)
+      where l.tenant_id = ${tenantId} and l.id = v.id`.execute(trx);
+  }
+
   /** The batch of a found product takes the values of its line again (a repost). */
   async refreshSurplusBatch(
     trx: TenantTransaction,

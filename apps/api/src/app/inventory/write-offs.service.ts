@@ -113,9 +113,13 @@ export class WriteOffsService {
       )
         .toISOString()
         .slice(0, 10);
-      const batches = (
-        await this.stock.batchStock(trx, tenantId, active, null)
-      ).filter((b) => b.qty > 0);
+      const expiry = await this.stock.expiryCounts(
+        trx,
+        tenantId,
+        active,
+        settings.today,
+        soon,
+      );
       return {
         items: rows.map((r) => ({
           id: r.id,
@@ -137,11 +141,8 @@ export class WriteOffsService {
           ...(canSeeCost
             ? { writtenOffThisMonthMinor: Number(month.amountDirams) }
             : {}),
-          expiredBatches: batches.filter((b) => b.expiryDate < settings.today)
-            .length,
-          expiringBatches: batches.filter(
-            (b) => b.expiryDate >= settings.today && b.expiryDate <= soon,
-          ).length,
+          expiredBatches: expiry.expired,
+          expiringBatches: expiry.expiring,
         },
       };
     });

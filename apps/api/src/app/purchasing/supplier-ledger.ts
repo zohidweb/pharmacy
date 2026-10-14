@@ -77,10 +77,14 @@ export class SupplierLedger {
       employeeId: string;
     },
   ): Promise<void> {
-    const balances = await this.repository.balancesOfSource(
-      trx,
-      e.tenantId,
-      e.documentId,
+    // the pairs are locked in one order, the same as in returnUnposted: a receipt with two pairs
+    // (the legal entity of the store changed) must not deadlock a parallel return
+    const balances = (
+      await this.repository.balancesOfSource(trx, e.tenantId, e.documentId)
+    ).sort((a, b) =>
+      pairKey(a.supplierId, a.legalEntityId).localeCompare(
+        pairKey(b.supplierId, b.legalEntityId),
+      ),
     );
     for (const balance of balances) {
       await this.repository.lockSettlement(

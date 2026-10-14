@@ -112,7 +112,8 @@ export class ReturnsService {
         const receiptId = body.receiptId.toLowerCase();
         // the returns of one receipt one after another: what is left of its lines and payments is
         // read under the lock (E19); the rows of the receipt are append-only, no FOR UPDATE on them
-        await sql`select pg_advisory_xact_lock(hashtextextended(${receiptId}, 0))`.execute(
+        // the key names its kind and tenant, as the other advisory keys of the code
+        await sql`select pg_advisory_xact_lock(hashtextextended(${`customer-return:${tenantId}:${receiptId}`}, 0))`.execute(
           trx,
         );
         const settings = await this.repository.settings(trx, tenantId);

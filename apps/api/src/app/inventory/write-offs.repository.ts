@@ -106,7 +106,8 @@ export class WriteOffsRepository {
              coalesce(sum(total_dirams), 0)::bigint as amount_dirams
       from pharmacy.documents
       where tenant_id = ${tenantId} and type = 'write_off' and status = 'posted'
-        and date_trunc('month', document_date) = date_trunc('month', ${today}::date)
+        and document_date >= date_trunc('month', ${today}::date)::date
+        and document_date < (date_trunc('month', ${today}::date) + interval '1 month')::date
         ${storeIds === null ? sql`` : sql`and store_id in (${sql.join([...storeIds])})`}`.execute(
       trx,
     );

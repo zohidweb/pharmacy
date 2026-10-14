@@ -132,7 +132,11 @@ export class PricesService {
         ]);
       }
 
-      for (const price of wanted) {
+      // the stores in one order (store, product), as every writer of prices: no deadlock
+      const ordered = [...wanted].sort((a, b) =>
+        a.storeId < b.storeId ? -1 : a.storeId > b.storeId ? 1 : 0,
+      );
+      for (const price of ordered) {
         await this.writer.set(trx, {
           tenantId,
           productId: id,

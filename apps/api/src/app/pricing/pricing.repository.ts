@@ -201,6 +201,7 @@ export class PricingRepository {
       select store_id, retail_price_per_pack_dirams as price from pharmacy.store_products
       where tenant_id = ${tenantId} and product_id = ${productId}
         and store_id in (${sql.join([...storeIds])})
+      order by store_id
       for update`.execute(trx);
     return new Map(result.rows.map((row) => [row.storeId, row.price]));
   }

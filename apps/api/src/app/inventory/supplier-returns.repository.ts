@@ -23,7 +23,6 @@ export interface SupplierReturnLineRow {
   expiryDate: string;
   purchasePricePerPackDirams: bigint;
   costPerPieceDirams: bigint;
-  piecesPerPack: number;
 }
 
 export interface ReturnBatch {
@@ -37,7 +36,9 @@ export interface ReturnBatch {
 
 /**
  * Amount of a line at the purchase price of its batch (spec 2026-10-12-supplier-returns-transfers,
- * R2): the formula of the amount of a goods receipt — pieces × price of a pack / pieces per pack.
+ * R2): pieces × price of a pack / pieces per pack, rounded — a return line may be in pieces. A goods
+ * receipt, always in packs, counts packs × price; one formula for all documents is an open
+ * architect question (triage sr-M1).
  */
 export const returnAmount = (line: {
   qtyPieces: number;
@@ -48,6 +49,22 @@ export const returnAmount = (line: {
     (line.qtyPieces * Number(line.purchasePricePerPackDirams)) /
       line.piecesPerPack,
   );
+
+/**
+ * The lines with the pieces per pack of their products. The products are read through the catalog's
+ * ProductsReader (module boundary), not joined here.
+ */
+export function withPiecesPerPack<T extends { productId: string }>(
+  lines: readonly T[],
+  products: ReadonlyMap<string, { piecesPerPack: number }>,
+): Array<T & { piecesPerPack: number }> {
+  return lines.map((line) => {
+    const product = products.get(line.productId);
+    if (!product)
+      throw new Error('A product of the return lines is not readable');
+    return { ...line, piecesPerPack: product.piecesPerPack };
+  });
+}
 
 // The lines of supplier returns (spec 2026-10-12-supplier-returns-transfers, section 3.1): a batch
 // of the store and of the supplier of the document; the header lives in DocumentsRepository.
@@ -110,30 +127,41 @@ export class SupplierReturnsRepository {
     const result = await sql<SupplierReturnLineRow>`
       select l.id, l.line_no, l.batch_id, l.product_id, l.qty_pieces, l.unit, l.note,
              l.amount_dirams, b.lot_number, b.expiry_date::text as expiry_date,
-             b.purchase_price_per_pack_dirams, b.cost_per_piece_dirams,
-             p.pieces_per_pack
+             b.purchase_price_per_pack_dirams, b.cost_per_piece_dirams
       from pharmacy.supplier_return_lines l
       join pharmacy.batches b on b.tenant_id = l.tenant_id and b.id = l.batch_id
-      join pharmacy.products p on p.tenant_id = l.tenant_id and p.id = l.product_id
       where l.tenant_id = ${tenantId} and l.document_id = ${documentId}
       order by l.line_no`.execute(trx);
     return result.rows;
   }
 
-  /** Fixes the amounts of the lines at posting (amendment 2.1 p. 2). */
+  /** Fixes the amounts of the lines at posting (amendment 2.1 p. 2), one statement for all. */
   async setAmounts(
     trx: TenantTransaction,
     tenantId: string,
     amounts: ReadonlyArray<{ id: string; amountDirams: number }>,
   ): Promise<void> {
-    for (const line of amounts) {
-      await trx
-        .updateTable('supplierReturnLines')
-        .set({ amountDirams: BigInt(line.amountDirams) })
-        .where('tenantId', '=', tenantId)
-        .where('id', '=', line.id)
-        .execute();
-    }
+    if (amounts.length === 0) return;
+    await sql`
+      update pharmacy.supplier_return_lines l
+      set amount_dirams = v.amount
+      from unnest(${amounts.map((a) => a.id)}::uuid[],
+                  ${amounts.map((a) => String(a.amountDirams))}::bigint[]) as v(id, amount)
+      where l.tenant_id = ${tenantId} and l.id = v.id`.execute(trx);
+  }
+
+  /** A draft has no line amounts (amendment 2.1 p. 2): cleared when the posting is undone. */
+  async clearAmounts(
+    trx: TenantTransaction,
+    tenantId: string,
+    documentId: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('supplierReturnLines')
+      .set({ amountDirams: null })
+      .where('tenantId', '=', tenantId)
+      .where('documentId', '=', documentId)
+      .execute();
   }
 
   /** Posted returns of the month of `today` in the stores: count and amount. */
@@ -151,7 +179,8 @@ export class SupplierReturnsRepository {
              coalesce(sum(total_dirams), 0)::bigint as amount_dirams
       from pharmacy.documents
       where tenant_id = ${tenantId} and type = 'supplier_return' and status = 'posted'
-        and date_trunc('month', document_date) = date_trunc('month', ${today}::date)
+        and document_date >= date_trunc('month', ${today}::date)::date
+        and document_date < (date_trunc('month', ${today}::date) + interval '1 month')::date
         ${storeIds === null ? sql`` : sql`and store_id in (${sql.join([...storeIds])})`}`.execute(
       trx,
     );

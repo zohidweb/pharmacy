@@ -111,7 +111,9 @@ export class StorePriceWriter {
     },
   ): Promise<void> {
     const { employeeId } = requirePrincipal();
-    for (const productId of c.productIds) {
+    // in the order of the products, as every writer of prices: (store, product)
+    const productIds = [...new Set(c.productIds)].sort();
+    for (const productId of productIds) {
       const price = await this.repository.copyPrice(
         trx,
         c.tenantId,

@@ -515,6 +515,21 @@ export class CatalogRepository {
     return result.rows;
   }
 
+  /** Names (both languages) of the categories with these ids, any status. */
+  async categoryNamesByIds(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<{ id: string; name: NameMap }[]> {
+    if (ids.length === 0) return [];
+    return trx
+      .selectFrom('categories')
+      .select(['id', 'name'])
+      .where('tenantId', '=', tenantId)
+      .where('id', 'in', [...ids])
+      .execute() as Promise<{ id: string; name: NameMap }[]>;
+  }
+
   async findCategory(
     trx: TenantTransaction,
     tenantId: string,

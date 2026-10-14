@@ -44,6 +44,41 @@ export class OrderReceiving {
     );
   }
 
+  /**
+   * At the posting of a goods receipt by an order: the order, locked until the transaction ends, is
+   * still of the supplier and the store and open — a parallel receipt may have closed it since the
+   * draft was saved. 422 validation_failed at `orderId` otherwise.
+   */
+  async assertOpen(
+    trx: TenantTransaction,
+    tenantId: string,
+    receipt: { orderId: string; supplierId: string | null; storeId: string },
+  ): Promise<void> {
+    const order = await this.repository.find(
+      trx,
+      tenantId,
+      receipt.orderId,
+      true,
+    );
+    if (order === null) throw badOrder('unknown_order');
+    if (order.supplierId !== receipt.supplierId)
+      throw badOrder('order_supplier_mismatch');
+    if (order.storeId !== receipt.storeId)
+      throw badOrder('order_store_mismatch');
+    if (order.status !== 'confirmed' && order.status !== 'partially_received') {
+      throw badOrder('order_not_open');
+    }
+  }
+
+  /** Locks the order until the transaction ends (the unposting of a goods receipt by it). */
+  async lock(
+    trx: TenantTransaction,
+    tenantId: string,
+    orderId: string,
+  ): Promise<void> {
+    await this.repository.find(trx, tenantId, orderId, true);
+  }
+
   /** The status of a confirmed order after its posted goods receipts. */
   async refreshStatus(
     trx: TenantTransaction,

@@ -123,7 +123,8 @@ export interface HeaderValues {
   requestDocumentId?: string | null;
   inventoryScope?: 'all' | 'category' | null;
   inventoryCategoryId?: string | null;
-  inventoryStartedAt?: Date | null;
+  /** The start of a stock count: the transaction time (`now()`), not the clock of the process. */
+  inventoryStartedAt?: Date | RawBuilder<Date> | null;
 }
 
 export interface MovementRow {
@@ -282,10 +283,12 @@ export class DocumentsRepository {
       drafts: number;
     }>`
       select count(*) filter (where status = 'posted'
-               and date_trunc('month', document_date) = date_trunc('month', ${today}::date))::integer
+               and document_date >= date_trunc('month', ${today}::date)::date
+               and document_date < (date_trunc('month', ${today}::date) + interval '1 month')::date)::integer
                as posted_this_month,
              coalesce(sum(total_dirams) filter (where status = 'posted'
-               and date_trunc('month', document_date) = date_trunc('month', ${today}::date)), 0)::bigint
+               and document_date >= date_trunc('month', ${today}::date)::date
+               and document_date < (date_trunc('month', ${today}::date) + interval '1 month')::date), 0)::bigint
                as posted_this_month_dirams,
              count(*) filter (where status = 'draft')::integer as drafts
       from pharmacy.documents

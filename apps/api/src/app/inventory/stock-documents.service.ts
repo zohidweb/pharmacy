@@ -21,10 +21,7 @@ import {
   type TenantTransaction,
 } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
-import {
-  type PricingProduct,
-  ProductsReader,
-} from '../catalog/products-reader';
+import { ProductsReader } from '../catalog/products-reader';
 import { OrderReceiving } from '../purchasing/order-receiving';
 import { SuppliersReader } from '../purchasing/suppliers-reader';
 import {
@@ -38,7 +35,7 @@ import {
 import { InventoryRepository } from './inventory.repository';
 import { Numbering } from './numbering';
 import { StoreAccess } from './store-access';
-import { DocumentPosting, linesTotal, packsOf } from './posting';
+import { DocumentPosting, linesTotal, packsOf, packsTotal } from './posting';
 
 const DAY_MS = 86_400_000;
 const notFound = () => new ProblemException(404, 'not_found');
@@ -55,12 +52,16 @@ type InputLine = {
   starting?: boolean;
 };
 
-/** The same line of a draft keeps its batch: product, expiry, lot and price unchanged. */
+/**
+ * The same line of a draft keeps its batch: product, expiry, lot, price and the «starting» mark
+ * unchanged (the batch carries them, and posting does not rewrite a kept batch).
+ */
 const sameLine = (old: LineRow, line: LineValues) =>
   old.productId === line.productId &&
   old.expiryDate === line.expiryDate &&
   (old.lotNumber ?? '') === (line.lotNumber ?? '') &&
-  Number(old.purchasePricePerPackDirams) === line.purchasePricePerPackDirams;
+  Number(old.purchasePricePerPackDirams) === line.purchasePricePerPackDirams &&
+  old.isStarting === line.isStarting;
 
 // Goods receipts and opening balances (spec 2026-10-09-inventory-purchasing, section 4.1): drafts
 // with a number from creation, posting and unposting through DocumentPosting. A document is seen
@@ -464,6 +465,12 @@ export class StockDocumentsService {
     const values: LineValues[] = lines.map((line, i) => {
       const product = products.get(line.productId.toLowerCase());
       if (!product) throw badField(`lines.${i}.productId`, 'unknown_product');
+      // refused at saving, as in a purchase order, not only at posting
+      if (product.status !== 'active') {
+        throw new FieldProblemException(409, 'product_archived', [
+          { field: `lines.${i}.productId`, code: 'product_archived' },
+        ]);
+      }
       return {
         productId: product.id,
         qtyPieces: line.quantity * product.piecesPerPack,
@@ -478,8 +485,9 @@ export class StockDocumentsService {
           orderLines.get(product.id)?.pricePerPackDirams ?? null,
       };
     });
-    // a line unchanged since an unposting keeps its batch (spec 4.1)
-    if (current !== null) {
+    // a line unchanged since an unposting keeps its batch (spec 4.1); a batch carries the supplier,
+    // so another supplier of the document makes new batches
+    if (current !== null && current.supplierId === supplierId) {
       const free = (await this.documents.lines(trx, tenantId, type, id)).filter(
         (l) => l.batchId,
       );
@@ -499,13 +507,8 @@ export class StockDocumentsService {
         type === 'opening_balance'
           ? (input as OpeningBalanceInput).comment.trim() || null
           : null,
-      totalDirams: values.reduce(
-        (sum, l) =>
-          sum +
-          l.purchasePricePerPackDirams *
-            (l.qtyPieces /
-              (products.get(l.productId) as PricingProduct).piecesPerPack),
-        0,
+      totalDirams: packsTotal(
+        lines.map((l) => ({ packs: l.quantity, pricePerPack: l.costMinor })),
       ),
       supplierId,
       supplierInvoiceNumber: invoiceNumber,

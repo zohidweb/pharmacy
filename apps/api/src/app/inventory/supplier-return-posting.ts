@@ -16,6 +16,7 @@ import { StockFreeze } from './stock-freeze';
 import { StockRepository } from './stock.repository';
 import {
   returnAmount,
+  withPiecesPerPack,
   type SupplierReturnLineRow,
   SupplierReturnsRepository,
 } from './supplier-returns.repository';
@@ -94,7 +95,14 @@ export class SupplierReturnPosting {
         reversesMovementId: null,
       })),
     );
-    const amounts = lines.map((line) => ({
+    const products = new Map(
+      (
+        await this.products.findForStock(trx, tenantId, [
+          ...new Set(lines.map((l) => l.productId)),
+        ])
+      ).map((p) => [p.id, p]),
+    );
+    const amounts = withPiecesPerPack(lines, products).map((line) => ({
       id: line.id,
       amountDirams: returnAmount(line),
     }));
@@ -165,6 +173,7 @@ export class SupplierReturnPosting {
       doc.id,
       doc.documentDate,
     );
+    await this.lines.clearAmounts(trx, tenantId, doc.id);
     await this.documents.markUnposted(trx, tenantId, doc.id, employeeId);
     await this.ledger.returnUnposted(trx, {
       tenantId,

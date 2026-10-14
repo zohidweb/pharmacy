@@ -1,12 +1,33 @@
 'use client';
 
-import type { Shift } from '@pharmacy/shared-dto';
+import type {
+  PaymentTotal,
+  ReceiptPaymentMethod,
+  Shift,
+} from '@pharmacy/shared-dto';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, apiRequest, isUnreachable } from '@/shared/api';
 import { rememberShift, rememberedShift } from '@/shared/lib/terminal-cache';
 
 export const shiftQueryKey = (storeId: string | null) =>
   ['shift', 'current', storeId] as const;
+
+const none: PaymentTotal = { count: 0, amountMinor: 0 };
+
+/**
+ * A shift remembered before the customer returns were released has no `returnsByMethod`: no return
+ * was made through it then. The totals of the drawer and of the bank terminal read it.
+ */
+function withReturns(shift: Shift | null): Shift | null {
+  if (shift === null || (shift as Partial<Shift>).returnsByMethod) return shift;
+  const returnsByMethod: Record<ReceiptPaymentMethod, PaymentTotal> = {
+    cash: none,
+    card: none,
+    qr: none,
+    nfc: none,
+  };
+  return { ...shift, returnsByMethod };
+}
 
 /**
  * The open shift of the terminal of the session; null when none is open (404 no_open_shift). During
@@ -29,7 +50,7 @@ export function useCurrentShift(storeId: string | null, onTerminal = true) {
         }
         if (isUnreachable(error)) {
           const remembered = await rememberedShift(store);
-          if (remembered !== undefined) return remembered;
+          if (remembered !== undefined) return withReturns(remembered);
         }
         throw error;
       }

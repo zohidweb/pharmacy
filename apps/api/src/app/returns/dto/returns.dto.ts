@@ -64,8 +64,8 @@ export class CreateReturnDto
   @IsIn(REASONS)
   reason!: ReturnReason;
 
+  /** Empty when nothing is paid back (`refundMinor` 0: a price 0, a 100 % discount). */
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(4)
   @ValidateNested({ each: true })
   @Type(() => ReceiptPaymentDto)

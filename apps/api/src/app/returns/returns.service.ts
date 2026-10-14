@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { hasPermissions, returnLineRefund } from '@pharmacy/shared-domain';
 import type {
@@ -187,9 +188,14 @@ export class ReturnsService {
         if (refused.length > 0) {
           throw new FieldProblemException(422, 'return_not_allowed', refused);
         }
-        // a ПКУ line is returned only by a cashier who may sell it (E8)
+        // A ПКУ line is returned only by a cashier who may sell it (E8): sold as ПКУ, or ПКУ in the
+        // catalog now (marked after the sale, or sold from the buffer without its record).
         if (
-          picked.some((p) => p.line.controlled) &&
+          picked.some(
+            (p) =>
+              kindOf(p.line, products.get(p.line.productId)?.prescription) ===
+              'controlled',
+          ) &&
           !hasPermissions(principal.permissions, 'pos:sell-controlled')
         ) {
           throw new ProblemException(403, 'forbidden');
@@ -263,7 +269,8 @@ export class ReturnsService {
           foundWithoutReceipt: foundProductId !== null,
           discountReturnedDirams: discountTotal,
           refundDirams: refundTotal,
-          correlationId: getRequestContext()?.correlationId ?? '',
+          // without a request context (a future sync path) still a correlation id of its own
+          correlationId: getRequestContext()?.correlationId ?? randomUUID(),
         });
         const lineIds = await this.repository.insertLines(
           trx,

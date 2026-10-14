@@ -368,6 +368,7 @@ export interface CreateReturnRequest extends PosOperationContext {
   shiftId: string;
   lines: ReturnLineInput[];
   reason: ReturnReason;
+  /** Empty exactly when `refundMinor` is 0 (a price 0, a 100 % discount): the sum is checked. */
   refunds: ReceiptPayment[];
   refundMinor: number;
   /** The product of the search when the sale was found without the receipt (R8), else null. */

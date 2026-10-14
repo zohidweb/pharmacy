@@ -20,6 +20,7 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -150,6 +151,8 @@ export class CloseShiftDto
   @MaxLength(500)
   discrepancyReason!: string;
 
+  // required: @ValidateNested lets a missing object through, and the service reads it
+  @IsObject()
   @ValidateNested()
   @Type(() => TerminalTotalsDto)
   terminalTotals!: TerminalTotalsDto;

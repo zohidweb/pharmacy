@@ -126,6 +126,8 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'operator.sessions.create',
   'operator.sessions.current',
   'operator.sessions.delete',
+  'operatorAudit.list',
+  'operators.list',
   'tenants.list',
   'tenants.get',
   'tenants.stores',

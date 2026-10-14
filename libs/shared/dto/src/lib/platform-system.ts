@@ -158,23 +158,53 @@ export type NotificationPreferences = Record<NotificationTopic, boolean>;
 
 // ── Operators' audit log ──────────────────────────────────────────────────────────────────
 
+/**
+ * Kind of an event — the filter of the operator audit log. `access`: sign-ins, activation and
+ * refusals; `company`: networks; the rest come with their modules (payments, keys, services,
+ * platform settings and the team).
+ */
 export type OperatorActionType =
-  'company' | 'payment' | 'key' | 'service' | 'impersonation' | 'settings';
+  'access' | 'company' | 'payment' | 'key' | 'service' | 'settings';
 
+/** Who acted: an operator, or a platform job (`create-operator`). */
+export type OperatorAuditActor =
+  | { kind: 'operator'; operatorId: string; name: string }
+  | { kind: 'system'; job: string };
+
+/** A named record an event refers to. */
+export interface OperatorAuditRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * One event of platform_audit_log (data model 06). The screen words it from `action` and `details`
+ * in RU/TJ; the server sends no prose.
+ */
 export interface OperatorAuditEntry {
   id: string;
   at: string;
-  operatorId: string;
-  operatorName: string;
+  actor: OperatorAuditActor;
   type: OperatorActionType;
-  /** Company, store or "platform" the action was about. */
-  targetLabel: string;
-  description: string;
+  /** Event code: `tenant.blocked`, `auth.operator-login-failed`, `access.denied`… */
+  action: string;
+  /** The company the event concerns. */
+  tenant: OperatorAuditRef | null;
+  /** The store the event concerns. */
+  store: OperatorAuditRef | null;
+  /** The operator the event concerns (a sign-in, an activation, a code for a new operator). */
+  operator: OperatorAuditRef | null;
+  /** Codes for the wording (`permission`, `reason`): never secrets, identifier values or addresses. */
+  details: Record<string, string>;
 }
 
-/** GET /operator/operator-audit-log?operatorId&type&from&to&limit&offset — read only. */
+/**
+ * GET /operator/operator-audit-log — read only, newest first. `operatorId` — who acted; `from` and
+ * `to` — calendar dates (YYYY-MM-DD) of the platform time zone, both included.
+ */
 export interface OperatorAuditQuery {
   operatorId?: string;
+  tenantId?: string;
   type?: OperatorActionType;
   from?: string;
   to?: string;
@@ -249,10 +279,4 @@ export interface OperatorSessionInfo {
   device: string;
   lastSeenAt: string;
   current: boolean;
-}
-
-export interface OperatorActivityItem {
-  id: string;
-  at: string;
-  description: string;
 }

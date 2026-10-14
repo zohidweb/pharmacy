@@ -30,7 +30,11 @@ import { Controller, useForm } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
 import { z } from 'zod';
 import { useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiRequest,
+  isApiRouteAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
@@ -378,6 +382,11 @@ function AddOperator({
   );
 }
 
+// The team list is on apps/api; adding and disabling come with the team module (partial mode: the
+// actions are not offered where their routes do not answer).
+const canAddOperators = isApiRouteAvailable('operators.create');
+const canDisableOperators = isApiRouteAvailable('operators.disable');
+
 function TeamCard() {
   const t = useTranslations('settings.team');
   const tCommon = useTranslations('common');
@@ -407,13 +416,15 @@ function TeamCard() {
         titleId="team-title"
         description={t('hint')}
         actions={
-          <Button
-            variant="secondary"
-            iconStart="user-plus"
-            onClick={() => setAdding(true)}
-          >
-            {t('addAction')}
-          </Button>
+          canAddOperators && (
+            <Button
+              variant="secondary"
+              iconStart="user-plus"
+              onClick={() => setAdding(true)}
+            >
+              {t('addAction')}
+            </Button>
+          )
         }
       />
       <QueryState query={operators}>
@@ -446,6 +457,7 @@ function TeamCard() {
                     {t('statusDisabled')}
                   </StatusPill>
                 ) : (
+                  canDisableOperators &&
                   operator.id !== session?.operator.id && (
                     <Button
                       variant="tertiary"

@@ -37,7 +37,7 @@
 
 Индексы: `(tenant_id, recorded_at)`, `(tenant_id, employee_id, recorded_at)`, `(tenant_id, store_id, recorded_at)` — фильтры экрана аудита (БЛ W1-16).
 
-**`platform_audit_log` (platform):** `recorded_at`, `actor_kind` `operator` / `system`, `operator_id null`, `job text null`, `action`, `tenant_id null`, `entity_type`, `entity_id`, `details jsonb`. Журнал операторов: создание тенанта, платёж, ключ, услуга, «от имени».
+**`platform_audit_log` (platform):** `recorded_at`, `actor_kind` `operator` / `system`, `operator_id null`, `job text null`, `action`, `tenant_id null`, `entity_type`, `entity_id`, `details jsonb`. Журнал операторов: вход и доступ (`auth.*`, `operator.*`, `access.denied`), сети (`tenant.*`), платежи и счета, ключи, услуги, настройки — вид события определяется префиксом кода. Чтение — `GET /api/v1/operator/operator-audit-log` (фильтры: оператор, сеть, вид, даты платформы, `Asia/Dushanbe`); наружу из `details` отдаются только коды (`permission`, `reason`, `created`), без IP-адресов (2026-10-13).
 
 ## Очередь задач
 

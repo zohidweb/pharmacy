@@ -17,6 +17,9 @@ export const routes = {
   versions: () => '/offline/versions',
   notifications: () => '/notifications',
   auditLog: () => '/audit-log',
+  /** The operators' audit log narrowed to one company. */
+  companyAuditLog: (tenantId: string) =>
+    `/audit-log?tenantId=${encodeURIComponent(tenantId)}`,
   settings: () => '/settings',
   profile: () => '/profile',
 } as const;

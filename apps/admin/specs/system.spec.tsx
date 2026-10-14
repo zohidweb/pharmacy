@@ -189,7 +189,8 @@ describe('AuditLogPage', () => {
     const table = await screen.findByRole('table', {
       name: 'Журнал действий операторов',
     });
-    expect(within(table).getAllByRole('row')).toHaveLength(8);
+    // the header and 9 seeded events
+    expect(within(table).getAllByRole('row')).toHaveLength(10);
 
     fireEvent.click(
       await screen.findByRole('button', { name: 'Второй Оператор' }),

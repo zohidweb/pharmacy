@@ -14,6 +14,7 @@ import type {
 } from '@pharmacy/shared-dto';
 import { DEFAULT_VAT_RATE_PERCENT, PRICE_PER_STORE_MINOR } from './db-billing';
 import { demoOperator, demoOperatorPassword } from './fixtures';
+import { auditEntry } from './operator-audit';
 
 export interface SystemDb {
   notifications: PlatformNotification[];
@@ -125,68 +126,75 @@ export function seedSystem(): SystemDb {
     ],
     preferences: { billing: true, keys: true, services: true, sync: false },
     operatorAudit: [
+      auditEntry(
+        'oa-1',
+        '2026-09-30T06:42:00Z',
+        demoOperator,
+        'payment.recorded',
+        {
+          tenant: { id: 't-1', name: 'Демо Фарм' },
+        },
+      ),
+      auditEntry('oa-2', '2026-09-29T10:15:00Z', second, 'license.issued', {
+        tenant: { id: 't-1', name: 'Демо Фарм' },
+        store: { id: 's-104', name: 'Демо Фарм №4' },
+      }),
+      auditEntry(
+        'oa-3',
+        '2026-09-28T08:05:00Z',
+        demoOperator,
+        'auth.operator-login-succeeded',
+        {
+          operator: { id: demoOperator.id, name: demoOperator.fullName },
+        },
+      ),
+      auditEntry(
+        'oa-4',
+        '2026-09-27T12:30:00Z',
+        second,
+        'service.request-approved',
+        {
+          tenant: { id: 't-1', name: 'Демо Фарм' },
+        },
+      ),
+      auditEntry(
+        'oa-5',
+        '2026-09-25T07:00:00Z',
+        demoOperator,
+        'settings.updated',
+      ),
+      auditEntry(
+        'oa-6',
+        '2026-09-20T09:45:00Z',
+        demoOperator,
+        'tenant.created',
+        {
+          tenant: { id: 't-3', name: 'Тест Аптека' },
+        },
+      ),
+      auditEntry('oa-7', '2026-09-15T11:20:00Z', second, 'license.revoked', {
+        tenant: { id: 't-2', name: 'Пример Мед' },
+        store: { id: 's-203', name: 'Пример Мед №2' },
+      }),
+      auditEntry('oa-8', '2026-09-14T08:00:00Z', second, 'access.denied', {
+        details: {
+          reason: 'missing_permission',
+          permission: 'operators:manage',
+        },
+      }),
       {
-        id: 'oa-1',
-        at: '2026-09-30T06:42:00Z',
-        operatorId: demoOperator.id,
-        operatorName: demoOperator.fullName,
-        type: 'payment',
-        targetLabel: 'Демо Фарм',
-        description: 'Зафиксирован платёж по счёту СЧ-2026-09-001',
-      },
-      {
-        id: 'oa-2',
-        at: '2026-09-29T10:15:00Z',
-        operatorId: second.id,
-        operatorName: second.fullName,
-        type: 'key',
-        targetLabel: 'Демо Фарм №4',
-        description: 'Выдан лицензионный ключ на год',
-      },
-      {
-        id: 'oa-3',
-        at: '2026-09-28T08:05:00Z',
-        operatorId: demoOperator.id,
-        operatorName: demoOperator.fullName,
-        type: 'impersonation',
-        targetLabel: 'Пример Мед',
-        description: 'Сеанс «от имени» владельца: проверка обращения',
-      },
-      {
-        id: 'oa-4',
-        at: '2026-09-27T12:30:00Z',
-        operatorId: second.id,
-        operatorName: second.fullName,
-        type: 'service',
-        targetLabel: 'Демо Фарм',
-        description: 'Подтверждена услуга «Расширенная аналитика»',
-      },
-      {
-        id: 'oa-5',
-        at: '2026-09-25T07:00:00Z',
-        operatorId: demoOperator.id,
-        operatorName: demoOperator.fullName,
-        type: 'settings',
-        targetLabel: 'Платформа',
-        description: 'Изменено уведомление об окончании ключа: 7 дней',
-      },
-      {
-        id: 'oa-6',
-        at: '2026-09-20T09:45:00Z',
-        operatorId: demoOperator.id,
-        operatorName: demoOperator.fullName,
-        type: 'company',
-        targetLabel: 'Тест Аптека',
-        description: 'Создана компания и первая точка',
-      },
-      {
-        id: 'oa-7',
-        at: '2026-09-15T11:20:00Z',
-        operatorId: second.id,
-        operatorName: second.fullName,
-        type: 'key',
-        targetLabel: 'Пример Мед №2',
-        description: 'Отозван лицензионный ключ: замена при переустановке',
+        // a platform job, not an operator: the script that creates operators
+        ...auditEntry(
+          'oa-9',
+          '2026-09-10T05:00:00Z',
+          second,
+          'operator.code-issued',
+          {
+            operator: { id: second.id, name: second.fullName },
+            details: { created: 'true' },
+          },
+        ),
+        actor: { kind: 'system', job: 'create-operator' },
       },
     ],
     settings: {

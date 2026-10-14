@@ -49,13 +49,24 @@ function CompanyView() {
         subtitle={t('subtitle')}
       />
       <div className="flex flex-col gap-4 p-6">
-        <Link
-          href={routes.companies()}
-          className="inline-flex items-center gap-1 self-start text-sm text-primary hover:text-primary-hover"
-        >
-          <Icon name="arrow-left" size="sm" />
-          {t('back')}
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <Link
+            href={routes.companies()}
+            className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary-hover"
+          >
+            <Icon name="arrow-left" size="sm" />
+            {t('back')}
+          </Link>
+          {id && (
+            <Link
+              href={routes.companyAuditLog(id)}
+              className="inline-flex items-center gap-1 text-sm text-primary hover:text-primary-hover"
+            >
+              <Icon name="scroll-text" size="sm" />
+              {t('operatorActions')}
+            </Link>
+          )}
+        </div>
         <QueryState query={tenant}>
           {(company) => (
             <>

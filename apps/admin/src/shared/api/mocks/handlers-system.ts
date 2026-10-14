@@ -3,7 +3,6 @@
  * платформы», «Профиль» and the sidebar counters.
  */
 import type {
-  OperatorAuditEntry,
   OperatorQueueItem,
   UsageStoreRow,
   UsageTenantRow,
@@ -13,21 +12,22 @@ import { ApiError } from '../client';
 import { mockDb, mockStats } from './db';
 import { demoOperator } from './fixtures';
 import { notFound } from './helpers';
+import { auditEntry, type AuditRefs } from './operator-audit';
 import type { MockHandlers } from './types';
 
 const system = () => mockDb().system;
 const today = () => toAppDate();
 
-function logAction(
-  entry: Omit<OperatorAuditEntry, 'id' | 'at' | 'operatorId' | 'operatorName'>,
-) {
-  system().operatorAudit.unshift({
-    ...entry,
-    id: `oa-${Date.now()}`,
-    at: new Date().toISOString(),
-    operatorId: demoOperator.id,
-    operatorName: demoOperator.fullName,
-  });
+function logAction(action: string, refs: AuditRefs = {}) {
+  system().operatorAudit.unshift(
+    auditEntry(
+      `oa-${Date.now()}`,
+      new Date().toISOString(),
+      demoOperator,
+      action,
+      refs,
+    ),
+  );
 }
 
 function expiringLicenses() {
@@ -277,11 +277,7 @@ export const systemHandlers: Pick<
           : ('published' as const),
     };
     system().announcements.unshift(announcement);
-    logAction({
-      type: 'settings',
-      targetLabel: 'Платформа',
-      description: `Опубликовано объявление «${body.title}»`,
-    });
+    logAction('announcement.published');
     return announcement;
   },
   'announcements.cancel': ({ params, correlationId }) => {
@@ -290,11 +286,7 @@ export const systemHandlers: Pick<
     );
     if (!announcement) throw notFound(correlationId);
     announcement.status = 'cancelled';
-    logAction({
-      type: 'settings',
-      targetLabel: 'Платформа',
-      description: `Снято объявление «${announcement.title}»`,
-    });
+    logAction('announcement.cancelled');
     return announcement;
   },
   'me.notificationPreferences': () => system().preferences,
@@ -306,10 +298,14 @@ export const systemHandlers: Pick<
   'operatorAudit.list': ({ query }) => {
     const items = system().operatorAudit.filter(
       (entry) =>
-        (!query?.operatorId || entry.operatorId === query.operatorId) &&
+        (!query?.operatorId ||
+          (entry.actor.kind === 'operator' &&
+            entry.actor.operatorId === query.operatorId)) &&
+        (!query?.tenantId || entry.tenant?.id === query.tenantId) &&
         (!query?.type || entry.type === query.type) &&
-        (!query?.from || entry.at.slice(0, 10) >= query.from) &&
-        (!query?.to || entry.at.slice(0, 10) <= query.to),
+        // calendar days of the platform (Asia/Dushanbe), as apps/api
+        (!query?.from || toAppDate(new Date(entry.at)) >= query.from) &&
+        (!query?.to || toAppDate(new Date(entry.at)) <= query.to),
     );
     const limit = query?.limit ?? 20;
     const offset = query?.offset ?? 0;
@@ -324,11 +320,7 @@ export const systemHandlers: Pick<
   'settings.get': () => system().settings,
   'settings.update': ({ body }) => {
     system().settings = body;
-    logAction({
-      type: 'settings',
-      targetLabel: 'Платформа',
-      description: 'Изменены настройки платформы',
-    });
+    logAction('settings.updated');
     return body;
   },
   'operators.list': () => system().operators,
@@ -347,10 +339,8 @@ export const systemHandlers: Pick<
       status: 'active' as const,
     };
     system().operators.push(operator);
-    logAction({
-      type: 'settings',
-      targetLabel: 'Платформа',
-      description: `Добавлен оператор ${body.fullName}`,
+    logAction('operator.created', {
+      operator: { id: operator.id, name: operator.fullName },
     });
     return operator;
   },
@@ -360,10 +350,8 @@ export const systemHandlers: Pick<
     if (operator.id === demoOperator.id)
       throw new ApiError(409, 'cannot_disable_self', correlationId);
     operator.status = 'disabled';
-    logAction({
-      type: 'settings',
-      targetLabel: 'Платформа',
-      description: `Отключён оператор ${operator.fullName}`,
+    logAction('operator.disabled', {
+      operator: { id: operator.id, name: operator.fullName },
     });
     return operator;
   },
@@ -388,7 +376,10 @@ export const systemHandlers: Pick<
   },
   'me.activity': () =>
     system()
-      .operatorAudit.filter((entry) => entry.operatorId === demoOperator.id)
-      .slice(0, 5)
-      .map(({ id, at, description }) => ({ id, at, description })),
+      .operatorAudit.filter(
+        (entry) =>
+          entry.actor.kind === 'operator' &&
+          entry.actor.operatorId === demoOperator.id,
+      )
+      .slice(0, 5),
 };

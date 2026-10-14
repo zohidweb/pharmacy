@@ -340,6 +340,7 @@
     "title": "Компания",
     "subtitle": "Карточка клиента",
     "back": "Все компании",
+    "operatorActions": "Действия операторов по компании",
     "meta": "Владелец: {owner} · {phone} · {city} · на платформе с {since}",
     "inn": "ИНН {inn}",
     "blockedTitle": "Компания заблокирована",
@@ -957,16 +958,16 @@
     "typeLabel": "Тип действия",
     "allTypes": "Все типы",
     "types": {
+      "access": "Вход и доступ",
       "company": "Компания",
       "payment": "Оплата",
       "key": "Ключ",
       "service": "Услуга",
-      "impersonation": "Вход от имени",
       "settings": "Настройки"
     },
     "columns": {
       "at": "Когда",
-      "operator": "Оператор",
+      "operator": "Кто",
       "type": "Тип",
       "target": "Объект",
       "description": "Действие"
@@ -974,7 +975,46 @@
     "empty": "Записей по фильтру нет",
     "reset": "Сбросить фильтры",
     "pagesLabel": "Страницы журнала",
-    "note": "Записи нельзя изменить или удалить — ни из админки, ни в базе данных."
+    "note": "Записи нельзя изменить или удалить — ни из админки, ни в базе данных.",
+    "platform": "Платформа",
+    "companyFilter": "Компания: {name}",
+    "allCompanies": "Все компании",
+    "jobs": {
+      "operator-auth": "Вход в админку (система)",
+      "create-operator": "Скрипт создания оператора",
+      "operator-activation": "Первый вход оператора (система)",
+      "other": "Служебная задача «{job}»"
+    },
+    "reasons": {
+      "unknown_login": "неизвестный логин",
+      "invalid_password": "неверный пароль",
+      "no_password": "пароль ещё не задан",
+      "operator_blocked": "оператор отключён",
+      "missing_permission": "нет права",
+      "no_operator_permission_declared": "у маршрута не объявлено право"
+    },
+    "actions": {
+      "tenant_created": "Создана компания",
+      "tenant_owner-code-issued": "Выдан код активации владельцу",
+      "tenant_blocked": "Компания заблокирована",
+      "tenant_unblocked": "Компания разблокирована",
+      "auth_operator-login-succeeded": "Вход в админку",
+      "auth_operator-login-failed": "Неудачная попытка входа",
+      "operator_activated": "Задан первый пароль",
+      "operator_code-issued": "Выдан новый код первого входа",
+      "operator_code-issued-new": "Добавлен оператор, выдан код первого входа",
+      "operator_created": "Добавлен оператор",
+      "operator_disabled": "Отключён оператор",
+      "access_denied": "Отказано в доступе",
+      "payment_recorded": "Зафиксирован платёж",
+      "license_issued": "Выдан лицензионный ключ",
+      "license_revoked": "Отозван лицензионный ключ",
+      "service_request-approved": "Подтверждена услуга",
+      "settings_updated": "Изменены настройки платформы",
+      "announcement_published": "Опубликовано объявление",
+      "announcement_cancelled": "Снято объявление",
+      "unknown": "Событие {action}"
+    }
   },
   "settings": {
     "title": "Настройки платформы",

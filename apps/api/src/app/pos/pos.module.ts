@@ -11,6 +11,7 @@ import { DeploymentController } from './deployment.controller';
 import { HeldReceiptsController } from './held-receipts.controller';
 import { HeldReceiptsService } from './held-receipts.service';
 import { PosIdempotency } from './idempotency';
+import { PosAlerts } from './pos-alerts';
 import { PosContext } from './pos-context';
 import { PosShifts } from './pos-shifts';
 import { PosRepository } from './pos.repository';
@@ -61,7 +62,16 @@ import { SoldReceipts } from './sold-receipts';
     ShiftReturns,
     SoldReceipts,
     PosShifts,
+    PosAlerts,
   ],
-  exports: [PosContext, PosIdempotency, ShiftReturns, SoldReceipts, PosShifts],
+  // PosAlerts — the POS events of the notifications (spec 2026-10-14-owner-cabinet)
+  exports: [
+    PosContext,
+    PosIdempotency,
+    ShiftReturns,
+    SoldReceipts,
+    PosShifts,
+    PosAlerts,
+  ],
 })
 export class PosModule {}

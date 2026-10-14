@@ -8,6 +8,7 @@ import { PurchaseOrdersController } from './purchase-orders.controller';
 import { PurchaseOrdersRepository } from './purchase-orders.repository';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { PurchasingRepository } from './purchasing.repository';
+import { SupplierDues } from './supplier-dues';
 import { SupplierLedger } from './supplier-ledger';
 import { SuppliersController } from './suppliers.controller';
 import { SuppliersReader } from './suppliers-reader';
@@ -31,7 +32,9 @@ import { SuppliersService } from './suppliers.service';
     PurchaseOrdersRepository,
     PurchaseOrdersService,
     OrderReceiving,
+    SupplierDues,
   ],
-  exports: [SuppliersReader, SupplierLedger, OrderReceiving],
+  // SupplierDues — the payments coming due, for the notifications (spec 2026-10-14-owner-cabinet)
+  exports: [SuppliersReader, SupplierLedger, OrderReceiving, SupplierDues],
 })
 export class PurchasingModule {}

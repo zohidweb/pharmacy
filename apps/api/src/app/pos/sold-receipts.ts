@@ -171,7 +171,10 @@ export class SoldReceipts {
     );
   }
 
-  /** Lines of the sales of the products at the store on a business date, the newest first. */
+  /**
+   * Sales of the products at the store on a business date, the newest first: one row per receipt,
+   * product and sale unit — a product sold from two batches (FEFO) is one sale, not two.
+   */
   async salesOfProducts(
     trx: TenantTransaction,
     tenantId: string,
@@ -192,13 +195,16 @@ export class SoldReceipts {
       amount: string;
     }>`
       select r.id as receipt_id, r.number as receipt_number, r.sold_at, l.product_id,
-             l.sale_unit, l.qty_pieces, l.pieces_per_pack, l.line_amount_dirams::text as amount
+             l.sale_unit, sum(l.qty_pieces)::int as qty_pieces,
+             max(l.pieces_per_pack) as pieces_per_pack,
+             sum(l.line_amount_dirams)::text as amount
       from pharmacy.receipt_lines l
       join pharmacy.receipts r on r.tenant_id = l.tenant_id and r.id = l.receipt_id
       where l.tenant_id = ${tenantId} and r.store_id = ${storeId}
         and r.business_date = ${businessDate}::date
         and l.product_id in (${sql.join([...productIds])})
-      order by r.sold_at desc, l.line_no
+      group by r.id, r.number, r.sold_at, l.product_id, l.sale_unit
+      order by r.sold_at desc, min(l.line_no)
       limit ${limit}`.execute(trx);
     return result.rows.map((row) => ({
       receiptId: row.receiptId,

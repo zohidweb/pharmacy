@@ -13,10 +13,10 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
-  Matches,
   Max,
   MaxLength,
   Min,
@@ -24,12 +24,12 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 import { PosOperationContextDto, ReceiptPaymentDto } from '../../pos/dto/pos.dto';
 
 // Limits of spec 2026-10-13-customer-returns, section 4; the receipt, its lines, the shift and the
 // money are checked by the services.
 const MAX_MONEY_MINOR = 10_000_000_000;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const REASONS: ReturnReason[] = ['customer', 'defect'];
 
 export class ReturnLineDto implements ReturnLineInput {
@@ -106,7 +106,7 @@ export class SalesSearchQueryDto {
   @MaxLength(100)
   query!: string;
 
-  @Matches(DATE)
+  @IsCalendarDate()
   date!: string;
 }
 
@@ -152,6 +152,8 @@ export class ReturnPolicyDto implements ReturnPolicy {
   @Max(365)
   returnWindowDays!: number;
 
+  // ValidateNested lets a missing object through, and the service reads it: 400, not 500.
+  @IsObject()
   @ValidateNested()
   @Type(() => CustomerReturnsDto)
   customerReturns!: CustomerReturnsDto;

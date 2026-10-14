@@ -23,12 +23,12 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 
 // Limits of spec 2026-10-09-inventory-purchasing, sections 5.1–5.3; the uniqueness of the name is
 // checked by the service.
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
-const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const MAX_MONEY_MINOR = 10_000_000_000;
 
 /** POST /api/v1/suppliers, PUT /api/v1/suppliers/{id}. */
@@ -92,7 +92,7 @@ export class SupplierPaymentDto implements SupplierPaymentRequest {
   @Max(MAX_MONEY_MINOR)
   amountMinor!: number;
 
-  @Matches(DATE)
+  @IsCalendarDate()
   date!: string;
 
   @IsIn(['cash', 'bank'])
@@ -129,7 +129,7 @@ export class PurchaseOrderInputDto implements PurchaseOrderInput {
   storeId!: string;
 
   @ValidateIf((input: PurchaseOrderInputDto) => input.expectedOn !== null)
-  @Matches(DATE)
+  @IsCalendarDate()
   expectedOn!: string | null;
 
   @Transform(trim)

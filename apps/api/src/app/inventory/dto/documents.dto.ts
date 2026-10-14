@@ -14,19 +14,18 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Matches,
   Max,
   MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 
 // Limits of spec 2026-10-09-inventory-purchasing, section 4.1. Products, the supplier, the store
 // and the completeness of a document (at posting) are checked by the services.
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
-const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const MAX_MONEY_MINOR = 10_000_000_000;
 const MAX_PACKS = 100_000;
 const MAX_LINES = 500;
@@ -69,7 +68,7 @@ class StockLineBase {
   @MaxLength(60)
   batchNumber!: string;
 
-  @Matches(DATE)
+  @IsCalendarDate()
   expiresOn!: string;
 
   @IsInt()
@@ -99,7 +98,7 @@ export class GoodsReceiptLineDto extends StockLineBase {
 
 /** POST /api/v1/goods-receipts, PUT /api/v1/goods-receipts/{id}. */
 export class GoodsReceiptInputDto implements GoodsReceiptInput {
-  @Matches(DATE)
+  @IsCalendarDate()
   date!: string;
 
   @IsUUID()
@@ -118,7 +117,7 @@ export class GoodsReceiptInputDto implements GoodsReceiptInput {
   invoiceNumber!: string;
 
   @ValidateIf((input: GoodsReceiptInputDto) => input.paymentDueOn !== null)
-  @Matches(DATE)
+  @IsCalendarDate()
   paymentDueOn!: string | null;
 
   @IsArray()
@@ -141,7 +140,7 @@ export class OpeningBalanceLineDto extends StockLineBase {
 
 /** POST /api/v1/opening-balances, PUT /api/v1/opening-balances/{id}. */
 export class OpeningBalanceInputDto implements OpeningBalanceInput {
-  @Matches(DATE)
+  @IsCalendarDate()
   date!: string;
 
   @IsUUID()

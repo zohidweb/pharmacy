@@ -35,6 +35,7 @@ import {
 } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { useInvalidateTransfers, useProductsByIds } from '../api/queries';
+import { useLineProblem } from './use-line-problem';
 
 type Store = TransferOverview['stores'][number];
 
@@ -235,7 +236,10 @@ export function TransferDialog({
       onClose();
     },
   });
-  const error = useApiErrorMessage(save.error ?? cancel.error ?? draft.error);
+  const failure = save.error ?? cancel.error ?? draft.error;
+  const lineProblem = useLineProblem(failure);
+  const generic = useApiErrorMessage(lineProblem ? null : failure);
+  const error = lineProblem ?? generic;
   const valid =
     Boolean(toStoreId) &&
     current.length > 0 &&
@@ -626,9 +630,10 @@ export function TransferDetailDialog({
       apiRequest('transfers.recall', { params: { id: transferId } }),
     onSuccess: update,
   });
-  const error = useApiErrorMessage(
-    accept.error ?? recall.error ?? transfer.error,
-  );
+  const failure = accept.error ?? recall.error ?? transfer.error;
+  const lineProblem = useLineProblem(failure);
+  const generic = useApiErrorMessage(lineProblem ? null : failure);
+  const error = lineProblem ?? generic;
   // the shortage by unit: «−2 уп.», «−2 уп., −3 шт.»
   const missing = (['pack', 'piece'] as const)
     .map((unit) => {

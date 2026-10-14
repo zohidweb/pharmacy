@@ -532,6 +532,13 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
     const { session } = authorize(correlationId, 'returns:create');
     if (query.productId) authorize(correlationId, 'returns:without-receipt');
     const receipt = findReturnable(query, session.stores, correlationId);
+    // as apps/api: a product the receipt did not sell is no such sale
+    if (
+      query.productId &&
+      !receipt.lines.some((l) => l.productId === query.productId)
+    ) {
+      throw new ApiError(404, 'not_found', correlationId);
+    }
     const window = mockDb().owner.returnPolicy.returnWindowDays;
     const age = daysBetween(toAppDate(new Date(receipt.soldAt)), today());
     return {

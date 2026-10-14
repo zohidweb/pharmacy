@@ -104,6 +104,10 @@ export class ReturnableService {
       const lines = receipt.lines.filter(
         (line) => productId === null || line.productId === productId,
       );
+      // A product the receipt did not sell: no such sale, not a receipt without lines.
+      if (productId !== null && lines.length === 0) {
+        throw new ProblemException(404, 'not_found');
+      }
       return {
         id: receipt.id,
         number: receipt.number,

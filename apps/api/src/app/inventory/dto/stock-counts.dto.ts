@@ -14,18 +14,17 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Matches,
   Max,
   MaxLength,
   Min,
   ValidateIf,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 
 // Limits of spec 2026-10-12-write-offs-stock-counts, section 5; the scope, the line and the rights
 // are checked by the service.
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
-const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 /** POST /api/v1/stock-counts. */
 export class StartStockCountDto implements StartStockCountRequest {
@@ -76,7 +75,7 @@ export class FoundLineDto implements FoundLineInput {
   batchNumber!: string;
 
   @ValidateIf((input: FoundLineDto) => input.expiresOn !== null)
-  @Matches(DATE)
+  @IsCalendarDate()
   expiresOn!: string | null;
 
   /** A pack; taken only with `finance:view-cost`. */

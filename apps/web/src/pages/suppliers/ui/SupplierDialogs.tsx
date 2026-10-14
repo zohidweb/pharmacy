@@ -450,7 +450,13 @@ export function PaymentDialog({
           <Button
             iconStart="wallet"
             loading={pay.isPending}
-            disabled={amountError !== null || (choosePayer && !legalEntityId)}
+            // until the legal entities are known it is not clear whether a payer is needed; a
+            // failed request (no right to see them) leaves it to the server: the only one
+            disabled={
+              amountError !== null ||
+              entities.isPending ||
+              (choosePayer && !legalEntityId)
+            }
             onClick={() => pay.mutate()}
           >
             {t('confirm')}
@@ -485,8 +491,13 @@ export function PaymentDialog({
           inputMode="decimal"
           value={amountText}
           error={amountError ?? undefined}
+          // The debt is the supplier's over all legal entities: with several payers the excess
+          // over it says nothing of the chosen one's debt, so the hint is not shown (triage pur-M3).
           hint={
-            amount !== null && amount > debt
+            !entities.isPending &&
+            !choosePayer &&
+            amount !== null &&
+            amount > debt
               ? t('prepaymentHint', {
                   amount: formatMoney(amount - debt),
                 })

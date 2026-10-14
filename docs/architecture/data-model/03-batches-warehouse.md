@@ -208,6 +208,8 @@ erDiagram
 | `origin` | text | `local` / `cloud_snapshot` (переносящие движения флеш-комплекта, ADR-0014 §4) |
 | `reverses_movement_id` | uuid null | Есть у `reversal` и только у него: `check ((kind = 'reversal') = (reverses_movement_id is not null))` (миграция `db-guards`, 2026-10-14); существование движения проверяет приложение (секционированная таблица) |
 
+Только добавление: запрет UPDATE/DELETE (строковый триггер) клонируется на секции сам, запрет TRUNCATE стоит на родителе и на каждой секции (`stock_movements_no_truncate`, миграция `db-guards`); секция, созданная позже, получает тот же триггер.
+
 Индексы: `(tenant_id, store_id, batch_id) include (qty_delta_pieces)` — остаток партии без чтения таблицы; `(tenant_id, source_id)`; `(tenant_id, store_id, business_date)`.
 
 Правила:

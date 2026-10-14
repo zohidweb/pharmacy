@@ -160,7 +160,7 @@ erDiagram
 | **Перемещение, заявка** | | |
 | `destination_store_id` | uuid null | Обязателен для `transfer`, `transfer_request`; ≠ `store_id` |
 | `request_document_id` | uuid null | Перемещение по заявке |
-| `dispatched_at`, `received_at`, `received_by` | null | |
+| `dispatched_at`, `dispatched_by`, `received_at`, `received_by` | null | Индексы `(tenant_id, dispatched_by)`, `(tenant_id, received_by)` — как у остальных ссылок на сотрудника |
 | **Инвентаризация** | | |
 | `inventory_scope` | text null | `all` / `category` / `selected` |
 | `inventory_category_id` | uuid null | |
@@ -206,7 +206,9 @@ erDiagram
 | `business_date` | date | Дата документа или продажи (для отчётов «на дату» и ПКУ) |
 | `recorded_at` | timestamptz | Время записи |
 | `origin` | text | `local` / `cloud_snapshot` (переносящие движения флеш-комплекта, ADR-0014 §4) |
-| `reverses_movement_id` | uuid null | Для `reversal`; ссылку проверяет приложение (секционированная таблица) |
+| `reverses_movement_id` | uuid null | Есть у `reversal` и только у него: `check ((kind = 'reversal') = (reverses_movement_id is not null))` (миграция `db-guards`, 2026-10-14); существование движения проверяет приложение (секционированная таблица) |
+
+Только добавление: запрет UPDATE/DELETE (строковый триггер) клонируется на секции сам, запрет TRUNCATE стоит на родителе и на каждой секции (`stock_movements_no_truncate`, миграция `db-guards`); секция, созданная позже, получает тот же триггер.
 
 Индексы: `(tenant_id, store_id, batch_id) include (qty_delta_pieces)` — остаток партии без чтения таблицы; `(tenant_id, source_id)`; `(tenant_id, store_id, business_date)`.
 

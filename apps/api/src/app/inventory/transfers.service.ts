@@ -243,7 +243,10 @@ export class TransfersService {
     });
   }
 
-  /** The receiver: 403 out of its scope, 409 `transfer_not_in_transit`. */
+  /**
+   * The receiver: 403 out of its scope, 409 `transfer_not_in_transit`; 409 `transfer_changed` when
+   * the transfer was sent again (recalled and changed) since the card was read.
+   */
   async accept(id: string, body: AcceptTransferRequest): Promise<Transfer> {
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
@@ -255,6 +258,14 @@ export class TransfersService {
       );
       if (doc.status !== 'in_transit') {
         throw new ProblemException(409, 'transfer_not_in_transit');
+      }
+      // the quantities were filled for this dispatch, not an earlier one (milliseconds: the
+      // precision of the card)
+      if (
+        doc.dispatchedAt === null ||
+        doc.dispatchedAt.getTime() !== Date.parse(body.dispatchedAt)
+      ) {
+        throw new ProblemException(409, 'transfer_changed');
       }
       await this.posting.accept(
         trx,

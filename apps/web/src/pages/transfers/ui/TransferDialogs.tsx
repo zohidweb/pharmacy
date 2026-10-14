@@ -33,7 +33,7 @@ import {
   QuantityInput,
   type StockAccess,
 } from '@/features/stock-document';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { useInvalidateTransfers, useProductsByIds } from '../api/queries';
 import { useLineProblem } from './use-line-problem';
 
@@ -611,6 +611,7 @@ export function TransferDetailDialog({
       apiRequest('transfers.accept', {
         params: { id: transferId },
         body: {
+          dispatchedAt: doc?.sentBy?.at ?? '',
           comment: comment.trim(),
           lines: (doc?.lines ?? []).map((l) => ({
             batchId: l.batchId,
@@ -619,6 +620,14 @@ export function TransferDetailDialog({
         },
       }),
     onSuccess: update,
+    onError: (error) => {
+      // sent again since the card was read: the new lines, the quantities filled from scratch
+      if (error instanceof ApiError && error.code === 'transfer_changed') {
+        setReceived({});
+        setTouched(false);
+        void transfer.refetch();
+      }
+    },
   });
   // every line needs its actual quantity: an empty field is never taken for zero
   const incomplete = (doc?.lines ?? []).some((l) => {

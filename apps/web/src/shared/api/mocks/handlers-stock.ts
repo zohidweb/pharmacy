@@ -2114,6 +2114,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       throw new ApiError(409, 'transfer_not_in_transit', correlationId);
     }
     writable(session, doc.toStoreId, correlationId);
+    if (body.dispatchedAt !== doc.sentBy?.at) {
+      throw new ApiError(409, 'transfer_changed', correlationId);
+    }
     const received = doc.lines.map((line, i) => {
       const given = body.lines.filter((l) => l.batchId === line.batchId);
       const value = given[0]?.receivedQuantity;

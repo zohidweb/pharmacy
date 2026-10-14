@@ -14,6 +14,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
   IsUUID,
@@ -133,6 +134,9 @@ export class AcceptTransferLineDto {
 
 /** POST /api/v1/transfers/{id}/acceptance. */
 export class AcceptTransferDto implements AcceptTransferRequest {
+  @IsISO8601({ strict: true })
+  dispatchedAt!: string;
+
   @Transform(trim)
   @IsString()
   @MaxLength(500)

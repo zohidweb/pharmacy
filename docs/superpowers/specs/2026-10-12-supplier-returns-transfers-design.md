@@ -214,7 +214,9 @@ ADR-0018 (права и охват).
 - **Отзыв** (`in_transit` → `draft`): заморозка отправителя, закрытый период по дате документа; сторно движений
   отправки (`reversal`); заявка снова `in_progress`; аудит. Иначе 409 `transfer_not_in_transit`.
 - **Приёмка** (`in_transit` → `received`, одна транзакция): точка-получатель в охвате; заголовок `FOR NO KEY
-  UPDATE` (гонка с отзывом и второй приёмкой → 409 `transfer_not_in_transit`); `lines` — каждая строка документа
+  UPDATE` (гонка с отзывом и второй приёмкой → 409 `transfer_not_in_transit`); `dispatchedAt` — время отправки
+  из открытой карточки (`sentBy.at`): если перемещение с тех пор отозвали и отправили заново, 409
+  `transfer_changed` и карточка перечитывается; `lines` — каждая строка документа
   ровно один раз с количеством 0…отправленного в единицах строки; комментарий ≤ 500; заморозка получателя по
   товарам с количеством > 0 (409 `stock_count_in_progress`); закрытый период юрлица получателя по бизнес-дате;
   для каждой строки с количеством > 0 — **новая партия получателя** (`origin = 'transfer'`, `source_batch_id`,
@@ -261,7 +263,7 @@ ADR-0018 (права и охват).
 | 400 | `validation_failed` с `errors[]` (в т.ч. `wrong_supplier`, `not_requested`, `exceeds_request`) |
 | 403 | `forbidden`, `store_not_in_scope` |
 | 404 | `not_found` |
-| 409 | `document_posted`, `document_not_posted`, `document_cancelled`, `unpost_blocked`, `offline_store_read_only`, `stock_insufficient`, `stock_count_in_progress`, `supplier_archived`, `request_not_open`, `request_has_transfer`, `transfer_not_in_transit`, `write_off_from_transfer` |
+| 409 | `document_posted`, `document_not_posted`, `document_cancelled`, `unpost_blocked`, `offline_store_read_only`, `stock_insufficient`, `stock_count_in_progress`, `supplier_archived`, `request_not_open`, `request_has_transfer`, `transfer_not_in_transit`, `transfer_changed`, `write_off_from_transfer` |
 | 422 | `validation_failed` (дата), `period_closed` |
 
 ## 8. Web (`apps/web`)

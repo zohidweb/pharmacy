@@ -357,6 +357,11 @@ export class TransferPosting {
               !reversed.has(m.id),
           )
           .at(-1);
+        // a transfer in transit has a live dispatch of every line (a reversal names what it
+        // reverses — a check of stock_movements); without one the data is broken
+        if (!dispatch) {
+          throw new Error(`No live dispatch of the transfer line ${line.id}`);
+        }
         return {
           storeId: doc.storeId,
           batchId: line.sourceBatchId,
@@ -365,7 +370,7 @@ export class TransferPosting {
           sourceId: doc.id,
           sourceLineId: line.id,
           businessDate: today,
-          reversesMovementId: dispatch?.id ?? null,
+          reversesMovementId: dispatch.id,
         };
       }),
     );

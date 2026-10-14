@@ -76,6 +76,7 @@ export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
   'audit_log',
   'stock_movements',
   'supplier_ledger_entries',
+  'supplier_payments',
   'shift_cash_operations',
   'receipts',
   'receipt_lines',

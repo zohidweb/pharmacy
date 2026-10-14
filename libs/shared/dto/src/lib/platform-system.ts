@@ -263,7 +263,8 @@ export interface CreateOperatorResponse {
 /**
  * 201 from POST /operator/operators/{id}/activation-codes — a new one-time code (a lost or expired
  * code, a forgotten password): the old code stops working, a password stays until the new code is
- * used. 404, 409 `operator_disabled`, 403 `fresh_auth_required`.
+ * used. 400 for an id that is not a UUID, 404, 409 `cannot_issue_self` (a code would set one's own
+ * password without the current one), 409 `operator_disabled`, 403 `fresh_auth_required`.
  */
 export interface IssueOperatorCodeResponse {
   activationCode: string;
@@ -278,7 +279,7 @@ export interface OperatorMe extends OperatorProfile {
   lastLoginAt: string | null;
 }
 
-/** PATCH /operator/me — the name and the interface language. */
+/** PATCH /operator/me — the name (printable, 1–200 characters) and the interface language. */
 export interface UpdateMeRequest {
   fullName: string;
   locale: UiLocale;

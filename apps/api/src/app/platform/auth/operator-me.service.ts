@@ -91,14 +91,26 @@ export class OperatorMeService {
     return operatorMe(profile);
   }
 
-  /** The name and the interface language; the admin applies the language itself. */
+  /**
+   * The name and the interface language; the admin applies the language itself. A new name is
+   * audited (without the names): the log shows every past event under the current name.
+   */
   async update(fullName: string, locale: UiLocale): Promise<OperatorMe> {
     const actor = this.actor();
     const profile = await this.db.platformTransaction(actor, async (trx) => {
+      const before = await this.repository.findProfile(trx, actor.operatorId);
+      if (before === null) return null;
       await this.repository.updateProfile(trx, actor.operatorId, {
         fullName,
         language: dbLanguage(locale),
       });
+      if (before.fullName !== fullName) {
+        await this.audit.append(trx, {
+          action: 'operator.renamed',
+          entityType: 'operator',
+          entityId: actor.operatorId,
+        });
+      }
       return this.repository.findProfile(trx, actor.operatorId);
     });
     if (profile === null) throw unauthenticated();
@@ -136,8 +148,12 @@ export class OperatorMeService {
       throw unauthenticated();
     const { passwordHash: phc, passwordPepperVersion: pepperVersion } =
       credentials;
-    if (phc === null || pepperVersion === null) throw invalidCurrentPassword();
-    if (!(await this.hasher.verify(currentPassword, phc, pepperVersion))) {
+    if (
+      phc === null ||
+      pepperVersion === null ||
+      !(await this.hasher.verify(currentPassword, phc, pepperVersion))
+    ) {
+      await this.auditWrongCurrentPassword(operatorId);
       throw invalidCurrentPassword();
     }
     await this.limiter.reset(limiterKey);
@@ -177,6 +193,10 @@ export class OperatorMeService {
     const stored = { session: false };
     try {
       await this.db.platformTransaction(actor, async (trx) => {
+        // Disabled since the check above: no new password and no new session for him.
+        if (!(await this.repository.lockActive(trx, operatorId))) {
+          throw unauthenticated();
+        }
         const changed = await this.repository.changePassword(
           trx,
           operatorId,
@@ -236,6 +256,27 @@ export class OperatorMeService {
   async endOtherSessions(): Promise<void> {
     const { operatorId, sessionId } = requireOperator();
     await this.sessions.destroyAllFor(operatorId, sessionId);
+  }
+
+  // A wrong current password is audited like a failed sign-in: guessing from a hijacked session
+  // shows in the log. Its own transaction; a failure is logged, the answer stays the same 422.
+  private async auditWrongCurrentPassword(operatorId: string): Promise<void> {
+    try {
+      await this.db.platformTransaction(
+        { kind: 'operator', operatorId },
+        (trx) =>
+          this.audit.append(trx, {
+            action: 'auth.operator-password-change-failed',
+            entityType: 'operator',
+            entityId: operatorId,
+            details: { reason: 'invalid_password' },
+          }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Could not write the auth.operator-password-change-failed audit (${error instanceof Error ? error.name : typeof error}) [correlationId=${getRequestContext()?.correlationId}]`,
+      );
+    }
   }
 
   private async discard(sessionId: string): Promise<void> {

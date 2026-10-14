@@ -19,4 +19,20 @@ export class OperatorAuditLogService {
     );
     return { items, total, limit: filter.limit, offset: filter.offset };
   }
+
+  /** The newest events the reading operator did himself, without counting his whole history. */
+  recent(limit: number): Promise<OperatorAuditEntry[]> {
+    const operatorId = requireOperator().operatorId;
+    return this.db.platformTransaction({ kind: 'operator', operatorId }, (trx) =>
+      this.repository.entries(trx, {
+        operatorId,
+        tenantId: null,
+        type: null,
+        from: null,
+        to: null,
+        limit,
+        offset: 0,
+      }),
+    );
+  }
 }

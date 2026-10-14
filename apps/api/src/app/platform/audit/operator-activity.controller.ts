@@ -1,6 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
 import type { OperatorAuditEntry } from '@pharmacy/shared-dto';
-import { requireOperator } from '../../../common/context/request-context';
 import { RequireOperatorPermission } from '../auth/decorators';
 import { OperatorAuditLogService } from './operator-audit.service';
 
@@ -14,16 +13,7 @@ export class OperatorActivityController {
 
   @RequireOperatorPermission('platform:view')
   @Get()
-  async list(): Promise<OperatorAuditEntry[]> {
-    const page = await this.audit.list({
-      operatorId: requireOperator().operatorId,
-      tenantId: null,
-      type: null,
-      from: null,
-      to: null,
-      limit: RECENT,
-      offset: 0,
-    });
-    return page.items;
+  list(): Promise<OperatorAuditEntry[]> {
+    return this.audit.recent(RECENT);
   }
 }

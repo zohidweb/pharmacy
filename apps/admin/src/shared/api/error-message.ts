@@ -17,6 +17,7 @@ const knownCodes = [
   'license_exists',
   'license_revoked',
   'validation_failed',
+  'conflict',
   'login_taken',
   'cannot_disable_self',
   'cannot_issue_self',

@@ -7,6 +7,27 @@ export interface OperatorCredentialsRow {
   status: string;
   passwordHash: string | null;
   passwordPepperVersion: number | null;
+  /** Moved by an activation and a password change, not by a re-hash. */
+  passwordChangedAt: Date | null;
+}
+
+function toCredentials(row: {
+  id: string;
+  status: string;
+  passwordHash: string | null;
+  passwordPepperVersion: number | null;
+  passwordChangedAt: Date | string | null;
+}): OperatorCredentialsRow {
+  return {
+    id: row.id,
+    status: row.status,
+    passwordHash: row.passwordHash ?? null,
+    passwordPepperVersion: row.passwordPepperVersion ?? null,
+    passwordChangedAt:
+      row.passwordChangedAt === null || row.passwordChangedAt === undefined
+        ? null
+        : new Date(row.passwordChangedAt),
+  };
 }
 
 export interface OperatorProfileRow {
@@ -40,16 +61,11 @@ export class OperatorAuthRepository {
         'operators.status',
         'operatorCredentials.passwordHash',
         'operatorCredentials.passwordPepperVersion',
+        'operatorCredentials.passwordChangedAt',
       ])
       .where(sql`lower(operators.login)`, '=', login)
       .executeTakeFirst();
-    if (!row) return null;
-    return {
-      id: row.id,
-      status: row.status,
-      passwordHash: row.passwordHash ?? null,
-      passwordPepperVersion: row.passwordPepperVersion ?? null,
-    };
+    return row ? toCredentials(row) : null;
   }
 
   async findProfile(
@@ -85,16 +101,11 @@ export class OperatorAuthRepository {
         'operators.status',
         'operatorCredentials.passwordHash',
         'operatorCredentials.passwordPepperVersion',
+        'operatorCredentials.passwordChangedAt',
       ])
       .where('operators.id', '=', operatorId)
       .executeTakeFirst();
-    if (!row) return null;
-    return {
-      id: row.id,
-      status: row.status,
-      passwordHash: row.passwordHash ?? null,
-      passwordPepperVersion: row.passwordPepperVersion ?? null,
-    };
+    return row ? toCredentials(row) : null;
   }
 
   async updateProfile(
@@ -111,6 +122,44 @@ export class OperatorAuthRepository {
       })
       .where('id', '=', operatorId)
       .execute();
+  }
+
+  /**
+   * The time of the last password change, holding the credentials row to the commit: a sign-in
+   * that verified a password compares it, so a password changed (or set by a code) meanwhile is
+   * refused, and a change that comes later waits and then ends the new session. A re-hash does
+   * not move the time, so concurrent sign-ins that re-hash do not refuse each other.
+   */
+  async lockPasswordChange(
+    trx: Transaction<DB>,
+    operatorId: string,
+  ): Promise<{ changedAt: Date | null } | null> {
+    const row = await trx
+      .selectFrom('operatorCredentials')
+      .select('passwordChangedAt')
+      .where('operatorId', '=', operatorId)
+      .forNoKeyUpdate()
+      .executeTakeFirst();
+    if (!row) return null;
+    return {
+      changedAt:
+        row.passwordChangedAt === null ? null : new Date(row.passwordChangedAt),
+    };
+  }
+
+  /**
+   * Whether the operator is active, holding his row FOR SHARE to the commit: a concurrent disable
+   * (FOR UPDATE) waits, or has already committed and is seen. Taken before operator_credentials,
+   * the order of every writer of both tables.
+   */
+  async lockActive(trx: Transaction<DB>, operatorId: string): Promise<boolean> {
+    const row = await trx
+      .selectFrom('operators')
+      .select('status')
+      .where('id', '=', operatorId)
+      .forShare()
+      .executeTakeFirst();
+    return row?.status === 'active';
   }
 
   /**

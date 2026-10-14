@@ -6,8 +6,9 @@ import type {
   UpdateMeRequest,
 } from '@pharmacy/shared-dto';
 import { Transform } from 'class-transformer';
-import { IsIn, IsString, Length, MaxLength } from 'class-validator';
+import { IsIn, IsString, Length, Matches, MaxLength } from 'class-validator';
 import { uiLocales } from '../../../auth/dto/me.dto';
+import { PRINTABLE_NAME } from '../../operators/dto/operator.dto';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -48,6 +49,7 @@ export class UpdateOperatorMeDto implements UpdateMeRequest {
   @Transform(trim)
   @IsString()
   @Length(1, 200)
+  @Matches(PRINTABLE_NAME)
   fullName!: string;
 
   @IsIn(uiLocales)

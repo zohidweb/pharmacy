@@ -78,12 +78,21 @@ export class OperatorAuditRepository {
     trx: Transaction<DB>,
     filter: OperatorAuditFilter,
   ): Promise<{ items: OperatorAuditEntry[]; total: number }> {
-    const where = this.conditions(filter);
     const count = await trx
       .selectFrom('platformAuditLog as l')
       .select(sql<string>`count(*)`.as('total'))
-      .where(where)
+      .where(this.conditions(filter))
       .executeTakeFirstOrThrow();
+    const items = await this.entries(trx, filter);
+    return { items, total: Number(count.total) };
+  }
+
+  /** One page of the filtered log, newest first, without the total. */
+  async entries(
+    trx: Transaction<DB>,
+    filter: OperatorAuditFilter,
+  ): Promise<OperatorAuditEntry[]> {
+    const where = this.conditions(filter);
     const rows = await trx
       .selectFrom('platformAuditLog as l')
       .leftJoin('operators as actor', 'actor.id', 'l.operatorId')
@@ -117,7 +126,7 @@ export class OperatorAuditRepository {
       .offset(filter.offset)
       .execute();
 
-    const items = rows.map(
+    return rows.map(
       (row): OperatorAuditEntry => ({
         id: row.id,
         at: new Date(row.recordedAt).toISOString(),
@@ -133,7 +142,6 @@ export class OperatorAuditRepository {
         details: shownDetails(row.details),
       }),
     );
-    return { items, total: Number(count.total) };
   }
 
   private conditions(filter: OperatorAuditFilter): RawBuilder<SqlBool> {

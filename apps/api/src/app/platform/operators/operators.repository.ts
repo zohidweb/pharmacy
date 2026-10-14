@@ -48,15 +48,21 @@ export class OperatorsRepository {
     return row ? toOperator(row) : null;
   }
 
-  /** `active` / `blocked`, or null for an unknown operator; the row stays locked to the commit. */
-  async lockStatus(trx: Transaction<DB>, operatorId: string): Promise<string | null> {
-    const row = await trx
+  /**
+   * `active` / `blocked` of the operators found, their rows locked FOR UPDATE to the commit in id
+   * order (one order for every caller, no deadlock); ids come back in the canonical form.
+   */
+  async lockStatuses(
+    trx: Transaction<DB>,
+    operatorIds: string[],
+  ): Promise<Array<{ id: string; status: string }>> {
+    return trx
       .selectFrom('operators')
-      .select('status')
-      .where('id', '=', operatorId)
+      .select(['id', 'status'])
+      .where('id', 'in', operatorIds)
+      .orderBy('id')
       .forUpdate()
-      .executeTakeFirst();
-    return row?.status ?? null;
+      .execute();
   }
 
   /** A new operator without a password, with a one-time code for the first sign-in. */

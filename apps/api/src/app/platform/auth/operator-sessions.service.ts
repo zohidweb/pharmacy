@@ -35,7 +35,8 @@ type FailureReason =
   | 'unknown_login'
   | 'invalid_password'
   | 'no_password'
-  | 'operator_blocked';
+  | 'operator_blocked'
+  | 'password_changed';
 
 const SIGN_IN_JOB = { kind: 'system', job: 'operator-auth' } as const;
 
@@ -46,6 +47,18 @@ class OperatorGoneError extends Error {
     this.name = 'OperatorGoneError';
   }
 }
+
+// The password was changed (or set by a code) between the check and the session: the verified
+// password is not the operator's any more.
+class PasswordChangedError extends Error {
+  constructor() {
+    super('The password changed during the sign-in');
+    this.name = 'PasswordChangedError';
+  }
+}
+
+const sameInstant = (a: Date | null, b: Date | null): boolean =>
+  a === null || b === null ? a === b : a.getTime() === b.getTime();
 
 // One answer for every failure: an unknown login and a wrong password are indistinguishable.
 const invalidCredentials = () => new ProblemException(401, 'invalid_credentials');
@@ -167,10 +180,18 @@ export class OperatorSessionsService {
       profile = await this.db.platformTransaction(
         { kind: 'operator', operatorId },
         async (trx) => {
+          // operators before operator_credentials, as in every writer of both (a new code, a
+          // password change): the opposite order could deadlock with them.
+          await this.repository.recordLogin(trx, operatorId);
+          // A password changed after the check would otherwise leave this session alive: the
+          // change ends the sessions it finds, and this one is stored only now.
+          const current = await this.repository.lockPasswordChange(trx, operatorId);
+          if (current === null || !sameInstant(current.changedAt, found.passwordChangedAt)) {
+            throw new PasswordChangedError();
+          }
           if (rehash !== null) {
             await this.repository.updatePasswordHash(trx, operatorId, verifiedPhc, rehash);
           }
-          await this.repository.recordLogin(trx, operatorId);
           await this.audit.append(trx, {
             action: 'auth.operator-login-succeeded',
             entityType: 'operator',
@@ -199,6 +220,9 @@ export class OperatorSessionsService {
       if (stored.session) await this.discard(sessionId);
       // The operator of the verified password is gone: the same answer as an unknown login.
       if (error instanceof OperatorGoneError) return this.fail(operatorId, 'unknown_login', ip);
+      if (error instanceof PasswordChangedError) {
+        return this.fail(operatorId, 'password_changed', ip);
+      }
       throw error;
     }
 

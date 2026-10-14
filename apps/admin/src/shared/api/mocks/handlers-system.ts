@@ -400,15 +400,25 @@ export const systemHandlers: Pick<
   'me.get': () => system().me,
   'me.update': ({ body }) => {
     const fullName = body.fullName.trim();
+    const self = { id: demoOperator.id, name: fullName };
+    if (fullName !== system().me.fullName) {
+      logAction('operator.renamed', { operator: self });
+    }
     Object.assign(system().me, { fullName, locale: body.locale });
     // The team list reads the same operator, as apps/api does.
-    const self = system().operators.find((item) => item.id === demoOperator.id);
-    if (self) self.fullName = fullName;
+    const listed = system().operators.find(
+      (item) => item.id === demoOperator.id,
+    );
+    if (listed) listed.fullName = fullName;
     return system().me;
   },
   // As apps/api: the current password first (a field error), then the policy of the new one.
   'me.changePassword': ({ body, correlationId }) => {
     if (body.currentPassword !== system().password) {
+      logAction('auth.operator-password-change-failed', {
+        operator: { id: demoOperator.id, name: system().me.fullName },
+        details: { reason: 'invalid_password' },
+      });
       throw new ApiError(422, 'invalid_current_password', correlationId, [
         { field: 'currentPassword', code: 'invalid_current_password' },
       ]);

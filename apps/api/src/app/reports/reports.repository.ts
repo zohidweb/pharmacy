@@ -43,4 +43,45 @@ export class ReportsRepository {
       order by name, id`.execute(trx);
     return result.rows;
   }
+
+  /** Language maps of the names of the products. */
+  async productNames(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, unknown>> {
+    if (ids.length === 0) return new Map();
+    const result = await sql<{ id: string; name: unknown }>`
+      select id, name from pharmacy.products
+      where tenant_id = ${tenantId} and id = any(${sql.val([...ids])}::uuid[])`.execute(
+      trx,
+    );
+    return new Map(result.rows.map((row) => [row.id, row.name]));
+  }
+
+  /** Language maps of the names of every category of the network. */
+  async categoryNames(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<Map<string, unknown>> {
+    const result = await sql<{ id: string; name: unknown }>`
+      select id, name from pharmacy.categories where tenant_id = ${tenantId}`.execute(
+      trx,
+    );
+    return new Map(result.rows.map((row) => [row.id, row.name]));
+  }
+
+  async employeeNames(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const result = await sql<{ id: string; fullName: string }>`
+      select id, full_name from pharmacy.employees
+      where tenant_id = ${tenantId} and id = any(${sql.val([...ids])}::uuid[])`.execute(
+      trx,
+    );
+    return new Map(result.rows.map((row) => [row.id, row.fullName]));
+  }
 }

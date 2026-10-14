@@ -173,7 +173,7 @@ export class SalesFigures {
         where r.tenant_id = ${tenantId}
           and r.store_id = any(${stores(storeIds)}::uuid[])
           and r.business_date between ${from}::date and ${to}::date
-        group by r.id
+        group by r.id, r.cashier_id, r.store_id, r.change_dirams
       )
       select cashier_id, store_id, count(*)::integer as receipts,
              sum(cash - change_dirams) as cash_minor, sum(card) as card_minor,

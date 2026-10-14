@@ -171,7 +171,10 @@ export class SoldReceipts {
     );
   }
 
-  /** Lines of the sales of the products at the store on a business date, the newest first. */
+  /**
+   * Sales of the products at the store on a business date, the newest first: one row per receipt,
+   * product and sale unit — a product sold from two batches (FEFO) is one sale, not two.
+   */
   async salesOfProducts(
     trx: TenantTransaction,
     tenantId: string,
@@ -187,18 +190,22 @@ export class SoldReceipts {
       soldAt: Date;
       productId: string;
       saleUnit: 'pack' | 'piece';
-      qtyPieces: number;
-      piecesPerPack: number;
+      quantity: number;
       amount: string;
     }>`
       select r.id as receipt_id, r.number as receipt_number, r.sold_at, l.product_id,
-             l.sale_unit, l.qty_pieces, l.pieces_per_pack, l.line_amount_dirams::text as amount
+             l.sale_unit,
+             -- each line in its own unit: the pieces per pack of a snapshot may differ by line
+             sum(case when l.sale_unit = 'pack' then l.qty_pieces / l.pieces_per_pack
+                      else l.qty_pieces end)::int as quantity,
+             sum(l.line_amount_dirams)::text as amount
       from pharmacy.receipt_lines l
       join pharmacy.receipts r on r.tenant_id = l.tenant_id and r.id = l.receipt_id
       where l.tenant_id = ${tenantId} and r.store_id = ${storeId}
         and r.business_date = ${businessDate}::date
         and l.product_id in (${sql.join([...productIds])})
-      order by r.sold_at desc, l.line_no
+      group by r.id, r.number, r.sold_at, l.product_id, l.sale_unit
+      order by r.sold_at desc, min(l.line_no)
       limit ${limit}`.execute(trx);
     return result.rows.map((row) => ({
       receiptId: row.receiptId,
@@ -206,10 +213,7 @@ export class SoldReceipts {
       soldAt: row.soldAt,
       productId: row.productId,
       saleUnit: row.saleUnit,
-      quantity:
-        row.saleUnit === 'pack'
-          ? row.qtyPieces / row.piecesPerPack
-          : row.qtyPieces,
+      quantity: row.quantity,
       amountDirams: Number(row.amount),
     }));
   }

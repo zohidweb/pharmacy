@@ -3,15 +3,13 @@ import { Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
-  IsISO8601,
   IsOptional,
   IsUUID,
-  Matches,
   Max,
   Min,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../../common/validation/calendar-date';
 
-const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 export const OPERATOR_ACTION_TYPES: OperatorActionType[] = [
   'access',
   'company',
@@ -35,15 +33,12 @@ export class OperatorAuditQueryDto implements OperatorAuditQuery {
   @IsIn(OPERATOR_ACTION_TYPES)
   type?: OperatorActionType;
 
-  // The pattern keeps the shape, the strict ISO check refuses 2026-02-31 before PostgreSQL does.
   @IsOptional()
-  @Matches(DATE)
-  @IsISO8601({ strict: true })
+  @IsCalendarDate()
   from?: string;
 
   @IsOptional()
-  @Matches(DATE)
-  @IsISO8601({ strict: true })
+  @IsCalendarDate()
   to?: string;
 
   @IsOptional()

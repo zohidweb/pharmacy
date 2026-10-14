@@ -532,6 +532,13 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
     const { session } = authorize(correlationId, 'returns:create');
     if (query.productId) authorize(correlationId, 'returns:without-receipt');
     const receipt = findReturnable(query, session.stores, correlationId);
+    // as apps/api: a product the receipt did not sell is no such sale
+    if (
+      query.productId &&
+      !receipt.lines.some((l) => l.productId === query.productId)
+    ) {
+      throw new ApiError(404, 'not_found', correlationId);
+    }
     const window = mockDb().owner.returnPolicy.returnWindowDays;
     const age = daysBetween(toAppDate(new Date(receipt.soldAt)), today());
     return {
@@ -576,20 +583,43 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
           session.stores.some((s) => s.id === r.storeId) &&
           toAppDate(new Date(r.soldAt)) === query.date,
       )
-      .flatMap((r) =>
-        r.lines
-          .filter((l) => l.productName.toLocaleLowerCase('ru').includes(needle))
-          .map((l) => ({
-            receiptId: r.id,
-            receiptNumber: r.number,
-            soldAt: r.soldAt,
-            productId: l.productId,
-            productName: l.productName,
-            quantity: l.quantity,
-            unit: l.unit,
-            amountMinor: l.amountMinor,
-          })),
-      )
+      .flatMap((r) => {
+        // as apps/api: one row per receipt, product and sale unit (a sale from two batches is one)
+        const rows = new Map<
+          string,
+          {
+            receiptId: string;
+            receiptNumber: string;
+            soldAt: string;
+            productId: string;
+            productName: string;
+            quantity: number;
+            unit: (typeof r.lines)[number]['unit'];
+            amountMinor: number;
+          }
+        >();
+        for (const l of r.lines) {
+          if (!l.productName.toLocaleLowerCase('ru').includes(needle)) continue;
+          const key = `${l.productId}-${l.unit}`;
+          const row = rows.get(key);
+          if (row) {
+            row.quantity += l.quantity;
+            row.amountMinor += l.amountMinor;
+          } else {
+            rows.set(key, {
+              receiptId: r.id,
+              receiptNumber: r.number,
+              soldAt: r.soldAt,
+              productId: l.productId,
+              productName: l.productName,
+              quantity: l.quantity,
+              unit: l.unit,
+              amountMinor: l.amountMinor,
+            });
+          }
+        }
+        return [...rows.values()];
+      })
       .slice(0, 50);
   },
   'returns.create': ({ body, correlationId }) => {

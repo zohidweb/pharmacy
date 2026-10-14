@@ -15,19 +15,18 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Matches,
   Max,
   MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 
 // Limits of spec 2026-10-12-supplier-returns-transfers, section 4; the batch, its supplier, the
 // store and the unit of a line are checked by the service.
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
-const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 export const SUPPLIER_RETURN_REASONS: SupplierReturnReason[] = [
   'defect',
   'expired',
@@ -59,7 +58,7 @@ export class SupplierReturnLineDto implements StockLineInput {
 
 /** POST /api/v1/supplier-returns, PUT /api/v1/supplier-returns/{id}. */
 export class SupplierReturnInputDto implements SupplierReturnInput {
-  @Matches(DATE)
+  @IsCalendarDate()
   date!: string;
 
   @IsUUID()

@@ -15,7 +15,6 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Matches,
   Max,
   MaxLength,
   Min,
@@ -23,12 +22,12 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 
 // Limits of spec 2026-10-07-catalog-pricing, section 6. Scope, store and product rules are
 // checked by the services.
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
-const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const MAX_MONEY_MINOR = 10_000_000_000;
 
 /** GET /api/v1/prices. */
@@ -72,7 +71,13 @@ export class UpdatePricesDto implements UpdatePricesRequest {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(200)
-  @ArrayUnique((price: StorePriceDto) => price.storeId?.toLowerCase())
+  // An element may be null or of the wrong shape: the selector must not throw (500), the element
+  // validators answer 400.
+  @ArrayUnique((price: StorePriceDto | null) =>
+    typeof price?.storeId === 'string'
+      ? price.storeId.toLowerCase()
+      : price?.storeId,
+  )
   @ValidateNested({ each: true })
   @Type(() => StorePriceDto)
   prices!: StorePriceDto[];
@@ -94,11 +99,11 @@ export class DiscountThresholdDto implements DiscountThreshold {
 }
 
 export class DiscountPeriodDto {
-  @Matches(DATE)
+  @IsCalendarDate()
   from!: string;
 
   @ValidateIf((period: DiscountPeriodDto) => period.to !== null)
-  @Matches(DATE)
+  @IsCalendarDate()
   to!: string | null;
 }
 
@@ -121,7 +126,9 @@ export class DiscountRuleInputDto implements DiscountRuleInput {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(500)
-  @ArrayUnique((id: string) => id?.toLowerCase())
+  @ArrayUnique((id: unknown) =>
+    typeof id === 'string' ? id.toLowerCase() : id,
+  )
   @IsUUID('all', { each: true })
   storeIds!: string[] | null;
 

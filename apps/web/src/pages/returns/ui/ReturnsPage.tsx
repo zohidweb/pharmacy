@@ -36,6 +36,7 @@ import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
 import { useTerminalRuntime } from '@/entities/terminal';
 import {
   ApiError,
+  apiFieldErrors,
   apiRequest,
   isOnline,
   subscribeConnectivity,
@@ -416,7 +417,14 @@ function ReturnsPageView() {
         : null;
   const lookupOther = useApiErrorMessage(lookupError ? null : lookup.error);
   const searchError = useApiErrorMessage(search.error);
-  const createError = useApiErrorMessage(create.error);
+  // The payments of the receipt changed under the cashier (a return at another till): the generic
+  // «check the fields» text would not tell what to do.
+  const paymentsChanged = apiFieldErrors(create.error).some(
+    (field) =>
+      field.code === 'refund_exceeds_paid' || field.code === 'total_mismatch',
+  );
+  const createGeneric = useApiErrorMessage(paymentsChanged ? null : create.error);
+  const createError = paymentsChanged ? t('paymentsChanged') : createGeneric;
 
   // a QR / barcode of the receipt is its number
   useBarcodeScanner(
@@ -545,7 +553,7 @@ function ReturnsPageView() {
             <DataTable<SaleSearchItem>
               caption={t('salesFound')}
               minWidth="none"
-              rowKey={(row) => `${row.receiptId}-${row.productId}`}
+              rowKey={(row) => `${row.receiptId}-${row.productId}-${row.unit}`}
               rows={search.data}
               empty={<EmptyState icon="search" title={t('salesEmpty')} />}
               columns={[

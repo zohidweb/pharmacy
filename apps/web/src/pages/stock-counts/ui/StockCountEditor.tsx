@@ -231,15 +231,31 @@ export function StockCountEditor({
       }),
     onSuccess: setDoc,
   });
+  // The rows the server rejected at posting (lines.<index>.<field>), mapped by the lines as they
+  // were sent: the 10-second refresh may reorder doc.lines afterwards.
+  const [rejected, setRejected] = useState<
+    ReadonlyMap<string, { field: string; code: string }>
+  >(() => new Map());
   const post = useMutation({
-    mutationFn: () =>
+    mutationFn: (_sent: readonly StockCountLine[]) =>
       apiRequest('stockCounts.post', { params: { id: doc.id } }),
+    onMutate: () => setRejected(new Map()),
     onSuccess: (posted) => {
       setDoc(posted);
       setConfirm(false);
       void invalidate();
     },
-    onError: () => setConfirm(false),
+    onError: (failure, sent) => {
+      setConfirm(false);
+      const next = new Map<string, { field: string; code: string }>();
+      for (const e of apiFieldErrors(failure)) {
+        const match = /^lines\.(\d+)\.(\w+)$/.exec(e.field);
+        const line = match ? sent[Number(match[1])] : undefined;
+        if (line && match)
+          next.set(line.lineId, { field: match[2], code: e.code });
+      }
+      setRejected(next);
+    },
   });
   const unpost = useMutation({
     mutationFn: () =>
@@ -266,13 +282,6 @@ export function StockCountEditor({
       removeFound.error ??
       saveComment.error,
   );
-  // the rows the server rejected at posting: lines.<index>.<field>
-  const rejected = new Map<string, string>();
-  for (const e of apiFieldErrors(post.error)) {
-    const match = /^lines\.(\d+)\.(\w+)$/.exec(e.field);
-    const line = match ? doc.lines[Number(match[1])] : undefined;
-    if (line && match) rejected.set(line.lineId, match[2]);
-  }
 
   // a scanned barcode shows its lines; an unknown one opens «найденный товар»
   useBarcodeScanner(
@@ -455,9 +464,11 @@ export function StockCountEditor({
                         )}
                         {problem && (
                           <span className="block text-xs text-danger">
-                            {problem === 'counted'
-                              ? t('factRequired')
-                              : t('foundIncomplete')}
+                            {problem.field !== 'counted'
+                              ? t('foundIncomplete')
+                              : problem.code === 'negative'
+                                ? t('factNegative')
+                                : t('factRequired')}
                           </span>
                         )}
                       </td>
@@ -609,7 +620,10 @@ export function StockCountEditor({
             <Button variant="secondary" onClick={() => setConfirm(false)}>
               {tDocs('cancel')}
             </Button>
-            <Button loading={post.isPending} onClick={() => post.mutate()}>
+            <Button
+              loading={post.isPending}
+              onClick={() => post.mutate(doc.lines)}
+            >
               {tDocs('post')}
             </Button>
           </>

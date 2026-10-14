@@ -149,8 +149,9 @@ function Drawer({ shift }: { shift: Shift }) {
     [t('openingCash'), c.openingMinor],
     [`+ ${t('cashSales')}`, c.salesMinor],
     [`+ ${t('cashIn')}`, c.inMinor],
-    [`− ${t('cashOut')}`, -c.outMinor],
-    [`− ${t('cashReturns')}`, -c.returnsMinor],
+    // the label carries the sign: the amounts are shown as they are, not negated
+    [`− ${t('cashOut')}`, c.outMinor],
+    [`− ${t('cashReturns')}`, c.returnsMinor],
   ];
   return (
     <Card

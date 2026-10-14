@@ -292,13 +292,13 @@ export class WriteOffsService {
     const values: WriteOffLineValues[] = input.lines.map((line, i) => {
       const batch = batches.get(batchIds[i]);
       const product = products.get(line.productId.toLowerCase());
-      if (
-        !batch ||
-        !product ||
-        batch.storeId !== storeId ||
-        batch.productId !== product.id
-      ) {
+      if (!product) throw badLine(`lines.${i}.productId`, 'unknown_product');
+      // A batch of another store is reported as unknown: its existence is not told across stores.
+      if (!batch || batch.storeId !== storeId) {
         throw badLine(`lines.${i}.batchId`, 'unknown_batch');
+      }
+      if (batch.productId !== product.id) {
+        throw badLine(`lines.${i}.batchId`, 'product_mismatch');
       }
       if (seen.has(batch.id)) throw badLine(`lines.${i}.batchId`, 'duplicate');
       seen.add(batch.id);

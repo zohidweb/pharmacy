@@ -10,6 +10,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   Length,
@@ -98,6 +99,7 @@ export class CreateTenantDto implements CreateTenantRequest {
   @Matches(/^\d{9}$/)
   inn!: string;
 
+  @IsObject()
   @ValidateNested()
   @Type(() => TenantOwnerDto)
   owner!: TenantOwnerDto;

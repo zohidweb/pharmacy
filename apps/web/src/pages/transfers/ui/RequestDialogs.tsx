@@ -27,6 +27,7 @@ import {
 } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { useInvalidateTransfers, useProductsByIds } from '../api/queries';
+import { useLineProblem } from './use-line-problem';
 
 type Store = TransferOverview['stores'][number];
 
@@ -119,7 +120,10 @@ export function RequestDialog({
       onClose();
     },
   });
-  const error = useApiErrorMessage(save.error ?? remove.error);
+  const failure = save.error ?? remove.error;
+  const lineProblem = useLineProblem(failure);
+  const generic = useApiErrorMessage(lineProblem ? null : failure);
+  const error = lineProblem ?? generic;
   const valid =
     Boolean(fromStoreId) &&
     lines.length > 0 &&

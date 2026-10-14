@@ -33,7 +33,10 @@ export class WriteOffsController {
     return this.writeOffs.get(id);
   }
 
-  /** 201 — a draft with its number; 400 at `lines.i.batchId` / `lines.i.unit`. */
+  /**
+   * 201 — a draft with its number; 400 at `lines.i.productId` (`unknown_product`), `lines.i.batchId`
+   * (`unknown_batch`, `product_mismatch`, `duplicate`) or `lines.i.unit`.
+   */
   @RequirePermission('inventory:create')
   @Post()
   create(@Body() body: WriteOffInputDto): Promise<WriteOff> {

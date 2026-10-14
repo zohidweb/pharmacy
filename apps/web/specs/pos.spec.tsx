@@ -14,7 +14,7 @@ import { axe } from 'jest-axe';
 import { PosPage } from '@/pages/pos';
 import { getTerminalRuntime } from '@/shared/lib/offline-queue';
 import { AppShell } from '@/widgets/app-shell';
-import { scenario, signInAs, signInByPin, useMockApi } from './mock-env';
+import { scenario, signInByPin, useMockApi } from './mock-env';
 import { renderWithProviders } from './test-utils';
 
 jest.mock('next/navigation', () => ({

@@ -305,8 +305,8 @@ const handlers: MockHandlers = {
       throw new ApiError(403, 'fresh_auth_required', correlationId);
     }
     if (employee.password !== body.currentPassword) {
-      throw new ApiError(422, 'wrong_password', correlationId, [
-        { field: 'currentPassword', code: 'wrong' },
+      throw new ApiError(422, 'invalid_current_password', correlationId, [
+        { field: 'currentPassword', code: 'invalid_current_password' },
       ]);
     }
     employee.password = body.newPassword;
@@ -319,8 +319,8 @@ const handlers: MockHandlers = {
       throw new ApiError(403, 'fresh_auth_required', correlationId);
     }
     if (employee.pin !== null && employee.pin !== body.currentPin) {
-      throw new ApiError(422, 'wrong_pin', correlationId, [
-        { field: 'currentPin', code: 'wrong' },
+      throw new ApiError(422, 'invalid_current_pin', correlationId, [
+        { field: 'currentPin', code: 'invalid_current_pin' },
       ]);
     }
     if (

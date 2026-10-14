@@ -1,4 +1,3 @@
-/* eslint-disable */
 const { readFileSync } = require('fs');
 
 // Reading the SWC compilation config for the spec files
@@ -20,4 +19,6 @@ module.exports = {
   // ESM-only packages compiled by SWC; the list is shared with the integration config.
   transformIgnorePatterns: require('./jest.esm-packages.cjs').transformIgnorePatterns,
   coverageDirectory: 'test-output/jest/coverage',
+  // a spec that boots the app takes a second alone; a parallel nx run is several times slower
+  testTimeout: 20_000,
 };

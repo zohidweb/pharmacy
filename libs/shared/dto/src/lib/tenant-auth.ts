@@ -21,7 +21,8 @@ export interface EmployeeLoginRequest {
 
 /**
  * POST /api/v1/activations (public, 204): the first password of an owner (or a reset) by the
- * one-time activation code the platform operator hands over. The code is single-use and lives
+ * one-time activation code the platform operator hands over. `login` is a login, a phone or an
+ * e-mail, as at POST /sessions. The code is single-use and lives
  * `ACTIVATION_CODE_TTL_HOURS`; sign in with POST /sessions afterwards. Errors: 401 `invalid_code`
  * (unknown, expired or used code — not distinguished), 422 `password_policy`, 429 `login_locked`.
  */

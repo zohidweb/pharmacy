@@ -18,7 +18,7 @@ class NoOperatorSessionStore extends OperatorSessionStore {
   private fail(): never {
     throw new Error('Operator sessions do not exist on an offline store');
   }
-  create(_record: OperatorSessionRecord): Promise<void> {
+  create(): Promise<void> {
     return this.fail();
   }
   lookup(): Promise<OperatorSessionRecord | null> {

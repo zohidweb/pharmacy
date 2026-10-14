@@ -15,6 +15,8 @@ const config = {
   testEnvironment: 'jsdom',
   moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
   setupFilesAfterEnv: ['<rootDir>/specs/setup.ts'],
+  // alone a test takes under a second; a parallel nx run (IndexedDB outbox, renders) is slower
+  testTimeout: 20_000,
 };
 
 const jestConfig = createJestConfig(config);

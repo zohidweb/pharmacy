@@ -5,6 +5,7 @@
  * passwords and PINs follow ADR-0008 and never come back in responses. The audit log is read only.
  */
 import {
+  auditGroupOf,
   checkPin,
   exceedingPermissions,
   isPermission,
@@ -77,12 +78,11 @@ function employeeCard(e: MockEmployeeState): EmployeeCard {
     activity: owner()
       .audit.filter((a) => a.employeeName === e.fullName)
       .slice(0, 10)
-      .map(({ at, action, object, details }) => ({
-        at,
-        action,
-        object,
-        details,
-      })),
+      .flatMap(({ at, action, object }) =>
+        action === null
+          ? []
+          : [{ at, action, object: object ?? '—', details: '—' }],
+      ),
   };
 }
 
@@ -161,12 +161,15 @@ function othersEditableOf(
   return employee;
 }
 
+/** An entry of the journal as the API writes it: the code of the event, its object and values. */
 export function appendAudit(
   session: EmployeeSession,
-  entry: Pick<TenantAuditEntry, 'action' | 'object' | 'details'> & {
+  entry: Pick<TenantAuditEntry, 'event' | 'object'> & {
+    params?: TenantAuditEntry['params'];
     storeName?: string | null;
   },
 ) {
+  const params = entry.params ?? {};
   owner().audit.unshift({
     id: `au-${owner().counters.audit++}`,
     at: new Date().toISOString(),
@@ -176,9 +179,10 @@ export function appendAudit(
       entry.storeName ??
       session.stores.find((s) => s.id === session.currentStoreId)?.name ??
       null,
-    action: entry.action,
+    action: auditGroupOf(entry.event, params),
+    event: entry.event,
     object: entry.object,
-    details: entry.details,
+    params,
     byOperator: session.impersonation !== null,
   });
 }
@@ -287,9 +291,8 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     };
     mockDb().employees.push(employee);
     appendAudit(session, {
-      action: 'role_change',
+      event: 'employee.created',
       object: employee.fullName,
-      details: `Новый сотрудник · ${role.name}`,
     });
     return employeeCard(employee);
   },
@@ -319,9 +322,8 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
       employee.roleId = role.id;
       employee.storeIds = role.system ? null : body.storeIds;
       appendAudit(session, {
-        action: 'role_change',
+        event: 'employee.assignment-changed',
         object: employee.fullName,
-        details: role.name,
       });
     }
     Object.assign(employee, input, { shortName: shortName(input.fullName) });
@@ -337,9 +339,8 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     }
     employee.password = body.newPassword;
     appendAudit(session, {
-      action: 'password_reset',
+      event: 'employee.password-reset',
       object: employee.fullName,
-      details: '—',
     });
   },
   'employees.setPin': ({ params, body, correlationId }) => {
@@ -356,9 +357,8 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     employee.pinFailures = 0;
     employee.pinLocked = false;
     appendAudit(session, {
-      action: 'password_reset',
+      event: 'employee.pin-set',
       object: employee.fullName,
-      details: 'PIN',
     });
   },
   'employees.setStatus': ({ params, body, correlationId }) => {
@@ -375,12 +375,9 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     }
     if (employee.status !== body.status) {
       appendAudit(session, {
-        action: 'employee_block',
+        event:
+          body.status === 'blocked' ? 'employee.blocked' : 'employee.unblocked',
         object: employee.fullName,
-        details:
-          body.status === 'blocked'
-            ? 'Активен → Заблокирован'
-            : 'Заблокирован → Активен',
       });
     }
     employee.status = body.status;
@@ -407,9 +404,8 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     };
     owner().roles.push(role);
     appendAudit(session, {
-      action: 'role_change',
+      event: 'role.created',
       object: role.name,
-      details: `Новая роль · прав: ${role.permissions.length}`,
     });
     return toRole(role);
   },
@@ -428,9 +424,8 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
     }
     Object.assign(role, input);
     appendAudit(session, {
-      action: 'role_change',
+      event: 'role.updated',
       object: role.name,
-      details: `Права изменены · прав: ${role.permissions.length}`,
     });
     return toRole(role);
   },
@@ -466,7 +461,7 @@ export const staffHandlers: Pick<MockHandlers, StaffRoute> = {
       .filter(
         (a) =>
           !needle ||
-          `${a.object} ${a.details}`.toLocaleLowerCase('ru').includes(needle),
+          `${a.object ?? ''}`.toLocaleLowerCase('ru').includes(needle),
       );
     return page(items, { limit: query?.limit ?? 20, offset: query?.offset });
   },

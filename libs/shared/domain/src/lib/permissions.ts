@@ -34,6 +34,8 @@ const moduleActions = {
   billing: ['view'],
   audit: ['view', 'export'],
   settings: ['view', 'update'],
+  // receiving the notifications of the network (spec 2026-10-14-owner-cabinet, E10)
+  notifications: ['view'],
   sync: ['view'],
 } as const;
 

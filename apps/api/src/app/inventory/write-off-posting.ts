@@ -100,6 +100,7 @@ export class WriteOffPosting {
       details: {
         type: doc.type,
         number: doc.number,
+        documentDate: doc.documentDate,
         reason: doc.writeOffReason,
         lines: lines.length,
         totalMinor: total,
@@ -148,6 +149,7 @@ export class WriteOffPosting {
       details: {
         type: doc.type,
         number: doc.number,
+        documentDate: doc.documentDate,
         totalMinor: Number(doc.totalDirams ?? 0n),
       },
     });

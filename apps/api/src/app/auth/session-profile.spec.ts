@@ -130,7 +130,7 @@ describe('buildEmployeeSession', () => {
         login: 'test.employee',
         phone: '',
       },
-      tenant: { id: TENANT, name: 'Test network' },
+      tenant: { id: TENANT, name: 'Test network', warnBelowCost: true },
       role: {
         id: ROLE,
         name: 'Хазинадор',

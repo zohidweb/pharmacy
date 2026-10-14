@@ -6,12 +6,14 @@ import type {
   TenantDashboard,
 } from '@pharmacy/shared-dto';
 import {
+  daysBetween,
   formatDateOnly,
   formatDateTime,
   formatMoney,
   toAppDate,
 } from '@pharmacy/shared-util';
 import {
+  Alert,
   BarChart,
   Card,
   CardHeader,
@@ -20,25 +22,37 @@ import {
   Icon,
   KpiTile,
   Select,
+  TextField,
   type DataTableColumn,
   type StatusTone,
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'use-intl';
+import { useAuditEntryText } from '@/entities/audit-entry';
 import {
   reminderIcon,
   reminderTone,
   useReminderText,
 } from '@/entities/reminder';
-import { useSession } from '@/entities/session';
+import { can, useSession } from '@/entities/session';
 import { StoreModeBadge } from '@/entities/store';
 import { apiRequest } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { WithMessages } from '@/shared/i18n';
 
-const periods: DashboardPeriod[] = ['today', 'week', 'month'];
+const periods: DashboardPeriod[] = ['today', 'week', 'month', 'custom'];
+
+// the longest own period of the home (spec 2026-10-14-owner-cabinet, E1)
+const MAX_CUSTOM_DAYS = 92;
+
+/** YYYY-MM-DD `days` days before `date`. */
+function daysBefore(date: string, days: number): string {
+  const moment = new Date(`${date}T00:00:00Z`);
+  moment.setUTCDate(moment.getUTCDate() - days);
+  return moment.toISOString().slice(0, 10);
+}
 
 const toneSurface: Record<StatusTone, string> = {
   success: 'bg-success-subtle text-success',
@@ -191,6 +205,7 @@ function Reminders({ data }: { data: TenantDashboard }) {
 function Activity({ data }: { data: TenantDashboard }) {
   const t = useTranslations('dashboard');
   const format = useFormatter();
+  const text = useAuditEntryText();
   return (
     <Card as="section" padding="none" aria-labelledby="activity-title">
       <CardHeader title={t('activity')} titleId="activity-title" inset />
@@ -198,30 +213,37 @@ function Activity({ data }: { data: TenantDashboard }) {
         <EmptyState icon="scroll-text" title={t('noActivity')} />
       ) : (
         <ul className="m-0 flex list-none flex-col p-0">
-          {data.recentActivity.map((entry) => (
-            <li
-              key={entry.id}
-              className="flex gap-4 border-t border-border px-(--ph-card-padding) py-3 text-sm"
-            >
-              <time
-                dateTime={entry.at}
-                className="shrink-0 text-fg-subtle tabular-nums"
+          {data.recentActivity.map((entry) => {
+            const { title, details } = text(entry);
+            const who = [entry.employeeName, entry.storeName]
+              .filter(Boolean)
+              .join(' · ');
+            return (
+              <li
+                key={entry.id}
+                className="flex gap-4 border-t border-border px-(--ph-card-padding) py-3 text-sm"
               >
-                {format.dateTime(new Date(entry.at), {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </time>
-              <span className="flex min-w-0 flex-col">
-                <span className="text-fg">{entry.description}</span>
-                <span className="text-xs text-fg-subtle">
-                  {entry.storeName
-                    ? `${entry.actorName} · ${entry.storeName}`
-                    : entry.actorName}
+                <time
+                  dateTime={entry.at}
+                  className="shrink-0 text-fg-subtle tabular-nums"
+                >
+                  {format.dateTime(new Date(entry.at), {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </time>
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-fg">
+                    {[title, entry.object].filter(Boolean).join(' · ')}
+                  </span>
+                  {details && (
+                    <span className="text-xs text-fg-muted">{details}</span>
+                  )}
+                  {who && <span className="text-xs text-fg-subtle">{who}</span>}
                 </span>
-              </span>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </Card>
@@ -233,11 +255,29 @@ function DashboardPageView() {
   const t = useTranslations('dashboard');
   const { data: session } = useSession();
   const [period, setPeriod] = useState<DashboardPeriod>('today');
+  const today = toAppDate();
+  const [from, setFrom] = useState(() => daysBefore(toAppDate(), 6));
+  const [to, setTo] = useState(toAppDate);
+  const custom = period === 'custom';
+  const rangeValid =
+    from !== '' &&
+    to !== '' &&
+    from <= to &&
+    to <= today &&
+    daysBetween(from, to) < MAX_CUSTOM_DAYS;
   const dashboard = useQuery({
-    queryKey: ['dashboard', period],
+    queryKey: custom ? ['dashboard', period, from, to] : ['dashboard', period],
     queryFn: ({ signal }) =>
-      apiRequest('dashboard.get', { query: { period }, signal }),
+      apiRequest('dashboard.get', {
+        query: custom ? { period, from, to } : { period },
+        signal,
+      }),
+    enabled: !custom || rangeValid,
   });
+
+  // today and the week show the last 7 days as on the mockup; a month and an own period — its days (E6)
+  const chartTitle =
+    period === 'today' || period === 'week' ? t('revenue7') : t('revenueByDay');
 
   return (
     <>
@@ -250,48 +290,74 @@ function DashboardPageView() {
           date: formatDateOnly(toAppDate()),
         })}
         actions={
-          <Select
-            label={t('period')}
-            hideLabel
-            value={period}
-            onChange={(event) =>
-              setPeriod(event.target.value as DashboardPeriod)
-            }
-            options={periods.map((value) => ({
-              value,
-              label: t(`periods.${value}`),
-            }))}
-          />
+          <div className="flex flex-wrap items-end gap-3">
+            {custom && (
+              <>
+                <TextField
+                  label={t('from')}
+                  type="date"
+                  max={to}
+                  value={from}
+                  onChange={(event) => setFrom(event.target.value)}
+                />
+                <TextField
+                  label={t('to')}
+                  type="date"
+                  min={from}
+                  max={today}
+                  value={to}
+                  onChange={(event) => setTo(event.target.value)}
+                />
+              </>
+            )}
+            <Select
+              label={t('period')}
+              hideLabel
+              value={period}
+              onChange={(event) =>
+                setPeriod(event.target.value as DashboardPeriod)
+              }
+              options={periods.map((value) => ({
+                value,
+                label: t(`periods.${value}`),
+              }))}
+            />
+          </div>
         }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        <QueryState query={dashboard}>
-          {(data) => (
-            <>
-              <Kpis data={data} />
-              <div className="grid grid-cols-2 items-start gap-4">
-                <StoresTable rows={data.stores} />
-                <Card as="section" aria-labelledby="revenue-title">
-                  <CardHeader title={t('revenue7')} titleId="revenue-title" />
-                  <BarChart
-                    caption={t('revenue7')}
-                    columnLabels={{ label: t('day'), value: t('revenue') }}
-                    items={data.revenueByDay.map((day) => ({
-                      key: day.date,
-                      label: formatDateOnly(day.date).slice(0, 5),
-                      value: day.revenueMinor,
-                      valueText: formatMoney(day.revenueMinor),
-                    }))}
-                  />
-                </Card>
-              </div>
-              <div className="grid grid-cols-2 items-start gap-4">
-                <Reminders data={data} />
-                <Activity data={data} />
-              </div>
-            </>
-          )}
-        </QueryState>
+        {custom && !rangeValid ? (
+          <Alert tone="warning">{t('rangeInvalid')}</Alert>
+        ) : (
+          <QueryState query={dashboard}>
+            {(data) => (
+              <>
+                <Kpis data={data} />
+                <div className="grid grid-cols-2 items-start gap-4">
+                  <StoresTable rows={data.stores} />
+                  <Card as="section" aria-labelledby="revenue-title">
+                    <CardHeader title={chartTitle} titleId="revenue-title" />
+                    <BarChart
+                      caption={chartTitle}
+                      columnLabels={{ label: t('day'), value: t('revenue') }}
+                      items={data.revenueByDay.map((day) => ({
+                        key: day.date,
+                        label: formatDateOnly(day.date).slice(0, 5),
+                        value: day.revenueMinor,
+                        valueText: formatMoney(day.revenueMinor),
+                      }))}
+                    />
+                  </Card>
+                </div>
+                <div className="grid grid-cols-2 items-start gap-4">
+                  <Reminders data={data} />
+                  {/* the journal only for those who may read it (final review I1) */}
+                  {can(session, 'audit:view') && <Activity data={data} />}
+                </div>
+              </>
+            )}
+          </QueryState>
+        )}
       </div>
     </>
   );

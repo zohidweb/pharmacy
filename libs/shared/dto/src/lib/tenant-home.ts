@@ -4,8 +4,17 @@
  * `kind` + `params` (RU/TJ), the server sends no ready-made sentences.
  */
 import type { Page, StoreMode } from './platform-tenants.js';
+import type { TenantAuditEntry } from './tenant-staff.js';
 
-export type DashboardPeriod = 'today' | 'week' | 'month';
+/** `custom` — `from`…`to` inclusive, not longer than 92 days (spec 2026-10-14-owner-cabinet, E1). */
+export type DashboardPeriod = 'today' | 'week' | 'month' | 'custom';
+
+/** GET /api/v1/dashboard?period=&from=&to= — `from` and `to` (YYYY-MM-DD) only with `custom`. */
+export interface DashboardQuery {
+  period: DashboardPeriod;
+  from?: string;
+  to?: string;
+}
 
 export interface DashboardKpi {
   revenueMinor: number;
@@ -17,7 +26,7 @@ export interface DashboardKpi {
   lowStockItems: number;
   /** Batches within the expiry threshold of the network settings. */
   expiringBatches: number;
-  /** Of them — expiring within 7 days. */
+  /** Of them — expiring within 7 days (the expired ones included). */
   expiringCritical: number;
 }
 
@@ -37,13 +46,20 @@ export interface DailyRevenue {
   revenueMinor: number;
 }
 
-export type ReminderKind =
+/**
+ * One list of kinds for the notifications and for their switches in the network settings (spec
+ * 2026-10-14-owner-cabinet, 6.3). `sync_conflict` and `license_expiring` are not created until the
+ * synchronisation and the tariffs exist.
+ */
+export type NotificationKind =
   | 'batch_expiring'
+  | 'low_stock'
   | 'supplier_payment_due'
   | 'transfer_in_transit'
-  | 'low_stock'
-  | 'license_expiring'
-  | 'impersonation';
+  | 'shift_discrepancy'
+  | 'negative_stock'
+  | 'sync_conflict'
+  | 'license_expiring';
 
 export interface ReminderParams {
   productName?: string;
@@ -54,41 +70,41 @@ export interface ReminderParams {
   supplierName?: string;
   /** YYYY-MM-DD */
   dueDate?: string;
+  /** YYYY-MM-DD — the expiry of the batch; `days` is counted from it on read. */
+  expiresOn?: string;
   amountMinor?: number;
   documentNumber?: string;
   fromStore?: string;
   toStore?: string;
   positions?: number;
   operatorName?: string;
+  shiftNumber?: string;
 }
 
 export interface Reminder {
   id: string;
-  kind: ReminderKind;
+  kind: NotificationKind;
   params: ReminderParams;
 }
 
-export interface ActivityEntry {
-  id: string;
-  at: string;
-  actorName: string;
-  storeName: string | null;
-  /** Audit description as recorded on the server. */
-  description: string;
-}
-
-/** GET /api/v1/dashboard?period= — over the stores of the employee scope. */
+/** GET /api/v1/dashboard — over the stores of the employee scope. */
 export interface TenantDashboard {
   period: DashboardPeriod;
+  /** The dates of the period (YYYY-MM-DD, inclusive). */
+  from: string;
+  to: string;
   kpi: DashboardKpi;
   stores: DashboardStoreRow[];
-  /** The last 7 days up to today. */
+  /** `today` and `week` — the last 7 days; `month` and `custom` — every day of the period (E6). */
   revenueByDay: DailyRevenue[];
   reminders: Reminder[];
-  recentActivity: ActivityEntry[];
+  /** The last entries of the journal of the scope, without sign-ins and denials (E7). */
+  recentActivity: TenantAuditEntry[];
 }
 
 export interface TenantNotification extends Reminder {
+  /** null — a notification of the whole network. */
+  storeId: string | null;
   createdAt: string;
   read: boolean;
 }

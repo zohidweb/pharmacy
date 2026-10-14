@@ -6,15 +6,17 @@
     "periods": {
       "today": "Имрӯз",
       "week": "Ҳафта",
-      "month": "Моҳ"
+      "month": "Моҳ",
+      "custom": "Давраи худ…"
     },
     "kpi": {
       "revenue": {
         "today": "Даромади имрӯз",
         "week": "Даромади ҳафта",
-        "month": "Даромади моҳ"
+        "month": "Даромади моҳ",
+        "custom": "Даромади давра"
       },
-      "revenueChange": "{change} {period, select, today {нисбат ба дирӯз} week {нисбат ба ҳафтаи гузашта} other {нисбат ба моҳи гузашта}}",
+      "revenueChange": "{change} {period, select, today {нисбат ба дирӯз} week {нисбат ба ҳафтаи гузашта} month {нисбат ба моҳи гузашта} other {нисбат ба давраи гузашта}}",
       "noComparison": "Барои муқоиса маълумот нест",
       "receipts": "Чекҳо",
       "averageReceipt": "Чеки миёна {amount}",
@@ -40,7 +42,11 @@
     "reminders": "Хотиррасонӣ",
     "noReminders": "Хотиррасонӣ нест",
     "activity": "Журнали амалҳо",
-    "noActivity": "Ҳанӯз амал нест"
+    "noActivity": "Ҳанӯз амал нест",
+    "revenueByDay": "Даромад аз рӯи рӯзҳо",
+    "from": "Аз",
+    "to": "То",
+    "rangeInvalid": "Давра — на зиёда аз 92 рӯз ва на дертар аз имрӯз"
   },
   "profile": {
     "title": "Профил",

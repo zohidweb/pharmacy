@@ -162,22 +162,6 @@
       "active": "Активен",
       "blocked": "Заблокирован"
     },
-    "auditActions": {
-      "sale": "Продажа",
-      "return": "Возврат",
-      "goods_receipt": "Приход",
-      "transfer": "Перемещение",
-      "write_off": "Списание",
-      "stock_count": "Инвентаризация",
-      "price_change": "Изменение цены",
-      "sign_in": "Вход",
-      "shift_open": "Открытие смены",
-      "employee_block": "Блокировка",
-      "password_reset": "Сброс пароля",
-      "role_change": "Роли и права",
-      "unpost": "Отмена проведения",
-      "settings_change": "Настройки"
-    },
     "dialog": {
       "newTitle": "Новый сотрудник",
       "subtitle": "Одна роль и охват точек",
@@ -267,6 +251,7 @@
         "billing": "Оплата",
         "audit": "Журнал действий",
         "settings": "Настройки",
+        "notifications": "Уведомления",
         "sync": "Синхронизация"
       },
       "special": {
@@ -440,11 +425,12 @@
       "currency": "Валюта учёта",
       "currencyValue": "TJS — сомони",
       "currencyHint": "Только сомони (ADR-0016)",
-      "posSessionTimeoutMinutes": "Тайм-аут сеанса кассира, мин",
+      "posSessionTimeoutMinutes": "Тайм-аут сессии без действий, мин",
       "minPinLength": "Минимальная длина PIN",
       "expiryNoticeDays": "Предупреждать о сроке годности, дней",
       "warnBelowCost": "Предупреждать о цене ниже закупочной",
-      "warnBelowCostHint": "В приходе и при изменении цены"
+      "warnBelowCostHint": "При изменении цены",
+      "networkNameHint": "Название меняет оператор платформы"
     },
     "markups": {
       "title": "Наценка по умолчанию",
@@ -466,7 +452,7 @@
       "title": "Уведомления на дашборде",
       "hint": "Что показывать в напоминаниях и колокольчике.",
       "items": {
-        "expiry": {
+        "batch_expiring": {
           "title": "Сроки годности",
           "hint": "Партии, у которых срок подходит к концу"
         },
@@ -474,11 +460,11 @@
           "title": "Ниже минимума",
           "hint": "Товары с остатком ниже минимального"
         },
-        "supplier_debt": {
+        "supplier_payment_due": {
           "title": "Долги поставщикам",
           "hint": "Приближение и просрочка срока оплаты"
         },
-        "transfer": {
+        "transfer_in_transit": {
           "title": "Перемещения",
           "hint": "Перемещения в пути к вашей точке"
         },
@@ -492,9 +478,9 @@
         },
         "negative_stock": {
           "title": "Минус по остатку",
-          "hint": "После слияния данных офлайн-точки"
+          "hint": "Продажа при нехватке остатка на кассе"
         },
-        "license_expiry": {
+        "license_expiring": {
           "title": "Лицензионный ключ",
           "hint": "Срок ключа офлайн-точки подходит к концу"
         }

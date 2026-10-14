@@ -6,7 +6,11 @@
  * changed; «Владелец» is a system role. Passwords and PINs travel only in requests and are hashed by
  * the server (scrypt, ADR-0008); responses never carry them.
  */
-import type { Permission, RoleTemplateKey } from '@pharmacy/shared-domain';
+import type {
+  AuditGroup,
+  Permission,
+  RoleTemplateKey,
+} from '@pharmacy/shared-domain';
 import type { Page } from './platform-tenants.js';
 import type { UiLocale } from './tenant-auth.js';
 
@@ -148,32 +152,29 @@ export interface TenantTerminal {
 
 /* ---------------- audit ---------------- */
 
-export type AuditAction =
-  | 'sale'
-  | 'return'
-  | 'goods_receipt'
-  | 'transfer'
-  | 'write_off'
-  | 'stock_count'
-  | 'price_change'
-  | 'sign_in'
-  | 'shift_open'
-  | 'employee_block'
-  | 'password_reset'
-  | 'role_change'
-  | 'unpost'
-  | 'settings_change';
+/** A group of the journal filter (spec 2026-10-14-owner-cabinet, 6.4; rules in libs/shared/domain). */
+export type AuditAction = AuditGroup;
 
+/**
+ * An entry of the journal. The server sends no sentence: the screen builds the text from `event`
+ * and `params` in the user's language (spec 2026-10-14-owner-cabinet, E7).
+ */
 export interface TenantAuditEntry {
   id: string;
   at: string;
-  /** Date of the document when it differs from the time of entry (a back-dated document). */
+  /** Date of the document when it differs from the business date of the entry (back-dated). */
   documentDate: string | null;
-  employeeName: string;
+  /** null — an event without an employee (a system write). */
+  employeeName: string | null;
   storeName: string | null;
-  action: AuditAction;
-  object: string;
-  details: string;
+  /** null — a code no group names. */
+  action: AuditAction | null;
+  /** The code of `audit_log.action`, e.g. `receipt.completed`. */
+  event: string;
+  /** Number of the document, name of the product, employee or store — data, not a sentence. */
+  object: string | null;
+  /** Scalar values of the event; amounts at cost only with `finance:view-cost`. */
+  params: Record<string, string | number | null>;
   /** An action of the platform operator «от имени» the tenant (ADR-0008, ADR-0013). */
   byOperator: boolean;
 }

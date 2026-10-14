@@ -186,6 +186,13 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'returns.list',
   'settings.returns',
   'settings.updateReturns',
+  // the owner cabinet, PR 1 (spec 2026-10-14-owner-cabinet)
+  'settings.get',
+  'settings.update',
+  'dashboard.get',
+  'notifications.list',
+  'notifications.readAll',
+  'auditLog.list',
   'stock.list',
   'stock.products',
   'stock.productBatches',

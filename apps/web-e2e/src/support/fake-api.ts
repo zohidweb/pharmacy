@@ -129,7 +129,7 @@ function cashierSession(): EmployeeSession {
       login: 'zarina',
       phone: '+992 93 220-77-04',
     },
-    tenant: { id: 'tenant-shifo', name: 'Шифо' },
+    tenant: { id: 'tenant-shifo', name: 'Шифо', warnBelowCost: true },
     role: {
       id: 'role-cashier',
       name: 'Фармацевт-кассир',

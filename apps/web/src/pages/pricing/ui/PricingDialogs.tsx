@@ -21,6 +21,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { useSession } from '@/entities/session';
 import { MoneyInput } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 
@@ -35,6 +36,7 @@ export function PriceDialog({
   row: PriceRow;
   onClose: () => void;
 }) {
+  const { data: session } = useSession();
   const t = useTranslations('pricing.edit');
   const tPricing = useTranslations('pricing');
   const tDocs = useTranslations('stockDocs');
@@ -46,10 +48,12 @@ export function PriceDialog({
   const [confirmed, setConfirmed] = useState(false);
   const first = row.prices[0]?.storeId ?? '';
   const value = (storeId: string) => prices[same ? first : storeId] ?? 0;
+  // «ниже закупочной» only when the network asks for it (spec 2026-10-14-owner-cabinet, E15)
+  const warnBelowCost = session?.tenant.warnBelowCost ?? true;
   const warningsOf = (storeId: string) =>
     priceWarnings({
       priceMinor: value(storeId),
-      costMinor: row.costMinor,
+      costMinor: warnBelowCost ? row.costMinor : undefined,
       maxPriceMinor: row.maxPriceMinor,
     });
   // a store without a price stays without one until a price is typed

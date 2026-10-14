@@ -9,6 +9,7 @@ import { checkPin, stockState } from '@pharmacy/shared-domain';
 import type {
   EmployeeSession,
   NetworkSettings,
+  UpdateNetworkSettingsRequest,
   OwnerStore,
   ReportCell,
   ReportColumn,
@@ -625,8 +626,15 @@ const xmlEscape = (value: string) =>
 
 /* ---------------- settings ---------------- */
 
-function settingsInput(body: NetworkSettings, correlationId: string) {
-  const range = (field: keyof NetworkSettings, min: number, max: number) => {
+function settingsInput(
+  body: UpdateNetworkSettingsRequest,
+  correlationId: string,
+): NetworkSettings {
+  const range = (
+    field: keyof UpdateNetworkSettingsRequest,
+    min: number,
+    max: number,
+  ) => {
     const value = body[field];
     if (typeof value !== 'number' || !Number.isInteger(value)) {
       throw validation(correlationId, field, 'invalid');
@@ -635,13 +643,29 @@ function settingsInput(body: NetworkSettings, correlationId: string) {
       throw validation(correlationId, field, 'range');
     }
   };
-  if (!body.networkName.trim()) {
-    throw validation(correlationId, 'networkName', 'required');
-  }
-  range('posSessionTimeoutMinutes', 1, 240);
+  // the API keeps an idle session at least 5 minutes (spec 2026-10-14-owner-cabinet, E14)
+  range('posSessionTimeoutMinutes', 5, 240);
   range('minPinLength', 4, 8);
   range('expiryNoticeDays', 1, 365);
-  return { ...body, networkName: body.networkName.trim() };
+  const kinds = Object.keys(owner().settings.notifications);
+  const given = Object.keys(body.notifications ?? {});
+  if (
+    given.length !== kinds.length ||
+    kinds.some((kind) => typeof body.notifications[kind as never] !== 'boolean')
+  ) {
+    throw new ApiError(400, 'validation_failed', correlationId, [
+      { field: 'notifications', code: 'invalid' },
+    ]);
+  }
+  // the name of the network is the operator's (E14): the owner cannot change it here
+  return {
+    networkName: owner().settings.networkName,
+    posSessionTimeoutMinutes: body.posSessionTimeoutMinutes,
+    minPinLength: body.minPinLength,
+    expiryNoticeDays: body.expiryNoticeDays,
+    warnBelowCost: body.warnBelowCost,
+    notifications: { ...body.notifications },
+  };
 }
 
 function requireOfflineStore(correlationId: string) {
@@ -711,9 +735,8 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
     };
     if (idempotencyKey) owner().storeKeys[idempotencyKey] = id;
     appendAudit(session, {
-      action: 'settings_change',
+      event: 'store.created',
       object: body.name.trim(),
-      details: 'Новая точка',
       storeName: null,
     });
     const store = ownerStore(id);
@@ -755,9 +778,8 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       printReceiptDefault: body.printReceiptDefault,
     });
     appendAudit(session, {
-      action: 'settings_change',
+      event: 'store.updated',
       object: base.name,
-      details: 'Карточка точки',
       storeName: base.name,
     });
     mockDb().pos.catalogVersion += 1;
@@ -874,9 +896,8 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       closingTransferId: transfer.id,
     });
     appendAudit(session, {
-      action: 'transfer',
+      event: 'transfer.dispatched',
       object: transfer.number,
-      details: `Закрытие точки · ${store.name} → ${receiver.name}`,
       storeName: store.name,
     });
     const closing = ownerStore(store.id);
@@ -900,9 +921,8 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
     service.state = 'requested';
     service.requestedAt = new Date().toISOString();
     appendAudit(session, {
-      action: 'settings_change',
+      event: 'settings.service-requested',
       object: service.key,
-      details: 'Запрос на подключение услуги',
       storeName: null,
     });
     return service;
@@ -1015,9 +1035,8 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
     // a skeleton of the CommerceML document — the real one is built by apps/api
     const xml = `<?xml version="1.0" encoding="UTF-8"?><КоммерческаяИнформация ВерсияСхемы="2.10" ДатаФормирования="${today()}"><Каталог><Товары>${goods}</Товары></Каталог></КоммерческаяИнформация>`;
     appendAudit(session, {
-      action: 'settings_change',
+      event: 'settings.export-1c',
       object: '1С',
-      details: `Выгрузка ${body.from} — ${body.to}`,
       storeName: null,
     });
     return {
@@ -1037,11 +1056,14 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
     const { session } = context(correlationId, 'settings:update', {
       write: true,
     });
+    // a fresh sign-in, as the API asks for the security settings
+    if (session.auth !== 'password') {
+      throw new ApiError(403, 'fresh_auth_required', correlationId);
+    }
     owner().settings = settingsInput(body, correlationId);
     appendAudit(session, {
-      action: 'settings_change',
+      event: 'settings.updated',
       object: 'Настройки сети',
-      details: '—',
       storeName: null,
     });
     mockDb().pos.catalogVersion += 1;
@@ -1068,9 +1090,8 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       },
     };
     appendAudit(session, {
-      action: 'settings_change',
+      event: 'settings.returns-updated',
       object: 'Возвраты покупателей',
-      details: '—',
       storeName: null,
     });
     mockDb().pos.catalogVersion += 1;
@@ -1106,9 +1127,8 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       mockDb().stock.markup[markup.categoryId] = markup.markupPercent;
     }
     appendAudit(session, {
-      action: 'settings_change',
+      event: 'markups.updated',
       object: 'Наценки категорий',
-      details: '—',
       storeName: null,
     });
     return ownerHandlers['settings.markups']({

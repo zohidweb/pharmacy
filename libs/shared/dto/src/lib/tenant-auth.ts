@@ -68,7 +68,8 @@ export interface ImpersonationInfo {
  */
 export interface EmployeeSession {
   employee: SessionEmployee;
-  tenant: { id: string; name: string };
+  /** `warnBelowCost` — the network setting of the price warning (spec 2026-10-14-owner-cabinet, E15). */
+  tenant: { id: string; name: string; warnBelowCost: boolean };
   role: SessionRole;
   permissions: Permission[];
   /** Store scope of the employee: the whole network or a list of stores. */

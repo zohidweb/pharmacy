@@ -32,7 +32,7 @@
 | `correlation_id` | |
 | `action` | `receipt.completed`, `price.changed`, `auth.pin-failed`, `access.denied`, `role.changed`… |
 | `entity_type`, `entity_id` | |
-| `details jsonb` | Без секретов |
+| `details jsonb` | Без секретов. События `document.posted` / `document.unposted` документов с датой, которую ставит человек, пишут `documentDate` — журнал показывает «документ от …» (кабинет владельца, E8, 2026-10-14) |
 | `source` | `cloud` / `offline_store` |
 
 Индексы: `(tenant_id, recorded_at)`, `(tenant_id, employee_id, recorded_at)`, `(tenant_id, store_id, recorded_at)` — фильтры экрана аудита (БЛ W1-16).
@@ -73,7 +73,9 @@
 
 | Таблица | Класс | Колонки и правила |
 |---|---|---|
-| `notifications` | tenant | `recipient_employee_id null` или `recipient_permission` + `store_id` (все, у кого есть право на точке), `type`, `entity_type`, `entity_id`, `payload jsonb`, `created_at`, `read_at` (для адресных). Только интерфейс (КП 9) |
+| `notifications` | tenant | Введено миграцией `owner-cabinet` (спецификация `2026-10-14-owner-cabinet-design.md`, поправка 3.1 п. 2): `kind` (8 видов), `store_id null` (пусто — вся сеть), `dedupe_key` (уникален среди неснятых), `entity_type`, `entity_id`, `params jsonb`, `created_at`, `resolved_at null`. Получатели не хранятся: право вида (`inventory:view` / `purchasing:view` / `shifts:view`) + `notifications:view` + охват точек (E10). Состояния (сроки, мало на складе, оплата поставщику, перемещение в пути) обновляют `params` и снимаются; события (расхождение смены, продажа в минус) не снимаются и видны 30 дней. Только интерфейс (КП 9) |
+| `notification_reads` | tenant | Ключ `(tenant_id, notification_id, employee_id)`: `read_at` — «прочитано» у сотрудника (E12) |
+| `notification_refresh` | tenant | Ключ `tenant_id`: `refreshed_at`, `events_after`. Уведомления обновляются при чтении (`GET /notifications`, `GET /dashboard`), не чаще раза в 5 минут или после изменения `tenant_settings`, под `pg_try_advisory_xact_lock` по тенанту (E11) — фоновых задач и `job_queue` пока нет |
 | `platform_notifications` | platform | То же для операторов |
 | `import_jobs` | tenant | `kind` `catalog` / `opening_balance`, `store_id null`, `file_sha256` (уникален в `(tenant_id, kind, store_id, file_sha256)` — повтор не создаёт дублей), `status` `validating` / `failed` / `applied`, `errors jsonb` (строка, причина), `created_by`. Частичной загрузки нет (КП 10) |
 | `export_1c_runs` | tenant | `legal_entity_id`, `period_from`, `period_to`, `status`, `unmapped_count`, `file_sha256`, `created_by`. Файл генерируется при запросе |

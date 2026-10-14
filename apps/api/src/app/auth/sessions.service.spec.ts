@@ -605,7 +605,7 @@ describe('SessionsService.login — success', () => {
         login: 'farida.r',
         phone: '+992900000101',
       },
-      tenant: { id: TENANT, name: 'Test network' },
+      tenant: { id: TENANT, name: 'Test network', warnBelowCost: true },
       role: {
         id: ROLE,
         name: 'Хазинадор',

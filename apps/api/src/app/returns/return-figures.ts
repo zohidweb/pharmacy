@@ -106,7 +106,9 @@ export class ReturnFigures {
       refundMinor: string;
       returnedCostMinor: string;
     }>`
-      select p.category_id, sum(rl.amount_dirams) as refund_minor,
+      select p.category_id,
+             -- the money given back: the line less its share of the receipt discount (final review I1)
+             sum(rl.amount_dirams - rl.discount_share_dirams) as refund_minor,
              sum(rl.qty_pieces * b.cost_per_piece_dirams) as returned_cost_minor
       from pharmacy.customer_return_lines rl
       join pharmacy.customer_returns cr

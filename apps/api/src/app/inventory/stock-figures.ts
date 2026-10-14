@@ -65,11 +65,24 @@ const stores = (storeIds: readonly string[]) => sql.val([...storeIds]);
 // The movements of the stores with the kind of each one — a reversal counts as the movement it
 // reverses, on its own date: a document posted and unposted in a period gives nothing (spec
 // 2026-10-14-owner-cabinet, E3).
-const movements = (tenantId: string, storeIds: readonly string[]) => sql`
+// The reversed kind comes from a hash join: a scalar subquery per reversal row (final review I3) was
+// measured slower — a correlated subplan keeps the aggregation out of the parallel workers (movement
+// 0.9 s → 4.2 s on 2M movements). `controlledOnly` keeps the movements of the ПКУ products.
+const movements = (
+  tenantId: string,
+  storeIds: readonly string[],
+  controlledOnly = false,
+) => sql`
   select m.store_id, b.product_id, m.batch_id, m.qty_delta_pieces as qty, m.business_date,
          coalesce(o.kind, m.kind) as kind, b.cost_per_piece_dirams as cost
   from pharmacy.stock_movements m
   join pharmacy.batches b on b.tenant_id = m.tenant_id and b.id = m.batch_id
+  ${
+    controlledOnly
+      ? sql`join pharmacy.products cp
+              on cp.tenant_id = b.tenant_id and cp.id = b.product_id and cp.is_controlled`
+      : sql``
+  }
   left join pharmacy.stock_movements o
     on m.kind = 'reversal' and o.tenant_id = m.tenant_id and o.id = m.reverses_movement_id
   where m.tenant_id = ${tenantId} and m.store_id = any(${stores(storeIds)}::uuid[])`;
@@ -94,7 +107,8 @@ export class StockFigures {
       stockCountMinor: string;
     }>`
       with mv as (${movements(tenantId, storeIds)}
-        and m.business_date between ${from}::date and ${to}::date)
+        and m.business_date between ${from}::date and ${to}::date
+        and m.kind in ('write_off', 'inventory_loss', 'inventory_gain', 'reversal'))
       select store_id,
              coalesce(sum(-qty * cost) filter (where kind = 'write_off'), 0) as write_off_minor,
              coalesce(sum(-qty * cost)
@@ -205,16 +219,13 @@ export class StockFigures {
       qty: number;
     }>`
       select b.store_id, b.product_id, b.expiry_date::text as expiry_date,
-             b.cost_per_piece_dirams as cost, s.qty
-      from pharmacy.batches b
-      join lateral (
-        select sum(m.qty_delta_pieces)::integer as qty
-        from pharmacy.stock_movements m
-        where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
-          and m.business_date <= ${date}::date
-      ) s on true
-      where b.tenant_id = ${tenantId} and b.store_id = any(${stores(storeIds)}::uuid[])
-        and s.qty <> 0`.execute(trx);
+             b.cost_per_piece_dirams as cost, sum(m.qty_delta_pieces)::integer as qty
+      from pharmacy.stock_movements m
+      join pharmacy.batches b on b.tenant_id = m.tenant_id and b.id = m.batch_id
+      where m.tenant_id = ${tenantId} and m.store_id = any(${stores(storeIds)}::uuid[])
+        and m.business_date <= ${date}::date
+      group by b.id, b.store_id, b.product_id, b.expiry_date, b.cost_per_piece_dirams
+      having sum(m.qty_delta_pieces) <> 0`.execute(trx);
     const step = await sql<{ step: number }>`
       select coalesce(ts.piece_price_rounding_dirams, 10) as step
       from (select 1) one
@@ -316,7 +327,7 @@ export class StockFigures {
   ): Promise<ControlledBalance[]> {
     if (storeIds.length === 0) return [];
     const result = await sql<ControlledBalance>`
-      with mv as (${movements(tenantId, storeIds)}
+      with mv as (${movements(tenantId, storeIds, true)}
         and m.business_date <= ${to}::date)
       select mv.product_id, mv.store_id, p.pieces_per_pack,
         coalesce(sum(qty) filter (where business_date < ${from}::date), 0)::integer as opening,

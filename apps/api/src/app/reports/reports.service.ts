@@ -114,18 +114,16 @@ export class ReportsService {
     };
 
     switch (kind) {
-      case 'sales_by_store': {
-        // a warehouse sells nothing: the rows are the pharmacies (as the home)
-        const pharmacies = stores.filter((store) => store.kind === 'pharmacy');
-        const ids = pharmacies.map((store) => store.id);
+      case 'sales_by_store':
+        // every store of the selection: a warehouse sells nothing, but its write-offs and
+        // stock-count differences lower the profit of the network (final review I2)
         return build.salesByStore(
-          pharmacies,
-          await this.sales.byStore(trx, tenantId, ids, from, to),
-          await this.refunds.byStore(trx, tenantId, ids, from, to),
-          await this.stock.lossesByStore(trx, tenantId, ids, from, to),
+          stores,
+          await this.sales.byStore(trx, tenantId, storeIds, from, to),
+          await this.refunds.byStore(trx, tenantId, storeIds, from, to),
+          await this.stock.lossesByStore(trx, tenantId, storeIds, from, to),
           canSeeCost,
         );
-      }
       case 'sales_by_category': {
         const names = await this.repository.categoryNames(trx, tenantId);
         return build.salesByCategory(

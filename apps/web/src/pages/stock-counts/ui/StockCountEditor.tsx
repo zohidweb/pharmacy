@@ -44,13 +44,16 @@ function packsText(
 }
 
 /**
- * An entry typed but not taken by the server yet. The editor keeps it, not the row: a row hidden by
- * a filter and shown again retries with the same key, so a lost answer is not counted twice.
+ * The entry field of a line, kept by the editor, not the row: a row hidden by a filter keeps it.
+ * `sent` — the value sent last and not confirmed: sending the same value again reuses its key, so
+ * a lost answer is not counted twice, whatever was typed in between (a scan into the focused
+ * field); `failed` — that sending failed.
  */
 interface PendingEntry {
-  key: string | null;
   text: string;
   unit: 'pack' | 'piece';
+  sent?: { key: string; text: string; unit: 'pack' | 'piece' };
+  failed?: boolean;
 }
 
 /**
@@ -65,42 +68,46 @@ function EntryInput({
   entry,
   onEntry,
   onSent,
+  onFailed,
   focusRequest,
   onFocused,
   onCounted,
 }: {
   docId: string;
   line: StockCountLine;
-  /** The entry typed and not taken yet, kept by the editor. */
+  /** The entry field of the line, kept by the editor. */
   entry: PendingEntry | undefined;
   onEntry: (lineId: string, entry: PendingEntry | null) => void;
-  /** The server took the entry with this key: the editor clears it if it is still that one. */
+  /** The server took the value sent with this key: the editor clears it if it is still that one. */
   onSent: (lineId: string, key: string) => void;
+  onFailed: (lineId: string, key: string) => void;
   /** Set when a scan picked this line alone: its field takes the focus once. */
   focusRequest?: number;
   onFocused: () => void;
   onCounted: (line: StockCountLine) => void;
 }) {
   const t = useTranslations('stockCounts.editor');
+  const defaultUnit = line.piecesPerPack > 1 ? 'pack' : 'piece';
   const text = entry?.text ?? '';
-  const unit = entry?.unit ?? (line.piecesPerPack > 1 ? 'pack' : 'piece');
+  const unit = entry?.unit ?? defaultUnit;
   const field = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (focusRequest === undefined) return;
     field.current?.focus();
     onFocused();
   }, [focusRequest, onFocused]);
-  // Another quantity or unit is another entry: a new key. The same one keeps its key (e.g. the
-  // value put back by the scanner after a scan typed into the focused field).
-  const change = (next: Partial<Omit<PendingEntry, 'key'>>) => {
-    const value = { text: next.text ?? text, unit: next.unit ?? unit };
-    const key =
-      entry && entry.text === value.text && entry.unit === value.unit
-        ? entry.key
-        : null;
+  const change = (next: Partial<Pick<PendingEntry, 'text' | 'unit'>>) => {
+    const value: PendingEntry = {
+      ...entry,
+      text: next.text ?? text,
+      unit: next.unit ?? unit,
+    };
+    // nothing typed, the default unit and nothing waiting for an answer: nothing to keep
     onEntry(
       line.lineId,
-      value.text === '' && key === null ? null : { key, ...value },
+      value.text === '' && value.unit === defaultUnit && !value.sent
+        ? null
+        : value,
     );
   };
   const add = useMutation({
@@ -110,10 +117,10 @@ function EntryInput({
         body: { id: sent.key, lineId: line.lineId, pieces: sent.pieces },
       }),
     onSuccess: (updated, sent) => {
-      // only the entry sent: a value typed meanwhile stays
       onSent(line.lineId, sent.key);
       onCounted(updated);
     },
+    onError: (_failure, sent) => onFailed(line.lineId, sent.key),
   });
   const value = /^-?\d+$/.test(text) ? Number(text) : null;
   const pieces =
@@ -135,7 +142,7 @@ function EntryInput({
           inputMode="numeric"
           autoComplete="off"
           value={text}
-          error={add.isError ? t('notSent') : undefined}
+          error={entry?.failed ? t('notSent') : undefined}
           onChange={(event) =>
             // digits and one leading minus
             change({
@@ -167,8 +174,17 @@ function EntryInput({
         disabled={pieces === null}
         onClick={() => {
           if (pieces === null) return;
-          const key = entry?.key ?? uuidv7();
-          onEntry(line.lineId, { key, text, unit });
+          // the value sent before and not confirmed goes again with its key
+          const key =
+            entry?.sent && entry.sent.text === text && entry.sent.unit === unit
+              ? entry.sent.key
+              : uuidv7();
+          onEntry(line.lineId, {
+            text,
+            unit,
+            sent: { key, text, unit },
+            failed: false,
+          });
           add.mutate({ key, pieces });
         }}
       >
@@ -250,13 +266,27 @@ export function StockCountEditor({
       }),
     [],
   );
+  // The value sent is counted: the field empties, unless another value was typed meanwhile.
   const entrySent = useCallback(
     (lineId: string, key: string) =>
       setEntries((current) => {
-        if (current.get(lineId)?.key !== key) return current;
-        const next = new Map(current);
-        next.delete(lineId);
-        return next;
+        const entry = current.get(lineId);
+        if (!entry?.sent || entry.sent.key !== key) return current;
+        const counted =
+          entry.text === entry.sent.text && entry.unit === entry.sent.unit;
+        return new Map(current).set(lineId, {
+          text: counted ? '' : entry.text,
+          unit: entry.unit,
+        });
+      }),
+    [],
+  );
+  const entryFailed = useCallback(
+    (lineId: string, key: string) =>
+      setEntries((current) => {
+        const entry = current.get(lineId);
+        if (!entry?.sent || entry.sent.key !== key) return current;
+        return new Map(current).set(lineId, { ...entry, failed: true });
       }),
     [],
   );
@@ -654,6 +684,7 @@ export function StockCountEditor({
                             entry={entries.get(line.lineId)}
                             onEntry={setEntry}
                             onSent={entrySent}
+                            onFailed={entryFailed}
                             onFocused={focusDone}
                             focusRequest={
                               focusLine?.lineId === line.lineId

@@ -445,6 +445,10 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
     if (!Number.isInteger(body.amountMinor) || body.amountMinor <= 0) {
       throw validation(correlationId, 'amountMinor', 'positive');
     }
+    // as the server: a network with several legal entities names the payer
+    if (mockDb().owner.legalEntities.length > 1 && !body.legalEntityId) {
+      throw validation(correlationId, 'legalEntityId', 'required');
+    }
     // a payment above the debt is a prepayment (data model 05, decision 2026-10-01)
     db().payments.push({
       id: body.id,

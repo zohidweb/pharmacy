@@ -1,10 +1,11 @@
 'use client';
 
 import type { FoundLineInput, StockCountLine } from '@pharmacy/shared-dto';
+import { formatMoney, parseMoneyToMinor } from '@pharmacy/shared-util';
 import { Alert, Button, Dialog, TextField } from '@pharmacy/ui';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { MoneyInput, ProductSearch } from '@/features/stock-document';
+import { ProductSearch } from '@/features/stock-document';
 import { useApiErrorMessage } from '@/shared/api';
 
 /**
@@ -15,6 +16,7 @@ import { useApiErrorMessage } from '@/shared/api';
 export function FoundLineDialog({
   storeId,
   line,
+  scannedCode,
   canSeeCost,
   busy,
   error,
@@ -24,6 +26,8 @@ export function FoundLineDialog({
   storeId: string;
   /** null — a new found product. */
   line: StockCountLine | null;
+  /** A barcode scanned on the count and unknown to its lines: the search starts with it. */
+  scannedCode?: string;
   canSeeCost: boolean;
   busy: boolean;
   error: unknown;
@@ -37,7 +41,15 @@ export function FoundLineDialog({
   );
   const [batchNumber, setBatchNumber] = useState(line?.batchNumber ?? '');
   const [expiresOn, setExpiresOn] = useState(line?.expiresOn ?? '');
-  const [costMinor, setCostMinor] = useState(line?.costMinor ?? 0);
+  // An empty field is «no price yet» (a manager adds it), «0» is a price: the shared MoneyInput
+  // takes both for 0, so the text is kept here.
+  const [costText, setCostText] = useState(
+    line?.costMinor === null || line?.costMinor === undefined
+      ? ''
+      : formatMoney(line.costMinor, { withSign: false }),
+  );
+  const costMinor = costText.trim() === '' ? null : parseMoneyToMinor(costText);
+  const costInvalid = costText.trim() !== '' && costMinor === null;
   const message = useApiErrorMessage(error);
 
   return (
@@ -54,14 +66,14 @@ export function FoundLineDialog({
           </Button>
           <Button
             loading={busy}
-            disabled={product === null}
+            disabled={product === null || (canSeeCost && costInvalid)}
             onClick={() =>
               product &&
               onSave({
                 productId: product.id,
                 batchNumber: batchNumber.trim(),
                 expiresOn: expiresOn || null,
-                costMinor: canSeeCost && costMinor > 0 ? costMinor : null,
+                costMinor: canSeeCost ? costMinor : null,
               })
             }
           >
@@ -89,6 +101,7 @@ export function FoundLineDialog({
         ) : (
           <ProductSearch
             storeId={storeId}
+            initialQuery={scannedCode}
             onPick={(picked) =>
               setProduct({ id: picked.id, name: picked.name })
             }
@@ -108,13 +121,13 @@ export function FoundLineDialog({
           />
         </div>
         {canSeeCost ? (
-          <MoneyInput
+          <TextField
             label={t('cost')}
-            hideLabel={false}
-            valueMinor={costMinor}
-            allowEmpty
-            invalidText={tDocs('checkValue')}
-            onChange={setCostMinor}
+            inputMode="decimal"
+            autoComplete="off"
+            value={costText}
+            error={costInvalid ? tDocs('checkValue') : undefined}
+            onChange={(event) => setCostText(event.target.value)}
           />
         ) : (
           <p className="text-xs text-fg-subtle">{t('costByManager')}</p>

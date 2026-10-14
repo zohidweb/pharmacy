@@ -131,7 +131,8 @@ function StockCountsPageView() {
             nowrap: true,
             cell: (row: StockCountListItem) =>
               row.diffMinor !== undefined
-                ? formatMoney(row.diffMinor, { withSign: false })
+                ? // a surplus with its plus, as a shortage has its minus
+                  `${row.diffMinor > 0 ? '+' : ''}${formatMoney(row.diffMinor, { withSign: false })}`
                 : '—',
           },
         ]

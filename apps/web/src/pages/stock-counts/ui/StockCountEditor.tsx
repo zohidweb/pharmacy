@@ -13,14 +13,10 @@ import {
 } from '@pharmacy/shared-util';
 import { Alert, Button, Dialog, Select, Switch, TextField } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
-import {
-  QuantityInput,
-  UnpostDialog,
-  type StockAccess,
-} from '@/features/stock-document';
+import { UnpostDialog, type StockAccess } from '@/features/stock-document';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
 import { FoundLineDialog } from './FoundLineDialog';
@@ -48,39 +44,74 @@ function packsText(
 }
 
 /**
+ * An entry typed but not taken by the server yet. The editor keeps it, not the row: a row hidden by
+ * a filter and shown again retries with the same key, so a lost answer is not counted twice.
+ */
+interface PendingEntry {
+  key: string | null;
+  text: string;
+  unit: 'pack' | 'piece';
+}
+
+/**
  * Counting on a tablet (spec 2026-10-12, S7): a scanned barcode finds the line, an entered quantity
  * is an entry «counted N» of this employee; the entries of every employee add up. Each entry keeps
- * its UUIDv7 until the server took it, so a retry after a lost answer does not count twice.
+ * its UUIDv7 until the server took it, so a retry after a lost answer does not count twice. A
+ * leading minus is a correction of an entry counted too much.
  */
 function EntryInput({
   docId,
   line,
+  pending,
+  focusRequest,
   onCounted,
 }: {
   docId: string;
   line: StockCountLine;
+  pending: Map<string, PendingEntry>;
+  /** Changes when a scan picked this line alone: its field takes the focus. */
+  focusRequest?: number;
   onCounted: (line: StockCountLine) => void;
 }) {
   const t = useTranslations('stockCounts.editor');
-  const [value, setValue] = useState<number | null>(null);
+  const saved = pending.get(line.lineId);
+  const [text, setText] = useState(saved?.text ?? '');
   const [unit, setUnit] = useState<'pack' | 'piece'>(
-    line.piecesPerPack > 1 ? 'pack' : 'piece',
+    saved?.unit ?? (line.piecesPerPack > 1 ? 'pack' : 'piece'),
   );
-  const key = useRef<string | null>(null);
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusRequest !== undefined) field.current?.focus();
+  }, [focusRequest]);
+  // another quantity or unit is another entry: a new key
+  const change = (next: Partial<Omit<PendingEntry, 'key'>>) => {
+    const entry = {
+      key: null,
+      text: next.text ?? text,
+      unit: next.unit ?? unit,
+    };
+    if (entry.text === '') pending.delete(line.lineId);
+    else pending.set(line.lineId, entry);
+    setText(entry.text);
+    setUnit(entry.unit);
+  };
   const add = useMutation({
     mutationFn: (pieces: number) => {
-      key.current ??= uuidv7();
+      const entry = pending.get(line.lineId) ?? { key: null, text, unit };
+      const key = entry.key ?? uuidv7();
+      pending.set(line.lineId, { ...entry, key });
       return apiRequest('stockCounts.addEntry', {
         params: { id: docId },
-        body: { id: key.current, lineId: line.lineId, pieces },
+        body: { id: key, lineId: line.lineId, pieces },
       });
     },
     onSuccess: (updated) => {
-      key.current = null;
-      setValue(null);
+      pending.delete(line.lineId);
+      setText('');
       onCounted(updated);
     },
   });
+  const value = /^-?\d+$/.test(text) ? Number(text) : null;
   const pieces =
     value === null
       ? null
@@ -90,18 +121,25 @@ function EntryInput({
   return (
     <div className="flex flex-wrap items-start gap-2">
       <div className="w-cell-sm">
-        <QuantityInput
+        <TextField
+          ref={field}
           label={t('addOf', {
             name: line.productName,
             batch: line.batchNumber,
           })}
-          value={value}
-          invalid={add.isError ? t('notSent') : undefined}
-          onChange={(next) => {
-            // another quantity is another entry: a new key
-            key.current = null;
-            setValue(next);
-          }}
+          hideLabel
+          inputMode="numeric"
+          autoComplete="off"
+          value={text}
+          error={add.isError ? t('notSent') : undefined}
+          onChange={(event) =>
+            // digits and one leading minus
+            change({
+              text: event.target.value
+                .replace(/[^\d-]/g, '')
+                .replace(/(?!^)-/g, ''),
+            })
+          }
         />
       </div>
       {line.piecesPerPack > 1 && (
@@ -109,10 +147,9 @@ function EntryInput({
           label={t('unit')}
           hideLabel
           value={unit}
-          onChange={(event) => {
-            key.current = null;
-            setUnit(event.target.value as 'pack' | 'piece');
-          }}
+          onChange={(event) =>
+            change({ unit: event.target.value as 'pack' | 'piece' })
+          }
           options={[
             { value: 'pack', label: t('units.pack') },
             { value: 'piece', label: t('units.piece') },
@@ -185,6 +222,13 @@ export function StockCountEditor({
   const [cancelling, setCancelling] = useState(false);
   const [unposting, setUnposting] = useState(false);
   const [found, setFound] = useState<StockCountLine | 'new' | null>(null);
+  const [scannedCode, setScannedCode] = useState<string | undefined>();
+  const [focusLine, setFocusLine] = useState<{
+    lineId: string;
+    at: number;
+  } | null>(null);
+  // the entries typed and not taken yet, by line: they outlive a row hidden by a filter
+  const [pending] = useState(() => new Map<string, PendingEntry>());
   const running = doc.status === 'in_progress';
   const editable = running && access.canUpdate;
 
@@ -290,7 +334,13 @@ export function StockCountEditor({
       if (lines.length > 0) {
         setFocused(lines.map((l) => l.lineId));
         setFilter('');
+        // one line: its quantity field is ready to type
+        if (lines.length === 1 && editable) {
+          setFocusLine({ lineId: lines[0].lineId, at: Date.now() });
+        }
       } else if (editable) {
+        // the search of «найденный товар» starts with the scanned code
+        setScannedCode(code);
         setFound('new');
       }
     },
@@ -326,7 +376,8 @@ export function StockCountEditor({
           <>
             <p className="me-auto text-sm" role="status">
               {t('summary', { surplus, shortage })}
-              {access.canSeeCost && ` · ${formatMoney(diffMinor)}`}
+              {access.canSeeCost &&
+                ` · ${diffMinor > 0 ? '+' : ''}${formatMoney(diffMinor)}`}
             </p>
             {running && access.canDelete && (
               <Button
@@ -410,7 +461,10 @@ export function StockCountEditor({
               <Button
                 variant="secondary"
                 iconStart="plus"
-                onClick={() => setFound('new')}
+                onClick={() => {
+                  setScannedCode(undefined);
+                  setFound('new');
+                }}
               >
                 {t('addFound')}
               </Button>
@@ -565,6 +619,12 @@ export function StockCountEditor({
                           <EntryInput
                             docId={doc.id}
                             line={line}
+                            pending={pending}
+                            focusRequest={
+                              focusLine?.lineId === line.lineId
+                                ? focusLine.at
+                                : undefined
+                            }
                             onCounted={setLine}
                           />
                         )}
@@ -663,6 +723,7 @@ export function StockCountEditor({
         <FoundLineDialog
           storeId={doc.storeId}
           line={found === 'new' ? null : found}
+          scannedCode={found === 'new' ? scannedCode : undefined}
           canSeeCost={access.canSeeCost}
           busy={saveFound.isPending}
           error={saveFound.error}

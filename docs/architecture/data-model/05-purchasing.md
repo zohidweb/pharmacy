@@ -27,7 +27,7 @@ erDiagram
 > **Введено миграцией `purchasing` (2026-10-09, PR-2 той же спецификации):** `supplier_payments`,
 > `supplier_payment_allocations`, `purchase_orders`, `purchase_order_lines`; `documents.purchase_order_id`,
 > `goods_receipt_lines.purchase_order_line_id` и `order_price_per_pack_dirams` (цена заказа в строке прихода). Расчёт
-> «заполнить по дефициту» (`GET /purchase-orders/deficit`) отдаёт модуль `inventory`: он владеет остатками, а
+> «заполнить по дефициту» (`GET /stock/deficit`) отдаёт модуль `inventory`: он владеет остатками, а
 > `purchasing` от склада не зависит — приход связывается с заказом через экспорт `OrderReceiving`.
 
 Владение данными офлайн-точки: `suppliers` — облако → точка. Заказы, оплаты и журнал расчётов ведутся **только в облаке**. Приход, проведённый на офлайн-точке, приходит `document.posted`, и облако заводит по нему долг (уточнить в ADR-0014).

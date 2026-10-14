@@ -105,7 +105,7 @@ export class StockProductsQueryDto {
   receiptId?: string;
 }
 
-/** GET /api/v1/purchase-orders/deficit. */
+/** GET /api/v1/stock/deficit. */
 export class DeficitQueryDto {
   @IsUUID()
   storeId!: string;

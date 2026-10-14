@@ -1,6 +1,6 @@
 # Возврат поставщику и перемещения — спецификация
 
-Дата: 2026-10-12. Статус: на утверждении архитектора. Связано: модель данных
+Дата: 2026-10-12. Статус: утверждена архитектором 2026-10-12 (APPROVAL.md). Связано: модель данных
 `docs/architecture/data-model/03-batches-warehouse.md` и `05-purchasing.md` (одобрены 2026-09-30), спецификации
 `2026-10-09-inventory-purchasing-design.md` (ядро склада, расчёты с поставщиками, распределение оплат) и
 `2026-10-12-write-offs-stock-counts-design.md` (списание, заморозка, правило отмены проведения B2), ADR-0002
@@ -263,7 +263,7 @@ ADR-0018 (права и охват).
 | 400 | `validation_failed` с `errors[]` (в т.ч. `wrong_supplier`, `not_requested`, `exceeds_request`) |
 | 403 | `forbidden`, `store_not_in_scope` |
 | 404 | `not_found` |
-| 409 | `document_posted`, `document_not_posted`, `document_cancelled`, `unpost_blocked`, `offline_store_read_only`, `stock_insufficient`, `stock_count_in_progress`, `supplier_archived`, `request_not_open`, `request_has_transfer`, `transfer_not_in_transit`, `transfer_changed`, `write_off_from_transfer` |
+| 409 | `document_posted`, `document_not_posted`, `document_cancelled`, `unpost_blocked`, `offline_store_read_only`, `stock_insufficient`, `stock_count_in_progress`, `request_not_open`, `request_has_transfer`, `transfer_not_in_transit`, `transfer_changed`, `write_off_from_transfer` |
 | 422 | `validation_failed` (дата), `period_closed` |
 
 ## 8. Web (`apps/web`)

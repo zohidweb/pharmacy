@@ -42,6 +42,7 @@ const KINDS: ReportKind[] = [
   'cashiers',
   'losses',
   'controlled',
+  'controlled_summary',
 ];
 
 type Row = Record<string, ReportCell> & { __key: string };
@@ -72,7 +73,20 @@ function ReportsPageView() {
       previous?.kind === kind ? previous : undefined,
   });
 
-  const cell = (column: ReportColumn, value: ReportCell) => {
+  // pieces as «N уп. M шт.» by the pack of the row (spec 2026-10-14-owner-cabinet, E19)
+  const pieces = (value: number, perPack: number) => {
+    const sign = value < 0 ? '−' : '';
+    const all = Math.abs(value);
+    const packs = Math.floor(all / perPack);
+    const rest = all % perPack;
+    if (perPack === 1 || rest === 0) return sign + t('packs', { count: packs });
+    if (packs === 0) return sign + t('pieces', { count: rest });
+    return `${sign}${t('packs', { count: packs })} ${t('pieces', { count: rest })}`;
+  };
+  const cell = (column: ReportColumn, value: ReportCell, row: Row) => {
+    if (column.key === 'prescription' && row.prescriptionPurged) {
+      return t('prescriptionPurged');
+    }
     if (value === null || value === undefined) return '—';
     switch (column.type) {
       case 'money':
@@ -86,6 +100,8 @@ function ReportsPageView() {
         })} %`;
       case 'quantity':
         return t('packs', { count: Number(value) });
+      case 'pieces':
+        return pieces(Number(value), Number(row.piecesPerPack) || 1);
       case 'date':
         return formatDateOnly(String(value));
       case 'datetime':
@@ -190,7 +206,7 @@ function ReportsPageView() {
                     header: t(`columns.${column.key}` as 'columns.store'),
                     numeric: numeric(column),
                     nowrap: numeric(column),
-                    cell: (row: Row) => cell(column, row[column.key]),
+                    cell: (row: Row) => cell(column, row[column.key], row),
                   }),
                 );
                 const rows: Row[] = data.rows.map((row, index) => ({
@@ -212,6 +228,11 @@ function ReportsPageView() {
                     {!can(session, 'finance:view-cost') && (
                       <p className="px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
                         {t('costHidden')}
+                      </p>
+                    )}
+                    {kind === 'supplier_debts' && (
+                      <p className="px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
+                        {t('debtsToday')}
                       </p>
                     )}
                     {kind === 'controlled' && (

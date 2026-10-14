@@ -184,7 +184,9 @@ export type ReportKind =
   | 'supplier_debts'
   | 'cashiers'
   | 'losses'
-  | 'controlled';
+  | 'controlled'
+  /** ПКУ by product × store: opening, received, issued, closing (spec 2026-10-14-owner-cabinet, O6). */
+  | 'controlled_summary';
 
 /**
  * `quantity` — whole packs; `percent` — a number with one decimal; `reason` — a code of
@@ -198,7 +200,9 @@ export type ReportColumnType =
   | 'quantity'
   | 'date'
   | 'datetime'
-  | 'reason';
+  | 'reason'
+  /** Pieces; the row carries `piecesPerPack` to show «N уп. M шт.» (spec 2026-10-14, E19). */
+  | 'pieces';
 
 export interface ReportColumn {
   key: string;
@@ -218,6 +222,10 @@ export interface ReportQuery {
 /**
  * GET /api/v1/reports/{kind}?from=&to=&storeId= — one table per report. Cost and margin columns
  * are absent without `finance:view-cost` (ADR-0018, п. 6).
+ */
+/**
+ * A row may carry keys that are not columns: `piecesPerPack` for the `pieces` columns,
+ * `prescriptionPurged: 1` for a ПКУ sale whose prescription data were purged by the retention term.
  */
 export interface ReportTable {
   kind: ReportKind;

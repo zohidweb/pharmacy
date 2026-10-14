@@ -215,20 +215,23 @@ function report(
         const revenue = day.revenueMinor * days;
         const returns = -Math.round(revenue * 0.008);
         const cost = Math.round(revenue * 0.7);
-        const margin = revenue + returns - cost;
+        // write-offs and stock-count shortages at cost (spec 2026-10-14-owner-cabinet, E3)
+        const losses = -Math.round(revenue * 0.004);
+        const margin = revenue + returns - cost + losses;
         return {
           store: store.name,
           receipts: day.receipts * days,
           revenue,
           returns,
           cost,
+          losses,
           margin,
           marginPercent: percentOf(margin, revenue + returns),
         };
       });
       const total = sumRows(
         rows,
-        ['receipts', 'revenue', 'returns', 'cost', 'margin'],
+        ['receipts', 'revenue', 'returns', 'cost', 'losses', 'margin'],
         'total',
         'store',
       );
@@ -244,6 +247,7 @@ function report(
           col('returns', 'money'),
           ...costCols(
             col('cost', 'money'),
+            col('losses', 'money'),
             col('margin', 'money'),
             col('marginPercent', 'percent'),
           ),
@@ -353,38 +357,39 @@ function report(
     case 'movement': {
       const ids = scoped.map((s) => s.id);
       const rows = products.map((product) => {
-        const packs = (pieces: number) =>
-          Math.trunc(pieces / product.piecesPerPack);
-        const receipt = stock.goodsReceipts
-          .filter(
-            (d) =>
-              d.status === 'posted' &&
-              ids.includes(d.storeId) &&
-              inPeriod(d.date, from, to),
-          )
-          .flatMap((d) => d.lines)
-          .filter((l) => l.productId === product.id)
-          .reduce((sum, l) => sum + l.quantity, 0);
-        const transfers = stock.transfers
-          .filter((t) => t.status === 'accepted' && inPeriod(t.date, from, to))
-          .reduce((sum, t) => {
-            const moved = t.lines
-              .filter((l) => l.productId === product.id)
-              .reduce((s, l) => {
-                const quantity = l.receivedQuantity ?? l.sentQuantity;
-                return (
-                  s +
-                  (l.unit === 'piece'
-                    ? quantity / product.piecesPerPack
-                    : quantity)
-                );
-              }, 0);
-            const sign =
-              (ids.includes(t.toStoreId) ? 1 : 0) -
-              (ids.includes(t.fromStoreId) ? 1 : 0);
-            return sum + sign * moved;
-          }, 0);
-        const sold = mockDb()
+        const perPack = product.piecesPerPack;
+        const receipt =
+          stock.goodsReceipts
+            .filter(
+              (d) =>
+                d.status === 'posted' &&
+                ids.includes(d.storeId) &&
+                inPeriod(d.date, from, to),
+            )
+            .flatMap((d) => d.lines)
+            .filter((l) => l.productId === product.id)
+            .reduce((sum, l) => sum + l.quantity, 0) * perPack;
+        const transfers = Math.round(
+          stock.transfers
+            .filter(
+              (t) => t.status === 'accepted' && inPeriod(t.date, from, to),
+            )
+            .reduce((sum, t) => {
+              const moved = t.lines
+                .filter((l) => l.productId === product.id)
+                .reduce((s, l) => {
+                  const quantity = l.receivedQuantity ?? l.sentQuantity;
+                  return (
+                    s + (l.unit === 'piece' ? quantity : quantity * perPack)
+                  );
+                }, 0);
+              const sign =
+                (ids.includes(t.toStoreId) ? 1 : 0) -
+                (ids.includes(t.fromStoreId) ? 1 : 0);
+              return sum + sign * moved;
+            }, 0),
+        );
+        const sales = -mockDb()
           .pos.receipts.filter(
             (r) => ids.includes(r.storeId) && inPeriod(r.soldAt, from, to),
           )
@@ -392,13 +397,10 @@ function report(
           .filter((l) => l.productId === product.id)
           .reduce(
             (sum, l) =>
-              sum +
-              (l.unit === 'pack'
-                ? l.quantity * product.piecesPerPack
-                : l.quantity),
+              sum + (l.unit === 'pack' ? l.quantity * perPack : l.quantity),
             0,
           );
-        const writeOffs = stock.writeOffs
+        const writeOffs = -stock.writeOffs
           .filter(
             (d) =>
               d.status === 'posted' &&
@@ -409,13 +411,10 @@ function report(
           .filter((l) => l.productId === product.id)
           .reduce(
             (sum, l) =>
-              sum +
-              (l.unit === 'pack'
-                ? l.quantity * product.piecesPerPack
-                : l.quantity),
+              sum + (l.unit === 'pack' ? l.quantity * perPack : l.quantity),
             0,
           );
-        const held = ids.reduce(
+        const closing = ids.reduce(
           (sum, id) =>
             sum +
             product.batches.reduce((s, b) => s + (stockAt(id)[b.id] ?? 0), 0),
@@ -423,21 +422,28 @@ function report(
         );
         return {
           product: product.name,
+          piecesPerPack: perPack,
+          opening: closing - receipt - transfers - sales - writeOffs,
           receipt,
           transfers,
-          sales: -packs(sold),
-          writeOffs: -packs(writeOffs),
-          stock: packs(held),
+          sales,
+          supplierReturns: 0,
+          writeOffs,
+          stockCount: 0,
+          closing,
         };
       });
       return {
         columns: [
           col('product', 'text'),
-          col('receipt', 'quantity'),
-          col('transfers', 'quantity'),
-          col('sales', 'quantity'),
-          col('writeOffs', 'quantity'),
-          col('stock', 'quantity'),
+          col('opening', 'pieces'),
+          col('receipt', 'pieces'),
+          col('transfers', 'pieces'),
+          col('sales', 'pieces'),
+          col('supplierReturns', 'pieces'),
+          col('writeOffs', 'pieces'),
+          col('stockCount', 'pieces'),
+          col('closing', 'pieces'),
         ],
         rows,
         total: null,
@@ -481,21 +487,23 @@ function report(
           );
           if (!storeIdOf) return [];
           const day = storeDay[storeIdOf] ?? { receipts: 0, revenueMinor: 0 };
-          const revenue = Math.round(day.revenueMinor * days * 0.45);
-          const returns = -Math.round(revenue * 0.006);
+          const sales = Math.round(day.revenueMinor * days * 0.45);
+          const cash = Math.round(sales * 0.5);
+          const card = Math.round(sales * 0.3);
+          const qr = Math.round(sales * 0.1);
+          const nfc = sales - cash - card - qr;
+          const returns = -Math.round(sales * 0.006);
           return [
             {
               cashier: e.shortName,
               store: scoped.find((s) => s.id === storeIdOf)?.name ?? '—',
               receipts: Math.round(day.receipts * days * 0.45),
-              cash: Math.round(revenue * 0.55),
-              card: Math.round(revenue * 0.35),
-              qr:
-                revenue -
-                Math.round(revenue * 0.55) -
-                Math.round(revenue * 0.35),
+              cash,
+              card,
+              qr,
+              nfc,
               returns,
-              revenue: revenue + returns,
+              revenue: sales + returns,
             },
           ];
         });
@@ -507,44 +515,52 @@ function report(
           col('cash', 'money'),
           col('card', 'money'),
           col('qr', 'money'),
+          col('nfc', 'money'),
           col('returns', 'money'),
           col('revenue', 'money'),
         ],
         rows,
-        total: null,
+        total: sumRows(
+          rows,
+          ['receipts', 'cash', 'card', 'qr', 'nfc', 'returns', 'revenue'],
+          'total',
+          'cashier',
+        ),
       };
     }
     case 'losses': {
       const names = scoped.map((s) => s.name);
-      const writeOffs = stock.writeOffs
+      const rows = stock.writeOffs
         .filter(
           (d) =>
             d.status === 'posted' &&
             names.includes(d.storeName) &&
             inPeriod(d.date, from, to),
         )
-        .map((d) => ({
-          number: d.number,
-          date: d.date,
-          store: d.storeName,
-          product: d.lines[0]?.productName ?? '—',
-          reason: d.reason,
-          quantity: d.lines.reduce((sum, l) => sum + l.quantity, 0),
-          amount: d.totalMinor ?? 0,
-        }));
-      const returns = mockDb()
-        .pos.returns.filter(
-          (r) => names.includes(r.storeName) && inPeriod(r.at, from, to),
+        .flatMap((d) =>
+          d.lines.map((l) => {
+            const perPack =
+              products.find((p) => p.id === l.productId)?.piecesPerPack ?? 1;
+            const qty = l.unit === 'pack' ? l.quantity * perPack : l.quantity;
+            return {
+              number: d.number,
+              date: d.date,
+              store: d.storeName,
+              product: l.productName,
+              reason: d.reason,
+              quantity: qty,
+              piecesPerPack: perPack,
+              amount: Math.round(
+                ((d.totalMinor ?? 0) * l.quantity) /
+                  Math.max(
+                    1,
+                    d.lines.reduce((sum, x) => sum + x.quantity, 0),
+                  ),
+              ),
+            };
+          }),
         )
-        .map((r) => ({
-          number: r.number,
-          date: r.at.slice(0, 10),
-          store: r.storeName,
-          product: r.summary,
-          reason: r.reason,
-          quantity: null,
-          amount: -r.refundMinor,
-        }));
+        .sort((a, b) => b.date.localeCompare(a.date));
       return {
         columns: [
           col('number', 'text'),
@@ -552,13 +568,11 @@ function report(
           col('store', 'text'),
           col('product', 'text'),
           col('reason', 'reason'),
-          col('quantity', 'quantity'),
+          col('quantity', 'pieces'),
           ...costCols(col('amount', 'money')),
         ],
-        rows: [...writeOffs, ...returns].sort((a, b) =>
-          b.date.localeCompare(a.date),
-        ),
-        total: null,
+        rows,
+        total: canSeeCost ? sumRows(rows, ['amount'], 'total', 'number') : null,
       };
     }
     case 'controlled': {
@@ -572,26 +586,83 @@ function report(
             .filter((l) => l.controlled !== null)
             .map((l) => ({
               at: r.soldAt,
+              store: scoped.find((s) => s.id === r.storeId)?.name ?? '—',
               product: l.productName,
               batch: l.batchNumber,
-              quantity: l.quantity,
+              quantity:
+                l.unit === 'pack' ? l.quantity * l.piecesPerPack : l.quantity,
+              piecesPerPack: l.piecesPerPack,
               cashier: r.cashierName,
-              receipt: `№${r.number}`,
+              receipt: r.number,
               prescription: l.controlled
-                ? `${l.controlled.prescriptionNumber} · ${l.controlled.clinic}`
-                : '—',
+                ? [
+                    l.controlled.prescriptionNumber,
+                    l.controlled.prescriptionDate,
+                    l.controlled.clinic,
+                    l.controlled.doctor,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || null
+                : null,
             })),
         )
         .sort((a, b) => b.at.localeCompare(a.at));
       return {
         columns: [
           col('at', 'datetime'),
+          col('store', 'text'),
           col('product', 'text'),
           col('batch', 'text'),
-          col('quantity', 'quantity'),
+          col('quantity', 'pieces'),
           col('cashier', 'text'),
           col('receipt', 'text'),
           col('prescription', 'text'),
+        ],
+        rows,
+        total: null,
+      };
+    }
+    case 'controlled_summary': {
+      // ПКУ by product × store: received and issued in pieces, the closing from the stock (O6)
+      const rows = products
+        .filter((product) => product.prescription === 'controlled')
+        .flatMap((product) =>
+          scoped.map((store) => {
+            const perPack = product.piecesPerPack;
+            const issued = mockDb()
+              .pos.receipts.filter(
+                (r) => r.storeId === store.id && inPeriod(r.soldAt, from, to),
+              )
+              .flatMap((r) => r.lines)
+              .filter((l) => l.productId === product.id)
+              .reduce(
+                (sum, l) =>
+                  sum + (l.unit === 'pack' ? l.quantity * perPack : l.quantity),
+                0,
+              );
+            const closing = product.batches.reduce(
+              (sum, b) => sum + (stockAt(store.id)[b.id] ?? 0),
+              0,
+            );
+            return {
+              product: product.name,
+              store: store.name,
+              piecesPerPack: perPack,
+              opening: closing + issued,
+              received: 0,
+              issued,
+              closing,
+            };
+          }),
+        );
+      return {
+        columns: [
+          col('product', 'text'),
+          col('store', 'text'),
+          col('opening', 'pieces'),
+          col('received', 'pieces'),
+          col('issued', 'pieces'),
+          col('closing', 'pieces'),
         ],
         rows,
         total: null,

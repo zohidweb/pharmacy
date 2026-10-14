@@ -326,7 +326,7 @@ describe('ReportsPage', () => {
       name: 'Продажи по точкам',
     });
     expect(
-      within(table).getByRole('columnheader', { name: 'Маржа, %' }),
+      within(table).getByRole('columnheader', { name: 'Прибыль, %' }),
     ).toBeTruthy();
     expect(within(table).getByText('Итого')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Журнал ПКУ' }));

@@ -24,8 +24,7 @@ import {
 import { PurchaseOrdersService } from './purchase-orders.service';
 
 // Purchase orders to suppliers (spec 2026-10-09-inventory-purchasing, section 5.3). The deficit of
-// an order (`GET /purchase-orders/deficit`) is the stock module's: its controller is registered
-// before this one, the static paths here come before `:id`.
+// an order is the stock module's (`GET /stock/deficit`); the static paths here come before `:id`.
 @Controller({ path: 'purchase-orders', version: '1' })
 export class PurchaseOrdersController {
   constructor(private readonly orders: PurchaseOrdersService) {}

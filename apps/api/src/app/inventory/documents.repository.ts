@@ -515,6 +515,21 @@ export class DocumentsRepository {
   }
 
   /**
+   * Key-share locks on the batches in the order of their ids — what the lines of a document take
+   * on them through the foreign key anyway, taken first and in one order.
+   */
+  async keyShareBatches(
+    trx: TenantTransaction,
+    tenantId: string,
+    batchIds: readonly string[],
+  ): Promise<void> {
+    if (batchIds.length === 0) return;
+    await sql`select id from pharmacy.batches
+      where tenant_id = ${tenantId} and id in (${sql.join([...batchIds])})
+      order by id for key share`.execute(trx);
+  }
+
+  /**
    * Movements of the batches written by anything but this document after `after` (its last
    * posting): only they block an unposting (spec 2026-10-12, B2).
    */

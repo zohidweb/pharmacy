@@ -50,6 +50,18 @@ export function toAppDate(instant: Date = new Date()): string {
   return isoDateInZone.format(instant);
 }
 
+/** The date `days` days after `isoDate` (YYYY-MM-DD, negative goes back), without time zones. */
+export function addDays(isoDate: string, days: number): string {
+  const match = DATE_ONLY.exec(isoDate);
+  if (!match)
+    throw new RangeError(`Expected a YYYY-MM-DD date, got "${isoDate}"`);
+  return new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days),
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
 /** Whole days from `from` to `to` (both YYYY-MM-DD); negative when `to` is earlier. */
 export function daysBetween(from: string, to: string): number {
   const toUtc = (value: string) => {

@@ -83,7 +83,7 @@ export class TransfersController {
     return this.transfers.cancel(id);
   }
 
-  /** The receiver: 409 `transfer_not_in_transit` / `stock_count_in_progress`. */
+  /** The receiver: 409 `transfer_not_in_transit` / `stock_count_in_progress` / `transfer_changed`. */
   @RequirePermission('inventory:receive')
   @HttpCode(HttpStatus.OK)
   @Post(':id/acceptance')

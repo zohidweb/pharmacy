@@ -135,7 +135,10 @@ export class PaymentsService {
     });
   }
 
-  /** The same body gets the answer of the first request; another one is a conflict. */
+  /**
+   * The same body gets the same payment (id, amount, date, method) with the balance as it is now;
+   * another body is a conflict.
+   */
   private async replay(
     trx: TenantTransaction,
     tenantId: string,

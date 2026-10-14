@@ -113,8 +113,10 @@ export function OpeningBalanceEditor({
           body: input(),
         })
       : apiRequest('openingBalances.create', { body: input() });
+  // one error at a time: a save or a posting clears what the other one left
   const save = useMutation({
     mutationFn: write,
+    onMutate: (): void => post.reset(),
     onSuccess: (saved) => {
       setDoc(saved);
       void invalidate();
@@ -127,6 +129,7 @@ export function OpeningBalanceEditor({
       setDoc(saved);
       return apiRequest('openingBalances.post', { params: { id: saved.id } });
     },
+    onMutate: (): void => save.reset(),
     onSuccess: (posted) => {
       setDoc(posted);
       void invalidate();
@@ -142,7 +145,8 @@ export function OpeningBalanceEditor({
       void invalidate();
     },
   });
-  const fieldErrors = apiFieldErrors(post.error ?? save.error);
+  const failure = post.error ?? save.error;
+  const fieldErrors = apiFieldErrors(failure);
   const serverError = (field: string) => {
     const code = fieldErrors.find((e) => e.field === field)?.code;
     if (code === undefined) return undefined;
@@ -151,9 +155,11 @@ export function OpeningBalanceEditor({
     if (code === 'too_old') return t('dateTooOld');
     if (code === 'above_max_price') return t('aboveMax');
     if (code === 'product_archived') return t('productArchived');
+    // the product is in the scope of a running stock count (the banner gives the reason)
+    if (code === 'stock_count_in_progress') return tDocs('lines.inCount');
     return tDocs('checkValue');
   };
-  const error = useApiErrorMessage(save.error ?? post.error);
+  const error = useApiErrorMessage(failure);
 
   const setLine = (key: string, change: (line: Line) => Line) =>
     setDraft((current) => ({
@@ -220,7 +226,8 @@ export function OpeningBalanceEditor({
                 <Button
                   variant="secondary"
                   loading={save.isPending}
-                  disabled={!draft.storeId}
+                  // one of the two at a time: each one clears the other's error
+                  disabled={!draft.storeId || post.isPending}
                   onClick={() => save.mutate()}
                 >
                   {tDocs('saveDraft')}
@@ -229,6 +236,7 @@ export function OpeningBalanceEditor({
                   <Button
                     iconStart="check"
                     loading={post.isPending}
+                    disabled={save.isPending}
                     onClick={() => {
                       setTouched(true);
                       if (valid) post.mutate();

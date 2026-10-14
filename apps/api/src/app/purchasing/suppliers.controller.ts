@@ -73,8 +73,11 @@ export class SuppliersController {
 
   /**
    * The ledger entry of the payment; needs `finance:view-cost` as well. A repeat of the same `id`
-   * with the same body returns the same entry. 400 (`legalEntityId` required when the network has
-   * several active legal entities, `date` in the future), 404, 409 `idempotency_conflict`.
+   * with the same body returns the same entry: the payment itself (id, amount, date, method) is
+   * idempotent, but `balanceMinor` is the balance at the moment of the repeat — entries of parallel
+   * transactions recorded earlier may change the balance at the position of the payment. 400
+   * (`legalEntityId` required when the network has several active legal entities, `date` in the
+   * future), 404, 409 `idempotency_conflict`.
    */
   @RequirePermission('purchasing:post')
   @Post(':id/payments')

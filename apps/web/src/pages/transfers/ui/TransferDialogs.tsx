@@ -25,6 +25,7 @@ import {
   type IconName,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { TransferStatusPill } from '@/entities/stock-document';
@@ -33,7 +34,8 @@ import {
   QuantityInput,
   type StockAccess,
 } from '@/features/stock-document';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
+import { routes } from '@/shared/config';
 import { useInvalidateTransfers, useProductsByIds } from '../api/queries';
 import { useLineProblem } from './use-line-problem';
 
@@ -109,9 +111,10 @@ export function TransferDialog({
   const [fromStoreId, setFromStoreId] = useState(
     givenRequest?.fromStoreId ?? access.writableStores[0]?.id ?? '',
   );
-  const others = stores.filter(
-    (s) => s.id !== fromStoreId && s.mode !== 'offline',
-  );
+  // the other side: any active cloud store of the network but the own one
+  const othersOf = (own: string) =>
+    stores.filter((s) => s.id !== own && s.mode !== 'offline');
+  const others = othersOf(fromStoreId);
   const [toStoreId, setToStoreId] = useState(
     givenRequest?.requesterStoreId ?? others[0]?.id ?? '',
   );
@@ -121,6 +124,7 @@ export function TransferDialog({
   const [extra, setExtra] = useState<StockProductOption[]>([]);
   const [touched, setTouched] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const productIds = [
     ...(givenRequest?.lines.map((l) => l.productId) ?? []),
     ...(doc?.lines.map((l) => l.productId) ?? []),
@@ -268,7 +272,7 @@ export function TransferDialog({
               variant="destructive"
               iconStart="ban"
               loading={cancel.isPending}
-              onClick={() => cancel.mutate()}
+              onClick={() => setConfirmingCancel(true)}
             >
               {t('cancelDraft')}
             </Button>
@@ -308,7 +312,15 @@ export function TransferDialog({
             label={t('from')}
             value={fromStoreId}
             disabled={Boolean(request) || doc !== null || current.length > 0}
-            onChange={(event) => setFromStoreId(event.target.value)}
+            onChange={(event) => {
+              const own = event.target.value;
+              setFromStoreId(own);
+              // the receiver may have become the own store: the first of the new list then
+              const next = othersOf(own);
+              if (!next.some((s) => s.id === toStoreId)) {
+                setToStoreId(next[0]?.id ?? '');
+              }
+            }}
             options={(doc
               ? [{ id: doc.fromStoreId, name: doc.fromStoreName }]
               : access.writableStores
@@ -522,6 +534,38 @@ export function TransferDialog({
           </table>
         )}
         <p className="text-xs text-fg-subtle">{t('fefoHint')}</p>
+        {confirmingCancel && doc && (
+          <Dialog
+            open
+            onClose={() => setConfirmingCancel(false)}
+            title={t('confirmCancelTitle', { number: doc.number })}
+            closeLabel={tDocs('close')}
+            icon="triangle-alert"
+            tone="danger"
+            footer={
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => setConfirmingCancel(false)}
+                >
+                  {tDocs('cancel')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  loading={cancel.isPending}
+                  onClick={() => {
+                    setConfirmingCancel(false);
+                    cancel.mutate();
+                  }}
+                >
+                  {t('cancelDraft')}
+                </Button>
+              </>
+            }
+          >
+            <p className="text-sm">{t('confirmCancelText')}</p>
+          </Dialog>
+        )}
       </div>
     </Dialog>
   );
@@ -587,6 +631,12 @@ export function TransferDetailDialog({
   const [touched, setTouched] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const doc = transfer.data;
+  // The dispatch the quantities are entered for. A card reloaded in the background (a reconnect)
+  // with a new dispatch keeps it, so the server answers 409 instead of taking the old entries.
+  const [filledFor, setFilledFor] = useState<string | null>(null);
+  const shownDispatch =
+    doc?.status === 'in_transit' ? (doc.sentBy?.at ?? null) : null;
+  if (filledFor === null && shownDispatch !== null) setFilledFor(shownDispatch);
   const isReceiver =
     doc !== undefined &&
     access.writableStores.some((s) => s.id === doc.toStoreId) &&
@@ -611,6 +661,7 @@ export function TransferDetailDialog({
       apiRequest('transfers.accept', {
         params: { id: transferId },
         body: {
+          dispatchedAt: filledFor ?? '',
           comment: comment.trim(),
           lines: (doc?.lines ?? []).map((l) => ({
             batchId: l.batchId,
@@ -619,6 +670,23 @@ export function TransferDetailDialog({
         },
       }),
     onSuccess: update,
+    onError: (error) => {
+      // sent again since the card was read: the list and the card again, the quantities entered
+      // from scratch for the new dispatch
+      if (error instanceof ApiError && error.code === 'transfer_changed') {
+        setReceived({});
+        setTouched(false);
+        void invalidate().then(() =>
+          setFilledFor(
+            queryClient.getQueryData<Transfer>([
+              'transfers',
+              'detail',
+              transferId,
+            ])?.sentBy?.at ?? null,
+          ),
+        );
+      }
+    },
   });
   // every line needs its actual quantity: an empty field is never taken for zero
   const incomplete = (doc?.lines ?? []).some((l) => {
@@ -888,6 +956,18 @@ export function TransferDetailDialog({
                   {t('writtenOff', {
                     document: doc.discrepancy.writeOffNumber,
                   })}
+                  {/* the write-off is the sender's: seen only in its scope */}
+                  {isSender && (
+                    <>
+                      {' '}
+                      <Link
+                        href={routes.writeOffs()}
+                        className="font-medium text-primary underline"
+                      >
+                        {t('openWriteOffs')}
+                      </Link>
+                    </>
+                  )}
                 </span>
                 {doc.discrepancy.comment && (
                   <span>{doc.discrepancy.comment}</span>

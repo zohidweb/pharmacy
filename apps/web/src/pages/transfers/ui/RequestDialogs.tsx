@@ -73,9 +73,9 @@ export function RequestDialog({
     request?.requesterStoreId ?? access.writableStores[0]?.id ?? '',
   );
   // the other side: any active cloud store of the network, not only of the scope
-  const others = stores.filter(
-    (s) => s.id !== toStoreId && s.mode !== 'offline',
-  );
+  const othersOf = (own: string) =>
+    stores.filter((s) => s.id !== own && s.mode !== 'offline');
+  const others = othersOf(toStoreId);
   const [fromStoreId, setFromStoreId] = useState(
     request?.fromStoreId ?? others[0]?.id ?? '',
   );
@@ -84,11 +84,14 @@ export function RequestDialog({
   );
   const [comment, setComment] = useState(request?.comment ?? '');
   const [touched, setTouched] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const ids = lines.map((l) => l.productId);
-  // the stock of the asked store is shown only when it is in the scope of the employee
-  const senderVisible = access.writableStores.some((s) => s.id === fromStoreId);
-  const sender = useProductsByIds(senderVisible ? fromStoreId : '', ids);
-  const ours = useProductsByIds(toStoreId, ids);
+  // the stock of each side is shown only when it is in the scope of the employee: the asked store
+  // opening a request does not see the requester's
+  const inScope = (storeId: string) =>
+    access.writableStores.some((s) => s.id === storeId);
+  const sender = useProductsByIds(inScope(fromStoreId) ? fromStoreId : '', ids);
+  const ours = useProductsByIds(inScope(toStoreId) ? toStoreId : '', ids);
 
   const body = (send: boolean) => ({
     fromStoreId,
@@ -146,7 +149,7 @@ export function RequestDialog({
               variant="destructive"
               iconStart="trash-2"
               loading={remove.isPending}
-              onClick={() => remove.mutate()}
+              onClick={() => setConfirmingDelete(true)}
             >
               {t('delete')}
             </Button>
@@ -206,7 +209,15 @@ export function RequestDialog({
             label={t('to')}
             value={toStoreId}
             disabled={!editable || request !== null || lines.length > 0}
-            onChange={(event) => setToStoreId(event.target.value)}
+            onChange={(event) => {
+              const own = event.target.value;
+              setToStoreId(own);
+              // the asked store may have become the own one: the first of the new list then
+              const next = othersOf(own);
+              if (!next.some((s) => s.id === fromStoreId)) {
+                setFromStoreId(next[0]?.id ?? '');
+              }
+            }}
             options={(request
               ? [
                   {
@@ -346,6 +357,38 @@ export function RequestDialog({
           value={comment}
           onChange={(event) => setComment(event.target.value)}
         />
+        {confirmingDelete && request && (
+          <Dialog
+            open
+            onClose={() => setConfirmingDelete(false)}
+            title={t('confirmDeleteTitle', { number: request.number })}
+            closeLabel={tDocs('close')}
+            icon="triangle-alert"
+            tone="danger"
+            footer={
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  {tDocs('cancel')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  loading={remove.isPending}
+                  onClick={() => {
+                    setConfirmingDelete(false);
+                    remove.mutate();
+                  }}
+                >
+                  {t('delete')}
+                </Button>
+              </>
+            }
+          >
+            <p className="text-sm">{t('confirmDeleteText')}</p>
+          </Dialog>
+        )}
       </div>
     </Dialog>
   );

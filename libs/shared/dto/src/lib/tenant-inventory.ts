@@ -133,6 +133,8 @@ export interface StockListResponse extends Page<StockRow> {
 export interface SupplierOption {
   id: string;
   name: string;
+  /** The payment deferral: a goods receipt without a due date is due on its date + these days. */
+  paymentDelayDays: number;
 }
 
 export interface PurchaseOrderLineOption {
@@ -776,9 +778,15 @@ export interface TransferInput {
 /**
  * POST /api/v1/transfers/{id}/acceptance — `inventory:receive` of the receiver: every line once,
  * 0…sent in the unit of the line; the receiver gets its own batches, a shortage becomes a posted
- * write-off of the sender. 409 `transfer_not_in_transit` / `stock_count_in_progress`.
+ * write-off of the sender. 409 `transfer_not_in_transit` / `stock_count_in_progress` /
+ * `transfer_changed`.
  */
 export interface AcceptTransferRequest {
+  /**
+   * `sentBy.at` of the card the quantities were filled from. A transfer recalled, changed and sent
+   * again since then has another dispatch: 409 `transfer_changed`, the card is read again.
+   */
+  dispatchedAt: string;
   comment: string;
   lines: Array<{ batchId: string; receivedQuantity: number }>;
 }

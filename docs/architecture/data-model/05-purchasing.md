@@ -62,12 +62,12 @@ erDiagram
 
 Сальдо пары «поставщик × юрлицо» (D5: должно юрлицо точки прихода) = сумма записей. Долг — сумма остатков
 проведённых приходов пары после распределений оплат и возвратов; сальдо = долг − нераспределённые кредиты
-(предоплата), см. «Отчёты» ниже.
+(остатки оплат — предоплата — и возвратов поставщику), см. «Отчёты» ниже.
 
 | Колонка | Тип | Правило |
 |---|---|---|
 | `supplier_id`, `legal_entity_id` | uuid | |
-| `kind` | text | `goods_receipt` (+), `payment` (−), `supplier_return` (−), `adjustment` (±), `reversal` |
+| `kind` | text | `goods_receipt` (+), `payment` (−), `supplier_return` (−), `reversal`; `adjustment` (±) — не в MVP: в ограничении БД его нет |
 | `amount_dirams` | bigint ≠ 0 | Знак по `kind` |
 | `due_date` | date null | Для `goods_receipt` — срок оплаты документа |
 | `source_type`, `source_id` | | Документ, оплата или корректировка |

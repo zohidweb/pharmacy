@@ -326,13 +326,13 @@ const handlers: MockHandlers = {
     if (
       checkPin(body.newPin, mockDb().owner.settings.minPinLength) === 'length'
     ) {
-      throw new ApiError(422, 'validation_failed', correlationId, [
-        { field: 'newPin', code: 'length' },
+      throw new ApiError(422, 'pin_length', correlationId, [
+        { field: 'newPin', code: 'pin_length' },
       ]);
     }
     if (isTrivialPin(body.newPin)) {
       throw new ApiError(422, 'pin_trivial', correlationId, [
-        { field: 'newPin', code: 'trivial' },
+        { field: 'newPin', code: 'pin_trivial' },
       ]);
     }
     employee.pin = body.newPin;

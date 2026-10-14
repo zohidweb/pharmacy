@@ -250,13 +250,7 @@ describe('PosPage', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Чек оплачен' });
     expect(
-      await within(dialog).findByText(
-        /Нет связи: чек сохранён в буфере/,
-        undefined,
-        {
-          timeout: 3_000,
-        },
-      ),
+      await within(dialog).findByText(/Нет связи: чек сохранён в буфере/),
     ).toBeTruthy();
     expect(await screen.findByText('Нет связи — в буфере: 1')).toBeTruthy();
     const runtime = await getTerminalRuntime('tenant-shifo', 'store-3');

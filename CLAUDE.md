@@ -91,7 +91,8 @@ pharmacy/
   `purchasing` ← `inventory` (`ProductsReader`, `StorePriceWriter`, `SuppliersReader`, `SupplierLedger`,
   `OrderReceiving`); `catalog`, `pricing`, `inventory` ← `pos` (`ProductsReader`, `StorePricesReader`, `PosStock`,
   `Numbering`).
-  `pos`, `inventory`, `catalog` ← `returns` (`SoldReceipts`, `PosShifts`, `ReturnStock`); итоги возвратов смены и
+  `pos`, `inventory`, `catalog` ← `returns` (`SoldReceipts`, `PosShifts`, `PosContext`, `PosIdempotency`,
+  `ReturnStock`, `Numbering`, `ProductsReader`); итоги возвратов смены и
   номера возвратов `pos` и `inventory` получают через порты `ShiftReturns`, `CustomerReturnNumbers`, которые
   заполняет `returns`.
 
@@ -281,8 +282,8 @@ npm run prod:build / prod:up / prod:down
   `<sha>-dirty`). В PowerShell переменная задаётся отдельно: `$env:IMAGE_TAG = git rev-parse --short HEAD`, затем
   та же команда `docker compose …` без префикса. Сначала проверьте, что образ есть:
   `docker image inspect pharmacy/api:<тег>`. Без образа `run` не упадёт, а начнёт сборку (у сервиса `api` есть
-  `build:`, флага `--no-build` у `run` нет) — и запустит код рабочего дерева, а не собранного `build`. В dev: `node --env-file=.env apps/api/scripts/create-activation-code.mjs --login …`
-  (нужен `npm run dev:deps`). Скрипт печатает код и срок и больше ничего; ни код, ни хеш не логируются.
+  `build:`, флага `--no-build` у `run` нет) — и запустит код рабочего дерева, а не собранного `build`.
+  В dev: `node --env-file=.env apps/api/scripts/create-activation-code.mjs --login …` (нужен `npm run dev:deps`). Скрипт печатает код и срок и больше ничего; ни код, ни хеш не логируются.
 - Первый оператор платформы (часть 3 аутентификации) — тот же механизм: `scripts/create-operator.mjs
   --login <рабочий e-mail> --name "<ФИО>"` создаёт оператора (или находит существующего) и печатает
   одноразовый код один раз; пароль оператор задаёт сам на экране админки «Первый вход» (`/activate`,

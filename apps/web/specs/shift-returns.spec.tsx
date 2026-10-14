@@ -68,7 +68,8 @@ describe('ShiftPage', () => {
         ).toBe('Ожидается в кассе1 672,50 с'),
       { timeout: 15_000 },
     );
-  });
+    // two waits of up to 15 s each
+  }, 40_000);
 
   it('closes the shift with reconciliation and shows the Z-report', async () => {
     await signInByPin('emp-cashier', '2580');

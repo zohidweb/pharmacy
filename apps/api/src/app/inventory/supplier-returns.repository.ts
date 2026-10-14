@@ -36,7 +36,9 @@ export interface ReturnBatch {
 
 /**
  * Amount of a line at the purchase price of its batch (spec 2026-10-12-supplier-returns-transfers,
- * R2): the formula of the amount of a goods receipt — pieces × price of a pack / pieces per pack.
+ * R2): pieces × price of a pack / pieces per pack, rounded — a return line may be in pieces. A goods
+ * receipt, always in packs, counts packs × price; one formula for all documents is an open
+ * architect question (triage sr-M1).
  */
 export const returnAmount = (line: {
   qtyPieces: number;

@@ -70,6 +70,15 @@ export class OrderReceiving {
     }
   }
 
+  /** Locks the order until the transaction ends (the unposting of a goods receipt by it). */
+  async lock(
+    trx: TenantTransaction,
+    tenantId: string,
+    orderId: string,
+  ): Promise<void> {
+    await this.repository.find(trx, tenantId, orderId, true);
+  }
+
   /** The status of a confirmed order after its posted goods receipts. */
   async refreshStatus(
     trx: TenantTransaction,

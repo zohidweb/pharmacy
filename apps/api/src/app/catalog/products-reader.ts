@@ -166,8 +166,8 @@ export class ProductsReader {
     const wanted = new Set(ids);
     const { locale } = requirePrincipal();
     const language = await this.repository.networkLanguage(trx, tenantId);
-    for (const row of await this.repository.listCategories(trx, tenantId, false)) {
-      if (wanted.has(row.id)) names.set(row.id, localizedName(row.name, locale, language));
+    for (const row of await this.repository.categoryNamesByIds(trx, tenantId, [...wanted])) {
+      names.set(row.id, localizedName(row.name, locale, language));
     }
     return names;
   }

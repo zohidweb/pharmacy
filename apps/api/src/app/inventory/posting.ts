@@ -154,10 +154,17 @@ export class DocumentPosting {
           { field: `lines.${i}.productId`, code: 'product_archived' },
         ]);
       }
+      // the pack size changed since the draft was saved: its quantity no longer splits into packs
+      // (the amount would be wrong); saving the draft again recounts it
+      const pack = products.get(line.productId)?.piecesPerPack ?? 1;
+      if (line.qtyPieces % pack !== 0) {
+        throw invalid(`lines.${i}.quantity`, 'pack_size_changed');
+      }
     }
 
-    // The store prices of the products are locked first, in the order of the products: two postings
-    // (or a posting and a price change) with common products then wait instead of deadlocking.
+    // The store prices are written after the batches, in the order of the products: every writer of
+    // prices takes the rows in the order (store, product), so a posting, a price change or a
+    // transfer accepted at the store with common products wait instead of deadlocking.
     const priced = lines
       .map((line, i) => ({ line, i }))
       .filter(({ line }) => line.retailPriceDraftDirams !== null)
@@ -168,12 +175,6 @@ export class DocumentPosting {
             ? 1
             : 0,
       );
-    await this.prices.lock(trx, {
-      tenantId,
-      storeId: doc.storeId,
-      productIds: priced.map(({ line }) => line.productId),
-    });
-
     for (const line of lines) {
       const product = products.get(line.productId) as PricingProduct;
       let batchId = line.batchId;
@@ -287,6 +288,10 @@ export class DocumentPosting {
       doc.storeId,
       lines.map((l) => l.productId),
     );
+    // the order first, as the posting takes it: order, then batches, then settlements
+    if (doc.purchaseOrderId !== null) {
+      await this.orders.lock(trx, tenantId, doc.purchaseOrderId);
+    }
     const blockers = await this.blockersOf(trx, tenantId, doc, lines, true);
     if (blockers.length > 0) throw new ProblemException(409, 'unpost_blocked');
 

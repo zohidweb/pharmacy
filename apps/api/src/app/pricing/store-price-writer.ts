@@ -33,27 +33,6 @@ export class StorePriceWriter {
   ) {}
 
   /**
-   * Locks the price rows of the products at a store until the transaction ends, in the order of the
-   * products (rows not created yet are not locked; `set` creates them). Called before a batch of
-   * `set`s so that every writer takes the price rows in one order: (store, product).
-   */
-  async lock(
-    trx: TenantTransaction,
-    target: {
-      tenantId: string;
-      storeId: string;
-      productIds: readonly string[];
-    },
-  ): Promise<void> {
-    await this.repository.lockStoreProducts(
-      trx,
-      target.tenantId,
-      target.storeId,
-      target.productIds,
-    );
-  }
-
-  /**
    * Sets the price of a pack at a store. 403 `forbidden` / `store_not_in_scope` without the right
    * on the store, 422 `above_max_price` at `field` unless confirmed.
    */
@@ -132,7 +111,9 @@ export class StorePriceWriter {
     },
   ): Promise<void> {
     const { employeeId } = requirePrincipal();
-    for (const productId of c.productIds) {
+    // in the order of the products, as every writer of prices: (store, product)
+    const productIds = [...new Set(c.productIds)].sort();
+    for (const productId of productIds) {
       const price = await this.repository.copyPrice(
         trx,
         c.tenantId,

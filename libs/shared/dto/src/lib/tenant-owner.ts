@@ -6,6 +6,7 @@
  * the cloud shows their synchronisation; an offline store decides its product duplicates itself.
  */
 import type { Page, StoreMode } from './platform-tenants.js';
+import type { ExpenseKind } from '@pharmacy/shared-domain';
 import type { NotificationKind } from './tenant-home.js';
 
 /* ---------------- stores ---------------- */
@@ -221,9 +222,8 @@ export interface ReportQuery {
 
 /**
  * GET /api/v1/reports/{kind}?from=&to=&storeId= — one table per report. Cost and margin columns
- * are absent without `finance:view-cost` (ADR-0018, п. 6).
- */
-/**
+ * are absent without `finance:view-cost` (ADR-0018, п. 6); the expense columns of «Продажи по
+ * точкам» (`expenses`, `cashExpenses`, `netProfit`) need `finance:view-cost` and `expenses:view`.
  * A row may carry keys that are not columns: `piecesPerPack` for the `pieces` columns,
  * `prescriptionPurged: 1` for a ПКУ sale whose prescription data were purged by the retention term.
  */
@@ -233,6 +233,57 @@ export interface ReportTable {
   rows: Array<Record<string, ReportCell>>;
   total: Record<string, ReportCell> | null;
 }
+
+/* ---------------- other expenses (spec 2026-10-14-owner-cabinet, E16, 5.6) ---------------- */
+
+/** An expense of a month: of a store, or of the whole network (`storeId` null). */
+export interface Expense {
+  id: string;
+  /** YYYY-MM. */
+  month: string;
+  storeId: string | null;
+  storeName: string | null;
+  kind: ExpenseKind;
+  amountMinor: number;
+  comment: string | null;
+}
+
+/** The cash withdrawals «на расходы» of a store in the month (read only, O9). */
+export interface CashExpensesOfStore {
+  storeId: string;
+  storeName: string;
+  amountMinor: number;
+  operations: number;
+}
+
+/** GET /api/v1/expenses?month=YYYY-MM&storeId= */
+export interface ExpenseListResponse {
+  items: Expense[];
+  totalMinor: number;
+  cashExpenses: CashExpensesOfStore[];
+}
+
+export interface ExpenseQuery {
+  /** YYYY-MM. */
+  month: string;
+  storeId?: string;
+}
+
+/** POST /api/v1/expenses; the month is not later than the current month of the network. */
+export interface CreateExpenseRequest {
+  /** YYYY-MM. */
+  month: string;
+  /** `null` — the whole network (an employee of the whole network only). */
+  storeId: string | null;
+  kind: ExpenseKind;
+  /** 1 … 10 000 000 000 dirams. */
+  amountMinor: number;
+  /** ≤ 500 characters. */
+  comment: string | null;
+}
+
+/** PUT /api/v1/expenses/{id} — the whole record. */
+export type UpdateExpenseRequest = CreateExpenseRequest;
 
 /* ---------------- export to 1C (CommerceML, CLAUDE.md «Integrations») ---------------- */
 

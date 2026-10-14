@@ -26,6 +26,7 @@ export const auditGroups = [
   'role_change',
   'store',
   'settings_change',
+  'expense',
 ] as const;
 
 export type AuditGroup = (typeof auditGroups)[number];
@@ -130,6 +131,7 @@ export const AUDIT_GROUP_RULES: readonly AuditGroupRule[] = [
   },
   { group: 'store', prefixes: ['store.', 'legal-entity.', 'terminal.'] },
   { group: 'settings_change', prefixes: ['settings.'] },
+  { group: 'expense', prefixes: ['expense.'] },
 ];
 
 export function auditRuleMatches(

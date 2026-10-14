@@ -29,6 +29,7 @@ describe('permission catalog', () => {
       'pricing',
       'discounts',
       'reports',
+      'expenses',
       'export-1c',
       'employees',
       'roles',

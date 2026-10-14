@@ -25,6 +25,8 @@ const moduleActions = {
   pricing: ['view'],
   discounts: ['view'],
   reports: ['view', 'export'],
+  // other expenses of the network and the stores (spec 2026-10-14-owner-cabinet, E16)
+  expenses: ['view', 'create', 'update', 'delete'],
   'export-1c': ['view', 'export'],
   employees: ['view', 'create', 'update', 'delete'],
   roles: ['view'],

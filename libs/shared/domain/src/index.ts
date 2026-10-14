@@ -1,6 +1,7 @@
 export * from './lib/audit-groups';
 export * from './lib/catalog';
 export * from './lib/discount';
+export * from './lib/expenses';
 export * from './lib/operator-permissions';
 export * from './lib/permissions';
 export * from './lib/password-policy';

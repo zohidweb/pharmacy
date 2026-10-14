@@ -16,6 +16,7 @@ import {
   ProductsReader,
 } from '../catalog/products-reader';
 import { PricingRepository, type StoreRef } from './pricing.repository';
+import { PurchasePrices } from './purchase-prices';
 import { StorePriceWriter } from './store-price-writer';
 
 const notFound = () => new ProblemException(404, 'not_found');
@@ -40,6 +41,7 @@ export class PricesService {
     private readonly repository: PricingRepository,
     private readonly products: ProductsReader,
     private readonly writer: StorePriceWriter,
+    private readonly purchasePrices: PurchasePrices,
   ) {}
 
   async list(query: PriceListQuery): Promise<PriceListResponse> {
@@ -163,6 +165,16 @@ export class PricesService {
   ): Promise<PriceRow[]> {
     const { permissions } = requirePrincipal();
     const canSeeCost = hasPermissions(permissions, 'finance:view-cost');
+    // the last purchase price of a pack (E15): shown and compared only with the cost permission,
+    // compared only when the network asks for the warning
+    const costs = canSeeCost
+      ? await this.purchasePrices.lastPackCosts(
+          trx,
+          tenantId,
+          products.map((product) => product.id),
+        )
+      : new Map<string, number>();
+    const { warnBelowCost } = await this.repository.settings(trx, tenantId);
     const cells = await this.repository.prices(
       trx,
       tenantId,
@@ -178,8 +190,7 @@ export class PricesService {
     return products.map((product) => ({
       productId: product.id,
       productName: product.name,
-      // No purchase price before the goods receipts of the stock module.
-      ...(canSeeCost ? { costMinor: null } : {}),
+      ...(canSeeCost ? { costMinor: costs.get(product.id) ?? null } : {}),
       markupPercent: markupPercent(product),
       maxPriceMinor: product.maxPriceMinor,
       prices: stores.map((store) => {
@@ -194,7 +205,9 @@ export class PricesService {
               ? []
               : priceWarnings({
                   priceMinor,
-                  costMinor: null,
+                  costMinor: warnBelowCost
+                    ? (costs.get(product.id) ?? null)
+                    : null,
                   maxPriceMinor: product.maxPriceMinor,
                 }),
         };

@@ -5,8 +5,11 @@ import { IsString, Length, Matches, MaxLength } from 'class-validator';
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
-/** No control or invisible format characters: the name is shown in the audit log. */
-export const PRINTABLE_NAME = /^[^\p{Cc}\p{Cf}]+$/u;
+/**
+ * No control, invisible format or line/paragraph separator characters: the name is shown in the
+ * audit log. scripts/create-operator.mjs applies the same rule.
+ */
+export const PRINTABLE_NAME = /^[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+$/u;
 
 /**
  * POST /api/v1/operator/operators. The bounds are those of create-operator.mjs; the service checks

@@ -48,6 +48,14 @@ class OperatorGoneError extends Error {
   }
 }
 
+// The operator was disabled between the check and the session.
+class OperatorBlockedError extends Error {
+  constructor() {
+    super('The operator was disabled during the sign-in');
+    this.name = 'OperatorBlockedError';
+  }
+}
+
 // The password was changed (or set by a code) between the check and the session: the verified
 // password is not the operator's any more.
 class PasswordChangedError extends Error {
@@ -182,7 +190,9 @@ export class OperatorSessionsService {
         async (trx) => {
           // operators before operator_credentials, as in every writer of both (a new code, a
           // password change): the opposite order could deadlock with them.
-          await this.repository.recordLogin(trx, operatorId);
+          if (!(await this.repository.recordLogin(trx, operatorId))) {
+            throw new OperatorBlockedError();
+          }
           // A password changed after the check would otherwise leave this session alive: the
           // change ends the sessions it finds, and this one is stored only now.
           const current = await this.repository.lockPasswordChange(trx, operatorId);
@@ -220,6 +230,9 @@ export class OperatorSessionsService {
       if (stored.session) await this.discard(sessionId);
       // The operator of the verified password is gone: the same answer as an unknown login.
       if (error instanceof OperatorGoneError) return this.fail(operatorId, 'unknown_login', ip);
+      if (error instanceof OperatorBlockedError) {
+        return this.fail(operatorId, 'operator_blocked', ip);
+      }
       if (error instanceof PasswordChangedError) {
         return this.fail(operatorId, 'password_changed', ip);
       }

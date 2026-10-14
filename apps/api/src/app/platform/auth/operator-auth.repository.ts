@@ -189,12 +189,21 @@ export class OperatorAuthRepository {
     return result.numUpdatedRows === 1n;
   }
 
-  async recordLogin(trx: Transaction<DB>, operatorId: string): Promise<void> {
-    await trx
+  /**
+   * The time of the sign-in, for an active operator only; false when he is not active any more (a
+   * disable committed while the password was checked). The row stays locked to the commit.
+   */
+  async recordLogin(
+    trx: Transaction<DB>,
+    operatorId: string,
+  ): Promise<boolean> {
+    const result = await trx
       .updateTable('operators')
       .set({ lastLoginAt: sql<Date>`now()`, updatedAt: sql<Date>`now()` })
       .where('id', '=', operatorId)
-      .execute();
+      .where('status', '=', 'active')
+      .executeTakeFirst();
+    return result.numUpdatedRows === 1n;
   }
 
   /** Rewrites the hash with current parameters while it still equals the verified one. */

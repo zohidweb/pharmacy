@@ -79,6 +79,10 @@ function parseArgs(argv) {
   if (name === '' || name.length > MAX_NAME_LENGTH) {
     throw new UserError(`The name must be 1-${MAX_NAME_LENGTH} characters.`);
   }
+  // As PRINTABLE_NAME of the API (operators/dto/operator.dto.ts): the name is shown in the log.
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(name)) {
+    throw new UserError('The name must not contain control or invisible characters.');
+  }
   return { login, name };
 }
 

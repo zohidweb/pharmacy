@@ -141,7 +141,9 @@ export class PricingRepository {
     tenantId: string,
     storeId: string,
     businessDate: string,
-  ): Promise<Array<{ ruleId: string; minTotalDirams: bigint; percentBp: number }>> {
+  ): Promise<
+    Array<{ ruleId: string; minTotalDirams: bigint; percentBp: number }>
+  > {
     const result = await sql<{
       ruleId: string;
       minTotalDirams: bigint;

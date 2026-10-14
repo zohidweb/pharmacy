@@ -42,7 +42,7 @@ import type {
   OpeningBalanceInput,
   ProductBatchRow,
 } from '@pharmacy/shared-dto';
-import { daysBetween, toAppDate } from '@pharmacy/shared-util';
+import { addDays, daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
@@ -403,6 +403,12 @@ function buildReceipt(
   return {
     ...base,
     ...input,
+    // as the server: without a due date — the date + the deferral of the supplier
+    paymentDueOn:
+      input.paymentDueOn ??
+      (/^\d{4}-\d{2}-\d{2}$/.test(input.date)
+        ? addDays(input.date, supplier.paymentDelayDays)
+        : null),
     supplierName: supplier.name,
     storeName: storeName(input.storeId),
     orderNumber: order?.number ?? null,
@@ -917,7 +923,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
 
   'suppliers.options': ({ correlationId }) => {
     context(correlationId, 'inventory:view');
-    return db().suppliers.map(({ id, name }) => ({ id, name }));
+    return db().suppliers.map(({ id, name, paymentDelayDays }) => ({
+      id,
+      name,
+      paymentDelayDays,
+    }));
   },
   'purchaseOrders.open': ({ query, correlationId }) => {
     context(correlationId, 'inventory:view');

@@ -167,6 +167,7 @@
       "invoice": "Номер накладной",
       "invoiceRequired": "Укажите номер накладной",
       "paymentDue": "Оплатить до",
+      "paymentDueAuto": "По отсрочке поставщика: {days} дн.",
       "lines": "Строки · {count}",
       "linesCaption": "Строки прихода",
       "linesRequired": "Добавьте хотя бы одну строку",

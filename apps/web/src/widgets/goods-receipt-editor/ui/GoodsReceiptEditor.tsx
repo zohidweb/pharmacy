@@ -10,7 +10,7 @@ import type {
   GoodsReceiptInput,
   StockProductOption,
 } from '@pharmacy/shared-dto';
-import { formatMoney, toAppDate } from '@pharmacy/shared-util';
+import { addDays, formatMoney, toAppDate } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -119,6 +119,7 @@ export function GoodsReceiptEditor({
         },
   );
   const [touched, setTouched] = useState(false);
+  const [dueEdited, setDueEdited] = useState(false);
   const [prefilled, setPrefilled] = useState(!prefill);
   const [unposting, setUnposting] = useState(false);
   const editable = (!doc || doc.status === 'draft') && access.canUpdate;
@@ -127,6 +128,25 @@ export function GoodsReceiptEditor({
     queryKey: ['suppliers', 'options'],
     queryFn: ({ signal }) => apiRequest('suppliers.options', { signal }),
   });
+  // Without a typed due date the API takes the deferral of the supplier: the field shows that
+  // date and follows the date and the supplier. A typed one is sent as it is.
+  const deferralOf = (supplierId: string) =>
+    suppliers.data?.find((s) => s.id === supplierId)?.paymentDelayDays;
+  const dueByDeferral = (date: string, supplierId: string) => {
+    const days = deferralOf(supplierId);
+    return days === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? null
+      : addDays(date, days);
+  };
+  // a saved due date other than the deferral's was typed: it stays
+  const dueTyped =
+    dueEdited ||
+    (doc !== null &&
+      draft.paymentDueOn !== null &&
+      draft.paymentDueOn === doc.paymentDueOn &&
+      doc.paymentDueOn !== dueByDeferral(doc.date, doc.supplierId));
+  const dueAuto = editable && !dueTyped;
+  const autoDue = dueByDeferral(draft.date, draft.supplierId);
   // an order of the mocks is unknown to a receipt of apps/api (partial mode)
   const ordersAvailable =
     isApiRouteAvailable('purchaseOrders.open') &&
@@ -166,6 +186,7 @@ export function GoodsReceiptEditor({
 
   const input = (): GoodsReceiptInput => ({
     ...draft,
+    paymentDueOn: dueTyped ? draft.paymentDueOn : null,
     lines: draft.lines.map(
       ({ key: _k, productName: _n, retailTouched: _r, ...line }) => line,
     ),
@@ -485,13 +506,20 @@ export function GoodsReceiptEditor({
               label={t('paymentDue')}
               type="date"
               disabled={!editable}
-              value={draft.paymentDueOn ?? ''}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  paymentDueOn: event.target.value || null,
-                }))
+              value={(dueAuto ? autoDue : draft.paymentDueOn) ?? ''}
+              hint={
+                dueAuto && autoDue !== null
+                  ? t('paymentDueAuto', {
+                      days: deferralOf(draft.supplierId) ?? 0,
+                    })
+                  : undefined
               }
+              onChange={(event) => {
+                const value = event.target.value || null;
+                // cleared — back to the deferral of the supplier
+                setDueEdited(value !== null);
+                setDraft((current) => ({ ...current, paymentDueOn: value }));
+              }}
             />
           </div>
 

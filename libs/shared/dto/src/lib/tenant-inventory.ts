@@ -133,6 +133,8 @@ export interface StockListResponse extends Page<StockRow> {
 export interface SupplierOption {
   id: string;
   name: string;
+  /** The payment deferral: a goods receipt without a due date is due on its date + these days. */
+  paymentDelayDays: number;
 }
 
 export interface PurchaseOrderLineOption {

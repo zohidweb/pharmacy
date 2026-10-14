@@ -138,7 +138,11 @@ export class SuppliersService {
     );
     return rows
       .filter((r) => r.status === 'active')
-      .map((r) => ({ id: r.id, name: r.name }));
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        paymentDelayDays: r.paymentTermDays,
+      }));
   }
 
   async list(query: {

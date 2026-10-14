@@ -34,12 +34,24 @@ export interface EditableStockLine {
 const piecesOf = (line: EditableStockLine) =>
   line.unit === 'pack' ? line.quantity * line.piecesPerPack : line.quantity;
 
-export function unitCostOf(line: EditableStockLine): number | undefined {
+/**
+ * How a pack is valued: `pack` — the price of the pack of the batch (a supplier return); `piece` —
+ * its pieces at the cost of a piece rounded up, as a posted write-off counts (pieces × cost of a
+ * piece), so the amount on the screen is the posted one.
+ */
+export type StockValuation = 'pack' | 'piece';
+
+export function unitCostOf(
+  line: EditableStockLine,
+  valuation: StockValuation = 'pack',
+): number | undefined {
   const batch = line.batches.find((b) => b.id === line.batchId);
   if (batch?.costMinor === undefined) return undefined;
-  return line.unit === 'pack'
-    ? batch.costMinor
-    : pieceCost(batch.costMinor, line.piecesPerPack);
+  const perPiece = pieceCost(batch.costMinor, line.piecesPerPack);
+  if (line.unit === 'piece') return perPiece;
+  return valuation === 'piece'
+    ? perPiece * line.piecesPerPack
+    : batch.costMinor;
 }
 
 export function stockLineProblem(
@@ -49,6 +61,27 @@ export function stockLineProblem(
   const batch = line.batches.find((b) => b.id === line.batchId);
   if (!batch || piecesOf(line) > batch.quantityPieces) return 'stock';
   return null;
+}
+
+/**
+ * The whole rest of a batch as a line quantity: whole packs, or every piece of a divisible product
+ * with an opened pack; at least 1 (a rest below a pack of an indivisible product shows as above
+ * the stock).
+ */
+export function wholeBatchQuantity(
+  product: Pick<StockProductOption, 'piecesPerPack' | 'divisible'>,
+  batch: Pick<StockBatch, 'quantityPieces'>,
+): Pick<EditableStockLine, 'unit' | 'quantity'> {
+  if (product.divisible && batch.quantityPieces % product.piecesPerPack !== 0) {
+    return { unit: 'piece', quantity: batch.quantityPieces };
+  }
+  return {
+    unit: 'pack',
+    quantity: Math.max(
+      1,
+      Math.floor(batch.quantityPieces / product.piecesPerPack),
+    ),
+  };
 }
 
 /** New line of a product: FEFO batch with stock (expired ones too — they may be written off). */
@@ -96,6 +129,8 @@ export function StockLinesEditor({
   touched,
   allowExpired = true,
   totalMinor,
+  valuation = 'pack',
+  lineErrors,
 }: {
   storeId: string;
   /** Only the batches of this supplier can be picked (a supplier return). */
@@ -109,6 +144,9 @@ export function StockLinesEditor({
   allowExpired?: boolean;
   /** The amount of a posted document as the server fixed it; else the lines are summed. */
   totalMinor?: number;
+  valuation?: StockValuation;
+  /** Server errors of the lines by their key (e.g. a product frozen by a running stock count). */
+  lineErrors?: ReadonlyMap<string, string>;
 }) {
   const t = useTranslations('stockDocs.lines');
   const tDocs = useTranslations('stockDocs');
@@ -118,7 +156,7 @@ export function StockLinesEditor({
       lines.map((line) => (line.key === key ? { ...line, ...change } : line)),
     );
   const total = lines.reduce(
-    (sum, l) => sum + l.quantity * (unitCostOf(l) ?? 0),
+    (sum, l) => sum + l.quantity * (unitCostOf(l, valuation) ?? 0),
     0,
   );
 
@@ -177,7 +215,8 @@ export function StockLinesEditor({
               {lines.map((line) => {
                 const batch = line.batches.find((b) => b.id === line.batchId);
                 const problem = stockLineProblem(line);
-                const cost = unitCostOf(line);
+                const cost = unitCostOf(line, valuation);
+                const lineError = lineErrors?.get(line.key);
                 return (
                   <tr
                     key={line.key}
@@ -185,6 +224,11 @@ export function StockLinesEditor({
                   >
                     <td className="px-2 py-2">
                       <span className="font-medium">{line.productName}</span>
+                      {lineError && (
+                        <span className="block text-xs text-danger">
+                          {lineError}
+                        </span>
+                      )}
                       {withNote && (
                         <TextField
                           label={t('noteOf', { name: line.productName })}

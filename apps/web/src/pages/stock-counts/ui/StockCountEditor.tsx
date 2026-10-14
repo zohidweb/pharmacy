@@ -13,14 +13,10 @@ import {
 } from '@pharmacy/shared-util';
 import { Alert, Button, Dialog, Select, Switch, TextField } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
-import {
-  QuantityInput,
-  UnpostDialog,
-  type StockAccess,
-} from '@/features/stock-document';
+import { UnpostDialog, type StockAccess } from '@/features/stock-document';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
 import { FoundLineDialog } from './FoundLineDialog';
@@ -48,39 +44,85 @@ function packsText(
 }
 
 /**
+ * The entry field of a line, kept by the editor, not the row: a row hidden by a filter keeps it.
+ * `sent` — the value sent last and not confirmed: sending the same value again reuses its key, so
+ * a lost answer is not counted twice, whatever was typed in between (a scan into the focused
+ * field); `failed` — that sending failed.
+ */
+interface PendingEntry {
+  text: string;
+  unit: 'pack' | 'piece';
+  sent?: { key: string; text: string; unit: 'pack' | 'piece' };
+  failed?: boolean;
+}
+
+/**
  * Counting on a tablet (spec 2026-10-12, S7): a scanned barcode finds the line, an entered quantity
  * is an entry «counted N» of this employee; the entries of every employee add up. Each entry keeps
- * its UUIDv7 until the server took it, so a retry after a lost answer does not count twice.
+ * its UUIDv7 until the server took it, so a retry after a lost answer does not count twice. A
+ * leading minus is a correction of an entry counted too much.
  */
 function EntryInput({
   docId,
   line,
+  entry,
+  onEntry,
+  onSent,
+  onFailed,
+  focusRequest,
+  onFocused,
   onCounted,
 }: {
   docId: string;
   line: StockCountLine;
+  /** The entry field of the line, kept by the editor. */
+  entry: PendingEntry | undefined;
+  onEntry: (lineId: string, entry: PendingEntry | null) => void;
+  /** The server took the value sent with this key: the editor clears it if it is still that one. */
+  onSent: (lineId: string, key: string) => void;
+  onFailed: (lineId: string, key: string) => void;
+  /** Set when a scan picked this line alone: its field takes the focus once. */
+  focusRequest?: number;
+  onFocused: () => void;
   onCounted: (line: StockCountLine) => void;
 }) {
   const t = useTranslations('stockCounts.editor');
-  const [value, setValue] = useState<number | null>(null);
-  const [unit, setUnit] = useState<'pack' | 'piece'>(
-    line.piecesPerPack > 1 ? 'pack' : 'piece',
-  );
-  const key = useRef<string | null>(null);
+  const defaultUnit = line.piecesPerPack > 1 ? 'pack' : 'piece';
+  const text = entry?.text ?? '';
+  const unit = entry?.unit ?? defaultUnit;
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusRequest === undefined) return;
+    field.current?.focus();
+    onFocused();
+  }, [focusRequest, onFocused]);
+  const change = (next: Partial<Pick<PendingEntry, 'text' | 'unit'>>) => {
+    const value: PendingEntry = {
+      ...entry,
+      text: next.text ?? text,
+      unit: next.unit ?? unit,
+    };
+    // nothing typed, the default unit and nothing waiting for an answer: nothing to keep
+    onEntry(
+      line.lineId,
+      value.text === '' && value.unit === defaultUnit && !value.sent
+        ? null
+        : value,
+    );
+  };
   const add = useMutation({
-    mutationFn: (pieces: number) => {
-      key.current ??= uuidv7();
-      return apiRequest('stockCounts.addEntry', {
+    mutationFn: (sent: { key: string; pieces: number }) =>
+      apiRequest('stockCounts.addEntry', {
         params: { id: docId },
-        body: { id: key.current, lineId: line.lineId, pieces },
-      });
-    },
-    onSuccess: (updated) => {
-      key.current = null;
-      setValue(null);
+        body: { id: sent.key, lineId: line.lineId, pieces: sent.pieces },
+      }),
+    onSuccess: (updated, sent) => {
+      onSent(line.lineId, sent.key);
       onCounted(updated);
     },
+    onError: (_failure, sent) => onFailed(line.lineId, sent.key),
   });
+  const value = /^-?\d+$/.test(text) ? Number(text) : null;
   const pieces =
     value === null
       ? null
@@ -90,18 +132,25 @@ function EntryInput({
   return (
     <div className="flex flex-wrap items-start gap-2">
       <div className="w-cell-sm">
-        <QuantityInput
+        <TextField
+          ref={field}
           label={t('addOf', {
             name: line.productName,
             batch: line.batchNumber,
           })}
-          value={value}
-          invalid={add.isError ? t('notSent') : undefined}
-          onChange={(next) => {
-            // another quantity is another entry: a new key
-            key.current = null;
-            setValue(next);
-          }}
+          hideLabel
+          inputMode="numeric"
+          autoComplete="off"
+          value={text}
+          error={entry?.failed ? t('notSent') : undefined}
+          onChange={(event) =>
+            // digits and one leading minus
+            change({
+              text: event.target.value
+                .replace(/[^\d-]/g, '')
+                .replace(/(?!^)-/g, ''),
+            })
+          }
         />
       </div>
       {line.piecesPerPack > 1 && (
@@ -109,10 +158,9 @@ function EntryInput({
           label={t('unit')}
           hideLabel
           value={unit}
-          onChange={(event) => {
-            key.current = null;
-            setUnit(event.target.value as 'pack' | 'piece');
-          }}
+          onChange={(event) =>
+            change({ unit: event.target.value as 'pack' | 'piece' })
+          }
           options={[
             { value: 'pack', label: t('units.pack') },
             { value: 'piece', label: t('units.piece') },
@@ -124,7 +172,21 @@ function EntryInput({
         iconStart="plus"
         loading={add.isPending}
         disabled={pieces === null}
-        onClick={() => pieces !== null && add.mutate(pieces)}
+        onClick={() => {
+          if (pieces === null) return;
+          // the value sent before and not confirmed goes again with its key
+          const key =
+            entry?.sent && entry.sent.text === text && entry.sent.unit === unit
+              ? entry.sent.key
+              : uuidv7();
+          onEntry(line.lineId, {
+            text,
+            unit,
+            sent: { key, text, unit },
+            failed: false,
+          });
+          add.mutate({ key, pieces });
+        }}
       >
         {t('add')}
       </Button>
@@ -185,6 +247,50 @@ export function StockCountEditor({
   const [cancelling, setCancelling] = useState(false);
   const [unposting, setUnposting] = useState(false);
   const [found, setFound] = useState<StockCountLine | 'new' | null>(null);
+  const [scannedCode, setScannedCode] = useState<string | undefined>();
+  const [focusLine, setFocusLine] = useState<{
+    lineId: string;
+    at: number;
+  } | null>(null);
+  // the entries typed and not taken yet, by line: they outlive a row hidden by a filter
+  const [entries, setEntries] = useState<ReadonlyMap<string, PendingEntry>>(
+    () => new Map(),
+  );
+  const setEntry = useCallback(
+    (lineId: string, entry: PendingEntry | null) =>
+      setEntries((current) => {
+        const next = new Map(current);
+        if (entry) next.set(lineId, entry);
+        else next.delete(lineId);
+        return next;
+      }),
+    [],
+  );
+  // The value sent is counted: the field empties, unless another value was typed meanwhile.
+  const entrySent = useCallback(
+    (lineId: string, key: string) =>
+      setEntries((current) => {
+        const entry = current.get(lineId);
+        if (!entry?.sent || entry.sent.key !== key) return current;
+        const counted =
+          entry.text === entry.sent.text && entry.unit === entry.sent.unit;
+        return new Map(current).set(lineId, {
+          text: counted ? '' : entry.text,
+          unit: entry.unit,
+        });
+      }),
+    [],
+  );
+  const entryFailed = useCallback(
+    (lineId: string, key: string) =>
+      setEntries((current) => {
+        const entry = current.get(lineId);
+        if (!entry?.sent || entry.sent.key !== key) return current;
+        return new Map(current).set(lineId, { ...entry, failed: true });
+      }),
+    [],
+  );
+  const focusDone = useCallback(() => setFocusLine(null), []);
   const running = doc.status === 'in_progress';
   const editable = running && access.canUpdate;
 
@@ -290,7 +396,13 @@ export function StockCountEditor({
       if (lines.length > 0) {
         setFocused(lines.map((l) => l.lineId));
         setFilter('');
+        // one line: its quantity field is ready to type
+        if (lines.length === 1 && editable) {
+          setFocusLine({ lineId: lines[0].lineId, at: Date.now() });
+        }
       } else if (editable) {
+        // the search of «найденный товар» starts with the scanned code
+        setScannedCode(code);
         setFound('new');
       }
     },
@@ -326,7 +438,8 @@ export function StockCountEditor({
           <>
             <p className="me-auto text-sm" role="status">
               {t('summary', { surplus, shortage })}
-              {access.canSeeCost && ` · ${formatMoney(diffMinor)}`}
+              {access.canSeeCost &&
+                ` · ${diffMinor > 0 ? '+' : ''}${formatMoney(diffMinor)}`}
             </p>
             {running && access.canDelete && (
               <Button
@@ -410,7 +523,10 @@ export function StockCountEditor({
               <Button
                 variant="secondary"
                 iconStart="plus"
-                onClick={() => setFound('new')}
+                onClick={() => {
+                  setScannedCode(undefined);
+                  setFound('new');
+                }}
               >
                 {t('addFound')}
               </Button>
@@ -565,6 +681,16 @@ export function StockCountEditor({
                           <EntryInput
                             docId={doc.id}
                             line={line}
+                            entry={entries.get(line.lineId)}
+                            onEntry={setEntry}
+                            onSent={entrySent}
+                            onFailed={entryFailed}
+                            onFocused={focusDone}
+                            focusRequest={
+                              focusLine?.lineId === line.lineId
+                                ? focusLine.at
+                                : undefined
+                            }
                             onCounted={setLine}
                           />
                         )}
@@ -663,6 +789,7 @@ export function StockCountEditor({
         <FoundLineDialog
           storeId={doc.storeId}
           line={found === 'new' ? null : found}
+          scannedCode={found === 'new' ? scannedCode : undefined}
           canSeeCost={access.canSeeCost}
           busy={saveFound.isPending}
           error={saveFound.error}

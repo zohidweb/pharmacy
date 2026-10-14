@@ -18,15 +18,18 @@ export function ProductSearch({
   supplierId,
   onPick,
   disabled = false,
+  initialQuery = '',
 }: {
   storeId: string;
   /** Only the batches of this supplier (a supplier return). */
   supplierId?: string;
   onPick: (product: StockProductOption) => void;
   disabled?: boolean;
+  /** The search to start with, e.g. a barcode scanned before the search was shown. */
+  initialQuery?: string;
 }) {
   const t = useTranslations('stockDocs.search');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const trimmed = query.trim();
   const results = useQuery({
     queryKey: ['stock-products', storeId, trimmed, supplierId ?? ''],

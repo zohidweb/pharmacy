@@ -42,7 +42,7 @@ import type {
   OpeningBalanceInput,
   ProductBatchRow,
 } from '@pharmacy/shared-dto';
-import { daysBetween, toAppDate } from '@pharmacy/shared-util';
+import { addDays, daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
@@ -160,9 +160,20 @@ function move(
 const piecesOf = (product: PosProduct, unit: SaleUnit, quantity: number) =>
   unit === 'pack' ? quantity * product.piecesPerPack : quantity;
 
-function unitCost(product: PosProduct, batch: PosBatch, unit: SaleUnit) {
+/**
+ * Cost of a unit of a line: `pack` — the price of the pack of the batch; `piece` — a write-off, as
+ * apps/api counts it: the pieces at the cost of a piece rounded up.
+ */
+function unitCost(
+  product: PosProduct,
+  batch: PosBatch,
+  unit: SaleUnit,
+  valuation: 'pack' | 'piece' = 'pack',
+) {
   const pack = batch.costMinor ?? 0;
-  return unit === 'pack' ? pack : pieceCost(pack, product.piecesPerPack);
+  const piece = pieceCost(pack, product.piecesPerPack);
+  if (unit === 'piece') return piece;
+  return valuation === 'piece' ? piece * product.piecesPerPack : pack;
 }
 
 function hideCost<T extends { costMinor?: number; totalMinor?: number }>(
@@ -177,6 +188,7 @@ function hideCost<T extends { costMinor?: number; totalMinor?: number }>(
 function stockLines(
   lines: StockLineInput[],
   correlationId: string,
+  valuation: 'pack' | 'piece' = 'pack',
 ): StockLine[] {
   return lines.map((line) => {
     const product = productOf(line.productId, correlationId);
@@ -191,13 +203,22 @@ function stockLines(
       productName: product.name,
       batchNumber: batch.number,
       expiresOn: batch.expiresOn,
-      costMinor: unitCost(product, batch, line.unit),
+      costMinor: unitCost(product, batch, line.unit, valuation),
     };
   });
 }
 
 const linesTotal = (lines: Array<{ quantity: number; costMinor?: number }>) =>
   lines.reduce((sum, l) => sum + l.quantity * (l.costMinor ?? 0), 0);
+
+/** A write-off as the role sees it: amounts and prices only with `finance:view-cost`. */
+const writeOffView = (doc: WriteOff, canSeeCost: boolean): WriteOff =>
+  canSeeCost
+    ? doc
+    : {
+        ...hideCost(doc, false),
+        lines: doc.lines.map((l) => hideCost(l, false)),
+      };
 
 export function visible<T extends { storeId: string }>(
   session: EmployeeSession,
@@ -331,13 +352,15 @@ function assertNotFrozen(
     (c) => c.storeId === storeId && c.status === 'in_progress',
   );
   if (!count) return;
-  const frozen = productIds.some(
-    (id) =>
-      count.scope === 'all' ||
-      products().find((p) => p.id === id)?.categoryId === count.categoryId,
+  // as apps/api: the frozen products at their lines
+  const frozen = productIds.flatMap((id, i) =>
+    count.scope === 'all' ||
+    products().find((p) => p.id === id)?.categoryId === count.categoryId
+      ? [{ field: `lines.${i}.productId`, code: 'stock_count_in_progress' }]
+      : [],
   );
-  if (frozen) {
-    throw new ApiError(409, 'stock_count_in_progress', correlationId);
+  if (frozen.length > 0) {
+    throw new ApiError(409, 'stock_count_in_progress', correlationId, frozen);
   }
 }
 
@@ -403,6 +426,12 @@ function buildReceipt(
   return {
     ...base,
     ...input,
+    // as the server: without a due date — the date + the deferral of the supplier
+    paymentDueOn:
+      input.paymentDueOn ??
+      (/^\d{4}-\d{2}-\d{2}$/.test(input.date)
+        ? addDays(input.date, supplier.paymentDelayDays)
+        : null),
     supplierName: supplier.name,
     storeName: storeName(input.storeId),
     orderNumber: order?.number ?? null,
@@ -685,7 +714,7 @@ export function writeOffReturned(input: {
         expiresOn: batch.expiresOn,
         unit: line.unit,
         quantity: line.quantity,
-        costMinor: unitCost(product, batch, line.unit),
+        costMinor: unitCost(product, batch, line.unit, 'piece'),
       };
     }),
     createdBy: by,
@@ -917,7 +946,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
 
   'suppliers.options': ({ correlationId }) => {
     context(correlationId, 'inventory:view');
-    return db().suppliers.map(({ id, name }) => ({ id, name }));
+    return db().suppliers.map(({ id, name, paymentDelayDays }) => ({
+      id,
+      name,
+      paymentDelayDays,
+    }));
   },
   'purchaseOrders.open': ({ query, correlationId }) => {
     context(correlationId, 'inventory:view');
@@ -1301,6 +1334,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const all = visible(session, db().writeOffs)
       .filter((d) => !query?.storeId || d.storeId === query.storeId)
       .filter((d) => !query?.reason || d.reason === query.reason)
+      .filter((d) => !query?.status || d.status === query.status)
       .sort(
         (a, b) =>
           b.date.localeCompare(a.date) || b.number.localeCompare(a.number),
@@ -1355,20 +1389,17 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const { session, canSeeCost } = context(correlationId, 'inventory:view');
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     inScope(session, doc.storeId, correlationId);
-    return canSeeCost
-      ? doc
-      : {
-          ...hideCost(doc, false),
-          lines: doc.lines.map((l) => hideCost(l, false)),
-        };
+    return writeOffView(doc, canSeeCost);
   },
   'writeOffs.create': ({ body, correlationId }) => {
-    const { session, author } = context(correlationId, 'inventory:create', {
-      write: true,
-    });
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:create',
+      { write: true },
+    );
     manualReason(body.reason, correlationId);
     writable(session, body.storeId, correlationId);
-    const lines = stockLines(body.lines, correlationId);
+    const lines = stockLines(body.lines, correlationId, 'piece');
     const doc: WriteOff = {
       id: `wo-${Date.now()}`,
       number: number('СП', 'sp'),
@@ -1385,12 +1416,14 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       customerReturnNumber: null,
     };
     db().writeOffs.unshift(doc);
-    return doc;
+    return writeOffView(doc, canSeeCost);
   },
   'writeOffs.update': ({ params, body, correlationId }) => {
-    const { session } = context(correlationId, 'inventory:update', {
-      write: true,
-    });
+    const { session, canSeeCost } = context(
+      correlationId,
+      'inventory:update',
+      { write: true },
+    );
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     if (doc.transferId) {
       throw new ApiError(409, 'write_off_from_transfer', correlationId);
@@ -1401,18 +1434,20 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     requireDraft(doc.status, correlationId);
     manualReason(body.reason, correlationId);
     writable(session, body.storeId, correlationId);
-    const lines = stockLines(body.lines, correlationId);
+    const lines = stockLines(body.lines, correlationId, 'piece');
     Object.assign(doc, body, {
       storeName: storeName(body.storeId),
       lines,
       totalMinor: linesTotal(lines),
     });
-    return doc;
+    return writeOffView(doc, canSeeCost);
   },
   'writeOffs.post': ({ params, correlationId }) => {
-    const { session, author } = context(correlationId, 'inventory:post', {
-      write: true,
-    });
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:post',
+      { write: true },
+    );
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     if (doc.transferId) {
       throw new ApiError(409, 'write_off_from_transfer', correlationId);
@@ -1446,12 +1481,14 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     doc.status = 'posted';
     doc.postedBy = author();
     mockDb().pos.catalogVersion += 1;
-    return doc;
+    return writeOffView(doc, canSeeCost);
   },
   'writeOffs.unpost': ({ params, correlationId }) => {
-    const { session } = context(correlationId, 'inventory:unpost', {
-      write: true,
-    });
+    const { session, canSeeCost } = context(
+      correlationId,
+      'inventory:unpost',
+      { write: true },
+    );
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     if (doc.transferId) {
       throw new ApiError(409, 'write_off_from_transfer', correlationId);
@@ -1460,6 +1497,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       throw new ApiError(409, 'write_off_from_return', correlationId);
     }
     writable(session, doc.storeId, correlationId);
+    if (doc.status !== 'posted') {
+      throw new ApiError(409, 'document_not_posted', correlationId);
+    }
     assertNotFrozen(
       doc.storeId,
       doc.lines.map((l) => l.productId),
@@ -1480,7 +1520,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     doc.status = 'draft';
     doc.postedBy = null;
     mockDb().pos.catalogVersion += 1;
-    return doc;
+    return writeOffView(doc, canSeeCost);
   },
 
   /* supplier returns */
@@ -1572,6 +1612,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = findDoc(db().supplierReturns, params.id, correlationId);
     requireDraft(doc.status, correlationId);
     writable(session, doc.storeId, correlationId);
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     for (const line of doc.lines) {
       const product = productOf(line.productId, correlationId);
       const pieces = piecesOf(product, line.unit, line.quantity);
@@ -1600,6 +1645,14 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     });
     const doc = findDoc(db().supplierReturns, params.id, correlationId);
     writable(session, doc.storeId, correlationId);
+    if (doc.status !== 'posted') {
+      throw new ApiError(409, 'document_not_posted', correlationId);
+    }
+    assertNotFrozen(
+      doc.storeId,
+      doc.lines.map((l) => l.productId),
+      correlationId,
+    );
     const check = unpostCheck(doc.number, doc.storeId, doc.lines, doc.postedBy);
     if (!check.allowed)
       throw new ApiError(409, 'unpost_blocked', correlationId);
@@ -1795,6 +1848,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = runningCount(params.id, correlationId);
     writable(session, doc.storeId, correlationId);
     const product = productOf(body.productId, correlationId);
+    if (mockDb().catalog.archived.includes(product.id)) {
+      throw new ApiError(409, 'product_archived', correlationId, [
+        { field: 'productId', code: 'product_archived' },
+      ]);
+    }
     const cost = canSeeCost ? body.costMinor : null;
     doc.lines.push({
       lineId: `scl-found-${Date.now()}`,
@@ -1916,6 +1974,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     );
     const doc = findDoc(db().stockCounts, params.id, correlationId);
     writable(session, doc.storeId, correlationId);
+    if (doc.status !== 'posted') {
+      throw new ApiError(409, 'document_not_posted', correlationId);
+    }
     const check = unpostCheck(
       doc.number,
       doc.storeId,
@@ -2177,7 +2238,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
             expiresOn: line.expiresOn,
             unit: line.unit,
             quantity: line.sentQuantity - (line.receivedQuantity ?? 0),
-            costMinor: unitCost(product, batch, line.unit),
+            costMinor: unitCost(product, batch, line.unit, 'piece'),
           };
         }),
         createdBy: author(),

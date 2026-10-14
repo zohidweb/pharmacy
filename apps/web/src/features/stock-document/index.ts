@@ -8,6 +8,9 @@ export {
   StockLinesEditor,
   stockLineProblem,
   unitCostOf,
+  wholeBatchQuantity,
+  type StockValuation,
   type EditableStockLine,
 } from './ui/StockLinesEditor';
 export { toEditableLines, useStoreProducts } from './api/use-store-products';
+export { useLineErrors } from './ui/use-line-errors';

@@ -38,6 +38,26 @@ const facts = (record: ExpenseFields) => ({
   comment: record.comment,
 });
 
+/**
+ * The previous values of the fields an edit changed, flat, for the journal (final review I1): the
+ * month, the kind, the amount and — on a move — the store (`network` for the whole network).
+ */
+function previousOf(
+  before: ExpenseRow,
+  after: ExpenseFields,
+): Record<string, string | number> {
+  const previous: Record<string, string | number> = {};
+  if (before.month !== after.month) previous.previousMonth = before.month;
+  if (before.kind !== after.kind) previous.previousExpenseKind = before.kind;
+  if (before.amountMinor !== after.amountMinor) {
+    previous.previousAmountMinor = before.amountMinor;
+  }
+  if (before.storeId !== after.storeId) {
+    previous.previousStore = before.storeName ?? 'network';
+  }
+  return previous;
+}
+
 const fieldsOf = (record: ExpenseRow): ExpenseFields => ({
   month: record.month,
   storeId: record.storeId,
@@ -151,6 +171,7 @@ export class ExpensesService {
         storeId: body.storeId ?? undefined,
         details: {
           ...facts(body),
+          ...previousOf(before, body),
           before: { ...fieldsOf(before) },
           after: { ...body },
         },

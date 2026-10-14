@@ -1255,13 +1255,24 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       write: true,
     });
     const record = findExpense(params.id, session, correlationId);
+    const before = { ...record };
     Object.assign(record, expenseInput(body, session, correlationId), {
       id: record.id,
     });
+    // the previous values of the changed fields, as the API writes them
+    const previous: Record<string, string | number> = {};
+    if (before.month !== record.month) previous.previousMonth = before.month;
+    if (before.kind !== record.kind) previous.previousExpenseKind = before.kind;
+    if (before.amountMinor !== record.amountMinor) {
+      previous.previousAmountMinor = before.amountMinor;
+    }
+    if (before.storeId !== record.storeId) {
+      previous.previousStore = before.storeName ?? 'network';
+    }
     appendAudit(session, {
       event: 'expense.updated',
       object: null,
-      params: expenseParams(record),
+      params: { ...expenseParams(record), ...previous },
       storeName: record.storeName,
     });
     return { ...record };

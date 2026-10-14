@@ -29,6 +29,7 @@ const NUMBER_PARAMS = [
   'expectedMinor',
   'actualCashMinor',
   'priceMinor',
+  'previousAmountMinor',
   'lines',
   'positions',
 ] as const;
@@ -179,12 +180,19 @@ export class AuditJournal {
     const reason = details['reason'];
     if (typeof reason === 'string' && CODE.test(reason))
       params['reason'] = reason;
-    const expenseKind = details['expenseKind'];
-    if (typeof expenseKind === 'string' && CODE.test(expenseKind)) {
-      params['expenseKind'] = expenseKind;
+    // an expense and, after an edit, the previous values of the fields it changed (spec E16)
+    for (const key of ['expenseKind', 'previousExpenseKind'] as const) {
+      const value = details[key];
+      if (typeof value === 'string' && CODE.test(value)) params[key] = value;
     }
-    const month = details['month'];
-    if (typeof month === 'string' && MONTH.test(month)) params['month'] = month;
+    for (const key of ['month', 'previousMonth'] as const) {
+      const value = details[key];
+      if (typeof value === 'string' && MONTH.test(value)) params[key] = value;
+    }
+    const previousStore = details['previousStore'];
+    if (typeof previousStore === 'string' && previousStore.length <= 200) {
+      params['previousStore'] = previousStore;
+    }
     const receipt = details['receipt'];
     if (typeof receipt === 'string' && receipt.length <= 64) {
       params['receipt'] = receipt;

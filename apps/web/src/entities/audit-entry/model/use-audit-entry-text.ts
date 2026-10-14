@@ -19,6 +19,10 @@ const SHOWN_PARAMS = [
   'receipt',
   'expenseKind',
   'month',
+  'previousAmountMinor',
+  'previousExpenseKind',
+  'previousMonth',
+  'previousStore',
 ] as const;
 
 /** The i18n key of an audit code: `receipt.completed` → `receipt_completed`. */
@@ -53,10 +57,12 @@ export function useAuditEntryText() {
       } else if (name === 'reason' && reasons.has(shown as never)) {
         shown = reasons(shown as never);
       } else if (
-        name === 'expenseKind' &&
+        (name === 'expenseKind' || name === 'previousExpenseKind') &&
         expenseKinds.has(shown as never)
       ) {
         shown = expenseKinds(shown as never);
+      } else if (name === 'previousStore' && shown === 'network') {
+        shown = labels('network');
       }
       return [`${labels(name)}: ${shown}`];
     }).join(' · ');

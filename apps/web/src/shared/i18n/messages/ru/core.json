@@ -457,7 +457,12 @@
     "reason": "Причина",
     "receipt": "Чек",
     "expenseKind": "Вид",
-    "month": "Месяц"
+    "month": "Месяц",
+    "previousAmountMinor": "Было: сумма",
+    "previousExpenseKind": "Было: вид",
+    "previousMonth": "Было: месяц",
+    "previousStore": "Было: точка",
+    "network": "Вся сеть"
   },
   "auditReasons": {
     "expired": "Истёк срок годности",

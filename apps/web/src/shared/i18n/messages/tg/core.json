@@ -457,7 +457,12 @@
     "reason": "Сабаб",
     "receipt": "Чек",
     "expenseKind": "Намуд",
-    "month": "Моҳ"
+    "month": "Моҳ",
+    "previousAmountMinor": "Пештар: маблағ",
+    "previousExpenseKind": "Пештар: намуд",
+    "previousMonth": "Пештар: моҳ",
+    "previousStore": "Пештар: нуқта",
+    "network": "Тамоми шабака"
   },
   "auditReasons": {
     "expired": "Мӯҳлати истифода гузашт",

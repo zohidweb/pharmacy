@@ -134,6 +134,7 @@ export class SupplierReturnPosting {
       details: {
         type: doc.type,
         number: doc.number,
+        documentDate: doc.documentDate,
         reason: doc.supplierReturnReason,
         lines: lines.length,
         totalMinor: total,
@@ -189,6 +190,7 @@ export class SupplierReturnPosting {
       details: {
         type: doc.type,
         number: doc.number,
+        documentDate: doc.documentDate,
         totalMinor: Number(doc.totalDirams ?? 0n),
       },
     });

@@ -259,6 +259,7 @@ export class DocumentPosting {
       details: {
         type: doc.type,
         number: doc.number,
+        documentDate: doc.documentDate,
         lines: lines.length,
         totalMinor: total,
       },
@@ -319,7 +320,12 @@ export class DocumentPosting {
       entityType: 'document',
       entityId: doc.id,
       storeId: doc.storeId,
-      details: { type: doc.type, number: doc.number, totalMinor: total },
+      details: {
+        type: doc.type,
+        number: doc.number,
+        documentDate: doc.documentDate,
+        totalMinor: total,
+      },
     });
   }
 

@@ -19,6 +19,7 @@ import { ProductsReader } from '../catalog/products-reader';
 import { type DocumentRow, DocumentsRepository } from './documents.repository';
 import { InventoryRepository } from './inventory.repository';
 import { Numbering } from './numbering';
+import { StockFreeze } from './stock-freeze';
 import { StoreAccess } from './store-access';
 import { TransferMapper } from './transfer-mapper';
 import { TransferPosting } from './transfer-posting';
@@ -50,6 +51,7 @@ export class TransfersService {
     private readonly posting: TransferPosting,
     private readonly audit: AuditService,
     private readonly stores: StoreAccess,
+    private readonly freeze: StockFreeze,
   ) {}
 
   async overview(query: { storeId?: string }): Promise<TransferOverview> {
@@ -418,10 +420,6 @@ export class TransfersService {
     }
     // the batches of the sender; by a request — its products, not more than asked
     const batchIds = input.lines.map((l) => l.batchId.toLowerCase());
-    // Sent at once: the batches are locked for update before the lines reference them. The
-    // reference takes a key-share lock, and two sends of a common batch that each hold one and
-    // then ask for update would deadlock.
-    if (input.send) await this.documents.lockBatches(trx, tenantId, batchIds);
     const batches = await this.writeOffBatches.batches(trx, tenantId, batchIds);
     const products = new Map(
       (
@@ -510,6 +508,18 @@ export class TransfersService {
       );
     } else {
       await this.documents.updateHeader(trx, tenantId, id, header);
+    }
+    // Sent at once: the stock of the store, then the batches — the order of the sending — are
+    // locked before the lines reference the batches. A reference takes a key-share lock, and two
+    // sends of a common batch that each held one and then asked for update would deadlock. After
+    // the document counter: a draft of the store, which takes the counter first, waits for it.
+    if (input.send) {
+      await this.freeze.lockShared(trx, tenantId, fromStoreId);
+      await this.documents.lockBatches(
+        trx,
+        tenantId,
+        values.map((v) => v.sourceBatchId),
+      );
     }
     await this.lines.replaceTransferLines(trx, tenantId, id, values);
     await this.audit.append(trx, {

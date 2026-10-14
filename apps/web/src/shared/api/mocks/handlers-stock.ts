@@ -2109,6 +2109,12 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const { session, author } = context(correlationId, 'inventory:receive', {
       write: true,
     });
+    // an unparsable instant is a 400 of the validation, before anything else
+    if (Number.isNaN(Date.parse(body.dispatchedAt ?? ''))) {
+      throw new ApiError(400, 'validation_failed', correlationId, [
+        { field: 'dispatchedAt', code: 'is_iso8601' },
+      ]);
+    }
     const doc = findDoc(db().transfers, params.id, correlationId);
     if (doc.status !== 'in_transit') {
       throw new ApiError(409, 'transfer_not_in_transit', correlationId);

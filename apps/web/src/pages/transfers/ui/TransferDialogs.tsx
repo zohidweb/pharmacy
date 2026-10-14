@@ -631,6 +631,12 @@ export function TransferDetailDialog({
   const [touched, setTouched] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const doc = transfer.data;
+  // The dispatch the quantities are entered for. A card reloaded in the background (a reconnect)
+  // with a new dispatch keeps it, so the server answers 409 instead of taking the old entries.
+  const [filledFor, setFilledFor] = useState<string | null>(null);
+  const shownDispatch =
+    doc?.status === 'in_transit' ? (doc.sentBy?.at ?? null) : null;
+  if (filledFor === null && shownDispatch !== null) setFilledFor(shownDispatch);
   const isReceiver =
     doc !== undefined &&
     access.writableStores.some((s) => s.id === doc.toStoreId) &&
@@ -655,7 +661,7 @@ export function TransferDetailDialog({
       apiRequest('transfers.accept', {
         params: { id: transferId },
         body: {
-          dispatchedAt: doc?.sentBy?.at ?? '',
+          dispatchedAt: filledFor ?? '',
           comment: comment.trim(),
           lines: (doc?.lines ?? []).map((l) => ({
             batchId: l.batchId,
@@ -665,11 +671,20 @@ export function TransferDetailDialog({
       }),
     onSuccess: update,
     onError: (error) => {
-      // sent again since the card was read: the new lines, the quantities filled from scratch
+      // sent again since the card was read: the list and the card again, the quantities entered
+      // from scratch for the new dispatch
       if (error instanceof ApiError && error.code === 'transfer_changed') {
         setReceived({});
         setTouched(false);
-        void transfer.refetch();
+        void invalidate().then(() =>
+          setFilledFor(
+            queryClient.getQueryData<Transfer>([
+              'transfers',
+              'detail',
+              transferId,
+            ])?.sentBy?.at ?? null,
+          ),
+        );
       }
     },
   });

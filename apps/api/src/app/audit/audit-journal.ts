@@ -44,6 +44,8 @@ const COST_GROUPS: ReadonlySet<AuditGroup> = new Set([
 ]);
 /** A code, not prose. */
 const CODE = /^[a-z0-9_.:-]{1,64}$/;
+/** The month of an expense, YYYY-MM. */
+const MONTH = /^\d{4}-\d{2}$/;
 
 /** The stores an employee reads the journal of: a PIN session — its terminal's store only. */
 function scopeOf(principal: EmployeePrincipal): 'all' | readonly string[] {
@@ -162,7 +164,11 @@ export class AuditJournal {
       principal.permissions,
       'finance:view-cost',
     );
-    const hideAmounts = group !== null && COST_GROUPS.has(group) && !canSeeCost;
+    // the amounts of the other expenses (salaries, rent) — only with `expenses:view` (spec E16)
+    const hideAmounts =
+      (group !== null && COST_GROUPS.has(group) && !canSeeCost) ||
+      (group === 'expense' &&
+        !hasPermissions(principal.permissions, 'expenses:view'));
     const params: Record<string, string | number | null> = {};
     for (const key of NUMBER_PARAMS) {
       const value = details[key];
@@ -173,6 +179,12 @@ export class AuditJournal {
     const reason = details['reason'];
     if (typeof reason === 'string' && CODE.test(reason))
       params['reason'] = reason;
+    const expenseKind = details['expenseKind'];
+    if (typeof expenseKind === 'string' && CODE.test(expenseKind)) {
+      params['expenseKind'] = expenseKind;
+    }
+    const month = details['month'];
+    if (typeof month === 'string' && MONTH.test(month)) params['month'] = month;
     const receipt = details['receipt'];
     if (typeof receipt === 'string' && receipt.length <= 64) {
       params['receipt'] = receipt;

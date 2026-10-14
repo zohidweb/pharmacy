@@ -256,6 +256,20 @@ export interface EmployeeStores {
   tenantId: string;
 }
 
+export interface Expenses {
+  amountDirams: bigint;
+  comment: string | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  id: string;
+  kind: string;
+  month: string;
+  storeId: string | null;
+  tenantId: string;
+  updatedAt: Timestamp | null;
+  updatedBy: string | null;
+}
+
 export interface GoodsReceiptLines {
   batchId: string | null;
   createdAt: Generated<Timestamp>;
@@ -852,6 +866,7 @@ export interface DB {
   employeeCredentials: EmployeeCredentials;
   employees: Employees;
   employeeStores: EmployeeStores;
+  expenses: Expenses;
   goodsReceiptLines: GoodsReceiptLines;
   heldReceipts: HeldReceipts;
   idempotencyKeys: IdempotencyKeys;

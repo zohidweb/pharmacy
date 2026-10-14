@@ -5,10 +5,7 @@ import type {
   TenantDashboard,
 } from '@pharmacy/shared-dto';
 import { hasPermissions } from '@pharmacy/shared-domain';
-import {
-  type EmployeePrincipal,
-  requirePrincipal,
-} from '../../common/context/request-context';
+import { requirePrincipal } from '../../common/context/request-context';
 import { TenantDatabase } from '../../core/database';
 import { AuditJournal } from '../audit/audit-journal';
 import { StockAlerts } from '../inventory/stock-alerts';
@@ -22,19 +19,13 @@ import {
   resolveDashboardPeriod,
 } from './dashboard-period';
 import { ReportsRepository } from './reports.repository';
+import { scopeOf } from './scope';
 
 const REMINDERS = 5;
 const ACTIVITY = 8;
 const CRITICAL_DAYS = 7;
 
 /** The stores an employee sees: a PIN session — its terminal's store only. */
-function scopeOf(principal: EmployeePrincipal): 'all' | readonly string[] {
-  if (principal.auth === 'pin') {
-    return principal.currentStoreId ? [principal.currentStoreId] : [];
-  }
-  return principal.storeScope;
-}
-
 // The home of the owner cabinet (spec 2026-10-14-owner-cabinet, E1–E7, 5.2) over the stores of the
 // scope: revenue = sales − returns of the customers (by the business date of each), receipts and
 // the average receipt of the sales, the stock signals of today, the reminders and the journal.

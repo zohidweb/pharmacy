@@ -52,6 +52,13 @@ export interface ControlledSale {
   purged: boolean;
 }
 
+/** The cash withdrawals «на расходы» of a store (spec 2026-10-14-owner-cabinet, O9, E16). */
+export interface CashExpensesOfStoreFigure {
+  storeId: string;
+  amountMinor: number;
+  operations: number;
+}
+
 const stores = (storeIds: readonly string[]) => sql.val([...storeIds]);
 
 // The sales of the stores for the home and the reports (spec 2026-10-14-owner-cabinet, E2, E3,
@@ -217,6 +224,40 @@ export class SalesFigures {
     return result.rows.map(({ purgedAt, ...row }) => ({
       ...row,
       purged: purgedAt !== null,
+    }));
+  }
+
+  /**
+   * The withdrawals with the reason `expense` (not the collections) by the store of the shift, on the
+   * business date of `occurred_at` in the time zone of the network, whole (spec E16, O9).
+   */
+  async cashExpensesByStore(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeIds: readonly string[],
+    from: string,
+    to: string,
+  ): Promise<CashExpensesOfStoreFigure[]> {
+    if (storeIds.length === 0) return [];
+    const result = await sql<{
+      storeId: string;
+      amountMinor: string;
+      operations: number;
+    }>`
+      select s.store_id, sum(o.amount_dirams) as amount_minor, count(*)::integer as operations
+      from pharmacy.shift_cash_operations o
+      join pharmacy.shifts s on s.tenant_id = o.tenant_id and s.id = o.shift_id
+      where o.tenant_id = ${tenantId}
+        and o.kind = 'withdrawal' and o.reason = 'expense'
+        and s.store_id = any(${stores(storeIds)}::uuid[])
+        and (o.occurred_at at time zone coalesce(
+              (select ts.timezone from pharmacy.tenant_settings ts where ts.tenant_id = ${tenantId}),
+              'Asia/Dushanbe'))::date between ${from}::date and ${to}::date
+      group by s.store_id`.execute(trx);
+    return result.rows.map((row) => ({
+      storeId: row.storeId,
+      amountMinor: Number(row.amountMinor),
+      operations: row.operations,
     }));
   }
 }

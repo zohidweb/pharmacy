@@ -16,16 +16,10 @@ import { daysBetween } from './dashboard-period';
 import { REPORT_KINDS, type ReportQueryDto } from './dto/reports.dto';
 import * as build from './report-builders';
 import { ReportsRepository } from './reports.repository';
+import { scopeOf } from './scope';
 
 /** The longest period of a report (spec 2026-10-14-owner-cabinet, E1). */
 const MAX_REPORT_DAYS = 366;
-
-function scopeOf(principal: EmployeePrincipal): 'all' | readonly string[] {
-  if (principal.auth === 'pin') {
-    return principal.currentStoreId ? [principal.currentStoreId] : [];
-  }
-  return principal.storeScope;
-}
 
 function nameIn(names: unknown, locale: 'ru' | 'tg'): string {
   if (typeof names !== 'object' || names === null) return '—';

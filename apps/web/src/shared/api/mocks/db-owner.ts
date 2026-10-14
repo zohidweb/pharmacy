@@ -14,6 +14,7 @@ import type {
   LegalEntity,
   NetworkSettings,
   OfflineQueueItem,
+  ReturnPolicy,
   OwnerStore,
   TenantAuditEntry,
   TenantInvoice,
@@ -54,6 +55,8 @@ export interface OwnerMockDb {
   invoices: TenantInvoice[];
   audit: TenantAuditEntry[];
   settings: NetworkSettings;
+  /** The return window and policy of the network (spec 2026-10-13-customer-returns, R3). */
+  returnPolicy: ReturnPolicy;
   terminals: TenantTerminal[];
   /** Article of a product in 1C (mapping of the export, CommerceML). */
   articles1c: Record<string, string>;
@@ -308,7 +311,6 @@ export function createOwnerDb(): OwnerMockDb {
     ],
     settings: {
       networkName: 'Аптечная сеть «Шифо»',
-      returnWindowDays: 14,
       posSessionTimeoutMinutes: 15,
       minPinLength: 4,
       expiryNoticeDays: 30,
@@ -323,6 +325,10 @@ export function createOwnerDb(): OwnerMockDb {
         negative_stock: true,
         license_expiry: true,
       },
+    },
+    returnPolicy: {
+      returnWindowDays: 14,
+      customerReturns: { none: true, rx: false, controlled: false },
     },
     terminals: [
       {

@@ -53,56 +53,56 @@ export function nextDiscount(
   );
 }
 
-export interface ReturnRefundInput {
-  /** Subtotal of the receipt before discount, dirams. */
-  subtotalMinor: number;
-  /** Discount actually given on the receipt. */
-  discountMinor: number;
-  /** Subtotal of everything returned so far and now (lines at their prices). */
-  returnedSubtotalMinor: number;
-  /** Subtotal already returned by earlier returns of this receipt. */
-  previouslyReturnedSubtotalMinor?: number;
-  /** Percent the receipt was sold with: the rule is re-applied to what the customer keeps. */
-  percent: number;
-  /** Threshold of that rule: below it the kept goods lose the discount. */
-  minSubtotalMinor: number;
+export interface ReturnLineRefundInput {
+  /** Sold on the receipt line, in its sale unit (packs or pieces). */
+  soldQuantity: number;
+  /** Price of the sale unit, dirams. */
+  unitPriceMinor: number;
+  /** Discount share of the whole receipt line (`receipt_lines.discount_share_dirams`). */
+  discountShareMinor: number;
+  /** Returned by earlier returns of the line, in its sale unit. */
+  returnedQuantity: number;
+  /** Returned now, in its sale unit. */
+  quantity: number;
 }
 
-export interface ReturnRefund {
-  /** Subtotal of the lines returned now. */
-  returnedMinor: number;
-  /** Part of the discount that goes back with the returned goods or is lost below the threshold. */
-  discountRecalcMinor: number;
+export interface ReturnLineRefund {
+  /** The returned goods at their price. */
+  amountMinor: number;
+  /** The discount share taken back with them. */
+  discountMinor: number;
   /** Money back to the customer. */
   refundMinor: number;
-  /** Discount kept on the goods the customer keeps. */
-  keptDiscountMinor: number;
 }
 
 /**
- * Refund of a (partial) customer return with the discount recalculated (ТЗ «Возвраты»): the customer
- * pays for what they keep as if they had bought only that — if the kept subtotal falls below the
- * threshold, the discount on it is lost. Refund = paid before − price of the kept goods.
+ * Refund of a (partial) return of a receipt line (decision 2026-09-30; spec 2026-10-13-customer-
+ * returns, R1, E6): the price of the returned goods less their share of the discount; the
+ * discount on the goods the customer keeps stays. The share is taken cumulatively — after every
+ * return the line has given back ⌈share × returned / sold⌉ — so a line returned in parts gives back
+ * exactly its share, and the refund rounds down, in favour of the pharmacy.
  */
-export function returnRefund(input: ReturnRefundInput): ReturnRefund {
-  const before = input.previouslyReturnedSubtotalMinor ?? 0;
-  const keptBefore = input.subtotalMinor - before;
-  const keptAfter = input.subtotalMinor - input.returnedSubtotalMinor;
-  const discountOf = (kept: number) =>
-    kept >= input.minSubtotalMinor ? discountAmount(kept, input.percent) : 0;
-  const discountBefore =
-    before === 0 ? input.discountMinor : discountOf(keptBefore);
-  const keptDiscountMinor = discountOf(keptAfter);
-  const paidBefore = keptBefore - discountBefore;
-  const paidAfter = keptAfter - keptDiscountMinor;
-  const returnedMinor = keptBefore - keptAfter;
-  const refundMinor = paidBefore - paidAfter;
-  return {
-    returnedMinor,
-    discountRecalcMinor: returnedMinor - refundMinor,
-    refundMinor,
-    keptDiscountMinor,
-  };
+export function returnLineRefund(input: ReturnLineRefundInput): ReturnLineRefund {
+  const taken = (returned: number) =>
+    Math.ceil((input.discountShareMinor * returned) / input.soldQuantity);
+  const amountMinor = input.quantity * input.unitPriceMinor;
+  const discountMinor =
+    taken(input.returnedQuantity + input.quantity) - taken(input.returnedQuantity);
+  return { amountMinor, discountMinor, refundMinor: amountMinor - discountMinor };
+}
+
+/** The refund of a return: the sum of its lines. */
+export function returnRefundTotal(
+  lines: readonly ReturnLineRefundInput[],
+): ReturnLineRefund {
+  return lines.map(returnLineRefund).reduce(
+    (sum, line) => ({
+      amountMinor: sum.amountMinor + line.amountMinor,
+      discountMinor: sum.discountMinor + line.discountMinor,
+      refundMinor: sum.refundMinor + line.refundMinor,
+    }),
+    { amountMinor: 0, discountMinor: 0, refundMinor: 0 },
+  );
 }
 
 export type DiscountRuleStatus = 'active' | 'scheduled' | 'expired';

@@ -215,7 +215,9 @@
       "broken": "Бой",
       "defect": "Брак",
       "misgrade": "Пересорт",
-      "transfer_discrepancy": "Расхождение при перемещении"
+      "transfer_discrepancy": "Расхождение при перемещении",
+      "customer_return_defect": "Брак при возврате покупателя",
+      "customer_return_expired": "Просрочка при возврате покупателя"
     },
     "sumCost": "Сумма по закупке, с",
     "empty": "Списаний нет",
@@ -238,7 +240,9 @@
       "linesRequired": "Добавьте хотя бы одну строку",
       "periodClosed": "Период закрыт для этой даты",
       "fromTransfer": "Недостача при перемещении {number}: списание создано при приёмке и не меняется вручную.",
-      "openTransfers": "Перемещения"
+      "openTransfers": "Перемещения",
+      "fromReturn": "Возврат покупателя {number}: списание создано при возврате и не меняется вручную.",
+      "openReturns": "Возвраты"
     }
   },
   "supplierReturns": {

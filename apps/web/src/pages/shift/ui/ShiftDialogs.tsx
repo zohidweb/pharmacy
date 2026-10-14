@@ -4,6 +4,7 @@ import type {
   CashInReason,
   CashMovementKind,
   CashOutReason,
+  ReceiptPaymentMethod,
   Shift,
 } from '@pharmacy/shared-dto';
 import { formatMoney, parseMoneyToMinor } from '@pharmacy/shared-util';
@@ -18,10 +19,29 @@ import {
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 
+/** A signed amount: the net of a bank terminal is negative when its refunds exceed its sales. */
+function parseSignedMoneyToMinor(text: string): number | null {
+  const value = text.trim();
+  const negative = value.startsWith('-') || value.startsWith('\u2212');
+  const minor = parseMoneyToMinor(negative ? value.slice(1) : value);
+  return minor === null ? null : negative ? -minor : minor;
+}
+
 function useMoney(initial = '') {
   const [text, setText] = useState(initial);
   const minor = text.trim() === '' ? null : parseMoneyToMinor(text);
   return { text, setText, minor };
+}
+
+/**
+ * What the bank terminal of a kind should show: the sales less the returns made by that kind
+ * (spec 2026-10-13-customer-returns, E13).
+ */
+function systemOf(shift: Shift, method: ReceiptPaymentMethod): number {
+  return (
+    shift.byMethod[method].amountMinor -
+    shift.returnsByMethod[method].amountMinor
+  );
 }
 
 export function OpenShiftDialog({
@@ -210,8 +230,9 @@ export function CloseShiftDialog({
   onClose: () => void;
 }) {
   const t = useTranslations('shift');
+  // the drawer never holds less than nothing: returns may take the expected cash below zero (R6)
   const actual = useMoney(
-    formatMoney(shift.cash.expectedMinor, { withSign: false }),
+    formatMoney(Math.max(0, shift.cash.expectedMinor), { withSign: false }),
   );
   const [reason, setReason] = useState('');
   const [terminal, setTerminal] = useState<Record<TerminalMethod, string>>(
@@ -219,14 +240,15 @@ export function CloseShiftDialog({
       Object.fromEntries(
         TERMINAL_METHODS.map((m) => [
           m,
-          formatMoney(shift.byMethod[m].amountMinor, { withSign: false }),
+          formatMoney(systemOf(shift, m), { withSign: false }),
         ]),
       ) as Record<TerminalMethod, string>,
   );
   const [touched, setTouched] = useState(false);
   const discrepancy =
     actual.minor === null ? null : actual.minor - shift.cash.expectedMinor;
-  const terminalMinor = (m: TerminalMethod) => parseMoneyToMinor(terminal[m]);
+  const terminalMinor = (m: TerminalMethod) =>
+    parseSignedMoneyToMinor(terminal[m]);
   const terminalInvalid = TERMINAL_METHODS.some(
     (m) => terminalMinor(m) === null,
   );
@@ -353,7 +375,7 @@ export function CloseShiftDialog({
                 key: 'system',
                 header: t('bySystem'),
                 numeric: true,
-                cell: (m) => formatMoney(shift.byMethod[m].amountMinor),
+                cell: (m) => formatMoney(systemOf(shift, m)),
               },
               {
                 key: 'terminal',
@@ -386,7 +408,7 @@ export function CloseShiftDialog({
                   const value = terminalMinor(m);
                   return value === null
                     ? '—'
-                    : formatMoney(value - shift.byMethod[m].amountMinor);
+                    : formatMoney(value - systemOf(shift, m));
                 },
               },
             ]}

@@ -179,6 +179,13 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'discountRules.update',
   'settings.markups',
   'settings.updateMarkups',
+  // customer returns (spec 2026-10-13-customer-returns)
+  'receipts.returnable',
+  'returns.salesSearch',
+  'returns.create',
+  'returns.list',
+  'settings.returns',
+  'settings.updateReturns',
   'stock.list',
   'stock.products',
   'stock.productBatches',

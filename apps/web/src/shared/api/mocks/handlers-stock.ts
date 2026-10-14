@@ -636,6 +636,79 @@ function requestLines(
   });
 }
 
+/** The system reasons of a write-off of a customer return are not chosen by hand (E9). */
+function manualReason(reason: WriteOff['reason'], correlationId: string) {
+  if (reason === 'customer_return_defect' || reason === 'customer_return_expired') {
+    throw new ApiError(422, 'validation_failed', correlationId, [
+      { field: 'reason', code: 'invalid' },
+    ]);
+  }
+}
+
+/**
+ * The write-off of a customer return (spec 2026-10-13-customer-returns, E9): a defect or an expired
+ * batch goes back to the batch and leaves it again by a posted write-off linked to the return.
+ */
+export function writeOffReturned(input: {
+  storeId: string;
+  reason: 'customer_return_defect' | 'customer_return_expired';
+  customerReturnId: string;
+  customerReturnNumber: string;
+  authorName: string;
+  lines: ReadonlyArray<{
+    productId: string;
+    productName: string;
+    batchId: string;
+    unit: SaleUnit;
+    quantity: number;
+  }>;
+  correlationId: string;
+}): WriteOff {
+  const by: DocumentAuthor = { name: input.authorName, at: now() };
+  const writeOff: WriteOff = {
+    id: `wo-${input.customerReturnId}`,
+    number: number('СП', 'sp'),
+    status: 'posted',
+    date: today(),
+    storeId: input.storeId,
+    storeName: storeName(input.storeId),
+    reason: input.reason,
+    comment: input.customerReturnNumber,
+    lines: input.lines.map((line) => {
+      const product = productOf(line.productId, input.correlationId);
+      const batch = batchOf(line.productId, line.batchId, input.correlationId);
+      return {
+        productId: line.productId,
+        productName: line.productName,
+        batchId: line.batchId,
+        batchNumber: batch.number,
+        expiresOn: batch.expiresOn,
+        unit: line.unit,
+        quantity: line.quantity,
+        costMinor: unitCost(product, batch, line.unit),
+      };
+    }),
+    createdBy: by,
+    postedBy: by,
+    transferId: null,
+    transferNumber: null,
+    customerReturnId: input.customerReturnId,
+    customerReturnNumber: input.customerReturnNumber,
+  };
+  writeOff.totalMinor = linesTotal(writeOff.lines);
+  for (const line of input.lines) {
+    const product = productOf(line.productId, input.correlationId);
+    move(
+      input.storeId,
+      line.batchId,
+      writeOff.number,
+      -piecesOf(product, line.unit, line.quantity),
+    );
+  }
+  db().writeOffs.unshift(writeOff);
+  return writeOff;
+}
+
 export const stockHandlers: Pick<MockHandlers, StockRoute> = {
   'stock.list': ({ query, correlationId }) => {
     const { session, canSeeCost } = context(correlationId, 'inventory:view');
@@ -1293,6 +1366,7 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const { session, author } = context(correlationId, 'inventory:create', {
       write: true,
     });
+    manualReason(body.reason, correlationId);
     writable(session, body.storeId, correlationId);
     const lines = stockLines(body.lines, correlationId);
     const doc: WriteOff = {
@@ -1307,6 +1381,8 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
       postedBy: null,
       transferId: null,
       transferNumber: null,
+      customerReturnId: null,
+      customerReturnNumber: null,
     };
     db().writeOffs.unshift(doc);
     return doc;
@@ -1319,7 +1395,11 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     if (doc.transferId) {
       throw new ApiError(409, 'write_off_from_transfer', correlationId);
     }
+    if (doc.customerReturnId) {
+      throw new ApiError(409, 'write_off_from_return', correlationId);
+    }
     requireDraft(doc.status, correlationId);
+    manualReason(body.reason, correlationId);
     writable(session, body.storeId, correlationId);
     const lines = stockLines(body.lines, correlationId);
     Object.assign(doc, body, {
@@ -1336,6 +1416,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     if (doc.transferId) {
       throw new ApiError(409, 'write_off_from_transfer', correlationId);
+    }
+    if (doc.customerReturnId) {
+      throw new ApiError(409, 'write_off_from_return', correlationId);
     }
     requireDraft(doc.status, correlationId);
     writable(session, doc.storeId, correlationId);
@@ -1372,6 +1455,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     if (doc.transferId) {
       throw new ApiError(409, 'write_off_from_transfer', correlationId);
+    }
+    if (doc.customerReturnId) {
+      throw new ApiError(409, 'write_off_from_return', correlationId);
     }
     writable(session, doc.storeId, correlationId);
     assertNotFrozen(
@@ -2086,6 +2172,8 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
         postedBy: author(),
         transferId: doc.id,
         transferNumber: doc.number,
+        customerReturnId: null,
+        customerReturnNumber: null,
       };
       writeOff.totalMinor = linesTotal(writeOff.lines);
       db().writeOffs.unshift(writeOff);

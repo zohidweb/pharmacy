@@ -444,24 +444,31 @@ describe('SettingsPage', () => {
   it('saves network settings that reach the POS and the PIN rule', async () => {
     await signInAs('firuz', 'store-1');
     renderWithProviders(<SettingsPage />);
-    const returnWindow = await screen.findByRole('textbox', {
-      name: /Срок возврата, дней/,
-    });
-    fireEvent.change(returnWindow, { target: { value: '10' } });
     fireEvent.change(
-      screen.getByRole('textbox', { name: /Минимальная длина PIN/ }),
+      await screen.findByRole('textbox', { name: /Минимальная длина PIN/ }),
       {
         target: { value: '6' },
       },
     );
     fireEvent.click(screen.getAllByRole('button', { name: 'Сохранить' })[0]);
     expect(await screen.findByText('Настройки сохранены')).toBeTruthy();
-    const snapshot = await mockApi()(
-      'catalog.snapshot',
-      { params: { storeId: 'store-1' }, query: {} },
-      'test',
+    // the return window lives with the return policy (spec 2026-10-13-customer-returns, E17)
+    const returns = await screen.findByRole('region', {
+      name: 'Возвраты покупателей',
+    });
+    fireEvent.change(
+      within(returns).getByRole('textbox', { name: /Срок возврата, дней/ }),
+      { target: { value: '10' } },
     );
-    expect(snapshot.settings.returnWindowDays).toBe(10);
+    fireEvent.click(within(returns).getByRole('button', { name: 'Сохранить' }));
+    await waitFor(async () => {
+      const snapshot = await mockApi()(
+        'catalog.snapshot',
+        { params: { storeId: 'store-1' }, query: {} },
+        'test',
+      );
+      expect(snapshot.settings.returnWindowDays).toBe(10);
+    });
     await expect(
       mockApi()(
         'me.changePin',

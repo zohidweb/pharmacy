@@ -3,7 +3,8 @@ import {
   bestDiscount,
   discountAmount,
   nextDiscount,
-  returnRefund,
+  returnLineRefund,
+  returnRefundTotal,
   type DiscountRule,
 } from './discount';
 
@@ -39,70 +40,73 @@ describe('bestDiscount', () => {
   });
 });
 
-describe('returnRefund', () => {
-  it('returns the proportional discount while the kept goods stay above the threshold', () => {
-    // 700,00 с at 3 %: return 100,00 с, keep 600,00 с (still ≥ 500,00 с)
-    const refund = returnRefund({
-      subtotalMinor: 70_000,
-      discountMinor: 2_100,
-      returnedSubtotalMinor: 10_000,
-      percent: 3,
-      minSubtotalMinor: 50_000,
-    });
-    expect(refund).toEqual({
-      returnedMinor: 10_000,
-      discountRecalcMinor: 300,
-      refundMinor: 9_700,
-      keptDiscountMinor: 1_800,
-    });
-  });
-
-  it('takes the whole discount back when the kept goods fall below the threshold', () => {
-    // keep 400,00 с < 500,00 с: the kept goods lose their 12,00 с discount
-    const refund = returnRefund({
-      subtotalMinor: 70_000,
-      discountMinor: 2_100,
-      returnedSubtotalMinor: 30_000,
-      percent: 3,
-      minSubtotalMinor: 50_000,
-    });
-    expect(refund.refundMinor).toBe(70_000 - 2_100 - 40_000);
-    expect(refund.keptDiscountMinor).toBe(0);
-    expect(refund.discountRecalcMinor).toBe(2_100);
-  });
-
-  it('accounts for earlier returns of the same receipt', () => {
-    const first = returnRefund({
-      subtotalMinor: 70_000,
-      discountMinor: 2_100,
-      returnedSubtotalMinor: 10_000,
-      percent: 3,
-      minSubtotalMinor: 50_000,
-    });
-    const second = returnRefund({
-      subtotalMinor: 70_000,
-      discountMinor: 2_100,
-      returnedSubtotalMinor: 30_000,
-      previouslyReturnedSubtotalMinor: 10_000,
-      percent: 3,
-      minSubtotalMinor: 50_000,
-    });
-    // together the customer gets back exactly paid − price of what they keep
-    expect(first.refundMinor + second.refundMinor).toBe(
-      70_000 - 2_100 - 40_000,
-    );
-  });
-
-  it('refunds the full price of a receipt without discount', () => {
+describe('returnLineRefund', () => {
+  it('refunds the price less the discount share of the returned goods (R1)', () => {
+    // 120,00 с at 5 %: the 30,00 с item carries a discount share of 1,50 с
     expect(
-      returnRefund({
-        subtotalMinor: 2_920,
-        discountMinor: 0,
-        returnedSubtotalMinor: 620,
-        percent: 0,
-        minSubtotalMinor: 0,
-      }).refundMinor,
-    ).toBe(620);
+      returnLineRefund({
+        soldQuantity: 1,
+        unitPriceMinor: 3000,
+        discountShareMinor: 150,
+        returnedQuantity: 0,
+        quantity: 1,
+      }),
+    ).toEqual({ amountMinor: 3000, discountMinor: 150, refundMinor: 2850 });
+  });
+
+  it('takes exactly the line share over partial returns', () => {
+    const line = { soldQuantity: 3, unitPriceMinor: 1000, discountShareMinor: 100 };
+    const parts = [0, 1, 2].map((returnedQuantity) =>
+      returnLineRefund({ ...line, returnedQuantity, quantity: 1 }),
+    );
+    expect(parts.map((p) => p.discountMinor)).toEqual([34, 33, 33]);
+    expect(parts.map((p) => p.refundMinor)).toEqual([966, 967, 967]);
+    expect(parts.reduce((sum, p) => sum + p.discountMinor, 0)).toBe(100);
+  });
+
+  it('rounds the refund down, in favour of the pharmacy', () => {
+    expect(
+      returnLineRefund({
+        soldQuantity: 3,
+        unitPriceMinor: 1000,
+        discountShareMinor: 100,
+        returnedQuantity: 0,
+        quantity: 2,
+      }),
+    ).toEqual({ amountMinor: 2000, discountMinor: 67, refundMinor: 1933 });
+  });
+
+  it('sums the lines of a return', () => {
+    expect(
+      returnRefundTotal([
+        {
+          soldQuantity: 1,
+          unitPriceMinor: 3000,
+          discountShareMinor: 150,
+          returnedQuantity: 0,
+          quantity: 1,
+        },
+        {
+          soldQuantity: 3,
+          unitPriceMinor: 1000,
+          discountShareMinor: 100,
+          returnedQuantity: 0,
+          quantity: 2,
+        },
+      ]),
+    ).toEqual({ amountMinor: 5000, discountMinor: 217, refundMinor: 4783 });
+  });
+
+  it('has no discount without a share', () => {
+    expect(
+      returnLineRefund({
+        soldQuantity: 2,
+        unitPriceMinor: 620,
+        discountShareMinor: 0,
+        returnedQuantity: 1,
+        quantity: 1,
+      }),
+    ).toEqual({ amountMinor: 620, discountMinor: 0, refundMinor: 620 });
   });
 });
 

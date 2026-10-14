@@ -126,6 +126,7 @@ import type {
   OpenShiftRequest,
   ReturnableReceipt,
   ReturnListResponse,
+  ReturnPolicy,
   ReturnReason,
   SaleSearchItem,
   Shift,
@@ -277,7 +278,7 @@ export const apiRoutes = {
     ReturnableReceipt,
     undefined,
     undefined,
-    { number: string }
+    { number?: string; id?: string; productId?: string }
   >('GET', () => '/receipts/returnable'),
   'returns.salesSearch': route<
     SaleSearchItem[],
@@ -564,6 +565,11 @@ export const apiRoutes = {
   'settings.update': route<NetworkSettings, NetworkSettings>(
     'PUT',
     () => '/settings',
+  ),
+  'settings.returns': route<ReturnPolicy>('GET', () => '/settings/returns'),
+  'settings.updateReturns': route<ReturnPolicy, ReturnPolicy>(
+    'PUT',
+    () => '/settings/returns',
   ),
   'settings.markups': route<CategoryMarkup[]>('GET', () => '/settings/markups'),
   'settings.updateMarkups': route<CategoryMarkup[], UpdateMarkupsRequest>(

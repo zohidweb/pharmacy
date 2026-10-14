@@ -4,6 +4,8 @@ import type {
   CategoryMarkup,
   NetworkSettings,
   NotificationKind,
+  PrescriptionKind,
+  ReturnPolicy,
 } from '@pharmacy/shared-dto';
 import {
   Alert,
@@ -36,13 +38,11 @@ const NOTIFICATIONS: NotificationKind[] = [
 ];
 
 type NumberField =
-  | 'returnWindowDays'
   | 'posSessionTimeoutMinutes'
   | 'minPinLength'
   | 'expiryNoticeDays';
 
 const RANGES: Record<NumberField, [number, number]> = {
-  returnWindowDays: [0, 365],
   posSessionTimeoutMinutes: [1, 240],
   minPinLength: [4, 8],
   expiryNoticeDays: [1, 365],
@@ -119,7 +119,6 @@ function NetworkCard({
             value={t('network.currencyValue')}
             hint={t('network.currencyHint')}
           />
-          {number('returnWindowDays')}
           {number('posSessionTimeoutMinutes')}
           {number('minPinLength')}
           {number('expiryNoticeDays')}
@@ -179,6 +178,98 @@ function NetworkCard({
         )}
       </Card>
     </>
+  );
+}
+
+const KINDS: PrescriptionKind[] = ['none', 'rx', 'controlled'];
+
+/**
+ * The return window and the return policy of the network (spec 2026-10-13-customer-returns, R3):
+ * which kinds of products are taken back at the customer's wish; a defect is taken back always.
+ */
+function ReturnsCard({
+  policy,
+  editable,
+}: {
+  policy: ReturnPolicy;
+  editable: boolean;
+}) {
+  const t = useTranslations('settings');
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState(policy);
+  const save = useMutation({
+    mutationFn: () => apiRequest('settings.updateReturns', { body: form }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['settings', 'returns'], saved);
+      toast.show(t('saved'));
+    },
+  });
+  const error = useApiErrorMessage(save.error);
+  const outOfRange = form.returnWindowDays < 0 || form.returnWindowDays > 365;
+  return (
+    <Card
+      as="section"
+      aria-labelledby="returns-title"
+      className="flex flex-col gap-4"
+    >
+      <CardHeader
+        title={t('returns.title')}
+        titleId="returns-title"
+        description={t('returns.hint')}
+      />
+      {error && (
+        <Alert tone="danger" live="assertive">
+          {error}
+        </Alert>
+      )}
+      <div className="grid grid-cols-3 gap-4">
+        <TextField
+          label={t('returns.windowDays')}
+          inputMode="numeric"
+          disabled={!editable}
+          value={String(form.returnWindowDays)}
+          hint={t('range', { min: 0, max: 365 })}
+          error={outOfRange ? t('outOfRange') : undefined}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              returnWindowDays: Number(
+                event.target.value.replace(/\D/g, '') || 0,
+              ),
+            }))
+          }
+        />
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        {KINDS.map((kind) => (
+          <Switch
+            key={kind}
+            label={t(`returns.kinds.${kind}`)}
+            description={t('returns.kindHint')}
+            checked={form.customerReturns[kind]}
+            disabled={!editable}
+            onCheckedChange={(checked) =>
+              setForm((current) => ({
+                ...current,
+                customerReturns: { ...current.customerReturns, [kind]: checked },
+              }))
+            }
+          />
+        ))}
+      </div>
+      <p className="text-xs text-fg-subtle">{t('returns.defectHint')}</p>
+      {editable && (
+        <Button
+          className="self-end"
+          loading={save.isPending}
+          disabled={outOfRange}
+          onClick={() => save.mutate()}
+        >
+          {t('save')}
+        </Button>
+      )}
+    </Card>
   );
 }
 
@@ -341,6 +432,10 @@ function SettingsPageView() {
     queryKey: ['settings'],
     queryFn: ({ signal }) => apiRequest('settings.get', { signal }),
   });
+  const returns = useQuery({
+    queryKey: ['settings', 'returns'],
+    queryFn: ({ signal }) => apiRequest('settings.returns', { signal }),
+  });
   const markups = useQuery({
     queryKey: ['settings', 'markups'],
     queryFn: ({ signal }) => apiRequest('settings.markups', { signal }),
@@ -352,6 +447,9 @@ function SettingsPageView() {
         {session?.impersonation && <Alert tone="info">{t('readOnly')}</Alert>}
         <QueryState query={settings}>
           {(data) => <NetworkCard settings={data} editable={editable} />}
+        </QueryState>
+        <QueryState query={returns}>
+          {(data) => <ReturnsCard policy={data} editable={editable} />}
         </QueryState>
         <CategoriesCard />
         <div className="grid grid-cols-2 items-start gap-4">

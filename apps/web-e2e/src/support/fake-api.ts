@@ -101,6 +101,12 @@ function openShift(): Shift {
       nfc: payment(),
     },
     returns: payment(),
+    returnsByMethod: {
+      cash: payment(),
+      card: payment(),
+      qr: payment(),
+      nfc: payment(),
+    },
     revenueMinor: 0,
     cash: {
       openingMinor: 50_000,

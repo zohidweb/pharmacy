@@ -281,7 +281,6 @@ export type NotificationKind =
 /** GET/PUT /api/v1/settings — network settings; every change goes to the audit log. */
 export interface NetworkSettings {
   networkName: string;
-  returnWindowDays: number;
   /** Cashier session timeout on the terminal, minutes (CLAUDE.md «Security constraints»). */
   posSessionTimeoutMinutes: number;
   /** ≥ 4 (ADR-0008). */

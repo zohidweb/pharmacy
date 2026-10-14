@@ -1,6 +1,6 @@
 /*
  * Shift and customer returns against the in-memory API mocks: cash operations through the outbox,
- * closing with reconciliation and the Z-report; returns by receipt with the discount recalculated,
+ * closing with reconciliation and the Z-report; returns by receipt with their share of the discount,
  * the return window, the right to return without a receipt, no returns during an outage.
  */
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -153,7 +153,7 @@ async function findReceipt(number: string) {
 }
 
 describe('ReturnsPage', () => {
-  it('returns part of a receipt and takes the lost discount back', async () => {
+  it('returns part of a receipt with its share of the discount', async () => {
     // a return goes into the shift of the terminal: the manager signs in there by PIN (K6)
     await signInByPin('emp-manager', '3690');
     renderWithProviders(<ReturnsPage />);
@@ -167,20 +167,29 @@ describe('ReturnsPage', () => {
         name: 'Больше: Витамин D3 2000 МЕ, капс. №60',
       }),
     );
-    // 558,00 − 3 %: keeping 428,00 (< 500,00) loses the discount → 541,26 − 428,00
+    // 2 of 8 at 65,00 with a line share of 15,60: ⌈15,60 × 2 / 8⌉ = 3,90 → 130,00 − 3,90 (R1)
     const calc = screen.getByRole('region', { name: 'Расчёт' });
     expect(
       plain(within(calc).getByText('К выдаче').parentElement?.textContent),
-    ).toBe('К выдаче113,26 с');
-    expect(within(calc).getByText(/скидка на них пересчитана/)).toBeTruthy();
+    ).toBe('К выдаче126,10 с');
+    expect(
+      plain(
+        within(calc).getByText('Доля скидки возвращаемого').parentElement
+          ?.textContent,
+      ),
+    ).toBe('Доля скидки возвращаемого−3,90 с');
     fireEvent.click(
       within(calc).getByRole('button', { name: /Оформить возврат/ }),
     );
-    expect(await screen.findByText(/Возврат ВЗ-000043 оформлен/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Возврат ВЗ-03-\d{4}-000043 оформлен/),
+    ).toBeTruthy();
     const journal = await screen.findByRole('table', {
       name: 'Журнал возвратов',
     });
-    expect(await within(journal).findByText('ВЗ-000043')).toBeTruthy();
+    expect(
+      await within(journal).findByText(/^ВЗ-03-\d{4}-000043$/),
+    ).toBeTruthy();
   });
 
   it('refuses a receipt past the return window', async () => {
@@ -188,7 +197,7 @@ describe('ReturnsPage', () => {
     renderWithProviders(<ReturnsPage />);
     await findReceipt('0950');
     expect(
-      await screen.findByText('Срок возврата по этому чеку (14 дней) истёк.'),
+      await screen.findByText('Срок возврата по этому чеку истёк.'),
     ).toBeTruthy();
   });
 

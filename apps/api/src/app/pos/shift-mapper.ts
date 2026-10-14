@@ -6,6 +6,7 @@ import type {
   ShiftEvent,
 } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
+import { ShiftReturns } from './shift-returns';
 import { type ShiftRow, ShiftsRepository } from './shifts.repository';
 
 const METHODS: ReceiptPaymentMethod[] = ['cash', 'card', 'qr', 'nfc'];
@@ -13,10 +14,15 @@ const METHODS: ReceiptPaymentMethod[] = ['cash', 'card', 'qr', 'nfc'];
 // The `Shift` of the contract from the rows of a shift (spec 2026-10-13-pos-shift-sale, 4.4): the
 // totals are counted from its receipts, payments and cash operations, never stored. The cash part
 // of a receipt is the cash handed over minus the change (the payment row holds what was handed
-// over, E10). Returns of customers come with the next PR: zero for now.
+// over, E10). The customer returns made in the shift come from the returns module through
+// `ShiftReturns` (spec 2026-10-13-customer-returns, E13): their cash leaves the drawer, and the bank
+// terminal of a kind is reconciled against the sales less the returns of that kind.
 @Injectable()
 export class ShiftMapper {
-  constructor(private readonly shifts: ShiftsRepository) {}
+  constructor(
+    private readonly shifts: ShiftsRepository,
+    private readonly returns: ShiftReturns,
+  ) {}
 
   async view(
     trx: TenantTransaction,
@@ -25,6 +31,7 @@ export class ShiftMapper {
   ): Promise<Shift> {
     const totals = await this.shifts.totals(trx, tenantId, shift.id);
     const rows = await this.shifts.events(trx, tenantId, shift.id);
+    const returned = await this.returns.totals(trx, tenantId, shift.id);
     const byMethod = Object.fromEntries(
       METHODS.map((method): [ReceiptPaymentMethod, PaymentTotal] => {
         const kind = totals.byKind.get(method);
@@ -41,7 +48,17 @@ export class ShiftMapper {
     ) as Record<ReceiptPaymentMethod, PaymentTotal>;
     const opening = Number(shift.openingCashDirams);
     const sales = byMethod.cash.amountMinor;
-    const events: ShiftEvent[] = rows.map((row) => ({
+    const returnsByMethod = Object.fromEntries(
+      METHODS.map((method): [ReceiptPaymentMethod, PaymentTotal] => {
+        const kind = returned.byKind.get(method);
+        return [
+          method,
+          { count: kind?.count ?? 0, amountMinor: kind?.amountDirams ?? 0 },
+        ];
+      }),
+    ) as Record<ReceiptPaymentMethod, PaymentTotal>;
+    const cashReturns = returnsByMethod.cash.amountMinor;
+    const events: ShiftEvent[] = [...rows, ...returned.events].map((row) => ({
       id: row.id,
       at: row.at.toISOString(),
       kind: row.kind,
@@ -82,16 +99,22 @@ export class ShiftMapper {
       closedAt: shift.closedAt?.toISOString() ?? null,
       receipts: totals.receipts,
       byMethod,
-      returns: { count: 0, amountMinor: 0 },
-      revenueMinor: totals.revenueDirams,
+      returns: { count: returned.count, amountMinor: returned.amountDirams },
+      returnsByMethod,
+      // sales less returns
+      revenueMinor: totals.revenueDirams - returned.amountDirams,
       cash: {
         openingMinor: opening,
         salesMinor: sales,
         inMinor: totals.depositsDirams,
         outMinor: totals.withdrawalsDirams,
-        returnsMinor: 0,
+        returnsMinor: cashReturns,
         expectedMinor:
-          opening + sales + totals.depositsDirams - totals.withdrawalsDirams,
+          opening +
+          sales +
+          totals.depositsDirams -
+          totals.withdrawalsDirams -
+          cashReturns,
       },
       discrepancyReceipts: totals.discrepancyReceipts,
       events,

@@ -3,12 +3,14 @@ import { AuditModule } from '../audit/audit.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { PurchasingModule } from '../purchasing/purchasing.module';
+import { CustomerReturnNumbers } from './customer-return-numbers';
 import { DeficitController } from './deficit.controller';
 import { DocumentsRepository } from './documents.repository';
 import { GoodsReceiptsController } from './goods-receipts.controller';
 import { InventoryRepository } from './inventory.repository';
 import { Numbering } from './numbering';
 import { PosStock } from './pos-stock';
+import { ReturnStock } from './return-stock';
 import { OpeningBalancesController } from './opening-balances.controller';
 import { DocumentPosting } from './posting';
 import { StockDocumentsService } from './stock-documents.service';
@@ -80,8 +82,10 @@ import { WriteOffsService } from './write-offs.service';
     TransfersService,
     TransferRequestsService,
     PosStock,
+    ReturnStock,
+    CustomerReturnNumbers,
   ],
   // the POS reads and moves the stock only through these (spec 2026-10-13-pos-shift-sale)
-  exports: [Numbering, PosStock],
+  exports: [Numbering, PosStock, ReturnStock, CustomerReturnNumbers],
 })
 export class InventoryModule {}

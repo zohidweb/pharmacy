@@ -174,6 +174,7 @@ export class ReturnsService {
           ).map((p) => [p.id, p]),
         );
         const refused: FieldError[] = [];
+        let controlled = false;
         for (const p of picked) {
           const field = `lines.${p.index}.lineId`;
           if (foundProductId !== null && p.line.productId !== foundProductId) {
@@ -181,6 +182,7 @@ export class ReturnsService {
             continue;
           }
           const kind = kindOf(p.line, products.get(p.line.productId)?.prescription);
+          if (kind === 'controlled') controlled = true;
           if (body.reason === 'customer' && !settings.customerReturns[kind]) {
             refused.push({ field, code: 'return_not_allowed' });
           }
@@ -191,11 +193,7 @@ export class ReturnsService {
         // A ПКУ line is returned only by a cashier who may sell it (E8): sold as ПКУ, or ПКУ in the
         // catalog now (marked after the sale, or sold from the buffer without its record).
         if (
-          picked.some(
-            (p) =>
-              kindOf(p.line, products.get(p.line.productId)?.prescription) ===
-              'controlled',
-          ) &&
+          controlled &&
           !hasPermissions(principal.permissions, 'pos:sell-controlled')
         ) {
           throw new ProblemException(403, 'forbidden');
@@ -269,7 +267,8 @@ export class ReturnsService {
           foundWithoutReceipt: foundProductId !== null,
           discountReturnedDirams: discountTotal,
           refundDirams: refundTotal,
-          // without a request context (a future sync path) still a correlation id of its own
+          // never empty: unreachable today (the principal needs a request), kept so that a
+          // financial operation always carries a correlation id
           correlationId: getRequestContext()?.correlationId ?? randomUUID(),
         });
         const lineIds = await this.repository.insertLines(

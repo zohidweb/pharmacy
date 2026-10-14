@@ -42,7 +42,10 @@ export function unitPieces(line: SoldLine): number {
   return line.saleUnit === 'pack' ? line.piecesPerPack : 1;
 }
 
-/** The kind of the product of a line: ПКУ when it was sold as ПКУ (E8). */
+/**
+ * The kind of the product of a line, for the view and the return alike: ПКУ when it was sold as ПКУ,
+ * else the kind in the catalog now (E8).
+ */
 export function kindOf(
   line: SoldLine,
   prescription: PrescriptionKind | undefined,

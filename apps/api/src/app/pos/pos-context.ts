@@ -117,7 +117,8 @@ export class PosContext {
       author,
       occurredAt,
       receivedAt,
-      // without a request context (a future sync path) still a correlation id of its own
+      // never empty: unreachable today (the principal needs a request), kept so that a
+      // financial operation always carries a correlation id
       correlationId: getRequestContext()?.correlationId ?? randomUUID(),
     };
   }

@@ -193,6 +193,7 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'notifications.list',
   'notifications.readAll',
   'auditLog.list',
+  'reports.get',
   'stock.list',
   'stock.products',
   'stock.productBatches',

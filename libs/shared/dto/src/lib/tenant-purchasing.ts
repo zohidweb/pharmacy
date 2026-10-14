@@ -85,7 +85,7 @@ export interface PurchaseOrderListResponse extends Page<PurchaseOrderListItem> {
   };
 }
 
-/** GET /api/v1/purchase-orders/deficit?storeId=&supplierId= — lines of «заполнить по дефициту». */
+/** GET /api/v1/stock/deficit?storeId=&supplierId= — lines of «заполнить по дефициту». */
 export interface DeficitLine {
   productId: string;
   productName: string;

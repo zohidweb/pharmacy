@@ -39,6 +39,7 @@ const knownCodes = [
   'document_posted',
   'stock_insufficient',
   'transfer_not_in_transit',
+  'transfer_changed',
   'request_not_open',
   'request_has_transfer',
   'stock_count_in_progress',

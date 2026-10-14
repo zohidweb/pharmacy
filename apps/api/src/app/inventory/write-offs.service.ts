@@ -330,6 +330,14 @@ export class WriteOffsService {
       writeOffReason: input.reason,
     };
     if (current === null) {
+      // The batches before the counter of write-offs, as the writers that hold batches and then
+      // number a write-off (an acceptance of a transfer with a shortage, a customer return): the
+      // lines would take these key-share locks after the counter and deadlock with them.
+      await this.documents.keyShareBatches(
+        trx,
+        tenantId,
+        values.map((v) => v.batchId),
+      );
       const number = await this.numbering.next(
         trx,
         tenantId,

@@ -14,9 +14,11 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -133,6 +135,13 @@ export class AcceptTransferLineDto {
 
 /** POST /api/v1/transfers/{id}/acceptance. */
 export class AcceptTransferDto implements AcceptTransferRequest {
+  /** An instant: date, time and `Z` or an offset (`sentBy.at` of the card). */
+  @IsISO8601({ strict: true })
+  @Matches(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/,
+  )
+  dispatchedAt!: string;
+
   @Transform(trim)
   @IsString()
   @MaxLength(500)

@@ -178,6 +178,12 @@ describe('SuppliersPage', () => {
 
     fireEvent.click(within(sino).getByRole('button', { name: 'Оплатить' }));
     const pay = await dialog('Оплата поставщику');
+    fireEvent.change(
+      await within(pay).findByRole('combobox', {
+        name: 'Плательщик (юрлицо)',
+      }),
+      { target: { value: 'le-1' } },
+    );
     fireEvent.click(
       within(pay).getByRole('button', { name: 'Провести оплату' }),
     );
@@ -201,6 +207,7 @@ describe('SuppliersPage', () => {
       date: '2026-09-21',
       method: 'bank' as const,
       comment: '',
+      legalEntityId: 'le-1',
     };
     const first = await api(
       'suppliers.pay',

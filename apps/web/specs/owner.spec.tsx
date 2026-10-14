@@ -130,6 +130,7 @@ describe('StoresPage', () => {
       {
         params: { id: transfer.id },
         body: {
+          dispatchedAt: full.sentBy?.at ?? '',
           comment: '',
           lines: full.lines.map((l) => ({
             batchId: l.batchId,

@@ -5,7 +5,10 @@
  * come from the browser (ARIA APG "Dialog (Modal)").
  * - labelled by its title, described by the optional description;
  * - Esc and a click on the backdrop call onClose; the parent owns `open`;
- * - focus returns to the element that was focused before opening.
+ * - focus returns to the element that was focused before opening — also when the dialog is
+ *   unmounted while open (`{shown && <Dialog open />}`), which fires no `close`;
+ * - a dialog inside another (a confirmation) keeps its Esc and `close` to itself: React passes
+ *   them up to the parent dialog, which would close too.
  */
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { cx } from '../cx';
@@ -82,6 +85,14 @@ export function Dialog({
     }
   }, [open]);
 
+  useEffect(() => {
+    const dialog = ref.current;
+    const focusBack = returnFocus;
+    return () => {
+      if (dialog?.open) focusBack.current?.focus();
+    };
+  }, []);
+
   return (
     <dialog
       ref={ref}
@@ -90,9 +101,11 @@ export function Dialog({
       onCancel={(event) => {
         // Esc: keep React as the source of truth for `open`
         event.preventDefault();
+        event.stopPropagation();
         onClose();
       }}
-      onClose={() => {
+      onClose={(event) => {
+        event.stopPropagation();
         if (open) onClose();
         returnFocus.current?.focus();
       }}

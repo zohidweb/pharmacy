@@ -344,7 +344,7 @@ export const apiRoutes = {
     undefined,
     undefined,
     { storeId: string; supplierId?: string }
-  >('GET', () => '/purchase-orders/deficit'),
+  >('GET', () => '/stock/deficit'),
 
   'suppliers.list': route<
     SupplierListResponse,

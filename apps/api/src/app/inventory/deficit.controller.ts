@@ -5,9 +5,9 @@ import { DeficitQueryDto } from './dto/stock.dto';
 import { StockService } from './stock.service';
 
 // «Заполнить по дефициту» of a purchase order (spec 2026-10-09-inventory-purchasing, section 4.2):
-// the stock is the stock module's, so the route under /purchase-orders is served here. The stock
-// module is registered before purchasing, so this static path comes before `purchase-orders/:id`.
-@Controller({ path: 'purchase-orders', version: '1' })
+// the stock is the stock module's, so the route is under its prefix — not under /purchase-orders,
+// where it would depend on being registered before `purchase-orders/:id`.
+@Controller({ path: 'stock', version: '1' })
 export class DeficitController {
   constructor(private readonly stock: StockService) {}
 

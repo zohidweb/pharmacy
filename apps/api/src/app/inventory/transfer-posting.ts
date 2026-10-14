@@ -236,13 +236,14 @@ export class TransferPosting {
     const short = lines
       .map((line, i) => ({ line, missing: line.qtySentPieces - received[i] }))
       .filter((s) => s.missing > 0);
-    // The sender's batches of the shortage are locked for update before the receiver's batches
-    // reference them (a key-share lock): two acceptances of a common batch then wait instead of
-    // deadlocking.
+    // All the sender's batches of the transfer are locked for update, in the order of their ids as
+    // every writer of batches, before the receiver's batches reference them: a reference takes a
+    // key-share lock in the order of the lines, and the write-off of a shortage then asks for
+    // update — against a sale or another acceptance of the same batches that would deadlock.
     await this.documents.lockBatches(
       trx,
       tenantId,
-      short.map((s) => s.line.sourceBatchId),
+      lines.map((l) => l.sourceBatchId),
     );
 
     // the receiver's batches: the values of the sender's batch (D2)

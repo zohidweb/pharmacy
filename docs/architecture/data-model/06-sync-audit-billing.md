@@ -35,9 +35,11 @@
 | `details jsonb` | Без секретов. События `document.posted` / `document.unposted` документов с датой, которую ставит человек, пишут `documentDate` — журнал показывает «документ от …» (кабинет владельца, E8, 2026-10-14) |
 | `source` | `cloud` / `offline_store` |
 
-Индексы: `(tenant_id, recorded_at)`, `(tenant_id, employee_id, recorded_at)`, `(tenant_id, store_id, recorded_at)` — фильтры экрана аудита (БЛ W1-16).
+Индексы: `(tenant_id, recorded_at)`, `(tenant_id, employee_id, recorded_at)`, `(tenant_id, store_id, recorded_at)` — фильтры экрана аудита (БЛ W1-16); `(tenant_id, entity_type, entity_id, recorded_at)` — события о сущности: история карточки сотрудника, «Мои терминалы» (миграция `db-guards`, 2026-10-14).
 
-**`platform_audit_log` (platform):** `recorded_at`, `actor_kind` `operator` / `system`, `operator_id null`, `job text null`, `action`, `tenant_id null`, `entity_type`, `entity_id`, `details jsonb`. Журнал операторов: вход и доступ (`auth.*`, `operator.*`, `access.denied`), сети (`tenant.*`), платежи и счета, ключи, услуги, настройки — вид события определяется префиксом кода. Чтение — `GET /api/v1/operator/operator-audit-log` (фильтры: оператор, сеть, вид, даты платформы, `Asia/Dushanbe`); наружу из `details` отдаются только коды (`permission`, `reason`, `created`), без IP-адресов (2026-10-13).
+Только добавление: строковый триггер запрета UPDATE/DELETE клонируется на секции сам, а запрет TRUNCATE (триггер уровня оператора) стоит на родителе **и на каждой секции** — триггеры уровня оператора на секции не клонируются. Секция, созданная позже, получает тот же `audit_log_no_truncate` (контракт плановой задачи создания секций).
+
+**`platform_audit_log` (platform):** `recorded_at`, `actor_kind` `operator` / `system`, `operator_id null`, `job text null`, `action`, `tenant_id null`, `entity_type`, `entity_id`, `details jsonb`. Журнал операторов: вход и доступ (`auth.*`, `operator.*`, `access.denied`), сети (`tenant.*`), платежи и счета, ключи, услуги, настройки — вид события определяется префиксом кода. Чтение — `GET /api/v1/operator/operator-audit-log` (фильтры: оператор, сеть, вид, даты платформы, `Asia/Dushanbe`); наружу из `details` отдаются только коды (`permission`, `reason`, `created`), без IP-адресов (2026-10-13). Индексы: `(recorded_at)`, `(operator_id, recorded_at)`, `(tenant_id, recorded_at)` — журнал одной сети (миграция `db-guards`, 2026-10-14).
 
 ## Очередь задач
 

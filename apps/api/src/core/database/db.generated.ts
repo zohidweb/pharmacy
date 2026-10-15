@@ -445,6 +445,21 @@ export interface PlatformAuditLog {
   tenantId: string | null;
 }
 
+export interface PlatformSettings {
+  id: number;
+  paymentPurposeTemplate: Generated<string>;
+  storeMonthlyPriceDirams: Generated<bigint>;
+  supplierBankAccount: Generated<string>;
+  supplierBankBik: Generated<string>;
+  supplierBankCorrAccount: Generated<string>;
+  supplierBankName: Generated<string>;
+  supplierInn: Generated<string>;
+  supplierName: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  updatedBy: string | null;
+  vatBp: Generated<number>;
+}
+
 export interface ProductBarcodes {
   barcode: string;
   createdAt: Generated<Timestamp>;
@@ -572,6 +587,26 @@ export interface Roles {
   templateKey: string | null;
   tenantId: string;
   updatedAt: Generated<Timestamp>;
+}
+
+export interface ServiceRequests {
+  comment: string | null;
+  id: string;
+  requestedAt: Generated<Timestamp>;
+  requestedBy: string;
+  serviceId: string;
+  tenantId: string;
+}
+
+export interface Services {
+  archived: Generated<boolean>;
+  basePriceDirams: bigint;
+  createdAt: Generated<Timestamp>;
+  description: Json;
+  id: string;
+  name: Json;
+  updatedAt: Generated<Timestamp>;
+  visible: Generated<boolean>;
 }
 
 export interface Sessions {
@@ -776,6 +811,21 @@ export interface Tenants {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface TenantServices {
+  decidedAt: Generated<Timestamp>;
+  decidedBy: string;
+  id: string;
+  priceDirams: bigint | null;
+  providedBy: string | null;
+  providedOn: string | null;
+  reason: string | null;
+  requestId: string | null;
+  serviceId: string;
+  status: string;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface TenantSettings {
   backdatingMaxDays: Generated<number>;
   cashierSessionIdleMin: Generated<number>;
@@ -882,6 +932,7 @@ export interface DB {
   operators: Operators;
   payments: Payments;
   platformAuditLog: PlatformAuditLog;
+  platformSettings: PlatformSettings;
   productBarcodes: ProductBarcodes;
   products: Products;
   purchaseOrderLines: PurchaseOrderLines;
@@ -890,6 +941,8 @@ export interface DB {
   receipts: Receipts;
   rolePermissions: RolePermissions;
   roles: Roles;
+  serviceRequests: ServiceRequests;
+  services: Services;
   sessions: Sessions;
   shiftCashOperations: ShiftCashOperations;
   shifts: Shifts;
@@ -903,6 +956,7 @@ export interface DB {
   supplierReturnLines: SupplierReturnLines;
   suppliers: Suppliers;
   tenants: Tenants;
+  tenantServices: TenantServices;
   tenantSettings: TenantSettings;
   terminals: Terminals;
   transferLines: TransferLines;

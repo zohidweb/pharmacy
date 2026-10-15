@@ -69,7 +69,7 @@ function likePattern(q: string): string {
 const dateOnly = (value: Date | string): string =>
   new Date(value).toISOString().slice(0, 10);
 
-// Billing does not exist yet (spec 2026-10-05-tenants-module, T1): these fields are neutral.
+// Billing fields are neutral until the debt of networks is read (billing PR 2, Task 6).
 function toListItem(row: TenantRow): TenantListItem {
   return {
     id: row.id,
@@ -85,8 +85,10 @@ function toListItem(row: TenantRow): TenantListItem {
     overdue: false,
     cloudStores: Number(row.cloudStores),
     offlineStores: Number(row.offlineStores),
-    paidUntil: null,
-    monthlyChargeMinor: 0,
+    debtMinor: 0,
+    overdueDebtMinor: 0,
+    advanceMinor: 0,
+    discount: null,
   };
 }
 
@@ -170,7 +172,7 @@ export class TenantsRepository {
     const total = params.filter === 'unpaid' ? 0 : counts[params.filter];
 
     const direction = params.direction;
-    // paidUntil and monthlyCharge need billing: until then they sort like name.
+    // debt needs billing (Task 6): until then it sorts like name.
     const ordered =
       params.sort === 'owner'
         ? query.orderBy('tenants.ownerFullName', direction)
@@ -234,7 +236,6 @@ export class TenantsRepository {
       mode: row.mode === 'online' ? 'cloud' : 'offline',
       status: row.status === 'closed' ? 'closed' : 'active',
       closedOn: row.closedAt === null ? null : dateOnly(row.closedAt),
-      paidUntil: null,
       licenseValidUntil: null,
       lastSyncAt: null,
       monthSalesMinor: 0,

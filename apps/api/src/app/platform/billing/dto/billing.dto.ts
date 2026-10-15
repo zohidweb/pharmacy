@@ -180,6 +180,10 @@ export class AddTenantServiceDto
   extends PriceDto
   implements AddTenantServiceRequest
 {
+  /** The idempotency key made by the client (B17). */
+  @IsUUID()
+  id!: string;
+
   @IsUUID()
   serviceId!: string;
 }

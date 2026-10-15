@@ -25,7 +25,7 @@ const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
 const FILTERS: TenantListFilter[] = ['all', 'active', 'unpaid', 'blocked'];
-const SORTS: TenantSortKey[] = ['name', 'owner', 'stores', 'paidUntil', 'monthlyCharge'];
+const SORTS: TenantSortKey[] = ['name', 'owner', 'stores', 'debt'];
 
 /** GET /api/v1/operator/tenants. */
 export class TenantListQueryDto implements TenantListQuery {

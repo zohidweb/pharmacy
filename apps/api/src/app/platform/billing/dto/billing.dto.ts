@@ -1,15 +1,27 @@
 import type {
+  AddTenantServiceRequest,
+  ApproveServiceRequest,
+  CancelTenantServiceRequest,
   PlatformRequisites,
   PlatformSettings,
+  ProvideTenantServiceRequest,
+  RejectServiceRequest,
+  TenantServiceQuery,
+  TenantServiceStatus,
+  UpdateTenantServiceRequest,
   UpsertServiceRequest,
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
   Contains,
   IsBoolean,
+  IsIn,
   IsInt,
+  IsISO8601,
   IsObject,
+  IsOptional,
   IsString,
+  IsUUID,
   Length,
   Matches,
   Max,
@@ -125,4 +137,74 @@ export class UpsertServiceDto implements UpsertServiceRequest {
 
   @IsBoolean()
   archived!: boolean;
+}
+
+/** A reason the owner sees: 5–500 characters, line breaks kept. */
+class ReasonDto {
+  @Transform(trim)
+  @IsString()
+  @Length(5, 500)
+  @Matches(PRINTABLE_TEXT)
+  reason!: string;
+}
+
+class PriceDto {
+  @IsInt()
+  @Min(1)
+  @Max(MAX_MONEY_MINOR)
+  priceMinor!: number;
+}
+
+/** POST /api/v1/operator/service-requests/{id}/approval */
+export class ApproveServiceRequestDto
+  extends PriceDto
+  implements ApproveServiceRequest {}
+
+/** POST /api/v1/operator/service-requests/{id}/rejection */
+export class RejectServiceRequestDto
+  extends ReasonDto
+  implements RejectServiceRequest {}
+
+/** PATCH /api/v1/operator/tenant-services/{id} */
+export class UpdateTenantServiceDto
+  extends PriceDto
+  implements UpdateTenantServiceRequest {}
+
+/** POST /api/v1/operator/tenant-services/{id}/cancellation */
+export class CancelTenantServiceDto
+  extends ReasonDto
+  implements CancelTenantServiceRequest {}
+
+/** POST /api/v1/operator/tenants/{id}/services */
+export class AddTenantServiceDto
+  extends PriceDto
+  implements AddTenantServiceRequest
+{
+  @IsUUID()
+  serviceId!: string;
+}
+
+/** POST /api/v1/operator/tenant-services/{id}/provision — a calendar date; the service checks the range. */
+export class ProvideTenantServiceDto implements ProvideTenantServiceRequest {
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  providedOn!: string;
+}
+
+const STATUSES: TenantServiceStatus[] = [
+  'approved',
+  'rejected',
+  'cancelled',
+  'provided',
+];
+
+/** GET /api/v1/operator/tenant-services?status&tenantId */
+export class TenantServiceQueryDto implements TenantServiceQuery {
+  @IsOptional()
+  @IsIn(STATUSES)
+  status?: TenantServiceStatus;
+
+  @IsOptional()
+  @IsUUID()
+  tenantId?: string;
 }

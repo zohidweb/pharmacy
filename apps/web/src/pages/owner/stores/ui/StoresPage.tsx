@@ -79,10 +79,14 @@ function StoresTab() {
           )}
           <span className="text-xs text-fg-subtle">
             {row.status === 'closed'
-              ? t('closedInfo', {
-                  date: row.closedOn ? formatDateOnly(row.closedOn) : '—',
-                  store: row.stockMovedTo ?? '—',
-                })
+              ? row.stockMovedTo === null
+                ? t('closedEmptyInfo', {
+                    date: row.closedOn ? formatDateOnly(row.closedOn) : '—',
+                  })
+                : t('closedInfo', {
+                    date: row.closedOn ? formatDateOnly(row.closedOn) : '—',
+                    store: row.stockMovedTo,
+                  })
               : row.status === 'closing'
                 ? t('closingInfo', {
                     store: row.stockMovedTo ?? '—',

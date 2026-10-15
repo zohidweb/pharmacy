@@ -145,7 +145,8 @@
       "pharmacy": "Аптека",
       "warehouse": "Склад"
     },
-    "closingInfo": "закрывается · остатки — {store} · перемещения {transfers}"
+    "closingInfo": "закрывается · остатки — {store} · перемещения {transfers}",
+    "closedEmptyInfo": "закрыта {date} · остатков не было"
   },
   "employees": {
     "title": "Сотрудники и роли",

@@ -145,7 +145,8 @@
       "pharmacy": "Дорухона",
       "warehouse": "Анбор"
     },
-    "closingInfo": "баста мешавад · бақияҳо — {store} · интиқолҳо {transfers}"
+    "closingInfo": "баста мешавад · бақияҳо — {store} · интиқолҳо {transfers}",
+    "closedEmptyInfo": "баста шуд {date} · бақия набуд"
   },
   "employees": {
     "title": "Кормандон ва нақшҳо",

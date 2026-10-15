@@ -142,6 +142,8 @@ export function CloseStoreDialog({
     queryKey: ['stores', 'closing', store.id],
     queryFn: ({ signal }) =>
       apiRequest('stores.closingPreview', { params: { id: store.id }, signal }),
+    // a check, as the unposting check: a blocker resolved elsewhere is gone on the next opening
+    staleTime: 0,
   });
   const empty = preview.data?.positions === 0;
   const close = useMutation({
@@ -295,7 +297,7 @@ export function CloseStoreDialog({
                 </Alert>
               )}
               {data.positions === 0 ? (
-                <Alert tone="info">{t('emptyStore')}</Alert>
+                !done && <Alert tone="info">{t('emptyStore')}</Alert>
               ) : (
                 <>
                   <DataTable

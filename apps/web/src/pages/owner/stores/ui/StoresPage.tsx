@@ -33,7 +33,11 @@ import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
 import { DemoDataNotice, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
-import { CloseStoreDialog, StoreDialog } from './StoreDialogs';
+import {
+  CancelClosingDialog,
+  CloseStoreDialog,
+  StoreDialog,
+} from './StoreDialogs';
 
 type Tab = 'stores' | 'services' | 'billing';
 
@@ -49,6 +53,7 @@ function StoresTab() {
   const { data: session } = useSession();
   const [editing, setEditing] = useState<OwnerStore | 'new' | null>(null);
   const [closing, setClosing] = useState<OwnerStore | null>(null);
+  const [cancelling, setCancelling] = useState<OwnerStore | null>(null);
   const overview = useQuery({
     queryKey: ['stores', 'overview'],
     queryFn: ({ signal }) => apiRequest('stores.overview', { signal }),
@@ -73,13 +78,34 @@ function StoresTab() {
             </button>
           )}
           <span className="text-xs text-fg-subtle">
-            {row.status === 'closed' || row.status === 'closing'
+            {row.status === 'closed'
               ? t('closedInfo', {
                   date: row.closedOn ? formatDateOnly(row.closedOn) : '—',
                   store: row.stockMovedTo ?? '—',
                 })
-              : row.address}
+              : row.status === 'closing'
+                ? t('closingInfo', {
+                    store: row.stockMovedTo ?? '—',
+                    transfers: row.closingTransfers
+                      .map(
+                        (transfer) =>
+                          `${transfer.number} (${t(`closing.transferStatus.${transfer.status}`)})`,
+                      )
+                      .join(', '),
+                  })
+                : row.address}
           </span>
+          {row.closingCancellable && canWrite(session, 'stores:delete') && (
+            <Button
+              variant="tertiary"
+              size="md"
+              iconStart="undo-2"
+              className="self-start"
+              onClick={() => setCancelling(row)}
+            >
+              {t('closing.cancel')}
+            </Button>
+          )}
         </div>
       ),
     },
@@ -188,6 +214,12 @@ function StoresTab() {
             <CloseStoreDialog
               store={closing}
               onClose={() => setClosing(null)}
+            />
+          )}
+          {cancelling && (
+            <CancelClosingDialog
+              store={cancelling}
+              onClose={() => setCancelling(null)}
             />
           )}
         </div>

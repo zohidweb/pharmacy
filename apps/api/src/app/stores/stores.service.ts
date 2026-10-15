@@ -41,6 +41,8 @@ export function toOwnerStore(row: StoreRow): OwnerStore {
     receiptsThisMonth: 0,
     closedOn: row.closedAt ? row.closedAt.toISOString().slice(0, 10) : null,
     stockMovedTo: null,
+    closingTransfers: [],
+    closingCancellable: false,
   };
 }
 

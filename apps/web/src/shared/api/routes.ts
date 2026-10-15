@@ -532,6 +532,10 @@ export const apiRoutes = {
     'POST',
     (p) => `/stores/${id(p)}/closing`,
   ),
+  'stores.cancelClosing': route<OwnerStore, undefined, { id: string }>(
+    'POST',
+    (p) => `/stores/${id(p)}/closing/cancellation`,
+  ),
   'services.list': route<TenantService[]>('GET', () => '/services'),
   'services.request': route<
     TenantService,

@@ -5,7 +5,6 @@ import type {
   TenantServiceQuery,
   TenantServiceStatus,
 } from '@pharmacy/shared-dto';
-import { toAppDate } from '@pharmacy/shared-util';
 import type { Transaction } from 'kysely';
 import { requireOperator } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
@@ -182,9 +181,10 @@ export class ServiceOrdersService {
     return this.db.platformTransaction(actor, async (trx) => {
       const current = await this.existing(trx, id);
       if (current.status !== 'approved') throw notApproved();
-      if (providedOn > toAppDate()) throw badDate('future');
-      if (providedOn < toAppDate(new Date(current.decidedAt)))
-        throw badDate('before_decision');
+      const days = await this.repository.calendar(trx, id);
+      if (days === null) throw notFound();
+      if (providedOn > days.today) throw badDate('future');
+      if (providedOn < days.decidedOn) throw badDate('before_decision');
       const changed = await this.repository.update(trx, id, ['approved'], {
         status: 'provided',
         providedOn,

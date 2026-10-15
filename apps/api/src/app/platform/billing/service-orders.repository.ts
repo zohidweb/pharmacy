@@ -79,6 +79,22 @@ export class ServiceOrdersRepository {
     }));
   }
 
+  /**
+   * Today and the day of the decision of a service by the calendar of the platform
+   * (`Asia/Dushanbe`, as the operators' journal); null for an unknown service.
+   */
+  async calendar(
+    trx: Transaction<DB>,
+    id: string,
+  ): Promise<{ today: string; decidedOn: string } | null> {
+    const { rows } = await sql<{ today: string; decidedOn: string }>`
+      select (now() at time zone 'Asia/Dushanbe')::date::text as today,
+             (decided_at at time zone 'Asia/Dushanbe')::date::text as "decidedOn"
+      from pharmacy.tenant_services
+      where id = ${id}`.execute(trx);
+    return rows[0] ?? null;
+  }
+
   async countPending(trx: Transaction<DB>): Promise<number> {
     const { rows } = await sql<{ n: string }>`
       select count(*) as n

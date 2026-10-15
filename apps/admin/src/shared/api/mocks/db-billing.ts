@@ -10,6 +10,7 @@ import type {
   PlatformService,
   Release,
   ServiceRequestItem,
+  TenantServiceItem,
 } from '@pharmacy/shared-dto';
 
 /**
@@ -42,8 +43,10 @@ function invoice(
 export interface BillingDb {
   invoices: InvoiceDetails[];
   payments: PaymentListItem[];
-  services: PlatformService[];
+  services: Omit<PlatformService, 'tenants'>[];
+  /** Pending requests: a decision moves a request to `tenantServices`. */
   serviceRequests: ServiceRequestItem[];
+  tenantServices: TenantServiceItem[];
   licenses: LicenseListItem[];
   installations: InstallationItem[];
   releases: Release[];
@@ -244,48 +247,52 @@ export function seedBilling(): BillingDb {
         cancelled: false,
       },
     ],
+    // One-time services of the catalog (spec 2026-10-15-billing-services, B7); the count of
+    // networks is computed by the handler, as apps/api does.
     services: [
       {
         id: 'svc-a',
-        name: 'Перенос данных из прежней системы',
-        description:
+        nameRu: 'Перенос данных из прежней системы',
+        nameTj: 'Интиқоли маълумот аз системаи пешина',
+        descriptionRu:
           'Импорт справочника товаров, остатков и поставщиков из файла прежней программы.',
-        billing: 'one_time',
-        priceMinor: 120_000,
-        visibleInCatalog: true,
-        tenants: 1,
+        descriptionTj: null,
+        basePriceMinor: 120_000,
+        visible: true,
+        archived: false,
       },
       {
         id: 'svc-b',
-        name: 'Расширенная аналитика',
-        description:
-          'Отчёты по оборачиваемости, ABC-анализ и прогноз закупок по всей сети.',
-        billing: 'monthly',
-        priceMinor: 35_000,
-        visibleInCatalog: true,
-        tenants: 1,
+        nameRu: 'Обучение персонала',
+        nameTj: null,
+        descriptionRu: 'Занятие для кассиров и заведующих на точке или онлайн.',
+        descriptionTj: null,
+        basePriceMinor: 30_000,
+        visible: true,
+        archived: false,
       },
       {
         id: 'svc-c',
-        name: 'Выезд инженера на точку',
-        description:
-          'Установка офлайн-точки или обновление на месте в пределах города.',
-        billing: 'one_time',
-        priceMinor: 25_000,
-        visibleInCatalog: false,
-        tenants: 0,
+        nameRu: 'Выезд инженера на точку',
+        nameTj: null,
+        descriptionRu:
+          'Настройка кассы и оборудования на месте в пределах города.',
+        descriptionTj: null,
+        basePriceMinor: 25_000,
+        visible: false,
+        archived: false,
       },
     ],
     serviceRequests: [
       {
         id: 'req-1',
         serviceId: 'svc-b',
-        serviceName: 'Расширенная аналитика',
+        serviceName: 'Обучение персонала',
         tenantId: 't-2',
         tenantName: 'Пример Мед',
         requestedAt: '2026-09-29T07:15:00Z',
-        billing: 'monthly',
-        priceMinor: 35_000,
+        basePriceMinor: 30_000,
+        comment: 'Пять кассиров, вечером после смены',
       },
       {
         id: 'req-2',
@@ -294,8 +301,42 @@ export function seedBilling(): BillingDb {
         tenantId: 't-3',
         tenantName: 'Тест Аптека',
         requestedAt: '2026-09-30T11:40:00Z',
-        billing: 'one_time',
+        basePriceMinor: 120_000,
+        comment: null,
+      },
+    ],
+    tenantServices: [
+      {
+        id: 'ts-1',
+        serviceId: 'svc-a',
+        serviceName: 'Перенос данных из прежней системы',
+        tenantId: 't-1',
+        tenantName: 'Демо Фарм',
+        status: 'provided',
         priceMinor: 120_000,
+        reason: null,
+        requestId: 'req-0',
+        requestedAt: '2026-03-01T06:00:00Z',
+        comment: null,
+        decidedAt: '2026-03-01T09:30:00Z',
+        decidedBy: 'Демо Оператор',
+        providedOn: '2026-03-02',
+      },
+      {
+        id: 'ts-2',
+        serviceId: 'svc-b',
+        serviceName: 'Обучение персонала',
+        tenantId: 't-1',
+        tenantName: 'Демо Фарм',
+        status: 'approved',
+        priceMinor: 45_000,
+        reason: null,
+        requestId: null,
+        requestedAt: null,
+        comment: null,
+        decidedAt: '2026-09-20T08:00:00Z',
+        decidedBy: 'Демо Оператор',
+        providedOn: null,
       },
     ],
     licenses: [

@@ -200,14 +200,13 @@ export function seedSystem(): SystemDb {
     settings: {
       pricePerStoreMinor: PRICE_PER_STORE_MINOR,
       vatRatePercent: DEFAULT_VAT_RATE_PERCENT,
-      prorateByDays: true,
-      keyExpiryNoticeDays: 7,
-      defaultSyncSchedule: 'daily',
-      acceptLegacyVersionSync: true,
       supplier: {
         name: 'ООО «Платформа» (демо)',
         inn: '000000000',
         bankAccount: '00000000000000000000',
+        bankName: 'Демо-банк',
+        bankBik: '000000000',
+        bankCorrAccount: '00000000000000000000',
         paymentPurposeTemplate:
           'Оплата по счёту № {number} за обслуживание точек',
       },

@@ -35,6 +35,11 @@ import {
   useTenantStats,
   useTenantStores,
 } from '@/entities/tenant';
+import {
+  AddTenantService,
+  TenantServiceActions,
+  TenantServiceStatusPill,
+} from '@/features/tenant-service-actions';
 import { isApiRouteAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
@@ -218,35 +223,51 @@ export function BillingTab({ tenantId }: { tenantId: string }) {
   );
 }
 
-export function ServicesTab({ tenantId }: { tenantId: string }) {
+/** The services of the network: decisions on its requests and services added by the operator. */
+export function ServicesTab({
+  tenantId,
+  tenantName,
+}: {
+  tenantId: string;
+  tenantName: string;
+}) {
   const t = useTranslations('company.services');
   const columns: DataTableColumn<TenantServiceItem>[] = [
     {
       key: 'name',
       header: t('columns.service'),
-      cell: (service) => service.name,
-    },
-    {
-      key: 'billing',
-      header: t('columns.billing'),
-      nowrap: true,
-      cell: (service) => t(`billing.${service.billing}`),
-    },
-    {
-      key: 'connected',
-      header: t('columns.connected'),
-      nowrap: true,
-      cell: (service) => formatDateOnly(service.connectedOn),
+      cell: (service) => (
+        <span className="flex flex-col">
+          <span>{service.serviceName}</span>
+          {service.comment && (
+            <span className="text-xs text-fg-subtle">«{service.comment}»</span>
+          )}
+          {service.reason && (
+            <span className="text-xs text-fg-subtle">
+              {t('reason', { reason: service.reason })}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: 'status',
       header: t('columns.status'),
       nowrap: true,
-      cell: (service) => (
-        <StatusPill tone={service.status === 'active' ? 'success' : 'warning'}>
-          {t(`status.${service.status}`)}
-        </StatusPill>
-      ),
+      cell: (service) => <TenantServiceStatusPill status={service.status} />,
+    },
+    {
+      key: 'decided',
+      header: t('columns.decided'),
+      nowrap: true,
+      cell: (service) => formatDateTime(service.decidedAt),
+    },
+    {
+      key: 'provided',
+      header: t('columns.provided'),
+      nowrap: true,
+      cell: (service) =>
+        service.providedOn ? formatDateOnly(service.providedOn) : '—',
     },
     {
       key: 'price',
@@ -254,15 +275,25 @@ export function ServicesTab({ tenantId }: { tenantId: string }) {
       numeric: true,
       nowrap: true,
       cell: (service) =>
-        service.billing === 'monthly'
-          ? t('perMonth', { price: formatMoney(service.priceMinor) })
-          : formatMoney(service.priceMinor),
+        service.priceMinor === null ? '—' : formatMoney(service.priceMinor),
+    },
+    {
+      key: 'actions',
+      header: t('columns.actions'),
+      cell: (service) => <TenantServiceActions service={service} />,
     },
   ];
   return (
     <QueryState query={useTenantServices(tenantId)}>
       {(rows) => (
         <Card padding="none">
+          <CardHeader
+            inset
+            title={t('title')}
+            actions={
+              <AddTenantService tenantId={tenantId} tenantName={tenantName} />
+            }
+          />
           <DataTable
             caption={t('caption')}
             columns={columns}

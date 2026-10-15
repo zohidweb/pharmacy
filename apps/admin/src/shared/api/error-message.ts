@@ -23,6 +23,8 @@ const knownCodes = [
   'cannot_issue_self',
   'already_disabled',
   'operator_disabled',
+  'service_decided',
+  'service_not_approved',
   'invalid_current_password',
   'fresh_auth_required',
   'already_blocked',

@@ -129,7 +129,12 @@ function CompanyView() {
                         {
                           value: 'services',
                           label: t('tabs.services'),
-                          panel: <ServicesTab tenantId={company.id} />,
+                          panel: (
+                            <ServicesTab
+                              tenantId={company.id}
+                              tenantName={company.name}
+                            />
+                          ),
                         },
                         {
                           value: 'stats',

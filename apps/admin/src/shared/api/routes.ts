@@ -3,8 +3,14 @@
  * its method, path and DTO types from @pharmacy/shared-dto. Paths are relative to /api/v1.
  */
 import type {
+  AddTenantServiceRequest,
   Announcement,
+  ApproveServiceRequest,
   AttentionCounts,
+  CancelTenantServiceRequest,
+  ProvideTenantServiceRequest,
+  TenantServiceQuery,
+  UpdateTenantServiceRequest,
   ChangePasswordRequest,
   CreateAnnouncementRequest,
   CreateOperatorRequest,
@@ -264,14 +270,47 @@ export const apiRoutes = {
     'GET',
     () => '/operator/service-requests',
   ),
-  'serviceRequests.approve': route<void, undefined, { id: string }>(
-    'POST',
-    (p) => `/operator/service-requests/${id(p)}/approval`,
-  ),
-  'serviceRequests.reject': route<void, RejectServiceRequest, { id: string }>(
-    'POST',
-    (p) => `/operator/service-requests/${id(p)}/rejection`,
-  ),
+  'serviceRequests.approve': route<
+    TenantServiceItem,
+    ApproveServiceRequest,
+    { id: string }
+  >('POST', (p) => `/operator/service-requests/${id(p)}/approval`),
+  'serviceRequests.reject': route<
+    TenantServiceItem,
+    RejectServiceRequest,
+    { id: string }
+  >('POST', (p) => `/operator/service-requests/${id(p)}/rejection`),
+  'tenants.addService': route<
+    TenantServiceItem,
+    AddTenantServiceRequest,
+    { id: string }
+  >('POST', (p) => `/operator/tenants/${id(p)}/services`),
+  'tenantServices.list': route<
+    TenantServiceItem[],
+    undefined,
+    undefined,
+    TenantServiceQuery
+  >('GET', () => '/operator/tenant-services'),
+  'tenantServices.provide': route<
+    TenantServiceItem,
+    ProvideTenantServiceRequest,
+    { id: string }
+  >('POST', (p) => `/operator/tenant-services/${id(p)}/provision`),
+  'tenantServices.unprovide': route<
+    TenantServiceItem,
+    undefined,
+    { id: string }
+  >('DELETE', (p) => `/operator/tenant-services/${id(p)}/provision`),
+  'tenantServices.update': route<
+    TenantServiceItem,
+    UpdateTenantServiceRequest,
+    { id: string }
+  >('PATCH', (p) => `/operator/tenant-services/${id(p)}`),
+  'tenantServices.cancel': route<
+    TenantServiceItem,
+    CancelTenantServiceRequest,
+    { id: string }
+  >('POST', (p) => `/operator/tenant-services/${id(p)}/cancellation`),
 
   'licenses.list': route<
     LicenseListResponse,

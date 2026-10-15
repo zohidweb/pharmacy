@@ -9,6 +9,8 @@ import type {
   LicenseListFilter,
   LicenseListItem,
   PaymentListItem,
+  PlatformService,
+  TenantServiceItem,
 } from '@pharmacy/shared-dto';
 import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
@@ -16,6 +18,7 @@ import { withVat } from './db-billing';
 import { mockDb } from './db';
 import { demoOperator } from './fixtures';
 import { audit, findStore, findTenant, notFound } from './helpers';
+import { logAction } from './log-action';
 import type { MockHandlers } from './types';
 
 const billing = () => mockDb().billing;
@@ -23,6 +26,79 @@ const billing = () => mockDb().billing;
 const settings = () => mockDb().system.settings;
 const today = () => toAppDate();
 const currentPeriod = () => today().slice(0, 7);
+
+/** The catalog entry with the number of networks that have it approved or provided. */
+function withTenants(
+  service: Omit<PlatformService, 'tenants'>,
+): PlatformService {
+  const tenants = new Set(
+    billing()
+      .tenantServices.filter(
+        (item) =>
+          item.serviceId === service.id &&
+          (item.status === 'approved' || item.status === 'provided'),
+      )
+      .map((item) => item.tenantId),
+  );
+  return { ...service, tenants: tenants.size };
+}
+
+function tenantService(id: string, correlationId: string): TenantServiceItem {
+  const item = billing().tenantServices.find((entry) => entry.id === id);
+  if (!item) throw notFound(correlationId);
+  return item;
+}
+
+const tenantRef = (item: TenantServiceItem) => ({
+  id: item.tenantId,
+  name: item.tenantName,
+});
+
+const badDate = (code: 'future' | 'before_decision', correlationId: string) =>
+  new ApiError(400, 'validation_failed', correlationId, [
+    { field: 'providedOn', code },
+  ]);
+
+/** One decision per request: a decided one has left the pending list (409), an unknown one is 404. */
+function decide(
+  requestId: string,
+  correlationId: string,
+  decision: {
+    status: 'approved' | 'rejected';
+    priceMinor: number | null;
+    reason: string | null;
+  },
+): TenantServiceItem {
+  if (billing().tenantServices.some((item) => item.requestId === requestId)) {
+    throw new ApiError(409, 'service_decided', correlationId);
+  }
+  const index = billing().serviceRequests.findIndex(
+    (item) => item.id === requestId,
+  );
+  if (index < 0) throw notFound(correlationId);
+  const [request] = billing().serviceRequests.splice(index, 1);
+  const decided: TenantServiceItem = {
+    id: `ts-${Date.now()}`,
+    serviceId: request.serviceId,
+    serviceName: request.serviceName,
+    tenantId: request.tenantId,
+    tenantName: request.tenantName,
+    status: decision.status,
+    priceMinor: decision.priceMinor,
+    reason: decision.reason,
+    requestId: request.id,
+    requestedAt: request.requestedAt,
+    comment: request.comment,
+    decidedAt: new Date().toISOString(),
+    decidedBy: demoOperator.fullName,
+    providedOn: null,
+  };
+  billing().tenantServices.unshift(decided);
+  logAction(`service.${decision.status}`, {
+    tenant: { id: request.tenantId, name: request.tenantName },
+  });
+  return decided;
+}
 
 function toListItem(invoice: InvoiceDetails): InvoiceListItem {
   const { lines: _lines, vatRatePercent: _rate, ...item } = invoice;
@@ -116,6 +192,12 @@ export const billingHandlers: Pick<
   | 'serviceRequests.list'
   | 'serviceRequests.approve'
   | 'serviceRequests.reject'
+  | 'tenants.addService'
+  | 'tenantServices.list'
+  | 'tenantServices.provide'
+  | 'tenantServices.unprovide'
+  | 'tenantServices.update'
+  | 'tenantServices.cancel'
   | 'licenses.list'
   | 'licenses.issue'
   | 'licenses.renew'
@@ -339,41 +421,113 @@ export const billingHandlers: Pick<
     return payment;
   },
 
-  'services.list': () => billing().services,
+  // Services as apps/api answers them (spec 2026-10-15-billing-services, A12, A13, 6.1).
+  'services.list': () =>
+    [...billing().services]
+      .sort(
+        (a, b) =>
+          Number(a.archived) - Number(b.archived) ||
+          a.nameRu.localeCompare(b.nameRu, 'ru'),
+      )
+      .map(withTenants),
   'services.create': ({ body }) => {
-    const service = { ...body, id: `svc-${Date.now()}`, tenants: 0 };
+    const service = { ...body, id: `svc-${Date.now()}` };
     billing().services.push(service);
-    return service;
+    logAction('service.created');
+    return withTenants(service);
   },
   'services.update': ({ params, body, correlationId }) => {
     const service = billing().services.find((item) => item.id === params.id);
     if (!service) throw notFound(correlationId);
     Object.assign(service, body);
-    return service;
+    logAction('service.updated');
+    return withTenants(service);
   },
   'serviceRequests.list': () => billing().serviceRequests,
-  'serviceRequests.approve': ({ params, correlationId }) => {
-    const index = billing().serviceRequests.findIndex(
-      (item) => item.id === params.id,
-    );
-    if (index < 0) throw notFound(correlationId);
-    const [request] = billing().serviceRequests.splice(index, 1);
+  'serviceRequests.approve': ({ params, body, correlationId }) =>
+    decide(params.id, correlationId, {
+      status: 'approved',
+      priceMinor: body.priceMinor,
+      reason: null,
+    }),
+  'serviceRequests.reject': ({ params, body, correlationId }) =>
+    decide(params.id, correlationId, {
+      status: 'rejected',
+      priceMinor: null,
+      reason: body.reason,
+    }),
+  'tenants.addService': ({ params, body, correlationId }) => {
+    const tenant = findTenant(params.id, correlationId);
     const service = billing().services.find(
-      (item) => item.id === request.serviceId,
+      (item) => item.id === body.serviceId && !item.archived,
     );
-    if (service) service.tenants += 1;
-    audit(request.tenantId, `Подтверждена услуга «${request.serviceName}»`);
+    if (!service) throw notFound(correlationId);
+    const added: TenantServiceItem = {
+      id: `ts-${Date.now()}`,
+      serviceId: service.id,
+      serviceName: service.nameRu,
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      status: 'approved',
+      priceMinor: body.priceMinor,
+      reason: null,
+      requestId: null,
+      requestedAt: null,
+      comment: null,
+      decidedAt: new Date().toISOString(),
+      decidedBy: demoOperator.fullName,
+      providedOn: null,
+    };
+    billing().tenantServices.unshift(added);
+    logAction('service.added', {
+      tenant: { id: tenant.id, name: tenant.name },
+    });
+    return added;
   },
-  'serviceRequests.reject': ({ params, body, correlationId }) => {
-    const index = billing().serviceRequests.findIndex(
-      (item) => item.id === params.id,
-    );
-    if (index < 0) throw notFound(correlationId);
-    const [request] = billing().serviceRequests.splice(index, 1);
-    audit(
-      request.tenantId,
-      `Отклонён запрос услуги «${request.serviceName}». Причина: ${body.reason}`,
-    );
+  'tenantServices.list': ({ query }) =>
+    billing().tenantServices.filter(
+      (item) =>
+        (!query?.status || item.status === query.status) &&
+        (!query?.tenantId || item.tenantId === query.tenantId),
+    ),
+  'tenantServices.provide': ({ params, body, correlationId }) => {
+    const item = tenantService(params.id, correlationId);
+    if (item.status !== 'approved')
+      throw new ApiError(409, 'service_not_approved', correlationId);
+    if (body.providedOn > today()) throw badDate('future', correlationId);
+    if (body.providedOn < toAppDate(new Date(item.decidedAt)))
+      throw badDate('before_decision', correlationId);
+    Object.assign(item, { status: 'provided', providedOn: body.providedOn });
+    logAction('service.provided', { tenant: tenantRef(item) });
+    return item;
+  },
+  'tenantServices.unprovide': ({ params, correlationId }) => {
+    const item = tenantService(params.id, correlationId);
+    if (item.status !== 'provided')
+      throw new ApiError(409, 'service_not_approved', correlationId);
+    Object.assign(item, { status: 'approved', providedOn: null });
+    logAction('service.provision-undone', { tenant: tenantRef(item) });
+    return item;
+  },
+  'tenantServices.update': ({ params, body, correlationId }) => {
+    const item = tenantService(params.id, correlationId);
+    if (item.status !== 'approved' && item.status !== 'provided')
+      throw new ApiError(409, 'service_not_approved', correlationId);
+    item.priceMinor = body.priceMinor;
+    logAction('service.price-changed', { tenant: tenantRef(item) });
+    return item;
+  },
+  'tenantServices.cancel': ({ params, body, correlationId }) => {
+    const item = tenantService(params.id, correlationId);
+    if (item.status !== 'approved' && item.status !== 'provided')
+      throw new ApiError(409, 'service_not_approved', correlationId);
+    Object.assign(item, {
+      status: 'cancelled',
+      reason: body.reason,
+      providedOn: null,
+    });
+    logAction('service.cancelled', { tenant: tenantRef(item) });
+    return item;
   },
 
   'licenses.list': ({ query }) => {

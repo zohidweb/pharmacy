@@ -6,7 +6,6 @@ import type {
   AuditEntry,
   StoreDetails,
   TenantDetails,
-  TenantServiceItem,
   TenantStats,
 } from '@pharmacy/shared-dto';
 import { seedBilling, type BillingDb } from './db-billing';
@@ -47,7 +46,6 @@ export interface MockDb {
   stores: StoreDetails[];
   billing: BillingDb;
   system: SystemDb;
-  services: Record<string, TenantServiceItem[]>;
   audit: Record<string, AuditEntry[]>;
 }
 
@@ -265,26 +263,6 @@ function seed(): MockDb {
     stores,
     billing: seedBilling(),
     system: seedSystem(),
-    services: {
-      't-1': [
-        {
-          id: 'svc-1',
-          name: 'Перенос данных из прежней системы',
-          billing: 'one_time',
-          connectedOn: '2026-03-02',
-          status: 'active',
-          priceMinor: 120_000,
-        },
-        {
-          id: 'svc-2',
-          name: 'Расширенная аналитика',
-          billing: 'monthly',
-          connectedOn: '2026-09-20',
-          status: 'pending',
-          priceMinor: 35_000,
-        },
-      ],
-    },
     audit: {
       't-1': [
         {

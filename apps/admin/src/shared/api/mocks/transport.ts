@@ -287,7 +287,12 @@ const handlers: MockHandlers = {
       .stores.filter((s) => s.tenantId === params.id)
       .map(toSummary);
   },
-  'tenants.services': ({ params }) => mockDb().services[params.id] ?? [],
+  'tenants.services': ({ params, correlationId }) => {
+    findTenant(params.id, correlationId);
+    return mockDb().billing.tenantServices.filter(
+      (item) => item.tenantId === params.id,
+    );
+  },
   'tenants.stats': ({ params, correlationId }) => {
     findTenant(params.id, correlationId);
     return mockStats(params.id);

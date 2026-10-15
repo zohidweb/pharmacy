@@ -340,6 +340,53 @@ export interface InventoryLines {
   tenantId: string;
 }
 
+export interface InvoiceLines {
+  amountDirams: bigint;
+  baseDirams: bigint | null;
+  days: number | null;
+  daysInMonth: number | null;
+  description: string | null;
+  discountBp: number | null;
+  id: string;
+  invoiceId: string;
+  kind: string;
+  position: number;
+  providedOn: string | null;
+  removedAt: Timestamp | null;
+  removedReason: string | null;
+  storeId: string | null;
+  storeName: string | null;
+  tenantId: string;
+  tenantServiceId: string | null;
+}
+
+export interface Invoices {
+  createdBy: string;
+  dueOn: string;
+  id: string;
+  issuedAt: Generated<Timestamp>;
+  number: string;
+  paidDirams: Generated<bigint>;
+  paidOn: string | null;
+  paymentPurpose: string;
+  periodMonth: string;
+  pricePerStoreDirams: bigint;
+  recalculatedAt: Timestamp | null;
+  subtotalDirams: bigint;
+  supplierBankAccount: string;
+  supplierBankBik: string;
+  supplierBankCorrAccount: string;
+  supplierBankName: string;
+  supplierInn: string;
+  supplierName: string;
+  tenantId: string;
+  tenantInn: string;
+  tenantName: string;
+  totalDirams: bigint;
+  vatBp: number;
+  vatDirams: bigint;
+}
+
 export interface LegalEntities {
   archivedAt: Timestamp | null;
   bankDetails: string | null;
@@ -718,6 +765,18 @@ export interface Stores {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface StoreUsageMonthly {
+  closedOn: string | null;
+  computedAt: Generated<Timestamp>;
+  firstSaleDate: string;
+  firstSaleEverDate: string;
+  lastSaleDate: string;
+  month: string;
+  receiptsCount: number;
+  storeId: string;
+  tenantId: string;
+}
+
 export interface SupplierLedgerEntries {
   amountDirams: bigint;
   businessDate: string;
@@ -792,8 +851,47 @@ export interface Suppliers {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface TenantDiscounts {
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  fromMonth: string;
+  id: string;
+  percentBp: number;
+  removedAt: Timestamp | null;
+  removedBy: string | null;
+  tenantId: string;
+  toMonth: string;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface TenantPaymentAllocations {
+  amountDirams: bigint;
+  invoiceId: string;
+  paymentId: string;
+  tenantId: string;
+}
+
+export interface TenantPayments {
+  amountDirams: bigint;
+  cancelledAt: Timestamp | null;
+  cancelledBy: string | null;
+  cancelReason: string | null;
+  comment: string | null;
+  createdAt: Generated<Timestamp>;
+  id: string;
+  method: string;
+  paidOn: string;
+  preferredInvoiceId: string | null;
+  recordedBy: string;
+  requestHash: Buffer;
+  status: Generated<string>;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface Tenants {
   billingAddress: string | null;
+  billingAdvanceDirams: Generated<bigint>;
   billingBankDetails: string | null;
   billingEmail: string | null;
   billingName: string | null;
@@ -823,6 +921,7 @@ export interface TenantServices {
   providedBy: string | null;
   providedOn: string | null;
   reason: string | null;
+  requestHash: Buffer | null;
   requestId: string | null;
   serviceId: string;
   status: string;
@@ -927,6 +1026,8 @@ export interface DB {
   idempotencyKeys: IdempotencyKeys;
   inventoryCountEntries: InventoryCountEntries;
   inventoryLines: InventoryLines;
+  invoiceLines: InvoiceLines;
+  invoices: Invoices;
   legalEntities: LegalEntities;
   notificationReads: NotificationReads;
   notificationRefresh: NotificationRefresh;
@@ -953,12 +1054,16 @@ export interface DB {
   stockMovements: StockMovements;
   storeProducts: StoreProducts;
   stores: Stores;
+  storeUsageMonthly: StoreUsageMonthly;
   supplierLedgerEntries: SupplierLedgerEntries;
   supplierPaymentAllocations: SupplierPaymentAllocations;
   supplierPayments: SupplierPayments;
   supplierReturnAllocations: SupplierReturnAllocations;
   supplierReturnLines: SupplierReturnLines;
   suppliers: Suppliers;
+  tenantDiscounts: TenantDiscounts;
+  tenantPaymentAllocations: TenantPaymentAllocations;
+  tenantPayments: TenantPayments;
   tenants: Tenants;
   tenantServices: TenantServices;
   tenantSettings: TenantSettings;

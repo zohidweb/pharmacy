@@ -13,7 +13,7 @@ import { ApiError } from '../client';
 import { mockDb, mockStats } from './db';
 import { demoOperator } from './fixtures';
 import { notFound } from './helpers';
-import { auditEntry, type AuditRefs } from './operator-audit';
+import { logAction } from './log-action';
 import type { MockHandlers } from './types';
 
 const system = () => mockDb().system;
@@ -25,18 +25,6 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // The API's default ACTIVATION_CODE_TTL_HOURS.
 function mockCodeExpiresAt(): string {
   return new Date(Date.now() + 72 * 3600_000).toISOString();
-}
-
-function logAction(action: string, refs: AuditRefs = {}) {
-  system().operatorAudit.unshift(
-    auditEntry(
-      `oa-${Date.now()}`,
-      new Date().toISOString(),
-      demoOperator,
-      action,
-      refs,
-    ),
-  );
 }
 
 function expiringLicenses() {

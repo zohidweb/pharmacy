@@ -35,6 +35,7 @@ const NOTIFICATIONS: NotificationKind[] = [
   'sync_conflict',
   'negative_stock',
   'license_expiring',
+  'service_decided',
 ];
 
 type NumberField =

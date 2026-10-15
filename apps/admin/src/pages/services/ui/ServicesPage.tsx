@@ -1,7 +1,11 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { PlatformService, ServiceRequestItem } from '@pharmacy/shared-dto';
+import type {
+  PlatformService,
+  ServiceRequestItem,
+  TenantServiceItem,
+} from '@pharmacy/shared-dto';
 import {
   formatDateTime,
   formatMoney,
@@ -15,8 +19,6 @@ import {
   CountBadge,
   Dialog,
   EmptyState,
-  RadioCardGroup,
-  StatusPill,
   Switch,
   TextareaField,
   TextField,
@@ -27,26 +29,30 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
 import { z } from 'zod';
-import { tenantKeys } from '@/entities/tenant';
+import {
+  invalidateServices,
+  serviceKeys,
+  TenantServiceActions,
+} from '@/features/tenant-service-actions';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
-const keys = {
-  services: ['services'] as const,
-  requests: ['service-requests'] as const,
-};
-
 const serviceSchema = z.object({
-  name: z.string().trim().min(1, { error: 'required' }),
-  description: z.string().trim().min(1, { error: 'required' }),
-  billing: z.enum(['one_time', 'monthly']),
+  nameRu: z.string().trim().min(1, { error: 'required' }).max(120),
+  nameTj: z.string().trim().max(120),
+  descriptionRu: z.string().trim().min(1, { error: 'required' }).max(1000),
+  descriptionTj: z.string().trim().max(1000),
   price: z
     .string()
     .refine((value) => (parseMoneyToMinor(value) ?? 0) > 0, { error: 'money' }),
-  visibleInCatalog: z.boolean(),
+  visible: z.boolean(),
+  archived: z.boolean(),
 });
 type ServiceValues = z.input<typeof serviceSchema>;
+
+const money = (minor: number) =>
+  formatMoney(minor, { withSign: false, plainSpaces: true });
 
 function ServiceDialog({
   service,
@@ -66,38 +72,41 @@ function ServiceDialog({
     resolver: zodResolver(serviceSchema),
     values: service
       ? {
-          name: service.name,
-          description: service.description,
-          billing: service.billing,
-          price: formatMoney(service.priceMinor, {
-            withSign: false,
-            plainSpaces: true,
-          }),
-          visibleInCatalog: service.visibleInCatalog,
+          nameRu: service.nameRu,
+          nameTj: service.nameTj ?? '',
+          descriptionRu: service.descriptionRu,
+          descriptionTj: service.descriptionTj ?? '',
+          price: money(service.basePriceMinor),
+          visible: service.visible,
+          archived: service.archived,
         }
       : {
-          name: '',
-          description: '',
-          billing: 'one_time',
+          nameRu: '',
+          nameTj: '',
+          descriptionRu: '',
+          descriptionTj: '',
           price: '',
-          visibleInCatalog: true,
+          visible: true,
+          archived: false,
         },
   });
   const save = useMutation({
     mutationFn: (values: ServiceValues) => {
       const body = {
-        name: values.name.trim(),
-        description: values.description.trim(),
-        billing: values.billing,
-        priceMinor: parseMoneyToMinor(values.price) ?? 0,
-        visibleInCatalog: values.visibleInCatalog,
+        nameRu: values.nameRu.trim(),
+        nameTj: values.nameTj.trim() || null,
+        descriptionRu: values.descriptionRu.trim(),
+        descriptionTj: values.descriptionTj.trim() || null,
+        basePriceMinor: parseMoneyToMinor(values.price) ?? 0,
+        visible: values.visible,
+        archived: values.archived,
       };
       return service
         ? apiRequest('services.update', { params: { id: service.id }, body })
         : apiRequest('services.create', { body });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: keys.services });
+      void queryClient.invalidateQueries({ queryKey: serviceKeys.catalog });
       toast.show(service ? t('updated') : t('created'));
       close();
     },
@@ -114,7 +123,6 @@ function ServiceDialog({
       ? tErrors(message)
       : undefined;
   };
-  const billing = form.watch('billing');
 
   return (
     <Dialog
@@ -146,43 +154,31 @@ function ServiceDialog({
           </Alert>
         )}
         <TextField
-          label={t('name')}
+          label={t('nameRu')}
           required
-          error={fieldError('name')}
-          {...form.register('name')}
-        />
-        <TextareaField
-          label={t('description')}
-          required
-          hint={t('descriptionHint')}
-          error={fieldError('description')}
-          {...form.register('description')}
-        />
-        <Controller
-          control={form.control}
-          name="billing"
-          render={({ field }) => (
-            <RadioCardGroup
-              label={t('billing')}
-              value={field.value}
-              onValueChange={field.onChange}
-              options={[
-                {
-                  value: 'one_time',
-                  title: t('billingValue.one_time'),
-                  description: t('billingHint.one_time'),
-                },
-                {
-                  value: 'monthly',
-                  title: t('billingValue.monthly'),
-                  description: t('billingHint.monthly'),
-                },
-              ]}
-            />
-          )}
+          error={fieldError('nameRu')}
+          {...form.register('nameRu')}
         />
         <TextField
-          label={billing === 'monthly' ? t('priceMonthly') : t('price')}
+          label={t('nameTj')}
+          hint={t('tjHint')}
+          {...form.register('nameTj')}
+        />
+        <TextareaField
+          label={t('descriptionRu')}
+          required
+          hint={t('descriptionHint')}
+          error={fieldError('descriptionRu')}
+          {...form.register('descriptionRu')}
+        />
+        <TextareaField
+          label={t('descriptionTj')}
+          hint={t('tjHint')}
+          {...form.register('descriptionTj')}
+        />
+        <TextField
+          label={t('price')}
+          hint={t('priceHint')}
           inputMode="decimal"
           required
           error={fieldError('price')}
@@ -190,11 +186,23 @@ function ServiceDialog({
         />
         <Controller
           control={form.control}
-          name="visibleInCatalog"
+          name="visible"
           render={({ field }) => (
             <Switch
               label={t('visible')}
               description={t('visibleHint')}
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          )}
+        />
+        <Controller
+          control={form.control}
+          name="archived"
+          render={({ field }) => (
+            <Switch
+              label={t('archived')}
+              description={t('archivedHint')}
               checked={field.value}
               onCheckedChange={field.onChange}
             />
@@ -210,33 +218,41 @@ function RequestRow({ request }: { request: ServiceRequestItem }) {
   const tCommon = useTranslations('common');
   const toast = useToast();
   const queryClient = useQueryClient();
-  const [rejecting, setRejecting] = useState(false);
+  const [mode, setMode] = useState<'approve' | 'reject' | null>(null);
+  const [price, setPrice] = useState('');
   const [reason, setReason] = useState('');
-  const done = (message: string) => {
-    void queryClient.invalidateQueries({ queryKey: keys.requests });
-    void queryClient.invalidateQueries({ queryKey: keys.services });
-    void queryClient.invalidateQueries({
-      queryKey: tenantKeys.detail(request.tenantId),
-    });
-    toast.show(message);
-  };
-  const approve = useMutation({
-    mutationFn: () =>
-      apiRequest('serviceRequests.approve', { params: { id: request.id } }),
-    onSuccess: () => done(t('approved', { name: request.serviceName })),
-  });
-  const reject = useMutation({
-    mutationFn: () =>
-      apiRequest('serviceRequests.reject', {
-        params: { id: request.id },
-        body: { reason: reason.trim() },
-      }),
-    onSuccess: () => {
-      setRejecting(false);
-      done(t('rejected'));
+  const decide = useMutation({
+    mutationFn: (decision: 'approve' | 'reject') =>
+      decision === 'approve'
+        ? apiRequest('serviceRequests.approve', {
+            params: { id: request.id },
+            body: { priceMinor: parseMoneyToMinor(price) ?? 0 },
+          })
+        : apiRequest('serviceRequests.reject', {
+            params: { id: request.id },
+            body: { reason: reason.trim() },
+          }),
+    onSuccess: (_, decision) => {
+      invalidateServices(queryClient, request.tenantId);
+      toast.show(
+        decision === 'approve'
+          ? t('approved', { name: request.serviceName })
+          : t('rejected'),
+      );
+      setMode(null);
     },
   });
-  const error = useApiErrorMessage(approve.error ?? reject.error);
+  const error = useApiErrorMessage(decide.error);
+  const open = (next: 'approve' | 'reject') => {
+    setPrice(money(request.basePriceMinor));
+    setReason('');
+    decide.reset();
+    setMode(next);
+  };
+  const valid =
+    mode === 'approve'
+      ? (parseMoneyToMinor(price) ?? 0) > 0
+      : reason.trim().length >= 5;
 
   return (
     <li className="flex flex-wrap items-center gap-4 border-t border-border px-(--ph-card-padding) py-4">
@@ -246,75 +262,118 @@ function RequestRow({ request }: { request: ServiceRequestItem }) {
           {t('meta', {
             tenant: request.tenantName,
             at: formatDateTime(request.requestedAt),
-            billing: t(`billing.${request.billing}`),
-            price: formatMoney(request.priceMinor),
+            price: formatMoney(request.basePriceMinor),
           })}
         </span>
-        {error && <span className="text-xs text-danger">{error}</span>}
+        {request.comment && (
+          <span className="text-sm text-fg-muted">«{request.comment}»</span>
+        )}
       </div>
-      <Button variant="tertiary" onClick={() => setRejecting(true)}>
+      <Button variant="tertiary" onClick={() => open('reject')}>
         {t('reject')}
       </Button>
       <Button
         variant="success"
         iconStart="check"
-        loading={approve.isPending}
-        onClick={() => approve.mutate()}
+        onClick={() => open('approve')}
       >
         {t('approve')}
       </Button>
       <Dialog
-        open={rejecting}
-        onClose={() => setRejecting(false)}
-        title={t('rejectTitle')}
-        description={t('rejectDescription', {
-          tenant: request.tenantName,
-          name: request.serviceName,
-        })}
+        open={mode !== null}
+        onClose={() => setMode(null)}
+        title={mode === 'approve' ? t('approveTitle') : t('rejectTitle')}
+        description={t(
+          mode === 'approve' ? 'approveDescription' : 'rejectDescription',
+          { tenant: request.tenantName, name: request.serviceName },
+        )}
         closeLabel={tCommon('close')}
-        icon="ban"
-        tone="danger"
+        icon={mode === 'reject' ? 'ban' : undefined}
+        tone={mode === 'reject' ? 'danger' : undefined}
         footer={
           <>
-            <Button variant="tertiary" onClick={() => setRejecting(false)}>
+            <Button variant="tertiary" onClick={() => setMode(null)}>
               {tCommon('cancel')}
             </Button>
             <Button
-              variant="destructive"
-              loading={reject.isPending}
-              disabled={reason.trim().length < 5}
-              onClick={() => reject.mutate()}
+              variant={mode === 'reject' ? 'destructive' : 'success'}
+              loading={decide.isPending}
+              disabled={!valid}
+              onClick={() => mode && decide.mutate(mode)}
             >
-              {t('reject')}
+              {mode === 'reject' ? t('reject') : t('approve')}
             </Button>
           </>
         }
       >
-        <TextareaField
-          label={t('reason')}
-          hint={t('reasonHint')}
-          rows={2}
-          required
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-        />
+        {error && (
+          <Alert tone="danger" live="assertive">
+            {error}
+          </Alert>
+        )}
+        {mode === 'approve' ? (
+          <TextField
+            label={t('price')}
+            hint={t('priceHint')}
+            inputMode="decimal"
+            required
+            value={price}
+            onChange={(event) => setPrice(event.target.value)}
+          />
+        ) : (
+          <TextareaField
+            label={t('reason')}
+            hint={t('reasonHint')}
+            rows={2}
+            required
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        )}
       </Dialog>
     </li>
   );
 }
 
-/** «Услуги» (UI mockup «Услуги»): connection requests and the catalog of additional services. */
+function ApprovedRow({ service }: { service: TenantServiceItem }) {
+  const t = useTranslations('services.approved');
+  return (
+    <li className="flex flex-wrap items-center gap-4 border-t border-border px-(--ph-card-padding) py-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="font-medium">{service.serviceName}</span>
+        <span className="text-xs text-fg-subtle">
+          {t('meta', {
+            tenant: service.tenantName,
+            at: formatDateTime(service.decidedAt),
+            price: formatMoney(service.priceMinor ?? 0),
+          })}
+        </span>
+      </div>
+      <TenantServiceActions service={service} />
+    </li>
+  );
+}
+
+/** «Услуги»: requests of networks, approved services to provide, and the catalog. */
 export function ServicesPage() {
   const t = useTranslations('services');
   const [editing, setEditing] = useState<PlatformService | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const services = useQuery({
-    queryKey: keys.services,
+    queryKey: serviceKeys.catalog,
     queryFn: ({ signal }) => apiRequest('services.list', { signal }),
   });
   const requests = useQuery({
-    queryKey: keys.requests,
+    queryKey: serviceKeys.requests,
     queryFn: ({ signal }) => apiRequest('serviceRequests.list', { signal }),
+  });
+  const approved = useQuery({
+    queryKey: [...serviceKeys.tenantServices, 'approved'],
+    queryFn: ({ signal }) =>
+      apiRequest('tenantServices.list', {
+        query: { status: 'approved' },
+        signal,
+      }),
   });
 
   return (
@@ -360,6 +419,28 @@ export function ServicesPage() {
           </QueryState>
         </Card>
 
+        <Card as="section" padding="none" aria-labelledby="approved-title">
+          <CardHeader
+            inset
+            titleId="approved-title"
+            title={t('approved.title')}
+            description={t('approved.hint')}
+          />
+          <QueryState query={approved}>
+            {(rows) =>
+              rows.length === 0 ? (
+                <EmptyState icon="circle-check" title={t('approved.empty')} />
+              ) : (
+                <ul className="m-0 list-none p-0">
+                  {rows.map((service) => (
+                    <ApprovedRow key={service.id} service={service} />
+                  ))}
+                </ul>
+              )
+            }
+          </QueryState>
+        </Card>
+
         <section
           aria-labelledby="catalog-title"
           className="flex flex-col gap-4"
@@ -385,40 +466,29 @@ export function ServicesPage() {
                 {rows.map((service) => (
                   <li key={service.id}>
                     <Card as="article" className="flex h-full flex-col gap-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-bold">{service.name}</h3>
-                        <StatusPill
-                          tone={
-                            service.billing === 'monthly' ? 'info' : 'neutral'
-                          }
-                          icon={null}
-                        >
-                          {t(`catalog.billing.${service.billing}`)}
-                        </StatusPill>
-                      </div>
+                      <h3 className="font-bold">{service.nameRu}</h3>
                       <p className="text-sm text-fg-muted">
-                        {service.description}
+                        {service.descriptionRu}
                       </p>
                       <div className="mt-auto flex items-end justify-between gap-2">
                         <div className="flex flex-col">
                           <span className="text-lg font-bold tabular-nums">
-                            {service.billing === 'monthly'
-                              ? t('catalog.perMonth', {
-                                  price: formatMoney(service.priceMinor),
-                                })
-                              : formatMoney(service.priceMinor)}
+                            {t('catalog.from', {
+                              price: formatMoney(service.basePriceMinor),
+                            })}
                           </span>
                           <span className="text-xs text-fg-subtle">
                             {t('catalog.usedBy', { count: service.tenants })}
-                            {!service.visibleInCatalog &&
-                              ` · ${t('catalog.hidden')}`}
+                            {service.archived
+                              ? ` · ${t('catalog.archived')}`
+                              : !service.visible && ` · ${t('catalog.hidden')}`}
                           </span>
                         </div>
                         <Button
                           variant="tertiary"
                           iconStart="pencil"
                           aria-label={t('catalog.editFor', {
-                            name: service.name,
+                            name: service.nameRu,
                           })}
                           onClick={() => {
                             setEditing(service);

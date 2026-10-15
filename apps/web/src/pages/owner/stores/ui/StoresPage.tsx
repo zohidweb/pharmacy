@@ -4,8 +4,6 @@ import type {
   OwnerStore,
   OwnerStoreStatus,
   TenantInvoice,
-  TenantService,
-  TenantServiceKey,
 } from '@pharmacy/shared-dto';
 import {
   daysBetween,
@@ -24,15 +22,16 @@ import {
   type DataTableColumn,
   type StatusTone,
 } from '@pharmacy/ui';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { StoreModeBadge } from '@/entities/store';
 import { can, canWrite, useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiRequest } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
 import { DemoDataNotice, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { ServicesSection } from './ServicesSection';
 import {
   CancelClosingDialog,
   CloseStoreDialog,
@@ -232,95 +231,6 @@ function StoresTab() {
   );
 }
 
-const SERVICE_ORDER: TenantServiceKey[] = [
-  'export-1c',
-  'fiscal',
-  'notifications',
-  'print-agent',
-  'labels',
-];
-
-function ServicesTab() {
-  const t = useTranslations('ownerStores.services');
-  const { data: session } = useSession();
-  const queryClient = useQueryClient();
-  const services = useQuery({
-    queryKey: ['services'],
-    queryFn: ({ signal }) => apiRequest('services.list', { signal }),
-  });
-  const request = useMutation({
-    mutationFn: (key: TenantServiceKey) =>
-      apiRequest('services.request', { params: { key } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['services'] }),
-  });
-  const error = useApiErrorMessage(request.error);
-  const canRequest = canWrite(session, 'services:create');
-
-  const stateOf = (service: TenantService) =>
-    service.state === 'included' ? (
-      <StatusPill tone="success">{t('states.included')}</StatusPill>
-    ) : service.state === 'requested' ? (
-      <StatusPill tone="info">{t('states.requested')}</StatusPill>
-    ) : null;
-
-  return (
-    <div className="flex flex-col gap-4">
-      <DemoDataNotice routes={['services.list']} />
-      <QueryState query={services}>
-        {(data) => (
-          <div className="flex flex-col gap-4">
-            {error && (
-              <Alert tone="danger" live="assertive">
-                {error}
-              </Alert>
-            )}
-            <div className="grid grid-cols-3 gap-4">
-              {SERVICE_ORDER.map((key) => data.find((s) => s.key === key))
-                .filter((s): s is TenantService => s !== undefined)
-                .map((service) => (
-                  <Card key={service.key} className="flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-md font-bold">
-                        {t(`items.${service.key}.title`)}
-                      </h3>
-                      {stateOf(service)}
-                    </div>
-                    <p className="flex-1 text-sm text-fg-muted">
-                      {t(`items.${service.key}.description`)}
-                    </p>
-                    {service.state === 'requested' && service.requestedAt && (
-                      <p className="text-xs text-fg-subtle">
-                        {t('requestedAt', {
-                          date: formatDateOnly(
-                            service.requestedAt.slice(0, 10),
-                          ),
-                        })}
-                      </p>
-                    )}
-                    {service.state === 'available' && (
-                      <Button
-                        variant="secondary"
-                        className="self-start"
-                        disabled={!canRequest}
-                        loading={
-                          request.isPending && request.variables === service.key
-                        }
-                        onClick={() => request.mutate(service.key)}
-                      >
-                        {t('request')}
-                      </Button>
-                    )}
-                  </Card>
-                ))}
-            </div>
-            <p className="text-xs text-fg-subtle">{t('scopeHint')}</p>
-          </div>
-        )}
-      </QueryState>
-    </div>
-  );
-}
-
 const invoiceTone = {
   paid: 'success',
   due: 'info',
@@ -429,7 +339,7 @@ function StoresPageView() {
           {
             value: 'services' as const,
             label: t('tabs.services'),
-            panel: <ServicesTab />,
+            panel: <ServicesSection />,
           },
         ]
       : []),

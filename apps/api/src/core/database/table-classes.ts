@@ -2,9 +2,9 @@
 // pharmacy is listed here and vice versa; catalog.int-spec.ts checks this against pg_catalog.
 //   tenant        - tenant data, RLS by app.tenant_id for pharmacy_app;
 //   tenant-export - tenant-owned aggregates without personal data, readable by the platform;
-//   platform      - platform registry: pharmacy_app reads at most its own row of `tenants`;
-//                   `operators`, `operator_credentials` and `platform_audit_log` are open to
-//                   pharmacy_platform only;
+//   platform      - platform registry: pharmacy_app reads at most its own rows of `tenants` and
+//                   `tenant_services`; `operators`, `operator_credentials` and
+//                   `platform_audit_log` are open to pharmacy_platform only;
 //   shared        - reference data shared by all tenants;
 //   system        - internal service tables (job queue).
 export type TableClass =
@@ -66,9 +66,13 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     expenses: 'tenant',
     audit_log: 'tenant',
     sessions: 'tenant',
+    service_requests: 'tenant-export',
     operators: 'platform',
     operator_credentials: 'platform',
     platform_audit_log: 'platform',
+    tenant_services: 'platform',
+    platform_settings: 'shared',
+    services: 'shared',
   });
 
 // Tenant tables that are append-only (insert and select only; a trigger rejects update, delete

@@ -35,7 +35,7 @@
     "system_role": "Роль «Владелец» не редактируется.",
     "store_mode_locked": "Режим активной точки меняет оператор платформы.",
     "store_closed": "Точка закрыта — изменения недоступны.",
-    "service_requested": "Услуга уже подключена или запрошена.",
+    "service_requested": "Заявка на эту услугу уже ждёт решения оператора.",
     "article_taken": "Этот артикул 1С уже занят другим товаром.",
     "duplicate_resolved": "По этому дублю решение уже принято.",
     "store_code_taken": "Этот код точки уже занят в сети.",
@@ -72,7 +72,8 @@
     "store_closing": "Точка уже закрывается",
     "store_not_closable": "Закрыть точку пока нельзя — устраните причины из списка",
     "closing_partly_received": "Получатель уже принял часть товара — закрытие нельзя отменить",
-    "last_store": "Это последняя работающая точка сети — её закрыть нельзя"
+    "last_store": "Это последняя работающая точка сети — её закрыть нельзя",
+    "service_decided": "По заявке уже принято решение. Обновите страницу."
   },
   "states": {
     "toHome": "На главную",
@@ -284,6 +285,10 @@
     "sync_conflict": {
       "title": "Конфликт синхронизации",
       "detail": "{store} · нужно решение владельца"
+    },
+    "service_decided": {
+      "title": "{decision, select, approved {Услуга «{service}» подтверждена} rejected {Заявка на «{service}» отклонена} other {Услуга «{service}» отменена}}",
+      "detail": "{decision, select, approved {Цена {price}} other {Причина: {reason}}}"
     }
   },
   "signOut": {
@@ -449,7 +454,9 @@
     "expense_deleted": "Расход удалён",
     "store_closing_started": "Начато закрытие точки",
     "store_closing_cancelled": "Закрытие точки отменено",
-    "store_closed": "Точка закрыта"
+    "store_closed": "Точка закрыта",
+    "settings_service_requested": "Заказана услуга платформы",
+    "settings_service_request_withdrawn": "Отозвана заявка на услугу платформы"
   },
   "auditParams": {
     "totalMinor": "Сумма",

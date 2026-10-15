@@ -33,8 +33,10 @@ const STRING_PARAMS = [
   'fromStore',
   'toStore',
   'shiftNumber',
+  'reason',
 ] as const;
-const NUMBER_PARAMS = ['quantity', 'positions'] as const;
+const NUMBER_PARAMS = ['quantity', 'positions', 'priceMinor'] as const;
+const DECISIONS = ['approved', 'rejected', 'cancelled'] as const;
 
 const dayNumber = (date: string) =>
   Date.parse(`${date}T00:00:00Z`) / 86_400_000;
@@ -157,6 +159,10 @@ export class NotificationsService {
     }
     const productName = nameIn(stored['productNames'], principal.locale);
     if (productName !== undefined) params.productName = productName;
+    const serviceName = nameIn(stored['serviceNames'], principal.locale);
+    if (serviceName !== undefined) params.serviceName = serviceName;
+    const decision = DECISIONS.find((d) => d === stored['decision']);
+    if (decision !== undefined) params.decision = decision;
     if (params.expiresOn !== undefined) {
       params.days = dayNumber(params.expiresOn) - dayNumber(today);
     }

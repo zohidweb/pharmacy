@@ -30,11 +30,13 @@ import type {
   CreateStoreRequest,
   LegalEntity,
   LegalEntityInput,
+  ServiceOrder,
 } from '@pharmacy/shared-dto';
 import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
+import type { MockServiceOrder } from './db-owner';
 import { categories } from './fixtures-pos';
 import { storeDay, stores } from './fixtures';
 import { debtOf } from './handlers-purchasing';
@@ -49,6 +51,8 @@ type OwnerRoute = Extract<
   | `stores.${string}`
   | `legalEntities.${string}`
   | `services.${string}`
+  | 'serviceRequests.create'
+  | 'serviceRequests.withdraw'
   | 'billing.get'
   | 'reports.get'
   | `expenses.${string}`
@@ -61,6 +65,22 @@ type OwnerRoute = Extract<
 >;
 
 const owner = () => mockDb().owner;
+
+const localized = (ru: string, tj: string | null, locale: 'ru' | 'tg') =>
+  locale === 'tg' && tj !== null ? tj : ru;
+
+function withName(
+  order: MockServiceOrder,
+  locale: 'ru' | 'tg',
+): ServiceOrder {
+  const service = owner().services.find((s) => s.id === order.serviceId);
+  return {
+    ...order,
+    serviceName: service
+      ? localized(service.nameRu, service.nameTj, locale)
+      : '',
+  };
+}
 const activeCategories = () =>
   mockDb()
     .catalog.categories.filter((c) => c.status === 'active')
@@ -1269,27 +1289,76 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
     return ownerStore(params.id) as OwnerStore;
   },
 
+  // As apps/api (spec 2026-10-15-billing-services, 6.2): the name in the language of the employee,
+  // the Russian one without a Tajik text.
   'services.list': ({ correlationId }) => {
-    context(correlationId, 'services:view');
-    return owner().services;
+    const { session } = context(correlationId, 'services:view');
+    const locale = session.locale;
+    return {
+      catalog: owner().services.map((service) => ({
+        id: service.id,
+        name: localized(service.nameRu, service.nameTj, locale),
+        description: localized(
+          service.descriptionRu,
+          service.descriptionTj,
+          locale,
+        ),
+        basePriceMinor: service.basePriceMinor,
+      })),
+      orders: owner().serviceOrders.map((order) => withName(order, locale)),
+    };
   },
-  'services.request': ({ params, correlationId }) => {
+  'serviceRequests.create': ({ body, correlationId }) => {
     const { session } = context(correlationId, 'services:create', {
       write: true,
     });
-    const service = owner().services.find((s) => s.key === params.key);
+    const service = owner().services.find((s) => s.id === body.serviceId);
     if (!service) throw new ApiError(404, 'not_found', correlationId);
-    if (service.state !== 'available') {
+    if (
+      owner().serviceOrders.some(
+        (order) => order.serviceId === service.id && order.status === 'pending',
+      )
+    ) {
       throw new ApiError(409, 'service_requested', correlationId);
     }
-    service.state = 'requested';
-    service.requestedAt = new Date().toISOString();
+    const order = {
+      requestId: `req-${Date.now()}`,
+      serviceId: service.id,
+      status: 'pending' as const,
+      comment: body.comment?.trim() || null,
+      requestedAt: new Date().toISOString(),
+      priceMinor: null,
+      reason: null,
+      providedOn: null,
+      decidedAt: null,
+    };
+    owner().serviceOrders.unshift(order);
     appendAudit(session, {
       event: 'settings.service-requested',
-      object: service.key,
+      object: service.nameRu,
       storeName: null,
     });
-    return service;
+    return withName(order, session.locale);
+  },
+  'serviceRequests.withdraw': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'services:create', {
+      write: true,
+    });
+    const index = owner().serviceOrders.findIndex(
+      (order) => order.requestId === params.id,
+    );
+    if (index < 0) throw new ApiError(404, 'not_found', correlationId);
+    if (owner().serviceOrders[index].status !== 'pending') {
+      throw new ApiError(409, 'service_decided', correlationId);
+    }
+    const [removed] = owner().serviceOrders.splice(index, 1);
+    appendAudit(session, {
+      event: 'settings.service-request-withdrawn',
+      object:
+        owner().services.find((s) => s.id === removed.serviceId)?.nameRu ??
+        removed.serviceId,
+      storeName: null,
+    });
   },
   'billing.get': ({ correlationId }) => {
     context(correlationId, 'billing:view');

@@ -203,15 +203,22 @@ describe('BillingPage', () => {
 });
 
 describe('ServicesPage', () => {
-  it('approves a request and removes it from the list', async () => {
+  it('approves a request at a price and removes it from the list', async () => {
     renderWithProviders(<ServicesPage />);
     const approve = await screen.findAllByRole('button', {
       name: 'Подтвердить',
     });
 
     fireEvent.click(approve[0]);
+    const dialog = screen.getByRole('dialog', { name: 'Подтвердить заявку?' });
+    fireEvent.change(within(dialog).getByLabelText(/Цена заказа/), {
+      target: { value: '450' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Подтвердить' }),
+    );
     expect(
-      await screen.findByText('Услуга «Расширенная аналитика» подключена'),
+      await screen.findByText('Заявка на «Обучение персонала» подтверждена'),
     ).toBeTruthy();
     await waitFor(() =>
       expect(
@@ -237,28 +244,28 @@ describe('ServicesPage', () => {
     expect(confirm.disabled).toBe(false);
   });
 
-  it('adds a monthly service to the catalog', async () => {
+  it('adds a one-time service to the catalog', async () => {
     renderWithProviders(<ServicesPage />);
     fireEvent.click(
       await screen.findByRole('button', { name: 'Добавить услугу' }),
     );
     const dialog = screen.getByRole('dialog', { name: 'Новая услуга' });
 
-    fireEvent.input(within(dialog).getByLabelText(/Название/), {
-      target: { value: 'Обучение персонала' },
+    fireEvent.input(within(dialog).getByLabelText(/Название \(рус\.\)/), {
+      target: { value: 'Настройка принтера' },
     });
-    fireEvent.input(within(dialog).getByLabelText(/Описание/), {
-      target: { value: 'Два занятия для кассиров' },
-    });
-    fireEvent.click(within(dialog).getByRole('radio', { name: /Ежемесячная/ }));
-    fireEvent.input(within(dialog).getByLabelText(/Цена в месяц/), {
+    fireEvent.input(
+      within(dialog).getByLabelText(/Описание для владельца \(рус\.\)/),
+      { target: { value: 'Подключение принтера чеков на точке' } },
+    );
+    fireEvent.input(within(dialog).getByLabelText(/Базовая цена/), {
       target: { value: '50' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
 
-    expect(await screen.findByText('Обучение персонала')).toBeTruthy();
-    expect(plain(screen.getByText('50,00 с / мес').textContent)).toBe(
-      '50,00 с / мес',
+    expect(await screen.findByText('Настройка принтера')).toBeTruthy();
+    expect(plain(screen.getByText('от 50,00 с').textContent)).toBe(
+      'от 50,00 с',
     );
   });
 });

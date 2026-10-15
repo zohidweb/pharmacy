@@ -60,6 +60,8 @@ const knownCodes = [
   'document_not_posted',
   'period_closed',
   'supplier_name_taken',
+  'service_requested',
+  'service_decided',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

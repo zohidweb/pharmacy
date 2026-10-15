@@ -11,4 +11,4 @@ export { DatabaseModule } from './database.module';
 export { TenantDatabase, type TenantTransaction } from './tenant-database';
 export type { DB } from './db.generated';
 export { isUuid, newId } from './ids';
-export { uniqueConstraint } from './unique-violation';
+export { foreignKeyConstraint, uniqueConstraint } from './unique-violation';

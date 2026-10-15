@@ -202,15 +202,56 @@ export interface CloseStoreResponse {
 
 /* ---------------- services and billing ---------------- */
 
-export type TenantServiceKey =
-  'export-1c' | 'fiscal' | 'notifications' | 'print-agent' | 'labels';
+/** A service of the operator's catalog, in the language of the employee (Russian without a Tajik text). */
+export interface ServiceCatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  /** A guide: the operator sets the price of the order when approving it. */
+  basePriceMinor: number;
+}
 
-export type TenantServiceState = 'included' | 'requested' | 'available';
+export type ServiceOrderStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled'
+  | 'provided';
 
-export interface TenantService {
-  key: TenantServiceKey;
-  state: TenantServiceState;
+/**
+ * A request of the network and the operator's decision on it, or a service the operator added
+ * without a request (`requestId` null). Only a pending request can be withdrawn.
+ */
+export interface ServiceOrder {
+  requestId: string | null;
+  serviceId: string;
+  serviceName: string;
+  status: ServiceOrderStatus;
+  comment: string | null;
   requestedAt: string | null;
+  priceMinor: number | null;
+  /** Of a rejection or a cancellation. */
+  reason: string | null;
+  /** Date-only. */
+  providedOn: string | null;
+  decidedAt: string | null;
+}
+
+/** GET /api/v1/services (`services:view`) — the visible catalog and the orders of the network, newest first. */
+export interface TenantServices {
+  catalog: ServiceCatalogItem[];
+  orders: ServiceOrder[];
+}
+
+/**
+ * POST /api/v1/service-requests (`services:create`) → 201 `ServiceOrder`; comment up to 500
+ * characters. 404 (unknown, hidden or archived service), 409 `service_requested` (a request for
+ * this service waits for a decision). DELETE /api/v1/service-requests/{id} withdraws a pending
+ * request: 204, 404, 409 `service_decided`.
+ */
+export interface CreateServiceRequestBody {
+  serviceId: string;
+  comment: string | null;
 }
 
 export type TenantInvoiceStatus = 'paid' | 'due' | 'overdue';

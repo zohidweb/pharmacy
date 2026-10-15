@@ -1,11 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import type {
-  PlatformOperator,
-  PlatformSettings,
-  SyncSchedule,
-} from '@pharmacy/shared-dto';
+import type { PlatformOperator, PlatformSettings } from '@pharmacy/shared-dto';
 import {
   formatDateTime,
   formatMoney,
@@ -18,15 +14,13 @@ import {
   Card,
   CardHeader,
   Dialog,
-  Select,
   StatusPill,
-  Switch,
   TextField,
   useToast,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
 import { z } from 'zod';
 import { useSession } from '@/entities/session';
@@ -38,23 +32,14 @@ import {
 import { ActivationCodeCard, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
-const schedules: SyncSchedule[] = ['daily', 'twice_daily', 'hourly', 'manual'];
-
+// The settings of the next invoices and the requisites printed on them (spec
+// 2026-10-15-billing-services, B14, A20); the offline settings come with the offline stores (B6).
 const schema = z.object({
   price: z
     .string()
     .refine((value) => (parseMoneyToMinor(value) ?? 0) > 0, { error: 'money' }),
   vatRate: z.string().regex(/^\d{1,2}$/, { error: 'vat' }),
-  prorateByDays: z.boolean(),
-  noticeDays: z
-    .string()
-    .regex(/^\d{1,2}$/, { error: 'notifyDays' })
-    .refine((value) => Number(value) >= 1 && Number(value) <= 60, {
-      error: 'notifyDays',
-    }),
-  defaultSyncSchedule: z.enum(schedules),
-  acceptLegacyVersionSync: z.boolean(),
-  supplierName: z.string().trim().min(1, { error: 'required' }),
+  supplierName: z.string().trim().min(1, { error: 'required' }).max(200),
   supplierInn: z
     .string()
     .trim()
@@ -63,26 +48,30 @@ const schema = z.object({
     .string()
     .trim()
     .regex(/^\d{20}$/, { error: 'bankAccount' }),
+  bankName: z.string().trim().min(1, { error: 'required' }).max(200),
+  bankBik: z
+    .string()
+    .trim()
+    .regex(/^\d{9}$/, { error: 'bik' }),
+  bankCorrAccount: z
+    .string()
+    .trim()
+    .regex(/^\d{20}$/, { error: 'bankAccount' }),
   paymentPurpose: z
     .string()
     .trim()
+    .max(200)
     .refine((value) => value.includes('{number}'), { error: 'purpose' }),
 });
 type Values = z.input<typeof schema>;
 type ErrorKey =
-  | 'money'
-  | 'vat'
-  | 'notifyDays'
-  | 'required'
-  | 'inn'
-  | 'bankAccount'
-  | 'purpose';
+  'money' | 'vat' | 'required' | 'inn' | 'bik' | 'bankAccount' | 'purpose';
 const errorKeys: readonly string[] = [
   'money',
   'vat',
-  'notifyDays',
   'required',
   'inn',
+  'bik',
   'bankAccount',
   'purpose',
 ];
@@ -94,13 +83,12 @@ function toValues(settings: PlatformSettings): Values {
       plainSpaces: true,
     }),
     vatRate: String(settings.vatRatePercent),
-    prorateByDays: settings.prorateByDays,
-    noticeDays: String(settings.keyExpiryNoticeDays),
-    defaultSyncSchedule: settings.defaultSyncSchedule,
-    acceptLegacyVersionSync: settings.acceptLegacyVersionSync,
     supplierName: settings.supplier.name,
     supplierInn: settings.supplier.inn,
     bankAccount: settings.supplier.bankAccount,
+    bankName: settings.supplier.bankName,
+    bankBik: settings.supplier.bankBik,
+    bankCorrAccount: settings.supplier.bankCorrAccount,
     paymentPurpose: settings.supplier.paymentPurposeTemplate,
   };
 }
@@ -109,14 +97,13 @@ function toSettings(values: Values): PlatformSettings {
   return {
     pricePerStoreMinor: parseMoneyToMinor(values.price) ?? 0,
     vatRatePercent: Number(values.vatRate),
-    prorateByDays: values.prorateByDays,
-    keyExpiryNoticeDays: Number(values.noticeDays),
-    defaultSyncSchedule: values.defaultSyncSchedule,
-    acceptLegacyVersionSync: values.acceptLegacyVersionSync,
     supplier: {
       name: values.supplierName.trim(),
       inn: values.supplierInn.trim(),
       bankAccount: values.bankAccount.trim(),
+      bankName: values.bankName.trim(),
+      bankBik: values.bankBik.trim(),
+      bankCorrAccount: values.bankCorrAccount.trim(),
       paymentPurposeTemplate: values.paymentPurpose.trim(),
     },
   };
@@ -124,7 +111,6 @@ function toSettings(values: Values): PlatformSettings {
 
 function SettingsForm({ settings }: { settings: PlatformSettings }) {
   const t = useTranslations('settings');
-  const tSchedule = useTranslations('store.license.scheduleValue');
   const toast = useToast();
   const queryClient = useQueryClient();
   const form = useForm<Values>({
@@ -166,7 +152,11 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
           aria-labelledby="pricing-title"
           className="flex flex-col gap-4"
         >
-          <CardHeader title={t('pricing.title')} titleId="pricing-title" />
+          <CardHeader
+            title={t('pricing.title')}
+            titleId="pricing-title"
+            description={t('pricing.hint')}
+          />
           <TextField
             label={t('pricing.price')}
             inputMode="decimal"
@@ -189,59 +179,6 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
               {...form.register('vatRate')}
             />
           </div>
-          <Controller
-            control={form.control}
-            name="prorateByDays"
-            render={({ field }) => (
-              <Switch
-                label={t('pricing.prorate')}
-                description={t('pricing.prorateHint')}
-                checked={field.value}
-                onCheckedChange={field.onChange}
-              />
-            )}
-          />
-        </Card>
-        <Card
-          as="section"
-          aria-labelledby="offline-title"
-          className="flex flex-col gap-4"
-        >
-          <CardHeader title={t('offline.title')} titleId="offline-title" />
-          <TextField
-            label={t('offline.noticeDays')}
-            inputMode="numeric"
-            hint={t('offline.noticeDaysHint')}
-            error={error('noticeDays')}
-            {...form.register('noticeDays')}
-          />
-          <Select
-            label={t('offline.schedule')}
-            options={schedules.map((value) => ({
-              value,
-              label: tSchedule(value),
-            }))}
-            {...form.register('defaultSyncSchedule')}
-          />
-          <Controller
-            control={form.control}
-            name="acceptLegacyVersionSync"
-            render={({ field }) => (
-              <Switch
-                label={t('offline.legacy')}
-                description={t('offline.legacyHint')}
-                checked={field.value}
-                onCheckedChange={field.onChange}
-              />
-            )}
-          />
-          <Switch
-            label={t('offline.autoDelivery')}
-            description={t('offline.autoDeliveryHint')}
-            checked={false}
-            onCheckedChange={() => undefined}
-            disabled
-          />
         </Card>
         <Card
           as="section"
@@ -271,6 +208,24 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
               mono
               error={error('bankAccount')}
               {...form.register('bankAccount')}
+            />
+            <TextField
+              label={t('supplier.bankName')}
+              error={error('bankName')}
+              {...form.register('bankName')}
+            />
+            <TextField
+              label={t('supplier.bik')}
+              inputMode="numeric"
+              error={error('bankBik')}
+              {...form.register('bankBik')}
+            />
+            <TextField
+              label={t('supplier.corrAccount')}
+              inputMode="numeric"
+              mono
+              error={error('bankCorrAccount')}
+              {...form.register('bankCorrAccount')}
             />
           </div>
           <TextField

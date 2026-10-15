@@ -11,12 +11,14 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'negative_stock',
   'sync_conflict',
   'license_expiring',
+  'service_decided',
 ];
 
 /** Facts that never resolve: shown for 30 days after they appear (E12). */
 export const EVENT_KINDS: readonly NotificationKind[] = [
   'shift_discrepancy',
   'negative_stock',
+  'service_decided',
 ];
 
 /** The permission of the area of a kind, besides `notifications:view` (E10). */
@@ -29,4 +31,5 @@ export const KIND_PERMISSION: Readonly<Record<NotificationKind, Permission>> = {
   shift_discrepancy: 'shifts:view',
   sync_conflict: 'sync:view',
   license_expiring: 'stores:view',
+  service_decided: 'services:view',
 };

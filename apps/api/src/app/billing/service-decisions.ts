@@ -4,7 +4,8 @@ import { OwnerServicesRepository, textOf } from './owner-services.repository';
 
 export interface ServiceDecision {
   id: string;
-  serviceName: string;
+  /** The names of the service, `ru` always, `tj` when the operator gave one. */
+  serviceNames: { ru: string; tj?: string };
   decision: 'approved' | 'rejected' | 'cancelled';
   priceMinor: number | null;
   reason: string | null;
@@ -24,13 +25,16 @@ export class ServiceDecisions {
     since: Date,
   ): Promise<ServiceDecision[]> {
     const rows = await this.repository.decidedSince(trx, tenantId, since);
-    return rows.map((row) => ({
-      id: row.id,
-      serviceName: textOf(row.name, 'ru') ?? '',
-      decision: row.status,
-      priceMinor: row.priceDirams === null ? null : Number(row.priceDirams),
-      reason: row.reason,
-      decidedAt: new Date(row.decidedAt),
-    }));
+    return rows.map((row) => {
+      const tj = textOf(row.name, 'tj');
+      return {
+        id: row.id,
+        serviceNames: { ru: textOf(row.name, 'ru') ?? '', ...(tj && { tj }) },
+        decision: row.status,
+        priceMinor: row.priceDirams === null ? null : Number(row.priceDirams),
+        reason: row.reason,
+        decidedAt: new Date(row.decidedAt),
+      };
+    });
   }
 }

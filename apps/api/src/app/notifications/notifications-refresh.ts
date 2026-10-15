@@ -218,7 +218,8 @@ export class NotificationsRefresh {
           entityType: 'tenant_service',
           entityId: decision.id,
           params: {
-            serviceName: decision.serviceName,
+            // localized on reading, as the names of products
+            serviceNames: decision.serviceNames,
             decision: decision.decision,
             ...(decision.priceMinor !== null && {
               priceMinor: decision.priceMinor,

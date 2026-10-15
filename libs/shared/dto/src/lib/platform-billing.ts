@@ -102,7 +102,8 @@ export interface InvoiceLine {
 export interface InvoiceDetails extends InvoiceListItem {
   pricePerStoreMinor: number;
   vatRatePercent: number;
-  supplier: PlatformRequisites;
+  /** The requisites of the platform at issue; the purpose is resolved in `paymentPurpose`. */
+  supplier: Omit<PlatformRequisites, 'paymentPurposeTemplate'>;
   payer: { name: string; inn: string };
   paymentPurpose: string;
   recalculatedAt: string | null;

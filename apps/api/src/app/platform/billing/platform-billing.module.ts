@@ -1,8 +1,13 @@
 import { Module } from '@nestjs/common';
 import { PlatformDatabaseModule } from '../../../core/database/platform';
+import { BillingModule } from '../../billing/billing.module';
 import { PlatformAuditModule } from '../audit/platform-audit.module';
+import { TenantAllocation } from './allocation';
 import { AttentionController } from './attention.controller';
 import { BillingRepository } from './billing.repository';
+import { InvoicesController } from './invoices.controller';
+import { InvoicesRepository } from './invoices.repository';
+import { InvoicesService } from './invoices.service';
 import { PlatformSettingsController } from './platform-settings.controller';
 import { PlatformSettingsService } from './platform-settings.service';
 import { ServiceOrdersController } from './service-orders.controller';
@@ -12,15 +17,18 @@ import { ServicesCatalogController } from './services-catalog.controller';
 import { ServicesCatalogService } from './services-catalog.service';
 
 // Billing of the platform for the operator contour (spec 2026-10-15-billing-services): settings,
-// the service catalog, the requests and services of networks and the menu counter; invoices and
-// payments come with PR 2. Cloud only: an offline store has no operator contour.
+// the service catalog, the requests and services of networks, the menu counter, invoices, payments
+// and discounts of networks. The activity of stores comes from the tenant module `billing`
+// (`StoreUsage`, `billing` → `platform/billing`). Cloud only: an offline store has no operator
+// contour.
 @Module({
-  imports: [PlatformDatabaseModule, PlatformAuditModule],
+  imports: [PlatformDatabaseModule, PlatformAuditModule, BillingModule],
   controllers: [
     PlatformSettingsController,
     ServicesCatalogController,
     ServiceOrdersController,
     AttentionController,
+    InvoicesController,
   ],
   providers: [
     BillingRepository,
@@ -28,6 +36,9 @@ import { ServicesCatalogService } from './services-catalog.service';
     ServicesCatalogService,
     ServiceOrdersRepository,
     ServiceOrdersService,
+    InvoicesRepository,
+    InvoicesService,
+    TenantAllocation,
   ],
 })
 export class PlatformBillingModule {}

@@ -29,14 +29,19 @@ export class StoreAccess {
     }
   }
 
-  /** The store of a write: in the scope (403), active (404) and a cloud store (409). */
+  /**
+   * The store of a write: in the scope (403), active (404) and a cloud store (409); its row is read
+   * `FOR SHARE`, so the write and a closing of the store do not cross.
+   */
   async writableStore(
     trx: TenantTransaction,
     tenantId: string,
     storeId: string,
   ): Promise<StoreForWrite> {
     this.inScope(storeId);
-    const store = await this.inventory.store(trx, tenantId, storeId);
+    const store = await this.inventory.store(trx, tenantId, storeId, {
+      lock: 'share',
+    });
     if (store === null || store.status !== 'active') {
       throw new ProblemException(404, 'not_found');
     }

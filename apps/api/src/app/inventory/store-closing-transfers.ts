@@ -247,6 +247,18 @@ export class StoreClosingTransfers {
     return sent;
   }
 
+  /** The store whose closing made the transfer; null — an ordinary transfer. */
+  async storeOfTransfer(
+    trx: TenantTransaction,
+    tenantId: string,
+    transferId: string,
+  ): Promise<string | null> {
+    const result = await sql<{ storeId: string }>`
+      select store_id from pharmacy.documents
+      where tenant_id = ${tenantId} and id = ${transferId} and store_closing`.execute(trx);
+    return result.rows[0]?.storeId ?? null;
+  }
+
   /** The transfers of the closing of the store, by number. */
   async transfers(
     trx: TenantTransaction,

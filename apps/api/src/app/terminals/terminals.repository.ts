@@ -148,6 +148,23 @@ export class TerminalsRepository {
   }
 
   /** Revokes an active terminal; its store, or null when it was revoked already or is unknown. */
+  /** The terminals of a store that are not revoked (the closing of the store revokes them). */
+  async activeOfStore(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+  ): Promise<string[]> {
+    const rows = await trx
+      .selectFrom('terminals')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('storeId', '=', storeId)
+      .where('revokedAt', 'is', null)
+      .orderBy('id')
+      .execute();
+    return rows.map((row) => row.id);
+  }
+
   async revoke(
     trx: TenantTransaction,
     tenantId: string,

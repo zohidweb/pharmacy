@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { hasPermissions } from '@pharmacy/shared-domain';
 import type {
   CloseStoreRequest,
@@ -15,8 +15,11 @@ import { FieldProblemException } from '../../common/errors/validation-failed.exc
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 import { StoreClosingTransfers } from '../inventory/store-closing-transfers';
+import { TransferAcceptance } from '../inventory/transfer-acceptance';
 import { PosShifts } from '../pos/pos-shifts';
+import { StoreDiscountDetachment } from '../pricing/store-discount-detachment';
 import { SupplierDues } from '../purchasing/supplier-dues';
+import { TerminalsService } from '../terminals/terminals.service';
 import { StoresRepository, type StoreRow } from './stores.repository';
 import { toOwnerStore } from './stores.service';
 
@@ -31,7 +34,7 @@ const notFound = () => new ProblemException(404, 'not_found');
 // open requests, a negative stock and a closed period forbid it; the drafts, the open orders and the
 // unpaid receipts only stay behind (purchasing). Cancelled while nothing is accepted.
 @Injectable()
-export class StoreClosingService {
+export class StoreClosingService implements OnModuleInit {
   constructor(
     private readonly db: TenantDatabase,
     private readonly repository: StoresRepository,
@@ -39,6 +42,9 @@ export class StoreClosingService {
     private readonly shifts: PosShifts,
     private readonly dues: SupplierDues,
     private readonly audit: AuditService,
+    private readonly acceptance: TransferAcceptance,
+    private readonly terminals: TerminalsService,
+    private readonly discounts: StoreDiscountDetachment,
   ) {}
 
   preview(id: string): Promise<StoreClosingPreview> {
@@ -71,10 +77,11 @@ export class StoreClosingService {
     });
   }
 
-  close(id: string, body: CloseStoreRequest): Promise<CloseStoreResponse> {
+  async close(id: string, body: CloseStoreRequest): Promise<CloseStoreResponse> {
     const { tenantId, employeeId } = requirePrincipal();
     const storeId = id.toLowerCase();
-    return this.db.tenantTransaction(async (trx) => {
+    let after: (() => Promise<void>) | null = null;
+    const response = await this.db.tenantTransaction(async (trx) => {
       // the row first: an opening of a shift or a stock write waits for the closing, or the closing
       // sees what it did (Review Focus 1)
       const row = await this.repository.lockStore(trx, tenantId, storeId);
@@ -91,8 +98,13 @@ export class StoreClosingService {
       if (stock.length === 0) {
         // a store without stock closes at once, without a receiver (Z4)
         await this.repository.startClosing(trx, tenantId, storeId, employeeId, null);
-        await this.complete(trx, tenantId, storeId);
-        return { transferNumbers: [], store: await this.read(trx, tenantId, storeId) };
+        const started = await this.repository.findStore(trx, tenantId, storeId);
+        if (started === null) throw notFound();
+        after = await this.complete(trx, tenantId, started);
+        return {
+          transferNumbers: [] as string[],
+          store: await this.read(trx, tenantId, storeId),
+        };
       }
       const receiverId = await this.receiver(trx, tenantId, storeId, body.receiverStoreId);
       const sent = await this.transfers.send(
@@ -118,6 +130,10 @@ export class StoreClosingService {
         store: await this.read(trx, tenantId, storeId),
       };
     });
+    // the terminal sessions of a store closed at once end after the commit
+    const work = after as (() => Promise<void>) | null;
+    if (work !== null) await work();
+    return response;
   }
 
   cancel(id: string): Promise<OwnerStore> {
@@ -146,23 +162,50 @@ export class StoreClosingService {
     });
   }
 
+  /** The closing ends with the acceptance of its last transfer (E11). */
+  onModuleInit(): void {
+    this.acceptance.register(async (trx, tenantId, transferId) => {
+      const storeId = await this.transfers.storeOfTransfer(trx, tenantId, transferId);
+      if (storeId === null) return;
+      const row = await this.repository.lockStore(trx, tenantId, storeId);
+      if (row === null || row.status !== 'closing') return;
+      const transfers = await this.transfers.transfers(trx, tenantId, storeId);
+      if (transfers.some((transfer) => transfer.status === 'in_transit')) return;
+      return this.complete(trx, tenantId, row);
+    });
+  }
+
   /**
-   * `closing` → `closed` in the transaction that ends the closing (E11): the acceptance of its last
-   * transfer, or at once for a store without stock.
+   * `closing` → `closed` in the transaction that ends the closing (E11, E12): the terminals of the
+   * store are revoked by who started the closing, the store leaves the discount rules; the employee
+   * scope keeps it as history. Returns the work for after the commit (the terminal sessions).
    */
-  async complete(
+  private async complete(
     trx: TenantTransaction,
     tenantId: string,
-    storeId: string,
-  ): Promise<void> {
+    row: StoreRow,
+  ): Promise<() => Promise<void>> {
+    const storeId = row.id;
     await this.repository.markClosed(trx, tenantId, storeId);
+    const terminals = await this.terminals.revokeOfStore(
+      trx,
+      tenantId,
+      storeId,
+      row.closingStartedBy as string,
+    );
+    const rules = await this.discounts.detachStore(trx, tenantId, storeId);
     await this.audit.append(trx, {
       action: 'store.closed',
       entityType: 'store',
       entityId: storeId,
       storeId,
-      details: { terminals: 0, rulesDetached: 0, rulesArchived: 0 },
+      details: {
+        terminals: terminals.length,
+        rulesDetached: rules.detached,
+        rulesArchived: rules.archived,
+      },
     });
+    return () => this.terminals.afterRevokeAll(tenantId, terminals);
   }
 
   /**

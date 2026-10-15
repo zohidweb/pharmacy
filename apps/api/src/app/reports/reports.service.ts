@@ -68,7 +68,7 @@ export class ReportsService {
         ]);
       }
       const stores = (
-        await this.repository.activeStores(trx, principal.tenantId, scope)
+        await this.repository.reportStores(trx, principal.tenantId, scope, from)
       ).filter((store) => !query.storeId || store.id === query.storeId);
       const body = await this.body(
         trx,
@@ -163,9 +163,15 @@ export class ReportsService {
         );
       }
       case 'supplier_debts':
-        // today, whatever the period (E18)
+        // today, whatever the period (E18); the whole network — every store, closed ones too, as the
+        // supplier list (spec 2026-10-15-store-closing, E13)
         return build.supplierDebts(
-          await this.dues.debts(trx, tenantId, period.today, storeIds),
+          await this.dues.debts(
+            trx,
+            tenantId,
+            period.today,
+            network ? undefined : storeIds,
+          ),
           canSeeCost,
         );
       case 'cashiers': {

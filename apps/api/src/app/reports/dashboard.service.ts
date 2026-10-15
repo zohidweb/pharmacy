@@ -55,13 +55,15 @@ export class DashboardService {
         query.from,
         query.to,
       );
-      const stores = await this.repository.activeStores(
+      const first = [dates.prevFrom, dates.chartFrom].sort()[0];
+      // a store closed in the compared periods keeps its figures (spec 2026-10-15-store-closing, E13)
+      const stores = await this.repository.reportStores(
         trx,
         tenantId,
         scopeOf(principal),
+        first,
       );
       const storeIds = stores.map((store) => store.id);
-      const first = [dates.prevFrom, dates.chartFrom].sort()[0];
       const sales = await this.sales.byStoreDay(
         trx,
         tenantId,

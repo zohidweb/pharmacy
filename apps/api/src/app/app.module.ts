@@ -33,6 +33,7 @@ import { TerminalsModule } from './terminals/terminals.module';
 import { OperatorAuthModule } from './platform/auth/operator-auth.module';
 import { OperatorAuditModule } from './platform/audit/operator-audit.module';
 import { OperatorsModule } from './platform/operators/operators.module';
+import { PlatformBillingModule } from './platform/billing/platform-billing.module';
 import { TenantsModule } from './platform/tenants/tenants.module';
 import { OperatorPermissionsGuard } from './platform/auth/operator-permissions.guard';
 import { PermissionsGuard } from './auth/permissions.guard';
@@ -92,6 +93,10 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     ),
     ConditionalModule.registerWhen(
       OperatorAuditModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
+    ConditionalModule.registerWhen(
+      PlatformBillingModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
     // Stores and legal entities are kept in the cloud only (spec 2026-10-06-owner-stores).

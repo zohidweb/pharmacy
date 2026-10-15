@@ -44,8 +44,9 @@ import type {
   StoresOverview,
   SyncRunResult,
   TenantBilling,
-  TenantService,
-  TenantServiceKey,
+  CreateServiceRequestBody,
+  ServiceOrder,
+  TenantServices,
   TenantTerminal,
   UpdateEmployeeRequest,
   UpdateMarkupsRequest,
@@ -532,12 +533,15 @@ export const apiRoutes = {
     'POST',
     (p) => `/stores/${id(p)}/closing`,
   ),
-  'services.list': route<TenantService[]>('GET', () => '/services'),
-  'services.request': route<
-    TenantService,
-    undefined,
-    { key: TenantServiceKey }
-  >('POST', (p) => `/services/${p.key}/requests`),
+  'services.list': route<TenantServices>('GET', () => '/services'),
+  'serviceRequests.create': route<ServiceOrder, CreateServiceRequestBody>(
+    'POST',
+    () => '/service-requests',
+  ),
+  'serviceRequests.withdraw': route<void, undefined, { id: string }>(
+    'DELETE',
+    (p) => `/service-requests/${id(p)}`,
+  ),
   'billing.get': route<TenantBilling>('GET', () => '/billing'),
 
   'reports.get': route<

@@ -19,11 +19,22 @@ import type {
   OwnerStore,
   TenantAuditEntry,
   TenantInvoice,
-  TenantService,
+  ServiceOrder,
   TenantTerminal,
 } from '@pharmacy/shared-dto';
 import { toAppDate } from '@pharmacy/shared-util';
 import { DAY_MS, dateIn } from './fixtures-pos';
+
+export interface MockService {
+  id: string;
+  nameRu: string;
+  nameTj: string | null;
+  descriptionRu: string;
+  descriptionTj: string | null;
+  basePriceMinor: number;
+}
+
+export type MockServiceOrder = Omit<ServiceOrder, 'serviceName'>;
 
 export interface MockRole {
   id: string;
@@ -53,7 +64,10 @@ export interface OwnerMockDb {
   legalEntities: MockLegalEntity[];
   /** Idempotency-Key of a created store → its id (spec 2026-10-06-owner-stores, S5). */
   storeKeys: Record<string, string>;
-  services: TenantService[];
+  /** The visible catalog of the operator (spec 2026-10-15-billing-services, B7); `tj` optional. */
+  services: MockService[];
+  /** The orders of the network: requests and the operator's decisions, newest first. */
+  serviceOrders: MockServiceOrder[];
   invoices: TenantInvoice[];
   audit: TenantAuditEntry[];
   settings: NetworkSettings;
@@ -219,11 +233,47 @@ export function createOwnerDb(): OwnerMockDb {
       },
     ],
     services: [
-      { key: 'export-1c', state: 'included', requestedAt: null },
-      { key: 'fiscal', state: 'included', requestedAt: null },
-      { key: 'notifications', state: 'requested', requestedAt: daysAgo(3) },
-      { key: 'print-agent', state: 'available', requestedAt: null },
-      { key: 'labels', state: 'available', requestedAt: null },
+      {
+        id: 'svc-a',
+        nameRu: 'Перенос данных из прежней системы',
+        nameTj: 'Интиқоли маълумот аз системаи пешина',
+        descriptionRu:
+          'Импорт справочника товаров, остатков и поставщиков из файла прежней программы.',
+        descriptionTj: null,
+        basePriceMinor: 120_000,
+      },
+      {
+        id: 'svc-b',
+        nameRu: 'Обучение персонала',
+        nameTj: null,
+        descriptionRu: 'Занятие для кассиров и заведующих на точке или онлайн.',
+        descriptionTj: null,
+        basePriceMinor: 30_000,
+      },
+    ],
+    serviceOrders: [
+      {
+        requestId: 'req-demo-2',
+        serviceId: 'svc-b',
+        status: 'pending',
+        comment: 'Пять кассиров, вечером после смены',
+        requestedAt: daysAgo(3),
+        priceMinor: null,
+        reason: null,
+        providedOn: null,
+        decidedAt: null,
+      },
+      {
+        requestId: 'req-demo-1',
+        serviceId: 'svc-a',
+        status: 'provided',
+        comment: null,
+        requestedAt: daysAgo(40),
+        priceMinor: 120_000,
+        reason: null,
+        providedOn: dateIn(-38),
+        decidedAt: daysAgo(39),
+      },
     ],
     invoices: [
       {
@@ -359,6 +409,7 @@ export function createOwnerDb(): OwnerMockDb {
         sync_conflict: true,
         negative_stock: true,
         license_expiring: true,
+        service_decided: true,
       },
     },
     returnPolicy: {

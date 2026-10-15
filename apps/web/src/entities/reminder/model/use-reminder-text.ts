@@ -14,6 +14,7 @@ export const reminderIcon: Record<NotificationKind, IconName> = {
   negative_stock: 'triangle-alert',
   sync_conflict: 'refresh-cw',
   license_expiring: 'key-round',
+  service_decided: 'sparkles',
 };
 
 export const reminderTone: Record<NotificationKind, StatusTone> = {
@@ -25,6 +26,7 @@ export const reminderTone: Record<NotificationKind, StatusTone> = {
   negative_stock: 'warning',
   sync_conflict: 'warning',
   license_expiring: 'warning',
+  service_decided: 'info',
 };
 
 /** Title and detail of a reminder in the interface language (the API sends kind + parameters). */
@@ -49,6 +51,11 @@ export function useReminderText() {
       positions: params.positions ?? 0,
       operator: params.operatorName ?? '—',
       shift: params.shiftNumber ?? '—',
+      service: params.serviceName ?? '—',
+      decision: params.decision ?? 'approved',
+      price:
+        params.priceMinor !== undefined ? formatMoney(params.priceMinor) : '—',
+      reason: params.reason ?? '—',
     };
     // an expired batch counts its days back (the API sends a negative `days`)
     if (kind === 'batch_expiring' && values.days < 0) {

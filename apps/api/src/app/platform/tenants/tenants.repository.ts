@@ -59,7 +59,27 @@ type TenantRow = {
   blockedByName: string | null;
   cloudStores: number | string | bigint;
   offlineStores: number | string | bigint;
+  debtDirams: number | string | bigint;
+  overdueDirams: number | string | bigint;
+  billingAdvanceDirams: number | string | bigint;
+  discountBp: number | null;
+  discountTo: string | null;
 };
+
+// Billing of a network (spec 2026-10-15-billing-services, 5, 6.1; B12): the debt is what its
+// invoices still miss, the overdue debt — of the invoices past their due date (Asia/Dushanbe); the
+// discount is the one of the current month.
+const TODAY = sql`(now() at time zone 'Asia/Dushanbe')::date`;
+const CURRENT_MONTH = sql`date_trunc('month', now() at time zone 'Asia/Dushanbe')::date`;
+const DEBT = sql<string>`(select coalesce(sum(i.total_dirams - i.paid_dirams), 0)
+  from pharmacy.invoices i where i.tenant_id = tenants.id)`;
+const OVERDUE_DEBT = sql<string>`(select coalesce(sum(i.total_dirams - i.paid_dirams), 0)
+  from pharmacy.invoices i where i.tenant_id = tenants.id and i.due_on < ${TODAY})`;
+const HAS_OVERDUE = sql<SqlBool>`exists (select 1 from pharmacy.invoices i
+  where i.tenant_id = tenants.id and i.paid_dirams < i.total_dirams and i.due_on < ${TODAY})`;
+const CURRENT_DISCOUNT = sql`from pharmacy.tenant_discounts d
+  where d.tenant_id = tenants.id and d.removed_at is null
+    and d.from_month <= ${CURRENT_MONTH} and d.to_month >= ${CURRENT_MONTH}`;
 
 // `%`, `_` and the escape character itself are literal in a search term.
 function likePattern(q: string): string {
@@ -69,8 +89,8 @@ function likePattern(q: string): string {
 const dateOnly = (value: Date | string): string =>
   new Date(value).toISOString().slice(0, 10);
 
-// Billing fields are neutral until the debt of networks is read (billing PR 2, Task 6).
 function toListItem(row: TenantRow): TenantListItem {
+  const overdueDebtMinor = Number(row.overdueDirams);
   return {
     id: row.id,
     name: row.name,
@@ -82,13 +102,16 @@ function toListItem(row: TenantRow): TenantListItem {
       ...(row.ownerEmail ? { email: row.ownerEmail } : {}),
     },
     status: row.status === 'blocked' ? 'blocked' : 'active',
-    overdue: false,
+    overdue: overdueDebtMinor > 0,
     cloudStores: Number(row.cloudStores),
     offlineStores: Number(row.offlineStores),
-    debtMinor: 0,
-    overdueDebtMinor: 0,
-    advanceMinor: 0,
-    discount: null,
+    debtMinor: Number(row.debtDirams),
+    overdueDebtMinor,
+    advanceMinor: Number(row.billingAdvanceDirams),
+    discount:
+      row.discountBp === null || row.discountTo === null
+        ? null
+        : { percentBp: row.discountBp, toMonth: row.discountTo },
   };
 }
 
@@ -114,6 +137,13 @@ export class TenantsRepository {
         'tenants.blockedAt',
         'tenants.blockReason',
         'operators.fullName as blockedByName',
+        'tenants.billingAdvanceDirams',
+        DEBT.as('debtDirams'),
+        OVERDUE_DEBT.as('overdueDirams'),
+        sql<number | null>`(select d.percent_bp ${CURRENT_DISCOUNT})`.as('discountBp'),
+        sql<string | null>`(select to_char(d.to_month, 'YYYY-MM') ${CURRENT_DISCOUNT})`.as(
+          'discountTo',
+        ),
         eb
           .selectFrom('stores')
           .select(sql<number>`count(*)`.as('n'))
@@ -147,13 +177,14 @@ export class TenantsRepository {
     let query = this.base(trx);
     if (params.q) query = query.where(this.search(params.q));
 
-    // Counts per filter over the same search ('unpaid' needs billing: 0 until then).
+    // Counts per filter over the same search; `unpaid` — networks with an overdue debt.
     let countQuery = trx
       .selectFrom('tenants')
       .select([
         sql<string>`count(*)`.as('all'),
         sql<string>`count(*) filter (where status = 'active')`.as('active'),
         sql<string>`count(*) filter (where status = 'blocked')`.as('blocked'),
+        sql<string>`count(*) filter (where ${HAS_OVERDUE})`.as('unpaid'),
       ]);
     if (params.q) countQuery = countQuery.where(this.search(params.q));
     const countRow = await countQuery.executeTakeFirstOrThrow();
@@ -161,20 +192,21 @@ export class TenantsRepository {
       all: Number(countRow.all),
       active: Number(countRow.active),
       blocked: Number(countRow.blocked),
-      unpaid: 0,
+      unpaid: Number(countRow.unpaid),
     };
 
     if (params.filter === 'active' || params.filter === 'blocked') {
       query = query.where('tenants.status', '=', params.filter);
     } else if (params.filter === 'unpaid') {
-      query = query.where(sql<SqlBool>`false`);
+      query = query.where(HAS_OVERDUE);
     }
-    const total = params.filter === 'unpaid' ? 0 : counts[params.filter];
+    const total = counts[params.filter];
 
     const direction = params.direction;
-    // debt needs billing (Task 6): until then it sorts like name.
     const ordered =
-      params.sort === 'owner'
+      params.sort === 'debt'
+        ? query.orderBy(DEBT, direction).orderBy('tenants.name')
+        : params.sort === 'owner'
         ? query.orderBy('tenants.ownerFullName', direction)
         : params.sort === 'stores'
           ? query.orderBy(

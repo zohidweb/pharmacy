@@ -5,6 +5,8 @@ import { PlatformAuditModule } from '../audit/platform-audit.module';
 import { TenantAllocation } from './allocation';
 import { AttentionController } from './attention.controller';
 import { BillingRepository } from './billing.repository';
+import { DiscountsController } from './discounts.controller';
+import { DiscountsService } from './discounts.service';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesRepository } from './invoices.repository';
 import { InvoicesService } from './invoices.service';
@@ -33,6 +35,7 @@ import { ServicesCatalogService } from './services-catalog.service';
     AttentionController,
     InvoicesController,
     PaymentsController,
+    DiscountsController,
   ],
   providers: [
     BillingRepository,
@@ -45,6 +48,7 @@ import { ServicesCatalogService } from './services-catalog.service';
     TenantAllocation,
     PaymentsRepository,
     PaymentsService,
+    DiscountsService,
   ],
 })
 export class PlatformBillingModule {}

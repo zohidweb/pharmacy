@@ -145,7 +145,11 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       ReportsModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
-    BillingModule,
+    // The services the owner orders from the platform (spec 2026-10-15-billing-services, 6.2).
+    ConditionalModule.registerWhen(
+      BillingModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     SyncModule,
     FiscalModule,
     Export1cModule,

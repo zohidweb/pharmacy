@@ -100,6 +100,8 @@ pharmacy/
   `ReturnFigures`, `StockAlerts`, `SupplierDues`, `Reminders`); `audit` ← все (`AuditService`, журнал `AuditJournal`);
   цену последнего прихода `pricing` получает через порт `PurchasePrices`, который заполняет `inventory`.
   Прочие расходы — своя таблица модуля `reports`; изъятия кассы «на расходы» он получает через `SalesFigures`.
+  `billing` ← `notifications` (`ServiceDecisions` — решения оператора по услугам сети); платформенная часть
+  биллинга — `app/platform/billing`.
 
 ## Build / test / lint
 

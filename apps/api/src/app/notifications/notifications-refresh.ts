@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { NotificationKind } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
+import { ServiceDecisions } from '../billing/service-decisions';
 import { StockAlerts } from '../inventory/stock-alerts';
 import { PosAlerts } from '../pos/pos-alerts';
 import { SupplierDues } from '../purchasing/supplier-dues';
@@ -35,6 +36,7 @@ export class NotificationsRefresh {
     private readonly stock: StockAlerts,
     private readonly dues: SupplierDues,
     private readonly pos: PosAlerts,
+    private readonly services: ServiceDecisions,
   ) {}
 
   async run(trx: TenantTransaction, tenantId: string): Promise<void> {
@@ -194,6 +196,34 @@ export class NotificationsRefresh {
           params: {
             positions: day.lines,
             storeName: storeName(day.storeId),
+          },
+        })),
+      );
+    }
+    if (enabled('service_decided')) {
+      // the operator's decisions on the services of the network (spec 2026-10-15-billing-services,
+      // A17): one event per decision, an approval and a later cancellation are two
+      const decisions = await this.services.decidedSince(
+        trx,
+        tenantId,
+        new Date(eventsFrom),
+      );
+      await this.repository.upsert(
+        trx,
+        tenantId,
+        decisions.map((decision) => ({
+          kind: 'service_decided',
+          storeId: null,
+          dedupeKey: `service:${decision.id}:${decision.decision}`,
+          entityType: 'tenant_service',
+          entityId: decision.id,
+          params: {
+            serviceName: decision.serviceName,
+            decision: decision.decision,
+            ...(decision.priceMinor !== null && {
+              priceMinor: decision.priceMinor,
+            }),
+            ...(decision.reason !== null && { reason: decision.reason }),
           },
         })),
       );

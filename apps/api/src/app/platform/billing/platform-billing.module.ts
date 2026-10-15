@@ -8,6 +8,9 @@ import { BillingRepository } from './billing.repository';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesRepository } from './invoices.repository';
 import { InvoicesService } from './invoices.service';
+import { PaymentsController } from './payments.controller';
+import { PaymentsRepository } from './payments.repository';
+import { PaymentsService } from './payments.service';
 import { PlatformSettingsController } from './platform-settings.controller';
 import { PlatformSettingsService } from './platform-settings.service';
 import { ServiceOrdersController } from './service-orders.controller';
@@ -29,6 +32,7 @@ import { ServicesCatalogService } from './services-catalog.service';
     ServiceOrdersController,
     AttentionController,
     InvoicesController,
+    PaymentsController,
   ],
   providers: [
     BillingRepository,
@@ -39,6 +43,8 @@ import { ServicesCatalogService } from './services-catalog.service';
     InvoicesRepository,
     InvoicesService,
     TenantAllocation,
+    PaymentsRepository,
+    PaymentsService,
   ],
 })
 export class PlatformBillingModule {}

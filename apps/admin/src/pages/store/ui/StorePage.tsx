@@ -323,13 +323,6 @@ function StoreView() {
                   ) : (
                     <>
                       <KpiTile
-                        label={t('kpi.paidUntil')}
-                        value={
-                          data.paidUntil ? formatDateOnly(data.paidUntil) : '—'
-                        }
-                        icon="calendar-check"
-                      />
-                      <KpiTile
                         label={t('kpi.receipts')}
                         value={data.monthReceipts}
                         icon="receipt"

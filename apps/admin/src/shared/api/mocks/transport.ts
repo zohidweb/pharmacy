@@ -19,6 +19,7 @@ import { billingHandlers } from './handlers-billing';
 import { systemHandlers } from './handlers-system';
 import { audit, findStore, findTenant } from './helpers';
 import type { MockHandlers, MockRequest } from './types';
+import { tenantBilling } from './billing-ledger';
 import { mockDb, mockStats } from './db';
 import { demoActivationCode, demoOperator } from './fixtures';
 
@@ -60,9 +61,10 @@ function matchesFilter(
 ): boolean {
   switch (filter) {
     case 'active':
-      return tenant.status === 'active' && !tenant.overdue;
+      return tenant.status === 'active';
     case 'unpaid':
-      return tenant.status === 'active' && tenant.overdue;
+      // an overdue debt (spec 2026-10-15-billing-services, 6.1)
+      return tenant.overdue;
     case 'blocked':
       return tenant.status === 'blocked';
     default:
@@ -79,7 +81,6 @@ function toSummary(details: StoreDetails): StoreSummary {
     mode,
     status,
     closedOn,
-    paidUntil,
     licenseValidUntil,
     lastSyncAt,
     monthSalesMinor,
@@ -92,16 +93,16 @@ function toSummary(details: StoreDetails): StoreSummary {
     mode,
     status,
     closedOn,
-    paidUntil,
     licenseValidUntil,
     lastSyncAt,
     monthSalesMinor,
   };
 }
 
+/** Debt, advance and discount come from the invoices and payments of the mock (billing-ledger). */
 function toListItem(tenant: TenantDetails): TenantListItem {
   const { inn: _inn, joinedOn: _joinedOn, block: _block, ...item } = tenant;
-  return item;
+  return { ...item, ...tenantBilling(tenant.id) };
 }
 
 // The API's default ACTIVATION_CODE_TTL_HOURS.
@@ -176,10 +177,8 @@ const handlers: MockHandlers = {
           return t.owner.fullName;
         case 'stores':
           return t.cloudStores + t.offlineStores;
-        case 'paidUntil':
-          return t.paidUntil ?? '';
-        case 'monthlyCharge':
-          return t.monthlyChargeMinor;
+        case 'debt':
+          return t.debtMinor;
         default:
           return t.name;
       }
@@ -233,8 +232,10 @@ const handlers: MockHandlers = {
       block: null,
       cloudStores: 0,
       offlineStores: 0,
-      paidUntil: null,
-      monthlyChargeMinor: 0,
+      debtMinor: 0,
+      overdueDebtMinor: 0,
+      advanceMinor: 0,
+      discount: null,
     });
     audit(id, 'Компания создана оператором платформы');
     // Synthetic value: the real code is 128 bits of randomBytes (ADR-0008, amendment 2026-10-02).
@@ -255,8 +256,10 @@ const handlers: MockHandlers = {
       activationCodeExpiresAt: mockCodeExpiresAt(),
     };
   },
-  'tenants.get': ({ params, correlationId }) =>
-    findTenant(params.id, correlationId),
+  'tenants.get': ({ params, correlationId }) => {
+    const tenant = findTenant(params.id, correlationId);
+    return { ...tenant, ...tenantBilling(tenant.id) };
+  },
   'tenants.block': ({ params, body, correlationId }) => {
     const tenant = findTenant(params.id, correlationId);
     if (tenant.status === 'blocked') {
@@ -343,7 +346,6 @@ const handlers: MockHandlers = {
     }
     Object.assign(target, {
       mode: 'cloud',
-      paidUntil: body.paidUntil,
       license: null,
       licenseValidUntil: null,
     });

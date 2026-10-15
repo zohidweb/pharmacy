@@ -1,6 +1,10 @@
 'use client';
 
-import { formatDateOnly, formatDateTime } from '@pharmacy/shared-util';
+import {
+  formatDateOnly,
+  formatDateTime,
+  formatMoney,
+} from '@pharmacy/shared-util';
 import {
   Alert,
   Avatar,
@@ -32,9 +36,11 @@ import {
 
 type Tab = 'stores' | 'billing' | 'services' | 'stats' | 'audit';
 
-// Billing, services, statistics and the tenant audit have no API yet (spec 2026-10-05-tenants-module,
-// T1): they are shown only where their routes answer (the full mocks).
-const MOCK_ONLY_SECTIONS = isApiRouteAvailable('tenants.invoices');
+// A section is shown where its routes answer: billing and services are on the API (spec
+// 2026-10-15-billing-services), statistics and the tenant audit only in the full mocks.
+const BILLING = isApiRouteAvailable('tenants.invoices');
+const STATS = isApiRouteAvailable('tenants.stats');
+const AUDIT = isApiRouteAvailable('tenants.audit');
 
 function CompanyView() {
   const t = useTranslations('company');
@@ -92,13 +98,57 @@ function CompanyView() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {MOCK_ONLY_SECTIONS && (
+                  {BILLING && (
                     <RecordPayment tenantId={company.id} variant="tertiary" />
                   )}
                   <IssueOwnerCode tenant={company} />
                   <BlockTenant tenant={company} />
                 </div>
               </Card>
+              {BILLING && (
+                <dl className="m-0 grid grid-cols-4 gap-3">
+                  {(
+                    [
+                      ['debt', formatMoney(company.debtMinor)],
+                      ['overdueDebt', formatMoney(company.overdueDebtMinor)],
+                      ['advance', formatMoney(company.advanceMinor)],
+                      [
+                        'discount',
+                        company.discount
+                          ? t('summary.discountValue', {
+                              percent:
+                                `${company.discount.percentBp / 100}`.replace(
+                                  '.',
+                                  ',',
+                                ),
+                              month: formatDateOnly(
+                                `${company.discount.toMonth}-01`,
+                              ).slice(3),
+                            })
+                          : t('summary.noDiscount'),
+                      ],
+                    ] as const
+                  ).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex flex-col rounded-md bg-surface p-3"
+                    >
+                      <dt className="text-xs text-fg-subtle">
+                        {t(`summary.${key}`)}
+                      </dt>
+                      <dd
+                        className={
+                          key === 'overdueDebt' && company.overdue
+                            ? 'm-0 text-lg font-bold tabular-nums text-danger'
+                            : 'm-0 text-lg font-bold tabular-nums'
+                        }
+                      >
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
               {company.block && (
                 <Alert tone="danger" title={t('blockedTitle')}>
                   {t('blockedText', {
@@ -119,7 +169,7 @@ function CompanyView() {
                     count: company.cloudStores + company.offlineStores,
                     panel: <StoresTab tenantId={company.id} />,
                   },
-                  ...(MOCK_ONLY_SECTIONS
+                  ...(BILLING
                     ? ([
                         {
                           value: 'billing',
@@ -136,11 +186,19 @@ function CompanyView() {
                             />
                           ),
                         },
+                      ] satisfies TabItem<Tab>[])
+                    : []),
+                  ...(STATS
+                    ? ([
                         {
                           value: 'stats',
                           label: t('tabs.stats'),
                           panel: <StatsTab tenantId={company.id} />,
                         },
+                      ] satisfies TabItem<Tab>[])
+                    : []),
+                  ...(AUDIT
+                    ? ([
                         {
                           value: 'audit',
                           label: t('tabs.audit'),

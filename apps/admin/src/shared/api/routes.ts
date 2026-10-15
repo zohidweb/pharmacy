@@ -36,7 +36,7 @@ import type {
   InstallationListResponse,
   InvoiceDetails,
   InvoiceGenerationPreview,
-  InvoiceListFilter,
+  InvoiceListQuery,
   InvoiceListResponse,
   IssueLicenseRequest,
   LicenseListFilter,
@@ -45,6 +45,7 @@ import type {
   LicenseSortKey,
   OfflineStoreOption,
   PaymentListItem,
+  PaymentListQuery,
   PlatformService,
   RecalculationPreview,
   RecordPaymentRequest,
@@ -70,6 +71,9 @@ import type {
   StoreDetails,
   StoreSummary,
   TenantDetails,
+  TenantDiscount,
+  AddTenantDiscountRequest,
+  ShortenTenantDiscountRequest,
   TenantInvoiceItem,
   TenantListQuery,
   TenantListResponse,
@@ -163,6 +167,24 @@ export const apiRoutes = {
     'GET',
     (p) => `/operator/tenants/${id(p)}/payments`,
   ),
+  'tenants.discounts': route<TenantDiscount[], undefined, { id: string }>(
+    'GET',
+    (p) => `/operator/tenants/${id(p)}/discounts`,
+  ),
+  'tenants.addDiscount': route<
+    TenantDiscount,
+    AddTenantDiscountRequest,
+    { id: string }
+  >('POST', (p) => `/operator/tenants/${id(p)}/discounts`),
+  'discounts.shorten': route<
+    TenantDiscount,
+    ShortenTenantDiscountRequest,
+    { id: string }
+  >('PATCH', (p) => `/operator/discounts/${id(p)}`),
+  'discounts.remove': route<void, undefined, { id: string }>(
+    'DELETE',
+    (p) => `/operator/discounts/${id(p)}`,
+  ),
   'tenants.services': route<TenantServiceItem[], undefined, { id: string }>(
     'GET',
     (p) => `/operator/tenants/${id(p)}/services`,
@@ -210,7 +232,7 @@ export const apiRoutes = {
     InvoiceListResponse,
     undefined,
     undefined,
-    { filter?: InvoiceListFilter; limit?: number; offset?: number }
+    InvoiceListQuery
   >('GET', () => '/operator/invoices'),
   'invoices.get': route<InvoiceDetails, undefined, { id: string }>(
     'GET',
@@ -239,7 +261,7 @@ export const apiRoutes = {
     Page<PaymentListItem>,
     undefined,
     undefined,
-    { limit?: number; offset?: number }
+    PaymentListQuery
   >('GET', () => '/operator/payments'),
   'payments.record': route<PaymentListItem, RecordPaymentRequest>(
     'POST',

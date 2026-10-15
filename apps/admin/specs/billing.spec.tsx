@@ -54,12 +54,20 @@ describe('BillingPage', () => {
 
     expect(await screen.findByText('Выставлено за период')).toBeTruthy();
     const table = await screen.findByRole('table', { name: 'Счета' });
-    expect(within(table).getByText('СЧ-2026-09-003')).toBeTruthy();
+    expect(within(table).getByText('СЧ-2026-08-002')).toBeTruthy();
     expect(
       within(table)
         .getAllByRole('columnheader')
         .map((th) => th.textContent),
-    ).toEqual(expect.arrayContaining(['Без НДС, с', 'НДС, с', 'Итого, с']));
+    ).toEqual(
+      expect.arrayContaining([
+        'Без НДС, с',
+        'НДС, с',
+        'Итого, с',
+        'Оплачено, с',
+        'Остаток, с',
+      ]),
+    );
   });
 
   it('filters overdue invoices', async () => {
@@ -76,7 +84,7 @@ describe('BillingPage', () => {
     );
   });
 
-  it('records a payment for an overdue invoice with an idempotency key and marks it paid', async () => {
+  it('records a payment of a company first to its overdue invoice and marks it paid', async () => {
     renderWithProviders(<BillingPage />);
     await screen.findByRole('table', { name: 'Счета' });
 
@@ -84,28 +92,37 @@ describe('BillingPage', () => {
       screen.getAllByRole('button', { name: 'Зафиксировать платёж' })[0],
     );
     const dialog = screen.getByRole('dialog', { name: 'Зафиксировать платёж' });
-    const invoice = await within(dialog).findByRole('combobox', {
-      name: /Счёт/,
+    const tenant = await within(dialog).findByRole('combobox', {
+      name: /Компания/,
     });
-    const option = within(invoice).getByRole('option', {
-      name: /СЧ-2026-09-003/,
-    }) as HTMLOptionElement;
+    const company = (await within(tenant).findByRole('option', {
+      name: 'Пример Мед',
+    })) as HTMLOptionElement;
+    fireEvent.change(tenant, { target: { value: company.value } });
+    const invoice = within(dialog).getByRole('combobox', {
+      name: /Сначала на счёт/,
+    });
+    const option = (await within(invoice).findByRole('option', {
+      name: /СЧ-2026-08-002/,
+    })) as HTMLOptionElement;
     fireEvent.change(invoice, { target: { value: option.value } });
+    // the remainder of the invoice: 136,80 with VAT less 50,00 paid
     expect(
       plain((within(dialog).getByLabelText(/Сумма/) as HTMLInputElement).value),
-    ).toBe('173,28');
+    ).toBe('86,80');
 
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Зафиксировать' }),
     );
     expect(
       plain((await screen.findByText(/Платёж .* зафиксирован/)).textContent),
-    ).toBe('Платёж 173,28 с зафиксирован');
+    ).toBe('Платёж 86,80 с зафиксирован');
     await waitFor(() => {
       const row = within(screen.getByRole('table', { name: 'Счета' }))
-        .getByText('СЧ-2026-09-003')
+        .getByText('СЧ-2026-08-002')
         .closest('tr');
       expect(row?.textContent).toContain('Оплачен');
+      expect(row?.textContent).not.toContain('Просрочен');
     });
   });
 
@@ -117,10 +134,14 @@ describe('BillingPage', () => {
       screen.getAllByRole('button', { name: 'Зафиксировать платёж' })[0],
     );
     const dialog = screen.getByRole('dialog', { name: 'Зафиксировать платёж' });
-    const invoice = await within(dialog).findByRole('combobox', {
-      name: /Счёт/,
+    const tenant = await within(dialog).findByRole('combobox', {
+      name: /Компания/,
     });
-    fireEvent.change(invoice, { target: { value: 'inv-4' } });
+    await within(tenant).findByRole('option', { name: 'Тест Аптека' });
+    fireEvent.change(tenant, { target: { value: 't-3' } });
+    fireEvent.change(within(dialog).getByLabelText(/Сумма/), {
+      target: { value: '10' },
+    });
     fireEvent.input(within(dialog).getByLabelText('Дата платежа'), {
       target: { value: '2026-12-31' },
     });
@@ -137,11 +158,11 @@ describe('BillingPage', () => {
     renderWithProviders(<BillingPage />);
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Открыть платёж по счёту СЧ-2026-09-001',
+        name: 'Открыть платёж Демо Фарм от 10.09.2026',
       }),
     );
     const dialog = screen.getByRole('dialog', {
-      name: 'Платёж по счёту СЧ-2026-09-001',
+      name: 'Платёж Демо Фарм от 10.09.2026',
     });
 
     fireEvent.click(
@@ -190,14 +211,16 @@ describe('BillingPage', () => {
     renderWithProviders(<BillingPage />);
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Открыть счёт СЧ-2026-09-003',
+        name: 'Открыть счёт СЧ-2026-07-001',
       }),
     );
-    const dialog = screen.getByRole('dialog', { name: 'Счёт СЧ-2026-09-003' });
+    const dialog = screen.getByRole('dialog', { name: 'Счёт СЧ-2026-07-001' });
 
-    expect(
-      await within(dialog).findByText('Пример Мед — склад — 8 дней'),
-    ).toBeTruthy();
+    const line = (await within(dialog).findByText('Демо Фарм №2')).closest(
+      'tr',
+    );
+    // the first sale on 12 July: 20 days of 31 (spec 2026-10-15-billing-services, A2)
+    expect(line?.textContent).toContain('20/31');
     expect(within(dialog).getByText('НДС 14%')).toBeTruthy();
   });
 });

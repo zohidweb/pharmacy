@@ -6,6 +6,7 @@ import {
   formatMoney,
   parseMoneyToMinor,
   toAppDate,
+  uuidv7,
 } from '@pharmacy/shared-util';
 import {
   Alert,
@@ -23,7 +24,7 @@ import { useForm } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
 import { z } from 'zod';
 import { billingKeys, useInvoices } from '@/entities/invoice';
-import { tenantKeys } from '@/entities/tenant';
+import { tenantKeys, useTenantList } from '@/entities/tenant';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -31,7 +32,8 @@ const methods: PaymentMethod[] = ['bank_transfer', 'cash'];
 
 function schema(today: string) {
   return z.object({
-    invoiceId: z.string().min(1, { error: 'required' }),
+    tenantId: z.string().min(1, { error: 'required' }),
+    invoiceId: z.string(),
     amount: z.string().refine((value) => (parseMoneyToMinor(value) ?? 0) > 0, {
       error: 'money',
     }),
@@ -40,31 +42,27 @@ function schema(today: string) {
       .regex(DATE, { error: 'required' })
       .refine((value) => value <= today, { error: 'notFuture' }),
     method: z.enum(methods),
-    paidUntil: z
-      .string()
-      .refine((value) => value === '' || (DATE.test(value) && value >= today), {
-        error: 'dateFromToday',
-      }),
     comment: z.string().max(500),
   });
 }
 type Values = z.input<ReturnType<typeof schema>>;
-type ErrorKey = 'required' | 'money' | 'dateFromToday';
+type ErrorKey = 'required' | 'money';
 const isErrorKey = (value: unknown): value is ErrorKey =>
-  value === 'required' || value === 'money' || value === 'dateFromToday';
+  value === 'required' || value === 'money';
 
 export interface RecordPaymentProps {
-  /** Limit the invoice choice to one tenant (company card). */
+  /** The company of the payment, fixed on its card. */
   tenantId?: string;
   variant?: ButtonVariant;
 }
 
 /**
- * «Зафиксировать платёж» — a financial write: one Idempotency-Key per opened dialog, so a retried
- * submit cannot record the payment twice. Optionally sets "paid until" for the tenant's cloud stores.
+ * «Зафиксировать платёж» of a company (spec 2026-10-15-billing-services, B2, A9): the payment goes
+ * first to the chosen invoice, then to the oldest; the rest is the advance. Its UUIDv7 `id`, made
+ * when the dialog opens, is the idempotency key: a retried submit cannot record it twice.
  */
 export function RecordPayment({
-  tenantId,
+  tenantId: fixedTenant,
   variant = 'primary',
 }: RecordPaymentProps) {
   const t = useTranslations('payment');
@@ -73,36 +71,38 @@ export function RecordPayment({
   const toast = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [idempotencyKey, setIdempotencyKey] = useState('');
+  const [paymentId, setPaymentId] = useState('');
   const today = toAppDate();
-  const invoices = useInvoices({ filter: 'all', limit: 100 });
-  const unpaid: InvoiceListItem[] = (invoices.data?.items ?? []).filter(
-    (invoice) =>
-      invoice.status !== 'paid' && (!tenantId || invoice.tenantId === tenantId),
-  );
   const form = useForm<Values>({
     resolver: zodResolver(schema(today)),
     defaultValues: {
+      tenantId: fixedTenant ?? '',
       invoiceId: '',
       amount: '',
       paidOn: today,
       method: 'bank_transfer',
-      paidUntil: '',
       comment: '',
     },
   });
+  const tenantId = form.watch('tenantId');
+  const tenants = useTenantList({ limit: 100, sort: 'name' });
+  const invoices = useInvoices(
+    { tenantId, filter: 'unpaid', limit: 100 },
+    open && tenantId !== '',
+  );
+  const unpaid: InvoiceListItem[] = invoices.data?.items ?? [];
 
   const record = useMutation({
     mutationFn: (values: Values) =>
       apiRequest('payments.record', {
-        idempotencyKey,
         body: {
-          invoiceId: values.invoiceId,
+          id: paymentId,
+          tenantId: values.tenantId,
+          invoiceId: values.invoiceId || null,
           amountMinor: parseMoneyToMinor(values.amount) ?? 0,
           paidOn: values.paidOn,
           method: values.method,
-          ...(values.paidUntil && { paidUntil: values.paidUntil }),
-          ...(values.comment.trim() && { comment: values.comment.trim() }),
+          comment: values.comment.trim() || null,
         },
       }),
     onSuccess: (payment) => {
@@ -115,7 +115,7 @@ export function RecordPayment({
   const apiError = useApiErrorMessage(record.error);
 
   function openDialog() {
-    setIdempotencyKey(crypto.randomUUID());
+    setPaymentId(uuidv7());
     setOpen(true);
   }
   function close() {
@@ -167,36 +167,49 @@ export function RecordPayment({
               {apiError}
             </Alert>
           )}
-          {invoices.isSuccess && unpaid.length === 0 ? (
-            <Alert tone="info">{t('noUnpaid')}</Alert>
-          ) : (
+          {fixedTenant === undefined && (
             <Select
-              label={t('invoice')}
-              placeholder={t('invoicePlaceholder')}
+              label={t('tenant')}
+              placeholder={t('tenantPlaceholder')}
               required
-              error={error('invoiceId')}
-              options={unpaid.map((invoice) => ({
-                value: invoice.id,
-                label: `${invoice.number} · ${invoice.tenantName} · ${formatMoney(invoice.totalMinor)}`,
+              error={error('tenantId')}
+              options={(tenants.data?.items ?? []).map((tenant) => ({
+                value: tenant.id,
+                label: tenant.name,
               }))}
-              {...form.register('invoiceId', {
-                onChange: (event: { target: { value: string } }) => {
-                  const invoice = unpaid.find(
-                    (item) => item.id === event.target.value,
-                  );
-                  if (invoice) {
-                    form.setValue(
-                      'amount',
-                      formatMoney(invoice.totalMinor, {
-                        withSign: false,
-                        plainSpaces: true,
-                      }),
-                    );
-                  }
-                },
+              {...form.register('tenantId', {
+                onChange: () => form.setValue('invoiceId', ''),
               })}
             />
           )}
+          <Select
+            label={t('invoice')}
+            placeholder={t('invoicePlaceholder')}
+            disabled={tenantId === ''}
+            options={unpaid.map((invoice) => ({
+              value: invoice.id,
+              label: t('invoiceOption', {
+                number: invoice.number,
+                amount: formatMoney(invoice.remainingMinor),
+              }),
+            }))}
+            {...form.register('invoiceId', {
+              onChange: (event: { target: { value: string } }) => {
+                const invoice = unpaid.find(
+                  (item) => item.id === event.target.value,
+                );
+                if (invoice) {
+                  form.setValue(
+                    'amount',
+                    formatMoney(invoice.remainingMinor, {
+                      withSign: false,
+                      plainSpaces: true,
+                    }),
+                  );
+                }
+              },
+            })}
+          />
           <div className="grid grid-cols-2 gap-4">
             <TextField
               label={t('amount')}
@@ -221,14 +234,6 @@ export function RecordPayment({
               label: t(`methods.${value}`),
             }))}
             {...form.register('method')}
-          />
-          <TextField
-            label={t('paidUntil')}
-            type="date"
-            min={today}
-            hint={t('paidUntilHint')}
-            error={error('paidUntil')}
-            {...form.register('paidUntil')}
           />
           <TextareaField
             label={t('comment')}

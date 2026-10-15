@@ -44,7 +44,7 @@ export function DashboardPage() {
     queryFn: ({ signal }) => apiRequest('dashboard.get', { signal }),
   });
   const tenants = useTenantList({
-    sort: 'monthlyCharge',
+    sort: 'debt',
     direction: 'desc',
     limit: 5,
   });
@@ -224,16 +224,9 @@ export function DashboardPage() {
                         offline: tenant.offlineStores,
                       })}
                     </span>
-                    <span className="text-sm text-fg-muted">
-                      {tenant.paidUntil
-                        ? t('paidUntil', {
-                            date: formatDateOnly(tenant.paidUntil),
-                          })
-                        : '—'}
-                    </span>
                     <TenantStatusPill tenant={tenant} />
                     <span className="min-w-16 text-end text-sm font-bold tabular-nums">
-                      {formatMoney(tenant.monthlyChargeMinor)}
+                      {t('debt', { amount: formatMoney(tenant.debtMinor) })}
                     </span>
                   </li>
                 ))}

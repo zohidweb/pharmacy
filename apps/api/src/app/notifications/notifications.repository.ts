@@ -177,7 +177,8 @@ export class NotificationsRepository {
       on conflict do nothing`.execute(trx);
   }
 
-  // open states and the events of 30 days, of the kinds and the stores of the employee (E10, E12)
+  // open states and the events of 30 days, of the kinds and the stores of the employee (E10, E12);
+  // a notification of the whole network (no store, service_decided) reaches every scope
   private visible(
     tenantId: string,
     filter: VisibleFilter,
@@ -185,7 +186,7 @@ export class NotificationsRepository {
     const scope =
       filter.scope === 'all'
         ? sql`true`
-        : sql`n.store_id = any(${sql.val([...filter.scope])}::uuid[])`;
+        : sql`(n.store_id is null or n.store_id = any(${sql.val([...filter.scope])}::uuid[]))`;
     return sql<SqlBool>`n.tenant_id = ${tenantId}
       and n.kind = any(${sql.val([...filter.kinds])}::text[])
       and n.resolved_at is null

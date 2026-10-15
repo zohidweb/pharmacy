@@ -115,11 +115,17 @@ export class OwnerServicesService {
         const state = await this.repository.requestState(trx, tenantId, id);
         if (state === null) throw notFound();
         if (state === 'decided') throw decided();
-        await this.repository.deleteRequest(trx, tenantId, id);
+        const serviceId = await this.repository.deleteRequest(
+          trx,
+          tenantId,
+          id,
+        );
+        // the journal names the service by it: the request row is gone
         await this.audit.append(trx, {
           action: 'settings.service-request-withdrawn',
           entityType: 'service_request',
           entityId: id,
+          details: { serviceId },
         });
       });
     } catch (error) {

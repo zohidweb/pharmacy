@@ -143,16 +143,19 @@ export class OwnerServicesRepository {
     return rows[0].decided ? 'decided' : 'pending';
   }
 
+  /** The service of the deleted request, for the journal; null when no row was deleted. */
   async deleteRequest(
     trx: TenantTransaction,
     tenantId: string,
     id: string,
-  ): Promise<void> {
-    await trx
+  ): Promise<string | null> {
+    const row = await trx
       .deleteFrom('serviceRequests')
       .where('tenantId', '=', tenantId)
       .where('id', '=', id)
-      .execute();
+      .returning('serviceId')
+      .executeTakeFirst();
+    return row?.serviceId ?? null;
   }
 
   /**

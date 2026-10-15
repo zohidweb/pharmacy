@@ -105,6 +105,8 @@ export class AuditJournalRepository {
         on l.entity_type = 'category' and c.tenant_id = l.tenant_id and c.id = l.entity_id
       left join pharmacy.roles r
         on l.entity_type = 'role' and r.tenant_id = l.tenant_id and r.id = l.entity_id
+      left join pharmacy.services sv
+        on l.entity_type = 'service_request' and sv.id::text = l.details ->> 'serviceId'
       where l.tenant_id = ${tenantId} and ${this.conditions(filter)}`;
     const count = await sql<{
       total: string;
@@ -113,7 +115,7 @@ export class AuditJournalRepository {
       select l.id, l.recorded_at, l.business_date::text as business_date, l.action, l.details,
              l.acting_operator_id, e.full_name as employee_name, s.name as store_name,
              coalesce(l.details ->> 'number', ee.full_name, es.name, sup.name) as object_text,
-             coalesce(p.name, c.name, r.name) as object_names
+             coalesce(p.name, c.name, r.name, sv.name) as object_names
       ${from}
       order by l.recorded_at desc, l.id desc
       limit ${filter.limit} offset ${filter.offset}`.execute(trx);
@@ -141,7 +143,8 @@ export class AuditJournalRepository {
       parts.push(sql`(
         l.details ->> 'number' ilike ${pattern} or ee.full_name ilike ${pattern}
         or es.name ilike ${pattern} or sup.name ilike ${pattern}
-        or p.name::text ilike ${pattern} or c.name::text ilike ${pattern})`);
+        or p.name::text ilike ${pattern} or c.name::text ilike ${pattern}
+        or sv.name::text ilike ${pattern})`);
     }
     return sql<SqlBool>`${sql.join(parts, sql` and `)}`;
   }

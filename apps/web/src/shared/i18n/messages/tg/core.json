@@ -447,7 +447,9 @@
     "settings_viewed": "Дидани танзимот",
     "expense_created": "Хароҷот илова шуд",
     "expense_updated": "Хароҷот тағйир ёфт",
-    "expense_deleted": "Хароҷот нест карда шуд"
+    "expense_deleted": "Хароҷот нест карда шуд",
+    "settings_service_requested": "Хизматрасонии платформа фармоиш дода шуд",
+    "settings_service_request_withdrawn": "Дархост барои хизматрасонии платформа бозхонда шуд"
   },
   "auditParams": {
     "totalMinor": "Маблағ",

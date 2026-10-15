@@ -116,9 +116,10 @@ npx nx run web:dev-api               # то же, но готовые маршр
                                      #   поставщики и оплаты, заказы поставщикам, приход, начальные остатки, списание,
                                      #   инвентаризация, возврат поставщику, перемещения и заявки, остатки,
                                      #   касса и смена, возвраты покупателей, главная, уведомления,
-                                     #   журнал действий, настройки сети, отчёты, расходы) — в apps/api
+                                     #   журнал действий, настройки сети, отчёты, расходы, услуги) — в apps/api
 npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
-npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети) — в apps/api
+npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети, журнал операторов,
+                                     #   команда и профиль, настройки платформы, услуги) — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
 npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
@@ -302,7 +303,7 @@ npm run prod:build / prod:up / prod:down
 - Офлайн-точка (часть 4 аутентификации): `STORE_MODE=offline` и `OFFLINE_TENANT_ID=<сеть точки>`,
   Redis не нужен — сессии в таблице `sessions` PostgreSQL точки, лимиты попыток в памяти процесса,
   маршрутов оператора нет; модули `stores`, `staff`, `catalog`, `pricing`, `purchasing`, `inventory`, `pos`, `returns`,
-  `notifications`, `reports` пока
+  `notifications`, `reports`, `billing` пока
   регистрируются только в облаке (синхронизация на точку — ADR-0014, отдельной задачей). Ключи JWT и pepper точки
   генерируются на её ПК: `node scripts/generate-store-secrets.mjs --env-file <env-файл точки>`
   (значения не печатает, существующие не перезаписывает; бэкап pepper — отдельно от бэкапа БД).

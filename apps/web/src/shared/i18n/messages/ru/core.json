@@ -447,7 +447,9 @@
     "settings_viewed": "Просмотр настроек",
     "expense_created": "Расход добавлен",
     "expense_updated": "Расход изменён",
-    "expense_deleted": "Расход удалён"
+    "expense_deleted": "Расход удалён",
+    "settings_service_requested": "Заказана услуга платформы",
+    "settings_service_request_withdrawn": "Отозвана заявка на услугу платформы"
   },
   "auditParams": {
     "totalMinor": "Сумма",

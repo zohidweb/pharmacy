@@ -176,6 +176,13 @@ export interface StorePrice {
 export interface PriceListQuery {
   q?: string;
   categoryId?: string;
+  /**
+   * Only the products with a price problem (`above_max`, `below_cost`, `no_price`) — at the pharmacy
+   * `storeId`, else at any pharmacy of the scope (menu counter «Цены и скидки»).
+   */
+  problems?: boolean;
+  /** The pharmacy of `problems`; must be in the scope, else 403 `store_not_in_scope`. */
+  storeId?: string;
   limit?: number;
   offset?: number;
 }
@@ -193,7 +200,8 @@ export interface PriceRow {
 }
 
 /**
- * GET /api/v1/prices?q=&categoryId=&limit=&offset= — active products × active stores of the scope.
+ * GET /api/v1/prices?q=&categoryId=&problems=&storeId=&limit=&offset= — active products × active stores of
+ * the scope.
  * GET /api/v1/prices/{productId} returns the `StorePrice[]` of one product for the product card.
  */
 export interface PriceListResponse extends Page<PriceRow> {

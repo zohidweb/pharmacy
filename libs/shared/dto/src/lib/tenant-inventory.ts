@@ -129,6 +129,30 @@ export interface StockListResponse extends Page<StockRow> {
   counts: { low: number; expiring: number; negative: number };
 }
 
+/** GET /api/v1/stock/reorder?storeId= (`inventory:view`) — «Надо заказать», the menu counter «Остатки». */
+export interface ReorderQuery {
+  /** Without it — every active store of the employee scope; outside it — 403 `store_not_in_scope`. */
+  storeId?: string;
+}
+
+/**
+ * A product below its minimum at a store (the rule of the home tile «Мало на складе»: the assortment
+ * of the store, an active product with a minimum, stock below it — an ended product included). Sorted
+ * by store, then by product name.
+ */
+export interface ReorderLine {
+  storeId: string;
+  storeName: string;
+  productId: string;
+  productName: string;
+  /** Not negative: an ended product has 0. */
+  stockPieces: number;
+  minPieces: number;
+  /** `minPieces − stockPieces`. */
+  shortagePieces: number;
+  piecesPerPack: number;
+}
+
 /** GET /api/v1/suppliers/options — minimal list for documents (the full card is «Поставщики»). */
 export interface SupplierOption {
   id: string;

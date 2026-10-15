@@ -33,12 +33,17 @@ import {
   toSession,
   writeSession,
 } from './session';
-import { catalogHandlers } from './handlers-catalog';
+import { catalogHandlers, priceProblems } from './handlers-catalog';
 import { ownerHandlers } from './handlers-owner';
 import { posHandlers } from './handlers-pos';
 import { purchasingHandlers } from './handlers-purchasing';
 import { staffHandlers } from './handlers-staff';
-import { stockHandlers } from './handlers-stock';
+import {
+  incomingTransfers,
+  inScope,
+  reorderLines,
+  stockHandlers,
+} from './handlers-stock';
 import type { MockHandlers, MockRequest } from './types';
 
 /** Simulated network latency in development; none in tests (fast, deterministic). */
@@ -377,6 +382,31 @@ const handlers: MockHandlers = {
       unread: items.filter((item) => !item.read).length,
     };
   },
+  'navCounters.get': ({ query, correlationId }) => {
+    const { session } = authorize(correlationId, null);
+    if (query?.storeId) inScope(session, query.storeId, correlationId);
+    const storeIds = query?.storeId
+      ? [query.storeId]
+      : session.stores.map((s) => s.id);
+    const has = (permission: Permission) =>
+      hasPermissions(session.permissions, permission);
+    return {
+      ...(has('inventory:view') && {
+        lowStock: reorderLines(storeIds).length,
+      }),
+      ...(has('inventory:receive') && {
+        incomingTransfers: incomingTransfers(storeIds),
+      }),
+      ...(has('pricing:view') && {
+        priceProblems: priceProblems(
+          session,
+          has('finance:view-cost'),
+          storeIds,
+        ).length,
+      }),
+    };
+  },
+
   'notifications.readAll': ({ correlationId }) => {
     const { session } = authorize(correlationId, 'notifications:view');
     const visible = new Set(notificationsOf(session).map((n) => n.id));

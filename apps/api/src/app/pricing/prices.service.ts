@@ -200,16 +200,12 @@ export class PricesService {
           storeId: store.id,
           storeName: store.name,
           priceMinor,
-          warnings:
-            priceMinor === null
-              ? []
-              : priceWarnings({
-                  priceMinor,
-                  costMinor: warnBelowCost
-                    ? (costs.get(product.id) ?? null)
-                    : null,
-                  maxPriceMinor: product.maxPriceMinor,
-                }),
+          warnings: priceWarnings({
+            priceMinor,
+            costMinor: warnBelowCost ? (costs.get(product.id) ?? null) : null,
+            maxPriceMinor: product.maxPriceMinor,
+            inStock: false,
+          }),
         };
       }),
     }));

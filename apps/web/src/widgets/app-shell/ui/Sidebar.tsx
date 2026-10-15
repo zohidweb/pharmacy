@@ -1,10 +1,12 @@
 'use client';
 
-import { cx, Icon } from '@pharmacy/ui';
+import { CountBadge, cx, Icon } from '@pharmacy/ui';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
+import { apiRequest, isApiRouteAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { activeRoute, visibleNavigation } from '../config/navigation';
 
@@ -17,6 +19,19 @@ export function Sidebar() {
   const pathname = usePathname();
   const active = activeRoute(pathname ?? '/');
   const { data: session } = useSession();
+  const storeId = session?.currentStoreId ?? null;
+  // Numbers of the working store (E2, E9): a minute old at most, refreshed at once by the mutations
+  // that change them (they invalidate ['nav-counters']); an error keeps the last numbers silently.
+  const { data: counters } = useQuery({
+    queryKey: ['nav-counters', storeId],
+    queryFn: ({ signal }) =>
+      apiRequest('navCounters.get', {
+        query: storeId ? { storeId } : {},
+        signal,
+      }),
+    enabled: !!session && isApiRouteAvailable('navCounters.get'),
+    refetchInterval: 60_000,
+  });
 
   return (
     <nav
@@ -57,10 +72,17 @@ export function Sidebar() {
                   );
                 }
                 const current = item.route === active;
+                const count = item.counter
+                  ? (counters?.[item.counter.key] ?? 0)
+                  : 0;
+                const href =
+                  item.counter && count > 0 && storeId
+                    ? item.counter.href(storeId)
+                    : routes[item.route]();
                 return (
                   <li key={item.route}>
                     <Link
-                      href={routes[item.route]()}
+                      href={href}
                       aria-current={current ? 'page' : undefined}
                       className={cx(
                         itemClass,
@@ -71,6 +93,16 @@ export function Sidebar() {
                     >
                       <Icon name={item.icon} size="md" />
                       <span className="min-w-0 flex-1">{label}</span>
+                      {item.counter && (
+                        <CountBadge
+                          count={count}
+                          max={99}
+                          tone={item.counter.tone}
+                          label={t(`nav.counters.${item.counter.key}`, {
+                            count,
+                          })}
+                        />
+                      )}
                     </Link>
                   </li>
                 );

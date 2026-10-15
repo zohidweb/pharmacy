@@ -6,6 +6,8 @@ import {
   Button,
   Card,
   CardHeader,
+  Chip,
+  ChipGroup,
   DataTable,
   EmptyState,
   KpiTile,
@@ -13,8 +15,10 @@ import {
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { useSession } from '@/entities/session';
 import {
   RequestStatusPill,
   TransferStatusPill,
@@ -38,12 +42,19 @@ type Open =
   | { kind: 'detail'; id: string }
   | null;
 
-/** Requests (ЗП) and transfers (ПМ) between stores (UI mockup «Перемещения и заявки»). */
-function TransfersPageView() {
+/**
+ * Requests (ЗП) and transfers (ПМ) between stores (UI mockup «Перемещения и заявки»). The menu counter
+ * opens it with `?incoming=1` — the transfers in transit to the working store («К приёмке»).
+ */
+function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
   const t = useTranslations('transfers');
   const tDocs = useTranslations('stockDocs');
   const access = useStockAccess();
+  const { data: session } = useSession();
   const [open, setOpen] = useState<Open>(null);
+  const [incoming, setIncoming] = useState(initialIncoming);
+  const isIncoming = (row: TransferListItem) =>
+    row.status === 'in_transit' && row.toStoreId === session?.currentStoreId;
   const overview = useQuery({
     queryKey: ['transfers', 'overview'],
     queryFn: ({ signal }) => apiRequest('transfers.overview', { signal }),
@@ -259,15 +270,38 @@ function TransfersPageView() {
               </Card>
               <Card padding="none">
                 <CardHeader title={t('transfers')} inset />
+                <div className="px-4 pb-3">
+                  <ChipGroup label={t('filter')}>
+                    <Chip
+                      selected={!incoming}
+                      onClick={() => setIncoming(false)}
+                    >
+                      {t('allTransfers')}
+                    </Chip>
+                    <Chip
+                      selected={incoming}
+                      count={data.transfers.filter(isIncoming).length}
+                      onClick={() => setIncoming(true)}
+                    >
+                      {t('incoming')}
+                    </Chip>
+                  </ChipGroup>
+                </div>
                 <DataTable
                   caption={t('transfers')}
                   rowKey={(r) => r.id}
-                  rows={data.transfers}
+                  rows={
+                    incoming
+                      ? data.transfers.filter(isIncoming)
+                      : data.transfers
+                  }
                   columns={transferColumns}
                   empty={
                     <EmptyState
                       icon="arrow-left-right"
-                      title={t('transfersEmpty')}
+                      title={
+                        incoming ? t('incomingEmpty') : t('transfersEmpty')
+                      }
                     />
                   }
                 />
@@ -310,10 +344,23 @@ function TransfersPageView() {
   );
 }
 
+/** The filter comes from the address; a new address (a click on the menu counter) starts afresh. */
+function TransfersPageRoute() {
+  const params = useSearchParams();
+  return (
+    <TransfersPageView
+      key={params?.toString() ?? ''}
+      initialIncoming={params?.get('incoming') === '1'}
+    />
+  );
+}
+
 export function TransfersPage() {
   return (
     <WithMessages groups={['stock']}>
-      <TransfersPageView />
+      <Suspense>
+        <TransfersPageRoute />
+      </Suspense>
     </WithMessages>
   );
 }

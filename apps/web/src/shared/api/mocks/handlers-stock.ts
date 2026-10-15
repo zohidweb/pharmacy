@@ -21,6 +21,7 @@ import type {
   PosBatch,
   PosProduct,
   PurchaseOrderOption,
+  ReorderLine,
   SaleUnit,
   StockCount,
   StockCountLine,
@@ -667,7 +668,10 @@ function requestLines(
 
 /** The system reasons of a write-off of a customer return are not chosen by hand (E9). */
 function manualReason(reason: WriteOff['reason'], correlationId: string) {
-  if (reason === 'customer_return_defect' || reason === 'customer_return_expired') {
+  if (
+    reason === 'customer_return_defect' ||
+    reason === 'customer_return_expired'
+  ) {
     throw new ApiError(422, 'validation_failed', correlationId, [
       { field: 'reason', code: 'invalid' },
     ]);
@@ -738,7 +742,59 @@ export function writeOffReturned(input: {
   return writeOff;
 }
 
+/**
+ * «Надо заказать» of the stores — the rule of the home tile (spec 2026-10-15-nav-counters, E3): an active
+ * product with a minimum, stock below it (an ended one included); every mock product has a price, so
+ * every one is in the assortment.
+ */
+export function reorderLines(storeIds: readonly string[]): ReorderLine[] {
+  const archived = mockDb().catalog.archived;
+  const lines: ReorderLine[] = [];
+  for (const storeId of storeIds) {
+    for (const product of products()) {
+      if (archived.includes(product.id)) continue;
+      const minPieces =
+        (db().minPacks[product.id] ?? 0) * product.piecesPerPack;
+      if (minPieces <= 0) continue;
+      const quantity = product.batches.reduce(
+        (sum, batch) => sum + (stockAt(storeId)[batch.id] ?? 0),
+        0,
+      );
+      if (quantity >= minPieces) continue;
+      const stockPieces = Math.max(quantity, 0);
+      lines.push({
+        storeId,
+        storeName: storeName(storeId),
+        productId: product.id,
+        productName: product.name,
+        stockPieces,
+        minPieces,
+        shortagePieces: minPieces - stockPieces,
+        piecesPerPack: product.piecesPerPack,
+      });
+    }
+  }
+  return lines.sort(
+    (a, b) =>
+      a.storeName.localeCompare(b.storeName, 'ru') ||
+      a.productName.localeCompare(b.productName, 'ru'),
+  );
+}
+
+/** Transfers in transit to the stores — the menu counter «Перемещения и заявки» (E4). */
+export const incomingTransfers = (storeIds: readonly string[]) =>
+  db().transfers.filter(
+    (t) => t.status === 'in_transit' && storeIds.includes(t.toStoreId),
+  ).length;
+
 export const stockHandlers: Pick<MockHandlers, StockRoute> = {
+  'stock.reorder': ({ query, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:view');
+    if (query?.storeId) inScope(session, query.storeId, correlationId);
+    return reorderLines(
+      query?.storeId ? [query.storeId] : session.stores.map((s) => s.id),
+    );
+  },
   'stock.list': ({ query, correlationId }) => {
     const { session, canSeeCost } = context(correlationId, 'inventory:view');
     const storeIds = query?.storeId
@@ -1419,11 +1475,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     return writeOffView(doc, canSeeCost);
   },
   'writeOffs.update': ({ params, body, correlationId }) => {
-    const { session, canSeeCost } = context(
-      correlationId,
-      'inventory:update',
-      { write: true },
-    );
+    const { session, canSeeCost } = context(correlationId, 'inventory:update', {
+      write: true,
+    });
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     if (doc.transferId) {
       throw new ApiError(409, 'write_off_from_transfer', correlationId);
@@ -1484,11 +1538,9 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     return writeOffView(doc, canSeeCost);
   },
   'writeOffs.unpost': ({ params, correlationId }) => {
-    const { session, canSeeCost } = context(
-      correlationId,
-      'inventory:unpost',
-      { write: true },
-    );
+    const { session, canSeeCost } = context(correlationId, 'inventory:unpost', {
+      write: true,
+    });
     const doc = findDoc(db().writeOffs, params.id, correlationId);
     if (doc.transferId) {
       throw new ApiError(409, 'write_off_from_transfer', correlationId);

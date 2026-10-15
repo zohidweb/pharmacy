@@ -8,6 +8,13 @@ export interface OperatorSessionRecord {
   authenticatedAt: string;
   idleTtlSeconds: number;
   absoluteExpiresAt: string;
+  /**
+   * Browser and OS of the sign-in («Chrome · Windows»), for the operator's list of sessions; never
+   * the raw user agent. Absent in a record stored before the list existed.
+   */
+  device?: string;
+  /** The last request, as precise as the idle extension (once a minute); absent as `device`. */
+  lastSeenAt?: string;
 }
 
 // Port of the operator contour. The cloud only: an offline store has no operator routes.
@@ -20,7 +27,10 @@ export abstract class OperatorSessionStore {
     operatorId: string,
   ): Promise<OperatorSessionRecord | null>;
 
-  // Extends the idle lifetime, never beyond absoluteExpiresAt.
+  // The live sessions of the operator, in no particular order.
+  abstract listFor(operatorId: string): Promise<OperatorSessionRecord[]>;
+
+  // Extends the idle lifetime, never beyond absoluteExpiresAt, and records the time as lastSeenAt.
   abstract touch(sessionId: string, idleTtlSeconds: number): Promise<void>;
 
   abstract destroy(sessionId: string): Promise<void>;
@@ -31,6 +41,15 @@ export abstract class OperatorSessionStore {
 const sessionKey = (sessionId: string): string => `op-sess:${sessionId}`;
 const operatorSessionsKey = (operatorId: string): string =>
   `op-emp-sess:${operatorId}`;
+
+// Rewrites the record with a new lifetime only while it still holds the value that was read: a
+// session destroyed meanwhile (sign-out, a disabled operator) is never written back to life.
+const COMPARE_AND_SET_PX = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+  return 1
+end
+return 0`;
 
 // Idle lifetime in ms, capped by the absolute expiry; null when the session has already expired.
 function lifetimeMs(idleTtlSeconds: number, absoluteExpiresAt: string): number | null {
@@ -89,16 +108,46 @@ export class RedisOperatorSessionStore extends OperatorSessionStore {
     return record;
   }
 
+  async listFor(operatorId: string): Promise<OperatorSessionRecord[]> {
+    const setKey = operatorSessionsKey(operatorId);
+    const ids = await this.redis.sMembers(setKey);
+    if (ids.length === 0) return [];
+    const raws = await this.redis.mGet(ids.map(sessionKey));
+    const records: OperatorSessionRecord[] = [];
+    const expired: string[] = [];
+    ids.forEach((id, index) => {
+      const raw = raws[index] ?? null;
+      const record = parseRecord(raw);
+      if (record !== null && record.sessionId === id && record.operatorId === operatorId) {
+        records.push(record);
+      } else if (raw === null) {
+        // Ended by expiry, without a destroy: the id is dropped from the set.
+        expired.push(id);
+      }
+    });
+    if (expired.length > 0) await this.redis.sRem(setKey, expired);
+    return records;
+  }
+
   async touch(sessionId: string, idleTtlSeconds: number): Promise<void> {
     const key = sessionKey(sessionId);
-    const record = parseRecord(await this.redis.get(key));
-    if (record === null) return;
+    const raw = await this.redis.get(key);
+    const record = parseRecord(raw);
+    if (raw === null || record === null) return;
     const ttl = lifetimeMs(idleTtlSeconds, record.absoluteExpiresAt);
     if (ttl === null) {
       await this.destroy(sessionId);
       return;
     }
-    await this.redis.pExpire(key, ttl);
+    // A record changed meanwhile was touched by a concurrent request: nothing is lost.
+    await this.redis.eval(COMPARE_AND_SET_PX, {
+      keys: [key],
+      arguments: [
+        raw,
+        JSON.stringify({ ...record, lastSeenAt: new Date().toISOString() }),
+        String(ttl),
+      ],
+    });
   }
 
   async destroy(sessionId: string): Promise<void> {

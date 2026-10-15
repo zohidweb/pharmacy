@@ -24,6 +24,9 @@ class NoOperatorSessionStore extends OperatorSessionStore {
   lookup(): Promise<OperatorSessionRecord | null> {
     return this.fail();
   }
+  listFor(): Promise<OperatorSessionRecord[]> {
+    return this.fail();
+  }
   touch(): Promise<void> {
     return this.fail();
   }

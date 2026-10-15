@@ -2,8 +2,16 @@ import { PASSWORD_MAX_LENGTH } from '@pharmacy/shared-domain';
 import type {
   OperatorActivationRequest,
   OperatorLoginRequest,
+  UiLocale,
+  UpdateMeRequest,
 } from '@pharmacy/shared-dto';
-import { IsString, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsIn, IsString, Length, Matches, MaxLength } from 'class-validator';
+import { uiLocales } from '../../../auth/dto/me.dto';
+import { PRINTABLE_NAME } from '../../operators/dto/operator.dto';
+
+const trim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
 
 // An e-mail (RFC 5321 path limit).
 const LOGIN_MAX_LENGTH = 254;
@@ -34,4 +42,16 @@ export class OperatorActivationDto implements OperatorActivationRequest {
   @IsString()
   @MaxLength(PASSWORD_MAX_LENGTH)
   newPassword!: string;
+}
+
+/** PATCH /api/v1/operator/me. The name bound is the one of create-operator.mjs. */
+export class UpdateOperatorMeDto implements UpdateMeRequest {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 200)
+  @Matches(PRINTABLE_NAME)
+  fullName!: string;
+
+  @IsIn(uiLocales)
+  locale!: UiLocale;
 }

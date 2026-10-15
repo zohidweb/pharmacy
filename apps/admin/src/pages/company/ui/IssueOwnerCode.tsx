@@ -5,8 +5,8 @@ import { Alert, Button, Dialog } from '@pharmacy/ui';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { ActivationCodeCard } from '@/entities/tenant';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { ActivationCodeCard } from '@/shared/ui';
 
 /**
  * A new one-time activation code for the owner (a lost code, a forgotten password): the old code

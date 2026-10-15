@@ -50,6 +50,7 @@ export class OperatorSessionsController {
       body.login,
       body.password,
       req.ip ?? '',
+      req.get('user-agent'),
     );
     setOperatorCookie(res, token, maxAgeSeconds, this.cookieEnv);
     return session;

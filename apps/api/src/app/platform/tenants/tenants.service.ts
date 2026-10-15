@@ -208,9 +208,12 @@ export class TenantsService {
   /**
    * Blocks the network; every session of it ends on its next request (spec, section 6). Blocking
    * an already blocked network sets the session flag again and answers 409, so a retry after a
-   * Redis failure completes the block.
+   * Redis failure completes the block. The id is made canonical first: the session flag is a
+   * Redis key the session middleware reads by the lower-case tenant id of the token, while the
+   * pipe accepts upper case.
    */
-  async block(tenantId: string, reason: string): Promise<TenantDetails> {
+  async block(id: string, reason: string): Promise<TenantDetails> {
+    const tenantId = id.toLowerCase();
     const actor = this.actor();
     const blocked = await this.db.platformTransaction(actor, async (trx) => {
       if (await this.repository.block(trx, tenantId, actor.operatorId, reason.trim())) {
@@ -231,7 +234,9 @@ export class TenantsService {
     return this.details(tenantId);
   }
 
-  async unblock(tenantId: string): Promise<TenantDetails> {
+  async unblock(id: string): Promise<TenantDetails> {
+    // Canonical, as in block: the flag is keyed by the lower-case id.
+    const tenantId = id.toLowerCase();
     const unblocked = await this.db.platformTransaction(this.actor(), async (trx) => {
       if (await this.repository.unblock(trx, tenantId)) {
         await this.audit.append(trx, {

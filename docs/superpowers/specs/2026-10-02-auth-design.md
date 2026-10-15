@@ -378,7 +378,8 @@ revoked_at)`; нет или отозван → `404 not_bound`. В `withTenant`:
   задаёт сам через `POST /api/v1/operator/activations { login, code, newPassword }` (поправка
   2026-10-05, план части 3, решение P1: без повторения scrypt и pepper вне `PasswordHasher`) — в
   админке экран «Первый вход» (`/activate`, 2026-10-13).
-  Остальные операторы — из админки позже.
+  Остальные операторы — из админки позже (сделано 2026-10-14: команда и профиль оператора — модель
+  данных 01, раздел `operators`).
 - `POST /api/v1/operator/sessions { login, password }` → 201 `OperatorSession`; хеширование, лимиты,
   фиктивный хеш — как у сотрудника. Сессия в Redis, `aud=admin`, cookie `__Host-op_sid`,
   бездействие `OPERATOR_SESSION_IDLE_SECONDS` (1800), абсолютный срок

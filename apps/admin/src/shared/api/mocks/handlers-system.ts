@@ -7,6 +7,7 @@ import type {
   UsageStoreRow,
   UsageTenantRow,
 } from '@pharmacy/shared-dto';
+import { passwordProblems } from '@pharmacy/shared-domain';
 import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import { mockDb, mockStats } from './db';
@@ -17,6 +18,14 @@ import type { MockHandlers } from './types';
 
 const system = () => mockDb().system;
 const today = () => toAppDate();
+
+// The e-mail shape of apps/api (identifier.ts) for an operator login.
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// The API's default ACTIVATION_CODE_TTL_HOURS.
+function mockCodeExpiresAt(): string {
+  return new Date(Date.now() + 72 * 3600_000).toISOString();
+}
 
 function logAction(action: string, refs: AuditRefs = {}) {
   system().operatorAudit.unshift(
@@ -83,6 +92,7 @@ export const systemHandlers: Pick<
   | 'settings.update'
   | 'operators.list'
   | 'operators.create'
+  | 'operators.issueCode'
   | 'operators.disable'
   | 'me.get'
   | 'me.update'
@@ -324,31 +334,62 @@ export const systemHandlers: Pick<
     return body;
   },
   'operators.list': () => system().operators,
+  // As apps/api: the login is a work e-mail, unique; the code is shown once.
   'operators.create': ({ body, correlationId }) => {
-    if (system().operators.some((item) => item.login === body.login)) {
+    const login = body.login.trim().toLowerCase();
+    if (!EMAIL.test(login)) {
+      throw new ApiError(400, 'validation_failed', correlationId, [
+        { field: 'login', code: 'email_format' },
+      ]);
+    }
+    if (system().operators.some((item) => item.login === login)) {
       throw new ApiError(409, 'login_taken', correlationId, [
-        { field: 'login', code: 'taken' },
+        { field: 'login', code: 'login_taken' },
       ]);
     }
     const operator = {
       id: `op-${Date.now()}`,
-      fullName: body.fullName,
-      login: body.login,
+      fullName: body.fullName.trim(),
+      login,
       role: 'full_access' as const,
       lastLoginAt: null,
       status: 'active' as const,
     };
     system().operators.push(operator);
-    logAction('operator.created', {
+    logAction('operator.code-issued', {
       operator: { id: operator.id, name: operator.fullName },
+      details: { created: 'true' },
     });
-    return operator;
+    // Synthetic value: the real code is 128 bits of randomBytes (ADR-0008, amendment 2026-10-02).
+    return {
+      operator,
+      activationCode: 'MOCKOPERATORCODE0000000000',
+      activationCodeExpiresAt: mockCodeExpiresAt(),
+    };
   },
-  'operators.disable': ({ params, correlationId }) => {
+  'operators.issueCode': ({ params, correlationId }) => {
+    if (params.id === demoOperator.id)
+      throw new ApiError(409, 'cannot_issue_self', correlationId);
     const operator = system().operators.find((item) => item.id === params.id);
     if (!operator) throw notFound(correlationId);
-    if (operator.id === demoOperator.id)
+    if (operator.status !== 'active')
+      throw new ApiError(409, 'operator_disabled', correlationId);
+    logAction('operator.code-issued', {
+      operator: { id: operator.id, name: operator.fullName },
+      details: { created: 'false' },
+    });
+    return {
+      activationCode: 'MOCKNEWOPERATORCODE0000000',
+      activationCodeExpiresAt: mockCodeExpiresAt(),
+    };
+  },
+  'operators.disable': ({ params, correlationId }) => {
+    if (params.id === demoOperator.id)
       throw new ApiError(409, 'cannot_disable_self', correlationId);
+    const operator = system().operators.find((item) => item.id === params.id);
+    if (!operator) throw notFound(correlationId);
+    if (operator.status !== 'active')
+      throw new ApiError(409, 'already_disabled', correlationId);
     operator.status = 'disabled';
     logAction('operator.disabled', {
       operator: { id: operator.id, name: operator.fullName },
@@ -358,17 +399,38 @@ export const systemHandlers: Pick<
 
   'me.get': () => system().me,
   'me.update': ({ body }) => {
-    Object.assign(system().me, body);
+    const fullName = body.fullName.trim();
+    const self = { id: demoOperator.id, name: fullName };
+    if (fullName !== system().me.fullName) {
+      logAction('operator.renamed', { operator: self });
+    }
+    Object.assign(system().me, { fullName, locale: body.locale });
+    // The team list reads the same operator, as apps/api does.
+    const listed = system().operators.find(
+      (item) => item.id === demoOperator.id,
+    );
+    if (listed) listed.fullName = fullName;
     return system().me;
   },
+  // As apps/api: the current password first (a field error), then the policy of the new one.
   'me.changePassword': ({ body, correlationId }) => {
     if (body.currentPassword !== system().password) {
-      throw new ApiError(422, 'wrong_password', correlationId, [
-        { field: 'currentPassword', code: 'wrong' },
+      logAction('auth.operator-password-change-failed', {
+        operator: { id: demoOperator.id, name: system().me.fullName },
+        details: { reason: 'invalid_password' },
+      });
+      throw new ApiError(422, 'invalid_current_password', correlationId, [
+        { field: 'currentPassword', code: 'invalid_current_password' },
       ]);
+    }
+    if (passwordProblems(body.newPassword).length > 0) {
+      throw new ApiError(422, 'password_policy', correlationId);
     }
     system().password = body.newPassword;
     system().sessions = system().sessions.filter((session) => session.current);
+    logAction('auth.operator-password-changed', {
+      operator: { id: demoOperator.id, name: system().me.fullName },
+    });
   },
   'me.sessions': () => system().sessions,
   'me.endOtherSessions': () => {

@@ -21,6 +21,8 @@ import {
   OperatorAuthRepository,
   type OperatorProfileRow,
 } from './operator-auth.repository';
+import { deviceLabel } from './device-label';
+import { operatorSession } from './operator-profile';
 
 export interface OperatorLoginResult {
   /** Operator JWT for the cookie; never in a response body or a log. */
@@ -33,7 +35,8 @@ type FailureReason =
   | 'unknown_login'
   | 'invalid_password'
   | 'no_password'
-  | 'operator_blocked';
+  | 'operator_blocked'
+  | 'password_changed';
 
 const SIGN_IN_JOB = { kind: 'system', job: 'operator-auth' } as const;
 
@@ -44,6 +47,26 @@ class OperatorGoneError extends Error {
     this.name = 'OperatorGoneError';
   }
 }
+
+// The operator was disabled between the check and the session.
+class OperatorBlockedError extends Error {
+  constructor() {
+    super('The operator was disabled during the sign-in');
+    this.name = 'OperatorBlockedError';
+  }
+}
+
+// The password was changed (or set by a code) between the check and the session: the verified
+// password is not the operator's any more.
+class PasswordChangedError extends Error {
+  constructor() {
+    super('The password changed during the sign-in');
+    this.name = 'PasswordChangedError';
+  }
+}
+
+const sameInstant = (a: Date | null, b: Date | null): boolean =>
+  a === null || b === null ? a === b : a.getTime() === b.getTime();
 
 // One answer for every failure: an unknown login and a wrong password are indistinguishable.
 const invalidCredentials = () => new ProblemException(401, 'invalid_credentials');
@@ -77,10 +100,15 @@ export class OperatorSessionsService {
     this.failureFloorMs = config.getOrThrow<number>('LOGIN_FAILURE_FLOOR_MS');
   }
 
-  async login(raw: string, password: string, ip: string): Promise<OperatorLoginResult> {
+  async login(
+    raw: string,
+    password: string,
+    ip: string,
+    userAgent: string | undefined,
+  ): Promise<OperatorLoginResult> {
     const started = this.clock.now();
     try {
-      return await this.attemptLogin(raw, password, ip);
+      return await this.attemptLogin(raw, password, ip, userAgent);
     } catch (error) {
       if (error instanceof ProblemException && error.code === 'invalid_credentials') {
         await padFailure(this.clock, this.failureFloorMs, started);
@@ -96,15 +124,7 @@ export class OperatorSessionsService {
       (trx) => this.repository.findProfile(trx, operator.operatorId),
     );
     if (profile === null) throw new ProblemException(401, 'unauthenticated');
-    return {
-      operator: {
-        id: profile.id,
-        fullName: profile.fullName,
-        login: profile.login,
-        role: operator.role,
-      },
-      authenticatedAt: operator.authenticatedAt,
-    };
+    return operatorSession(profile, operator.authenticatedAt);
   }
 
   async logout(): Promise<void> {
@@ -115,6 +135,7 @@ export class OperatorSessionsService {
     raw: string,
     password: string,
     ip: string,
+    userAgent: string | undefined,
   ): Promise<OperatorLoginResult> {
     // An operator login is a work e-mail; anything else cannot match and spends no limiter key.
     const identifier = normalizeIdentifier(raw);
@@ -167,10 +188,20 @@ export class OperatorSessionsService {
       profile = await this.db.platformTransaction(
         { kind: 'operator', operatorId },
         async (trx) => {
+          // operators before operator_credentials, as in every writer of both (a new code, a
+          // password change): the opposite order could deadlock with them.
+          if (!(await this.repository.recordLogin(trx, operatorId))) {
+            throw new OperatorBlockedError();
+          }
+          // A password changed after the check would otherwise leave this session alive: the
+          // change ends the sessions it finds, and this one is stored only now.
+          const current = await this.repository.lockPasswordChange(trx, operatorId);
+          if (current === null || !sameInstant(current.changedAt, found.passwordChangedAt)) {
+            throw new PasswordChangedError();
+          }
           if (rehash !== null) {
             await this.repository.updatePasswordHash(trx, operatorId, verifiedPhc, rehash);
           }
-          await this.repository.recordLogin(trx, operatorId);
           await this.audit.append(trx, {
             action: 'auth.operator-login-succeeded',
             entityType: 'operator',
@@ -186,6 +217,8 @@ export class OperatorSessionsService {
             authenticatedAt,
             idleTtlSeconds: this.idleTtlSeconds,
             absoluteExpiresAt: new Date(now + this.absoluteTtlSeconds * 1000).toISOString(),
+            device: deviceLabel(userAgent),
+            lastSeenAt: authenticatedAt,
           });
           stored.session = true;
           return row;
@@ -197,6 +230,12 @@ export class OperatorSessionsService {
       if (stored.session) await this.discard(sessionId);
       // The operator of the verified password is gone: the same answer as an unknown login.
       if (error instanceof OperatorGoneError) return this.fail(operatorId, 'unknown_login', ip);
+      if (error instanceof OperatorBlockedError) {
+        return this.fail(operatorId, 'operator_blocked', ip);
+      }
+      if (error instanceof PasswordChangedError) {
+        return this.fail(operatorId, 'password_changed', ip);
+      }
       throw error;
     }
 
@@ -204,15 +243,7 @@ export class OperatorSessionsService {
     return {
       token,
       maxAgeSeconds: this.absoluteTtlSeconds,
-      session: {
-        operator: {
-          id: profile.id,
-          fullName: profile.fullName,
-          login: profile.login,
-          role: 'full_access',
-        },
-        authenticatedAt,
-      },
+      session: operatorSession(profile, authenticatedAt),
     };
   }
 

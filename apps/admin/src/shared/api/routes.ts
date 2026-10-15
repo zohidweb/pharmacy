@@ -8,7 +8,9 @@ import type {
   ChangePasswordRequest,
   CreateAnnouncementRequest,
   CreateOperatorRequest,
+  CreateOperatorResponse,
   DashboardResponse,
+  IssueOperatorCodeResponse,
   NotificationListResponse,
   NotificationPreferences,
   NotificationTopic,
@@ -374,10 +376,15 @@ export const apiRoutes = {
     'GET',
     () => '/operator/operators',
   ),
-  'operators.create': route<PlatformOperator, CreateOperatorRequest>(
+  'operators.create': route<CreateOperatorResponse, CreateOperatorRequest>(
     'POST',
     () => '/operator/operators',
   ),
+  'operators.issueCode': route<
+    IssueOperatorCodeResponse,
+    undefined,
+    { id: string }
+  >('POST', (p) => `/operator/operators/${id(p)}/activation-codes`),
   'operators.disable': route<PlatformOperator, undefined, { id: string }>(
     'POST',
     (p) => `/operator/operators/${id(p)}/deactivation`,

@@ -1,5 +1,6 @@
 'use client';
 
+import { passwordProblems, passwordRules } from '@pharmacy/shared-domain';
 import type { OperatorMe } from '@pharmacy/shared-dto';
 import { formatDateTime } from '@pharmacy/shared-util';
 import {
@@ -19,21 +20,12 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useOperatorAuditText } from '@/entities/operator-audit';
-import { sessionQueryKey, useSession } from '@/entities/session';
-import { apiRequest, servedByMocks, useApiErrorMessage } from '@/shared/api';
+import { sessionQueryKey } from '@/entities/session';
+import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { setLocale, type Locale } from '@/shared/i18n';
 import { DemoDataNotice, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
-
-const PHONE = /^\+992(\s?\d){9}$/;
-
-/** Password rules shown as a checklist (ADR-0008 sets hashing; length/complexity per the mockup). */
-const passwordRules = [
-  { key: 'length', test: (value: string) => value.length >= 8 },
-  { key: 'upper', test: (value: string) => /\p{Lu}/u.test(value) },
-  { key: 'digit', test: (value: string) => /\d/.test(value) },
-] as const;
 
 function PersonalData({ me }: { me: OperatorMe }) {
   const t = useTranslations('profile.personal');
@@ -41,28 +33,12 @@ function PersonalData({ me }: { me: OperatorMe }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [fullName, setFullName] = useState(me.fullName);
-  const [phone, setPhone] = useState(me.phone);
-  const [position, setPosition] = useState(me.position);
   const [locale, setLocaleValue] = useState<Locale>(me.locale);
-  // «От имени» is not available in the MVP (ADR-0008 amendment 2026-10-05): the setting is kept
-  // as it is and not shown.
-  const reminder = me.impersonationReminder;
   const [touched, setTouched] = useState(false);
-  const invalid = {
-    fullName: fullName.trim().length < 3,
-    phone: !PHONE.test(phone.trim()),
-  };
+  const invalid = { fullName: fullName.trim().length < 3 };
   const update = useMutation({
     mutationFn: () =>
-      apiRequest('me.update', {
-        body: {
-          fullName: fullName.trim(),
-          phone: phone.trim(),
-          position: position.trim(),
-          locale,
-          impersonationReminder: reminder,
-        },
-      }),
+      apiRequest('me.update', { body: { fullName: fullName.trim(), locale } }),
     onSuccess: (saved) => {
       queryClient.setQueryData(['me'], saved);
       void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
@@ -96,18 +72,6 @@ function PersonalData({ me }: { me: OperatorMe }) {
           readOnly
           hint={t('loginHint')}
         />
-        <TextField
-          label={t('phone')}
-          type="tel"
-          value={phone}
-          error={touched && invalid.phone ? t('phoneError') : undefined}
-          onChange={(event) => setPhone(event.target.value)}
-        />
-        <TextField
-          label={t('position')}
-          value={position}
-          onChange={(event) => setPosition(event.target.value)}
-        />
       </div>
       <SegmentedControl
         label={t('locale')}
@@ -123,7 +87,7 @@ function PersonalData({ me }: { me: OperatorMe }) {
           loading={update.isPending}
           onClick={() => {
             setTouched(true);
-            if (!invalid.fullName && !invalid.phone) update.mutate();
+            if (!invalid.fullName) update.mutate();
           }}
         >
           {t('save')}
@@ -140,14 +104,17 @@ function Security() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [touched, setTouched] = useState(false);
-  const rulesOk = passwordRules.every((rule) => rule.test(next));
+  const problems = passwordProblems(next);
+  const rulesOk = problems.length === 0;
   const change = useMutation({
     mutationFn: () =>
       apiRequest('me.changePassword', {
         body: { currentPassword: current, newPassword: next },
       }),
     onSuccess: () => {
+      // A new session replaced this one: other sessions ended, the sign-in time is new.
       void queryClient.invalidateQueries({ queryKey: ['me', 'sessions'] });
+      void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
       setCurrent('');
       setNext('');
       setTouched(false);
@@ -195,10 +162,10 @@ function Security() {
         aria-label={t('rulesLabel')}
       >
         {passwordRules.map((rule) => {
-          const ok = rule.test(next);
+          const ok = !problems.includes(rule);
           return (
             <li
-              key={rule.key}
+              key={rule}
               className={
                 ok
                   ? 'flex items-center gap-2 text-success'
@@ -206,7 +173,7 @@ function Security() {
               }
             >
               <Icon name={ok ? 'circle-check' : 'circle-alert'} size="sm" />
-              {t(`rules.${rule.key}`)}
+              {t(`rules.${rule}`)}
               <span className="ph-visually-hidden">
                 , {ok ? t('ruleMet') : t('ruleNotMet')}
               </span>
@@ -272,7 +239,9 @@ function Sessions() {
                   <Icon name="monitor" size="md" />
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm">{session.device}</span>
+                  <span className="text-sm">
+                    {session.device || t('unknownDevice')}
+                  </span>
                   <span className="text-xs text-fg-subtle">
                     {t('lastSeen', { at: formatDateTime(session.lastSeenAt) })}
                   </span>
@@ -294,17 +263,10 @@ export function ProfilePage() {
   const t = useTranslations('profile');
   const router = useRouter();
   const queryClient = useQueryClient();
-  const session = useSession();
   const auditText = useOperatorAuditText();
-  // While the profile is not on apps/api (partial mode), who is signed in comes from the session.
-  const signedIn = servedByMocks('me.get') ? session.data?.operator : undefined;
   const me = useQuery({
     queryKey: ['me'],
     queryFn: ({ signal }) => apiRequest('me.get', { signal }),
-    select: (stored) =>
-      signedIn
-        ? { ...stored, fullName: signedIn.fullName, login: signedIn.login }
-        : stored,
   });
   const activity = useQuery({
     queryKey: ['me', 'activity'],
@@ -339,9 +301,7 @@ export function ProfilePage() {
                   </div>
                   <p className="text-sm text-fg-muted">
                     {data.login}
-                    {!signedIn && ` · ${data.phone}`}
-                    {!signedIn &&
-                      data.lastLoginAt &&
+                    {data.lastLoginAt &&
                       ` · ${t('lastLogin', { at: formatDateTime(data.lastLoginAt) })}`}
                   </p>
                 </div>

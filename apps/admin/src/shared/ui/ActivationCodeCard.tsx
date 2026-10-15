@@ -11,6 +11,8 @@ export interface ActivationCodeCardProps {
   /** ISO 8601 expiry as the API returned it. */
   expiresAt: string;
   title: string;
+  /** Who enters it on the first sign-in: an owner of a company or a platform operator. */
+  recipient?: 'owner' | 'operator';
   /** What the operator does next (a link to the company, a close button). */
   action?: ReactNode;
 }
@@ -22,18 +24,21 @@ function groups(code: string): string {
 }
 
 /**
- * The owner's one-time activation code, shown once (spec 2026-10-05-tenants-module): only its hash
- * is stored, so it cannot be shown again — a lost code is replaced with a new one.
+ * A one-time activation code of an owner or an operator, shown once (spec
+ * 2026-10-05-tenants-module): only its hash is stored, so it cannot be shown again — a lost code is
+ * replaced with a new one.
  */
 export function ActivationCodeCard({
   code,
   expiresAt,
   title,
+  recipient = 'owner',
   action,
 }: ActivationCodeCardProps) {
   const t = useTranslations('activationCode');
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const display = groups(code);
+  const once = recipient === 'operator' ? 'onceOperator' : 'once';
 
   return (
     <Card
@@ -49,7 +54,7 @@ export function ActivationCodeCard({
         {display}
       </p>
       <Alert tone="warning">
-        {t('once', { expiresAt: formatDateTime(expiresAt) })}
+        {t(once, { expiresAt: formatDateTime(expiresAt) })}
       </Alert>
       {copy === 'failed' && (
         <Alert tone="danger" live="assertive">

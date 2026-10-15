@@ -15,6 +15,8 @@ erDiagram
   employees ||--o{ employee_stores : "scope"
   stores ||--o{ employee_stores : ""
   stores ||--o{ terminals : ""
+  tenants ||--o{ expenses : "other expenses"
+  stores ||--o{ expenses : ""
   stores ||--o{ license_keys : "offline"
   operators ||--|| operator_credentials : ""
   operators ||--o{ impersonations : ""
@@ -157,6 +159,28 @@ erDiagram
 | `bound_by`, `bound_at` | uuid / timestamptz | |
 | `last_seen_at` | timestamptz null | |
 | `revoked_at`, `revoked_by` | null | Отзыв действует немедленно |
+
+## `expenses` — прочие расходы (класс `tenant`, поправка 2026-10-14, PR 3)
+
+Прочие расходы месяца — аренда, зарплата, коммуналка, прочее (спецификация 2026-10-14-owner-cabinet, O4, O5,
+E16). Владелец вносит их раз в месяц по точке или по всей сети. Отчёт за часть месяца берёт долю дней
+(`prorateExpense` в `libs/shared/domain`). Изъятия из кассы «на расходы» сюда не копируются: отчёты читают их из
+`shift_cash_operations` (O9). Синхронизация: только облако.
+
+| Колонка | Тип | Правило |
+|---|---|---|
+| `month` | date | Первое число месяца (`check`); не позже текущего месяца сети — проверяет приложение |
+| `store_id` | uuid null | Точка (аптека или склад); `null` — вся сеть: её видит и меняет только сотрудник с охватом «вся сеть» |
+| `kind` | text | `rent` / `salary` / `utilities` / `other` |
+| `amount_dirams` | bigint | `> 0` |
+| `comment` | text null | ≤ 500 |
+| `created_by` | uuid | Сотрудник |
+| `updated_by`, `updated_at` | null | Последняя правка |
+
+- Индексы: `(tenant_id, month)`, а также по внешним ключам `store_id`, `created_by`, `updated_by`.
+- Правка и удаление разрешены (полный DML у `pharmacy_app`). Каждое изменение пишется в `audit_log`
+  (`expense.created` / `updated` / `deleted`) с прежними значениями.
+- Права: `expenses:view` / `create` / `update` / `delete`. По умолчанию они есть только у владельца.
 
 ## `operators`, `operator_credentials` (класс `platform`)
 

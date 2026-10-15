@@ -29,6 +29,7 @@ const NUMBER_PARAMS = [
   'expectedMinor',
   'actualCashMinor',
   'priceMinor',
+  'previousAmountMinor',
   'lines',
   'positions',
 ] as const;
@@ -44,6 +45,8 @@ const COST_GROUPS: ReadonlySet<AuditGroup> = new Set([
 ]);
 /** A code, not prose. */
 const CODE = /^[a-z0-9_.:-]{1,64}$/;
+/** The month of an expense, YYYY-MM. */
+const MONTH = /^\d{4}-\d{2}$/;
 
 /** The stores an employee reads the journal of: a PIN session — its terminal's store only. */
 function scopeOf(principal: EmployeePrincipal): 'all' | readonly string[] {
@@ -162,7 +165,11 @@ export class AuditJournal {
       principal.permissions,
       'finance:view-cost',
     );
-    const hideAmounts = group !== null && COST_GROUPS.has(group) && !canSeeCost;
+    // the amounts of the other expenses (salaries, rent) — only with `expenses:view` (spec E16)
+    const hideAmounts =
+      (group !== null && COST_GROUPS.has(group) && !canSeeCost) ||
+      (group === 'expense' &&
+        !hasPermissions(principal.permissions, 'expenses:view'));
     const params: Record<string, string | number | null> = {};
     for (const key of NUMBER_PARAMS) {
       const value = details[key];
@@ -173,6 +180,19 @@ export class AuditJournal {
     const reason = details['reason'];
     if (typeof reason === 'string' && CODE.test(reason))
       params['reason'] = reason;
+    // an expense and, after an edit, the previous values of the fields it changed (spec E16)
+    for (const key of ['expenseKind', 'previousExpenseKind'] as const) {
+      const value = details[key];
+      if (typeof value === 'string' && CODE.test(value)) params[key] = value;
+    }
+    for (const key of ['month', 'previousMonth'] as const) {
+      const value = details[key];
+      if (typeof value === 'string' && MONTH.test(value)) params[key] = value;
+    }
+    const previousStore = details['previousStore'];
+    if (typeof previousStore === 'string' && previousStore.length <= 200) {
+      params['previousStore'] = previousStore;
+    }
     const receipt = details['receipt'];
     if (typeof receipt === 'string' && receipt.length <= 64) {
       params['receipt'] = receipt;

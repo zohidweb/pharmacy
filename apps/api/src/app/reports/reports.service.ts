@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { hasPermissions } from '@pharmacy/shared-domain';
+import { hasPermissions, prorateExpense } from '@pharmacy/shared-domain';
 import type { ReportKind, ReportTable } from '@pharmacy/shared-dto';
 import {
   type EmployeePrincipal,
@@ -13,19 +13,14 @@ import { SalesFigures } from '../pos/sales-figures';
 import { SupplierDues } from '../purchasing/supplier-dues';
 import { ReturnFigures } from '../returns/return-figures';
 import { daysBetween } from './dashboard-period';
+import { ExpensesRepository } from './expenses.repository';
 import { REPORT_KINDS, type ReportQueryDto } from './dto/reports.dto';
 import * as build from './report-builders';
 import { ReportsRepository } from './reports.repository';
+import { scopeOf } from './scope';
 
 /** The longest period of a report (spec 2026-10-14-owner-cabinet, E1). */
 const MAX_REPORT_DAYS = 366;
-
-function scopeOf(principal: EmployeePrincipal): 'all' | readonly string[] {
-  if (principal.auth === 'pin') {
-    return principal.currentStoreId ? [principal.currentStoreId] : [];
-  }
-  return principal.storeScope;
-}
 
 function nameIn(names: unknown, locale: 'ru' | 'tg'): string {
   if (typeof names !== 'object' || names === null) return '—';
@@ -48,6 +43,7 @@ export class ReportsService {
     private readonly refunds: ReturnFigures,
     private readonly stock: StockFigures,
     private readonly dues: SupplierDues,
+    private readonly expenses: ExpensesRepository,
   ) {}
 
   get(kind: string, query: ReportQueryDto): Promise<ReportTable> {
@@ -74,12 +70,15 @@ export class ReportsService {
       const stores = (
         await this.repository.activeStores(trx, principal.tenantId, scope)
       ).filter((store) => !query.storeId || store.id === query.storeId);
-      const body = await this.body(trx, principal, reportKind, stores, {
-        from,
-        to,
-        today,
-        expiryDays,
-      });
+      const body = await this.body(
+        trx,
+        principal,
+        reportKind,
+        stores,
+        { from, to, today, expiryDays },
+        // the records of the whole network count only for the whole network, without a store filter
+        scope === 'all' && !query.storeId,
+      );
       return { kind: reportKind, ...body };
     });
   }
@@ -90,6 +89,7 @@ export class ReportsService {
     kind: ReportKind,
     stores: readonly { id: string; name: string; kind: string }[],
     period: { from: string; to: string; today: string; expiryDays: number },
+    network: boolean,
   ): Promise<Omit<ReportTable, 'kind'>> {
     const { tenantId, locale } = principal;
     const { from, to } = period;
@@ -123,6 +123,10 @@ export class ReportsService {
           await this.refunds.byStore(trx, tenantId, storeIds, from, to),
           await this.stock.lossesByStore(trx, tenantId, storeIds, from, to),
           canSeeCost,
+          canSeeCost &&
+            hasPermissions(principal.permissions, 'expenses:view')
+            ? await this.expensesOf(trx, principal, storeIds, period, network)
+            : null,
         );
       case 'sales_by_category': {
         const names = await this.repository.categoryNames(trx, tenantId);
@@ -231,5 +235,44 @@ export class ReportsService {
         );
       }
     }
+  }
+  /**
+   * The expenses of the period (spec E16): each record of a month overlapping the period gives its
+   * share of days (prorateExpense); the records of the network only when `network`; the cash
+   * withdrawals «на расходы» of the stores whole.
+   */
+  private async expensesOf(
+    trx: TenantTransaction,
+    principal: EmployeePrincipal,
+    storeIds: readonly string[],
+    period: { from: string; to: string },
+    network: boolean,
+  ): Promise<build.StoreExpenses> {
+    const { tenantId } = principal;
+    const { from, to } = period;
+    const records = await this.expenses.ofMonths(
+      trx,
+      tenantId,
+      from.slice(0, 7),
+      to.slice(0, 7),
+    );
+    const byStore = new Map<string, number>();
+    let networkMinor = 0;
+    for (const record of records) {
+      const share = prorateExpense(record.amountMinor, record.month, from, to);
+      if (record.storeId === null) {
+        if (network) networkMinor += share;
+      } else if (storeIds.includes(record.storeId)) {
+        byStore.set(record.storeId, (byStore.get(record.storeId) ?? 0) + share);
+      }
+    }
+    const cash = await this.sales.cashExpensesByStore(
+      trx,
+      tenantId,
+      storeIds,
+      from,
+      to,
+    );
+    return { byStore, networkMinor, cash };
   }
 }

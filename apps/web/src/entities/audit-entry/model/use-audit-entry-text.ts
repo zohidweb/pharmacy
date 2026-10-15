@@ -17,6 +17,12 @@ const SHOWN_PARAMS = [
   'positions',
   'reason',
   'receipt',
+  'expenseKind',
+  'month',
+  'previousAmountMinor',
+  'previousExpenseKind',
+  'previousMonth',
+  'previousStore',
 ] as const;
 
 /** The i18n key of an audit code: `receipt.completed` → `receipt_completed`. */
@@ -34,6 +40,7 @@ export function useAuditEntryText() {
   const groups = useTranslations('auditGroups');
   const labels = useTranslations('auditParams');
   const reasons = useTranslations('auditReasons');
+  const expenseKinds = useTranslations('expenseKinds');
   return (entry: TenantAuditEntry) => {
     const key = auditEventKey(entry.event);
     const title = events.has(key as never)
@@ -49,6 +56,13 @@ export function useAuditEntryText() {
         shown = formatMoney(value);
       } else if (name === 'reason' && reasons.has(shown as never)) {
         shown = reasons(shown as never);
+      } else if (
+        (name === 'expenseKind' || name === 'previousExpenseKind') &&
+        expenseKinds.has(shown as never)
+      ) {
+        shown = expenseKinds(shown as never);
+      } else if (name === 'previousStore' && shown === 'network') {
+        shown = labels('network');
       }
       return [`${labels(name)}: ${shown}`];
     }).join(' · ');

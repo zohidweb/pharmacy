@@ -1,7 +1,7 @@
 'use client';
 
 import type { OwnerStore, StoreClosingLine } from '@pharmacy/shared-dto';
-import { formatDateOnly, formatMoney, toAppDate } from '@pharmacy/shared-util';
+import { formatDateOnly, formatMoney } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -9,17 +9,17 @@ import {
   Dialog,
   Select,
   Stepper,
-  TextField,
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { useSession } from '@/entities/session';
+import { sessionQueryKey, useSession } from '@/entities/session';
 import {
   apiRequest,
   isApiRouteAvailable,
   useApiErrorMessage,
+  withFreshAuth,
 } from '@/shared/api';
 import { StoreForm } from '@/features/store-form';
 import { QueryState } from '@/shared/ui';
@@ -117,8 +117,10 @@ export function StoreDialog({
 }
 
 /**
- * Closing a store (UI mockup «Закрытие точки»): pick the receiver, see the stock that moves, create
- * the transfer. The store closes only when the receiver accepts it.
+ * Closing a store (UI mockup «Закрытие точки»; spec 2026-10-15-store-closing): pick the receiver,
+ * see the stock that moves and what forbids or stays behind the closing, confirm by the password.
+ * The stock leaves by transfers of 500 lines; the store closes when the receiver accepts the last
+ * one, a store without stock closes at once.
  */
 export function CloseStoreDialog({
   store,
@@ -135,26 +137,38 @@ export function CloseStoreDialog({
     (s) => s.id !== store.id && s.mode === 'cloud',
   );
   const [receiverId, setReceiverId] = useState(receivers[0]?.id ?? '');
-  const [closeOn, setCloseOn] = useState(toAppDate());
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<string[] | null>(null);
   const preview = useQuery({
     queryKey: ['stores', 'closing', store.id],
     queryFn: ({ signal }) =>
       apiRequest('stores.closingPreview', { params: { id: store.id }, signal }),
+    // a check, as the unposting check: a blocker resolved elsewhere is gone on the next opening
+    staleTime: 0,
+    // once closed the store has no preview (409): the invalidation after the closing must not ask
+    enabled: done === null,
   });
+  const empty = preview.data?.positions === 0;
   const close = useMutation({
     mutationFn: () =>
-      apiRequest('stores.close', {
-        params: { id: store.id },
-        body: { receiverStoreId: receiverId, closeOn },
-      }),
+      withFreshAuth(() =>
+        apiRequest('stores.close', {
+          params: { id: store.id },
+          body: { receiverStoreId: empty ? null : receiverId },
+        }),
+      ),
     onSuccess: (result) => {
-      setDone(result.transferNumber);
-      void queryClient.invalidateQueries({ queryKey: ['stores'] });
+      setDone(result.transferNumbers);
+      // not the preview of this dialog: a closing or closed store has none (409, final review I3)
+      void queryClient.invalidateQueries({
+        queryKey: ['stores'],
+        predicate: (query) => query.queryKey[1] !== 'closing',
+      });
       void queryClient.invalidateQueries({ queryKey: ['transfers'] });
+      void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
     },
   });
   const error = useApiErrorMessage(close.error);
+  const blocked = (preview.data?.blockers.length ?? 0) > 0;
   const columns: DataTableColumn<StoreClosingLine>[] = [
     {
       key: 'product',
@@ -192,7 +206,6 @@ export function CloseStoreDialog({
         ]
       : []),
   ];
-
   return (
     <Dialog
       open
@@ -212,7 +225,9 @@ export function CloseStoreDialog({
             <Button
               variant="destructive"
               loading={close.isPending}
-              disabled={!receiverId || (preview.data?.positions ?? 0) === 0}
+              disabled={
+                !preview.data || blocked || (!empty && !receiverId)
+              }
               onClick={() => close.mutate()}
             >
               {t('confirm')}
@@ -239,47 +254,151 @@ export function CloseStoreDialog({
         )}
         {done ? (
           <Alert tone="success" live="polite">
-            {t('created', { number: done })}
+            {done.length === 0
+              ? t('closed')
+              : t('created', { number: done.join(', ') })}
           </Alert>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
+          !empty &&
+          preview.data && (
             <Select
               label={t('receiver')}
               value={receiverId}
               onChange={(event) => setReceiverId(event.target.value)}
               options={receivers.map((s) => ({ value: s.id, label: s.name }))}
             />
-            <TextField
-              label={t('closeOn')}
-              type="date"
-              min={toAppDate()}
-              value={closeOn}
-              onChange={(event) => setCloseOn(event.target.value)}
-            />
-          </div>
+          )
         )}
         <QueryState query={preview}>
           {(data) => (
             <>
-              <DataTable
-                caption={t('stockTitle')}
-                rowKey={(row) => `${row.productName}-${row.batchNumber}`}
-                rows={data.lines}
-                columns={columns}
-              />
-              <p className="flex justify-end gap-2 text-sm">
-                <span>{t('positions', { count: data.positions })}</span>
-                {data.totalCostMinor !== undefined && (
-                  <b className="tabular-nums">
-                    {formatMoney(data.totalCostMinor)}
-                  </b>
-                )}
-              </p>
+              {data.blockers.length > 0 && (
+                <Alert tone="warning" title={t('blockersTitle')}>
+                  <ul className="m-0 list-disc ps-5">
+                    {data.blockers.map((blocker) => (
+                      <li key={blocker.code}>
+                        {t(`blockers.${blocker.code}`, { count: blocker.count })}
+                      </li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
+              {data.warnings.length > 0 && (
+                <Alert tone="info" title={t('warningsTitle')}>
+                  <ul className="m-0 list-disc ps-5">
+                    {data.warnings.map((warning) => (
+                      <li key={warning.code}>
+                        {t(`warnings.${warning.code}`, {
+                          count: warning.count,
+                          amount:
+                            warning.amountMinor === undefined
+                              ? ''
+                              : formatMoney(warning.amountMinor, {
+                                  withSign: false,
+                                }),
+                        })}
+                      </li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
+              {data.positions === 0 ? (
+                !done && <Alert tone="info">{t('emptyStore')}</Alert>
+              ) : (
+                <>
+                  <DataTable
+                    caption={t('stockTitle')}
+                    rowKey={(row) => `${row.productName}-${row.batchNumber}`}
+                    rows={data.lines}
+                    columns={columns}
+                  />
+                  <p className="flex justify-end gap-2 text-sm">
+                    <span>{t('positions', { count: data.positions })}</span>
+                    {data.totalCostMinor !== undefined && (
+                      <b className="tabular-nums">
+                        {formatMoney(data.totalCostMinor)}
+                      </b>
+                    )}
+                  </p>
+                  {data.transfers > 1 && (
+                    <p className="text-sm">
+                      {t('transfersCount', { count: data.transfers })}
+                    </p>
+                  )}
+                </>
+              )}
             </>
           )}
         </QueryState>
-        <Alert tone="warning">{t('warning')}</Alert>
-        <p className="text-xs text-fg-subtle">{t('billingHint')}</p>
+        {!empty && <Alert tone="warning">{t('warning')}</Alert>}
+      </div>
+    </Dialog>
+  );
+}
+
+/**
+ * Cancelling a closing (spec 2026-10-15-store-closing, E10): the transfers still in transit come
+ * back to the store and it works again. Confirmed by the password.
+ */
+export function CancelClosingDialog({
+  store,
+  onClose,
+}: {
+  store: OwnerStore;
+  onClose: () => void;
+}) {
+  const t = useTranslations('ownerStores.closing');
+  const tStores = useTranslations('ownerStores');
+  const queryClient = useQueryClient();
+  const cancel = useMutation({
+    mutationFn: () =>
+      withFreshAuth(() =>
+        apiRequest('stores.cancelClosing', { params: { id: store.id } }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['stores'] });
+      void queryClient.invalidateQueries({ queryKey: ['transfers'] });
+      void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+      onClose();
+    },
+  });
+  const error = useApiErrorMessage(cancel.error);
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={t('cancelTitle')}
+      description={store.name}
+      closeLabel={tStores('close')}
+      icon="undo-2"
+      tone="warning"
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {tStores('cancel')}
+          </Button>
+          <Button
+            variant="destructive"
+            loading={cancel.isPending}
+            onClick={() => cancel.mutate()}
+          >
+            {t('cancel')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {error && (
+          <Alert tone="danger" live="assertive">
+            {error}
+          </Alert>
+        )}
+        <p className="text-sm">
+          {t('cancelText', {
+            transfers: store.closingTransfers.map((x) => x.number).join(', '),
+          })}
+        </p>
       </div>
     </Dialog>
   );

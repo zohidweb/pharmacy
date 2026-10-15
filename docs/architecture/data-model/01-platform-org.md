@@ -98,12 +98,18 @@ erDiagram
 | `address` | text | Фактический адрес для чека |
 | `kind` | text | `pharmacy` / `warehouse` (решение 2026-10-01): склад пока не продаёт — терминалы и смены для него запрещает приложение, а не база, чтобы позже разрешить розницу без миграции; в биллинг не входит; может быть офлайн-точкой |
 | `mode` | text | `online` / `offline_pending` / `offline`. `offline_pending`: выпущен флеш-комплект, запись склада в облаке закрыта (ADR-0014 §4) |
-| `status` | text | `active` / `closed`. «Ожидает активации» в макете — это `mode = 'offline_pending'` |
+| `status` | text | `active` / `closing` / `closed`. `closing` — товар точки в пути к получателю: продажи и складские документы запрещены; `closed` — получатель принял последнее перемещение закрытия, у пустой точки — сразу (спецификация 2026-10-15-store-closing). «Ожидает активации» в макете — это `mode = 'offline_pending'` |
 | `print_receipt_default` | boolean | true (КП 5) |
-| `closed_at` | timestamptz null | Обязателен при `status = 'closed'` |
+| `closed_at` | timestamptz null | Обязателен при `status = 'closed'`; дата закрытия — его бизнес-дата в часовом поясе сети |
+| `closing_started_at`, `closing_started_by` | timestamptz / uuid null | Кто и когда начал закрытие; обязательны при `status = 'closing'`; `closing_started_by` → `employees` |
+| `closing_receiver_store_id` | uuid null | Получатель товара закрытия (→ `stores`); null у пустой точки |
 | `idempotency_key` | uuid null | Ключ повтора создания точки (заголовок `Idempotency-Key`, спецификация 2026-10-06-owner-stores); уникален в сети, если задан |
 
-Ключи и индексы: `unique (tenant_id, id)` — цель составных ссылок; `(tenant_id, legal_entity_id)`.
+Ключи и индексы: `unique (tenant_id, id)` — цель составных ссылок; `(tenant_id, legal_entity_id)`;
+`(tenant_id, closing_started_by)`, `(tenant_id, closing_receiver_store_id)`.
+
+При закрытии отзываются терминалы точки, точка убирается из `discount_rule_stores` (правило без точек — в архив),
+а `employee_stores` остаются: по ним сотрудник видит историю закрытой точки, работать на ней он не может.
 
 ## `employees` — сотрудник (класс `tenant`)
 

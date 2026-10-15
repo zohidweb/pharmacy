@@ -75,6 +75,32 @@ export class SupplierDues {
    * The debts to the suppliers today by the posted receipts of the stores (all stores without
    * them), as the supplier list counts them (spec 2026-10-14-owner-cabinet, E18).
    */
+  /**
+   * What a closing store leaves with the suppliers (spec 2026-10-15-store-closing, E8): its purchase
+   * orders not closed, and its posted receipts not paid in full with the amount still due.
+   */
+  async openOfStore(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+  ): Promise<{ openOrders: number; unpaidReceipts: number; unpaidMinor: number }> {
+    const orders = await sql<{ open: number }>`
+      select count(*)::integer as open from pharmacy.purchase_orders
+      where tenant_id = ${tenantId} and store_id = ${storeId} and status <> 'closed'`.execute(trx);
+    const unpaid = (await this.repository.postedReceipts(trx, tenantId, null))
+      .filter((receipt) => receipt.storeId === storeId)
+      .map(
+        (receipt) =>
+          Number(receipt.totalDirams) - Number(receipt.allocatedDirams),
+      )
+      .filter((debt) => debt > 0);
+    return {
+      openOrders: orders.rows[0].open,
+      unpaidReceipts: unpaid.length,
+      unpaidMinor: unpaid.reduce((sum, debt) => sum + debt, 0),
+    };
+  }
+
   async debts(
     trx: TenantTransaction,
     tenantId: string,

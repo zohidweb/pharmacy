@@ -44,6 +44,31 @@ export class ReportsRepository {
     return result.rows;
   }
 
+  /**
+   * The stores of a report from `from` (spec 2026-10-15-store-closing, E13): the active and closing
+   * stores of the scope, and the closed ones closed on `from` or later — a closed store keeps its
+   * history for the periods it worked, its row leaves the periods after it.
+   */
+  async reportStores(
+    trx: TenantTransaction,
+    tenantId: string,
+    scope: 'all' | readonly string[],
+    from: string,
+  ): Promise<ReportStore[]> {
+    if (scope !== 'all' && scope.length === 0) return [];
+    const result = await sql<ReportStore>`
+      select s.id, s.name, s.kind, s.mode from pharmacy.stores s
+      where s.tenant_id = ${tenantId}
+        and (s.status in ('active', 'closing')
+             or (s.status = 'closed'
+                 and (s.closed_at at time zone coalesce(
+                       (select ts.timezone from pharmacy.tenant_settings ts
+                        where ts.tenant_id = s.tenant_id), 'Asia/Dushanbe'))::date >= ${from}::date))
+        ${scope === 'all' ? sql`` : sql`and s.id = any(${sql.val([...scope])}::uuid[])`}
+      order by s.name, s.id`.execute(trx);
+    return result.rows;
+  }
+
   /** Language maps of the names of the products. */
   async productNames(
     trx: TenantTransaction,

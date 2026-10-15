@@ -190,6 +190,31 @@ export class StaffRepository {
   }
 
   /** The ids among `ids` that are active stores of the network. */
+  /**
+   * The closing and closed stores of an employee's scope (spec 2026-10-15-store-closing, E12): kept
+   * on every save as the history the employee sees, though no form shows them.
+   */
+  async closedStoreIdsOf(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<string[]> {
+    const rows = await trx
+      .selectFrom('employeeStores')
+      .innerJoin('stores', (join) =>
+        join
+          .onRef('stores.tenantId', '=', 'employeeStores.tenantId')
+          .onRef('stores.id', '=', 'employeeStores.storeId'),
+      )
+      .select('stores.id')
+      .where('employeeStores.tenantId', '=', tenantId)
+      .where('employeeStores.employeeId', '=', employeeId)
+      .where('stores.status', '<>', 'active')
+      .orderBy('stores.id')
+      .execute();
+    return rows.map((row) => row.id);
+  }
+
   async activeStoreIds(
     trx: TenantTransaction,
     tenantId: string,

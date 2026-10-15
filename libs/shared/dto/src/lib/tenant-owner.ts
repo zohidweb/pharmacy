@@ -65,7 +65,10 @@ export interface OwnerStore {
   /** Print the receipt right after the payment. */
   printReceiptDefault: boolean;
   mode: StoreMode;
-  /** `pending` — an offline kit is issued (mode offline_pending); `closing` is not used yet. */
+  /**
+   * `pending` — an offline kit is issued (mode offline_pending); `closing` — the stock is on its way
+   * to the receiver, the store sells and posts nothing; `closed` — the receiver accepted it.
+   */
   status: OwnerStoreStatus;
   /** Cloud store: paid until; null until billing for the owner exists. */
   paidUntil: string | null;
@@ -73,10 +76,19 @@ export interface OwnerStore {
   licenseValidUntil: string | null;
   /** 0 until the POS module exists. */
   receiptsThisMonth: number;
-  /** YYYY-MM-DD of a closed store. */
+  /** YYYY-MM-DD of a closed store: the business date it became closed. */
   closedOn: string | null;
-  /** A closed store: where its stock went (null until store closing exists). */
+  /** A closing or closed store: the name of the store its stock went to (null for an empty store). */
   stockMovedTo: string | null;
+  /** The transfers of the closing (spec 2026-10-15-store-closing, E6); empty for a working store. */
+  closingTransfers: StoreClosingTransfer[];
+  /** A closing store none of whose transfers is accepted yet: the closing can be cancelled (E10). */
+  closingCancellable: boolean;
+}
+
+export interface StoreClosingTransfer {
+  number: string;
+  status: 'in_transit' | 'accepted';
 }
 
 /**
@@ -122,24 +134,71 @@ export interface StoreClosingLine {
   costMinor?: number;
 }
 
-/** GET /api/v1/stores/{id}/closing-preview — the stock that moves to the receiver. */
+/** What forbids the closing (spec 2026-10-15-store-closing, E7). */
+export type StoreClosingBlockerCode =
+  | 'open_shift'
+  | 'stock_count'
+  | 'incoming_transfer'
+  | 'outgoing_transfer'
+  | 'transfer_request'
+  | 'negative_stock'
+  | 'period_closed';
+
+export interface StoreClosingBlocker {
+  code: StoreClosingBlockerCode;
+  count: number;
+}
+
+/** What stays behind the closing and is only shown (E8). */
+export type StoreClosingWarningCode =
+  | 'draft_documents'
+  | 'open_purchase_orders'
+  | 'unpaid_receipts';
+
+export interface StoreClosingWarning {
+  code: StoreClosingWarningCode;
+  count: number;
+  /** The unpaid amount of `unpaid_receipts`; only with `finance:view-cost`. */
+  amountMinor?: number;
+}
+
+/**
+ * GET /api/v1/stores/{id}/closing-preview (`stores:delete`) — the stock that moves to the receiver,
+ * the transfers it takes (500 lines each), what forbids the closing and what stays behind. 403
+ * `store_not_in_scope`; 409 `offline_store_read_only` / `store_closing` / `store_closed` /
+ * `last_store`.
+ */
 export interface StoreClosingPreview {
   lines: StoreClosingLine[];
   positions: number;
   totalCostMinor?: number;
+  transfers: number;
+  blockers: StoreClosingBlocker[];
+  warnings: StoreClosingWarning[];
 }
 
-/** POST /api/v1/stores/{id}/closing — creates the transfer; the store closes on its acceptance. */
+/**
+ * POST /api/v1/stores/{id}/closing (`stores:delete`, a fresh sign-in) — sends the whole stock to the
+ * receiver; the store closes when the last transfer is accepted, an empty store at once. 403
+ * `fresh_auth_required` / `store_not_in_scope`; 409 as the preview and `store_not_closable` (errors[]:
+ * field = the blocker code, code `blocked`), `stock_insufficient`; 422 `receiverStoreId`.
+ */
 export interface CloseStoreRequest {
-  receiverStoreId: string;
-  /** YYYY-MM-DD */
-  closeOn: string;
+  /** Another active cloud store; `null` only for a store without stock. */
+  receiverStoreId: string | null;
 }
 
 export interface CloseStoreResponse {
-  transferNumber: string;
+  /** Empty for a store without stock (closed at once). */
+  transferNumbers: string[];
   store: OwnerStore;
 }
+
+/*
+ * POST /api/v1/stores/{id}/closing/cancellation (`stores:delete`, a fresh sign-in) — the transfers in
+ * transit are recalled and cancelled, the store works again; 200 `OwnerStore`. 409
+ * `closing_partly_received` once a transfer is accepted, `store_closed`.
+ */
 
 /* ---------------- services and billing ---------------- */
 

@@ -94,6 +94,15 @@ describe('StoresPage', () => {
 
   it('closes a store by a transfer of its stock, completed on acceptance', async () => {
     await signInAs('firuz', 'store-1');
+    // an open transfer request of the store forbids the closing (spec 2026-10-15-store-closing, E7)
+    await mockApi()(
+      'transferRequests.reject',
+      {
+        params: { id: 'rq-7' },
+        body: { reason: 'no_stock', comment: '' },
+      },
+      'test',
+    );
     renderWithProviders(<StoresPage />);
     fireEvent.click(
       await screen.findByRole('button', { name: 'Аптека №2 · Сино' }),
@@ -112,7 +121,7 @@ describe('StoresPage', () => {
       }),
     );
     const done = await within(closing).findByText(
-      /Создано перемещение (ПМ-\d+)/,
+      /Созданы перемещения: (ПМ-\d+)/,
     );
     const number = /ПМ-\d+/.exec(done.textContent ?? '')?.[0] ?? '';
 

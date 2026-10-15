@@ -8,6 +8,15 @@ import { ShiftsRepository } from './shifts.repository';
 export class PosShifts {
   constructor(private readonly shifts: ShiftsRepository) {}
 
+  /** The open shifts of a store: one forbids its closing (spec 2026-10-15-store-closing, Z2). */
+  openShiftsOfStore(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+  ): Promise<number> {
+    return this.shifts.openShiftsOfStore(trx, tenantId, storeId);
+  }
+
   /**
    * The open shift of the terminal locked `FOR SHARE`: a closing (`FOR UPDATE`) either waits for the
    * return or has closed the shift before it is seen. Null — no open shift.

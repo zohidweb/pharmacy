@@ -22,6 +22,8 @@ import { StockCountPosting } from './stock-count-posting';
 import { StockCountsController } from './stock-counts.controller';
 import { StockCountsRepository } from './stock-counts.repository';
 import { StockCountsService } from './stock-counts.service';
+import { StoreClosingTransfers } from './store-closing-transfers';
+import { TransferAcceptance } from './transfer-acceptance';
 import { StockFreeze } from './stock-freeze';
 import { StoreAccess } from './store-access';
 import { SupplierReturnPosting } from './supplier-return-posting';
@@ -91,10 +93,14 @@ import { WriteOffsService } from './write-offs.service';
     PurchasePricesSource,
     StockAlerts,
     StockFigures,
+    StoreClosingTransfers,
+    TransferAcceptance,
   ],
   // the POS reads and moves the stock only through these (spec 2026-10-13-pos-shift-sale)
   // StockAlerts, StockFigures — the stock signals and figures of the notifications, the home and the
   // reports (spec 2026-10-14-owner-cabinet)
+  // StoreClosingTransfers, TransferAcceptance — the stock side of the closing of a store and the port
+  // that tells it the acceptance of a transfer (spec 2026-10-15-store-closing)
   exports: [
     Numbering,
     PosStock,
@@ -102,6 +108,8 @@ import { WriteOffsService } from './write-offs.service';
     CustomerReturnNumbers,
     StockAlerts,
     StockFigures,
+    StoreClosingTransfers,
+    TransferAcceptance,
   ],
 })
 export class InventoryModule {}

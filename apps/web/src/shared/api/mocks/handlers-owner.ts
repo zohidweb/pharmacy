@@ -14,6 +14,8 @@ import {
   stockState,
 } from '@pharmacy/shared-domain';
 import type {
+  StoreClosingBlocker,
+  StoreClosingWarning,
   CashExpensesOfStore,
   CreateExpenseRequest,
   EmployeeSession,
@@ -38,7 +40,7 @@ import type { MockServiceOrder } from './db-owner';
 import { categories } from './fixtures-pos';
 import { storeDay, stores } from './fixtures';
 import { debtOf } from './handlers-purchasing';
-import { legalEntityName, ownerStore } from './owner-stores';
+import { closeStore, legalEntityName, ownerStore } from './owner-stores';
 import { appendAudit } from './handlers-staff';
 import { context, findDoc, stockAt, stockHandlers } from './handlers-stock';
 import { storePrice } from './pricing';
@@ -227,6 +229,102 @@ function sumRows(
 
 const inPeriod = (date: string, from: string, to: string) =>
   date.slice(0, 10) >= from && date.slice(0, 10) <= to;
+
+/* ---------------- store closing (spec 2026-10-15-store-closing) ---------------- */
+
+/** Lines a transfer of the closing takes: the limit of the acceptance (E6). */
+const CLOSING_LINES = 500;
+
+/** The store to close: in scope, cloud, active, not the last one (E2, E3). */
+function closingGuard(
+  storeId: string,
+  session: EmployeeSession,
+  correlationId: string,
+): OwnerStore {
+  if (owner().extraStores.some((s) => s.id === storeId)) {
+    throw new ApiError(409, 'store_closed', correlationId);
+  }
+  const store = ownerStore(storeId);
+  if (!store) throw new ApiError(404, 'not_found', correlationId);
+  if (!session.stores.some((s) => s.id === storeId)) {
+    throw new ApiError(403, 'store_not_in_scope', correlationId);
+  }
+  if (store.mode !== 'cloud' || store.status === 'pending') {
+    throw new ApiError(409, 'offline_store_read_only', correlationId);
+  }
+  if (store.status === 'closing') {
+    throw new ApiError(409, 'store_closing', correlationId);
+  }
+  const active = Object.values(owner().storeDetails).filter(
+    (d) => d.status === 'active',
+  ).length;
+  if (active <= 1) throw new ApiError(409, 'last_store', correlationId);
+  return store;
+}
+
+/** The batches of the store with a positive stock, by product and batch. */
+function closingStock(storeId: string) {
+  const held = stockAt(storeId);
+  return mockDb().pos.products.flatMap((product) =>
+    product.batches
+      .map((batch) => ({ product, batch, held: held[batch.id] ?? 0 }))
+      .filter(({ held: pieces }) => pieces > 0),
+  );
+}
+
+/** What forbids the closing (E7) — the facts the mocks keep. */
+function closingBlockers(storeId: string): StoreClosingBlocker[] {
+  const stock = mockDb().stock;
+  const held = stockAt(storeId);
+  const counts: Array<[StoreClosingBlocker['code'], number]> = [
+    [
+      'open_shift',
+      mockDb().pos.shifts.filter((s) => s.storeId === storeId && !s.closedAt)
+        .length,
+    ],
+    [
+      'stock_count',
+      stock.stockCounts.filter(
+        (c) => c.storeId === storeId && c.status === 'in_progress',
+      ).length,
+    ],
+    [
+      'incoming_transfer',
+      stock.transfers.filter(
+        (t) => t.toStoreId === storeId && t.status === 'in_transit',
+      ).length,
+    ],
+    [
+      'outgoing_transfer',
+      stock.transfers.filter(
+        (t) => t.fromStoreId === storeId && t.status === 'in_transit',
+      ).length,
+    ],
+    [
+      'transfer_request',
+      stock.transferRequests.filter(
+        (r) =>
+          (r.requesterStoreId === storeId || r.fromStoreId === storeId) &&
+          ['draft', 'sent', 'in_progress'].includes(r.status),
+      ).length,
+    ],
+    ['negative_stock', Object.values(held).filter((q) => q < 0).length],
+  ];
+  return counts
+    .filter(([, count]) => count > 0)
+    .map(([code, count]) => ({ code, count }));
+}
+
+/** What stays behind the closing (E8): the drafts of the stock documents of the store. */
+function closingWarnings(storeId: string): StoreClosingWarning[] {
+  const stock = mockDb().stock;
+  const drafts = [
+    ...stock.goodsReceipts,
+    ...stock.writeOffs,
+    ...stock.supplierReturns,
+  ].filter((d) => d.storeId === storeId && d.status === 'draft').length;
+  return drafts > 0 ? [{ code: 'draft_documents', count: drafts }] : [];
+}
 
 /* ---------------- other expenses (spec 2026-10-14-owner-cabinet, E16) ---------------- */
 
@@ -1052,90 +1150,143 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
   },
   'stores.closingPreview': ({ params, correlationId }) => {
     const { session, canSeeCost } = context(correlationId, 'stores:delete');
-    if (!session.stores.some((s) => s.id === params.id)) {
-      throw new ApiError(403, 'store_not_in_scope', correlationId);
-    }
-    const lines = mockDb().pos.products.flatMap((product) =>
-      product.batches
-        .map((batch) => ({ batch, held: stockAt(params.id)[batch.id] ?? 0 }))
-        .filter(({ held }) => held > 0)
-        .map(({ batch, held }) => ({
-          productName: product.name,
-          batchNumber: batch.number,
-          expiresOn: batch.expiresOn,
-          quantityPieces: held,
-          piecesPerPack: product.piecesPerPack,
-          ...(canSeeCost && {
-            costMinor: Math.round(
-              (held * (batch.costMinor ?? 0)) / product.piecesPerPack,
-            ),
-          }),
-        })),
-    );
+    const store = closingGuard(params.id, session, correlationId);
+    const lines = closingStock(store.id).map(({ product, batch, held }) => ({
+      productName: product.name,
+      batchNumber: batch.number,
+      expiresOn: batch.expiresOn,
+      quantityPieces: held,
+      piecesPerPack: product.piecesPerPack,
+      ...(canSeeCost && {
+        costMinor: Math.round(
+          (held * (batch.costMinor ?? 0)) / product.piecesPerPack,
+        ),
+      }),
+    }));
     return {
       lines,
       positions: lines.length,
       ...(canSeeCost && {
         totalCostMinor: lines.reduce((sum, l) => sum + (l.costMinor ?? 0), 0),
       }),
+      transfers: Math.ceil(lines.length / CLOSING_LINES),
+      blockers: closingBlockers(store.id),
+      warnings: closingWarnings(store.id),
     };
   },
   'stores.close': ({ params, body, correlationId }) => {
     const { session } = context(correlationId, 'stores:delete', {
       write: true,
     });
-    const store = stores.find((s) => s.id === params.id);
-    if (!store) throw new ApiError(404, 'not_found', correlationId);
-    if (store.mode === 'offline') {
-      // the stock of an offline store moves only from the store itself (ADR-0014)
-      throw new ApiError(409, 'offline_store_read_only', correlationId);
+    const store = closingGuard(params.id, session, correlationId);
+    const blockers = closingBlockers(store.id);
+    if (blockers.length > 0) {
+      throw new ApiError(
+        409,
+        'store_not_closable',
+        correlationId,
+        blockers.map((b) => ({ field: b.code, code: 'blocked' })),
+      );
+    }
+    const stock = closingStock(store.id);
+    const details = owner().storeDetails[store.id];
+    if (stock.length === 0) {
+      // a store without stock closes at once (spec 2026-10-15-store-closing, Z4)
+      closeStore(store.id);
+      appendAudit(session, {
+        event: 'store.closed',
+        object: store.name,
+        storeName: store.name,
+      });
+      return {
+        transferNumbers: [],
+        store: owner().extraStores.find((s) => s.id === store.id) as OwnerStore,
+      };
     }
     const receiver = stores.find((s) => s.id === body.receiverStoreId);
-    if (!receiver || receiver.id === store.id || receiver.mode !== 'cloud') {
+    if (
+      !receiver ||
+      receiver.id === store.id ||
+      receiver.mode !== 'cloud' ||
+      owner().storeDetails[receiver.id]?.status !== 'active'
+    ) {
       throw validation(correlationId, 'receiverStoreId', 'invalid');
     }
-    const lines = mockDb().pos.products.flatMap((product) =>
-      product.batches
-        .filter((b) => (stockAt(store.id)[b.id] ?? 0) >= product.piecesPerPack)
-        .map((b) => ({
-          productId: product.id,
-          batchId: b.id,
-          unit: 'pack' as const,
-          quantity: Math.floor(
-            (stockAt(store.id)[b.id] ?? 0) / product.piecesPerPack,
-          ),
-        })),
-    );
-    if (lines.length === 0) {
-      throw validation(correlationId, 'lines', 'empty_stock');
-    }
-    const transfer = stockHandlers['transfers.create']({
-      params: undefined,
-      query: undefined,
-      body: {
-        requestId: null,
-        fromStoreId: store.id,
-        toStoreId: receiver.id,
-        send: true,
-        lines,
-      },
-      correlationId,
+    // one line per batch: whole packs in packs, an opened pack in pieces (E5); 500 lines a transfer (E6)
+    const lines = stock.map(({ product, batch, held }) => {
+      const whole = held % product.piecesPerPack === 0;
+      return {
+        productId: product.id,
+        batchId: batch.id,
+        unit: whole ? ('pack' as const) : ('piece' as const),
+        quantity: whole ? held / product.piecesPerPack : held,
+      };
     });
-    const details = owner().storeDetails[store.id];
+    const transfers = [];
+    for (let i = 0; i < lines.length; i += CLOSING_LINES) {
+      transfers.push(
+        stockHandlers['transfers.create']({
+          params: undefined,
+          query: undefined,
+          body: {
+            requestId: null,
+            fromStoreId: store.id,
+            toStoreId: receiver.id,
+            send: true,
+            lines: lines.slice(i, i + CLOSING_LINES),
+          },
+          correlationId,
+        }),
+      );
+    }
     Object.assign(details, {
       status: 'closing',
-      closedOn: body.closeOn,
       stockMovedTo: receiver.name,
-      closingTransferId: transfer.id,
+      closingTransferIds: transfers.map((t) => t.id),
     });
     appendAudit(session, {
-      event: 'transfer.dispatched',
-      object: transfer.number,
+      event: 'store.closing-started',
+      object: store.name,
       storeName: store.name,
     });
     const closing = ownerStore(store.id);
     if (!closing) throw new ApiError(404, 'not_found', correlationId);
-    return { transferNumber: transfer.number, store: closing };
+    return { transferNumbers: transfers.map((t) => t.number), store: closing };
+  },
+  'stores.cancelClosing': ({ params, correlationId }) => {
+    const { session } = context(correlationId, 'stores:delete', {
+      write: true,
+    });
+    const details = owner().storeDetails[params.id];
+    if (!details) {
+      if (owner().extraStores.some((s) => s.id === params.id)) {
+        throw new ApiError(409, 'store_closed', correlationId);
+      }
+      throw new ApiError(404, 'not_found', correlationId);
+    }
+    const store = ownerStore(params.id);
+    if (!store || store.status !== 'closing') {
+      throw new ApiError(404, 'not_found', correlationId);
+    }
+    if (!store.closingCancellable) {
+      throw new ApiError(409, 'closing_partly_received', correlationId);
+    }
+    for (const id of details.closingTransferIds ?? []) {
+      const args = { params: { id }, query: undefined, body: undefined, correlationId };
+      stockHandlers['transfers.recall'](args);
+      stockHandlers['transfers.cancel'](args);
+    }
+    Object.assign(details, {
+      status: 'active',
+      stockMovedTo: null,
+      closingTransferIds: [],
+    });
+    appendAudit(session, {
+      event: 'store.closing-cancelled',
+      object: store.name,
+      storeName: store.name,
+    });
+    return ownerStore(params.id) as OwnerStore;
   },
 
   // As apps/api (spec 2026-10-15-billing-services, 6.2): the name in the language of the employee,

@@ -116,14 +116,15 @@ export class TenantsRepository {
           .selectFrom('stores')
           .select(sql<number>`count(*)`.as('n'))
           .whereRef('stores.tenantId', '=', 'tenants.id')
-          .where('stores.status', '=', 'active')
+          // a closing store still works with its license (spec 2026-10-15-store-closing, 4)
+          .where('stores.status', 'in', ['active', 'closing'])
           .where('stores.mode', '=', 'online')
           .as('cloudStores'),
         eb
           .selectFrom('stores')
           .select(sql<number>`count(*)`.as('n'))
           .whereRef('stores.tenantId', '=', 'tenants.id')
-          .where('stores.status', '=', 'active')
+          .where('stores.status', 'in', ['active', 'closing'])
           .where('stores.mode', '<>', 'online')
           .as('offlineStores'),
       ]);
@@ -175,7 +176,7 @@ export class TenantsRepository {
         ? query.orderBy('tenants.ownerFullName', direction)
         : params.sort === 'stores'
           ? query.orderBy(
-              sql`(select count(*) from pharmacy.stores s where s.tenant_id = tenants.id and s.status = 'active')`,
+              sql`(select count(*) from pharmacy.stores s where s.tenant_id = tenants.id and s.status in ('active', 'closing'))`,
               direction,
             )
           : query.orderBy('tenants.name', direction);

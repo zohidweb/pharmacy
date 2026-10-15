@@ -47,10 +47,17 @@ export interface MockRole {
 /** Store data the owner edits on top of the session store (name, address, mode). */
 export type StoreDetails = Omit<
   OwnerStore,
-  'id' | 'name' | 'address' | 'mode' | 'legalEntityName' | 'receiptsThisMonth'
+  | 'id'
+  | 'name'
+  | 'address'
+  | 'mode'
+  | 'legalEntityName'
+  | 'receiptsThisMonth'
+  | 'closingTransfers'
+  | 'closingCancellable'
 > & {
-  /** Transfer of the stock of a closing store; its acceptance closes the store. */
-  closingTransferId?: string;
+  /** Transfers of the stock of a closing store; the acceptance of the last one closes the store. */
+  closingTransferIds?: string[];
 };
 
 /** A legal entity of the mock network; `stores` is counted on read. */
@@ -230,6 +237,8 @@ export function createOwnerDb(): OwnerMockDb {
         receiptsThisMonth: 0,
         closedOn: dateIn(-90),
         stockMovedTo: 'Аптека №1 · Центр',
+        closingTransfers: [],
+        closingCancellable: false,
       },
     ],
     services: [

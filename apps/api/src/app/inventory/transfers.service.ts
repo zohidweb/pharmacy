@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { hasPermissions } from '@pharmacy/shared-domain';
 import type {
   AcceptTransferRequest,
@@ -21,6 +21,10 @@ import { InventoryRepository } from './inventory.repository';
 import { Numbering } from './numbering';
 import { StockFreeze } from './stock-freeze';
 import { StoreAccess } from './store-access';
+import {
+  type AfterAcceptance,
+  TransferAcceptance,
+} from './transfer-acceptance';
 import { TransferMapper } from './transfer-mapper';
 import { TransferPosting } from './transfer-posting';
 import { TransfersRepository } from './transfers.repository';
@@ -52,7 +56,10 @@ export class TransfersService {
     private readonly audit: AuditService,
     private readonly stores: StoreAccess,
     private readonly freeze: StockFreeze,
+    private readonly acceptance: TransferAcceptance,
   ) {}
+
+  private readonly logger = new Logger(TransfersService.name);
 
   async overview(query: { storeId?: string }): Promise<TransferOverview> {
     const { tenantId } = requirePrincipal();
@@ -251,7 +258,8 @@ export class TransfersService {
    */
   async accept(id: string, body: AcceptTransferRequest): Promise<Transfer> {
     const { tenantId, employeeId } = requirePrincipal();
-    return this.db.tenantTransaction(async (trx) => {
+    let after: AfterAcceptance[] = [];
+    const accepted = await this.db.tenantTransaction(async (trx) => {
       const doc = await this.visible(trx, tenantId, id, true);
       const receiver = await this.stores.writableStore(
         trx,
@@ -276,12 +284,26 @@ export class TransfersService {
         receiver,
         body,
       );
+      // e.g. the store whose closing this transfer ends is closed (spec 2026-10-15-store-closing, E11)
+      after = await this.acceptance.notify(trx, tenantId, doc.id);
       return this.mapper.transfer(
         trx,
         tenantId,
         await this.read(trx, tenantId, doc.id),
       );
     });
+    // after the commit; a failure is logged, the acceptance stands
+    for (const work of after) {
+      try {
+        await work();
+      } catch (error) {
+        this.logger.error(
+          `Work after the acceptance of transfer ${id} failed`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+    return accepted;
   }
 
   /* ---------------- helpers ---------------- */

@@ -16,6 +16,12 @@ export interface StoreRow {
   legalEntityName: string;
   printReceiptDefault: boolean;
   closedAt: Date | null;
+  /** YYYY-MM-DD: the business date of `closedAt` in the time zone of the network. */
+  closedOn: string | null;
+  /** Who started the closing (spec 2026-10-15-store-closing); kept after it. */
+  closingStartedBy: string | null;
+  /** The receiver of the stock of the closing; null for a store without stock. */
+  closingReceiverName: string | null;
 }
 
 export interface NewStore {
@@ -50,6 +56,18 @@ export class StoresRepository {
           .onRef('legalEntities.tenantId', '=', 'stores.tenantId')
           .onRef('legalEntities.id', '=', 'stores.legalEntityId'),
       )
+      .leftJoin('stores as receiver', (join) =>
+        join
+          .onRef('receiver.tenantId', '=', 'stores.tenantId')
+          .onRef('receiver.id', '=', 'stores.closingReceiverStoreId'),
+      )
+      .select([
+        'stores.closingStartedBy',
+        'receiver.name as closingReceiverName',
+        sql<string | null>`(stores.closed_at at time zone coalesce(
+          (select ts.timezone from pharmacy.tenant_settings ts where ts.tenant_id = stores.tenant_id),
+          'Asia/Dushanbe'))::date::text`.as('closedOn'),
+      ])
       .select([
         'stores.id',
         'stores.name',
@@ -104,6 +122,89 @@ export class StoresRepository {
         .where('stores.idempotencyKey', '=', idempotencyKey)
         .executeTakeFirst()) ?? null
     );
+  }
+
+  /** The store row locked `FOR UPDATE` (its closing), then read; null — no such store. */
+  async lockStore(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<StoreRow | null> {
+    const locked = await trx
+      .selectFrom('stores')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .forUpdate()
+      .executeTakeFirst();
+    return locked ? this.findStore(trx, tenantId, id) : null;
+  }
+
+  /** The stores of the network in the status `active` (the last one is not closed). */
+  async activeCount(trx: TenantTransaction, tenantId: string): Promise<number> {
+    const row = await trx
+      .selectFrom('stores')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('tenantId', '=', tenantId)
+      .where('status', '=', 'active')
+      .executeTakeFirstOrThrow();
+    return Number(row.count);
+  }
+
+  /** `active` → `closing` (spec 2026-10-15-store-closing, E9); the receiver is null without stock. */
+  async startClosing(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    employeeId: string,
+    receiverStoreId: string | null,
+  ): Promise<void> {
+    await trx
+      .updateTable('stores')
+      .set({
+        status: 'closing',
+        closingStartedAt: sql`now()`,
+        closingStartedBy: employeeId,
+        closingReceiverStoreId: receiverStoreId,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** `closing` → `active`: the closing is cancelled (E10). */
+  async cancelClosing(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('stores')
+      .set({
+        status: 'active',
+        closingStartedAt: null,
+        closingStartedBy: null,
+        closingReceiverStoreId: null,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** `closing` → `closed` now (E11); the closing fields stay as its history. */
+  async markClosed(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('stores')
+      .set({ status: 'closed', closedAt: sql`now()`, updatedAt: sql`now()` })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
   }
 
   async insertStore(trx: TenantTransaction, store: NewStore): Promise<void> {

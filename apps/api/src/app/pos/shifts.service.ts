@@ -130,7 +130,9 @@ export class ShiftsService implements OnModuleInit {
         if (!(await this.terminals.holdForShift(trx, op.tenantId, op.terminalId))) {
           throw new ProblemException(403, 'terminal_required');
         }
-        const store = await this.context.cloudStore(trx, op.tenantId, op.storeId);
+        const store = await this.context.cloudStore(trx, op.tenantId, op.storeId, {
+          lock: 'share',
+        });
         if (await this.shifts.openShiftOfTerminal(trx, op.tenantId, op.terminalId)) {
           throw new ProblemException(409, 'shift_open');
         }

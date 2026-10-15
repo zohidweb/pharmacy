@@ -16,10 +16,22 @@ import {
   uniqueConstraint,
 } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
+import {
+  type ClosingTransfer,
+  StoreClosingTransfers,
+} from '../inventory/store-closing-transfers';
 import { asConflict, LegalEntitiesService, notFound } from './legal-entities.service';
 import { StoresRepository, type StoreRow } from './stores.repository';
 
-export function toOwnerStore(row: StoreRow): OwnerStore {
+/**
+ * The store as the owner sees it; `transfers` — the transfers of its closing (spec
+ * 2026-10-15-store-closing): the cancelled ones are not shown, an accepted one is `accepted`.
+ */
+export function toOwnerStore(
+  row: StoreRow,
+  transfers: readonly ClosingTransfer[] = [],
+): OwnerStore {
+  const shown = transfers.filter((t) => t.status !== 'cancelled');
   return {
     id: row.id,
     name: row.name,
@@ -31,18 +43,22 @@ export function toOwnerStore(row: StoreRow): OwnerStore {
     printReceiptDefault: row.printReceiptDefault,
     mode: row.mode === 'online' ? 'cloud' : 'offline',
     status:
-      row.status === 'closed'
-        ? 'closed'
+      row.status === 'closed' || row.status === 'closing'
+        ? row.status
         : row.mode === 'offline_pending'
           ? 'pending'
           : 'active',
     paidUntil: null,
     licenseValidUntil: null,
     receiptsThisMonth: 0,
-    closedOn: row.closedAt ? row.closedAt.toISOString().slice(0, 10) : null,
-    stockMovedTo: null,
-    closingTransfers: [],
-    closingCancellable: false,
+    closedOn: row.status === 'closed' ? row.closedOn : null,
+    stockMovedTo: row.closingReceiverName,
+    closingTransfers: shown.map((t) => ({
+      number: t.number,
+      status: t.status === 'received' ? 'accepted' : 'in_transit',
+    })),
+    closingCancellable:
+      row.status === 'closing' && shown.every((t) => t.status === 'in_transit'),
   };
 }
 
@@ -55,14 +71,24 @@ export class StoresService {
     private readonly repository: StoresRepository,
     private readonly legalEntities: LegalEntitiesService,
     private readonly audit: AuditService,
+    private readonly closing: StoreClosingTransfers,
   ) {}
 
   async overview(): Promise<StoresOverview> {
     const { tenantId, storeScope } = requirePrincipal();
-    const rows = await this.db.tenantTransaction((trx) =>
-      this.repository.listStores(trx, tenantId, storeScope),
-    );
-    return { stores: rows.map(toOwnerStore) };
+    return this.db.tenantTransaction(async (trx) => {
+      const rows = await this.repository.listStores(trx, tenantId, storeScope);
+      const stores: OwnerStore[] = [];
+      for (const row of rows) {
+        // the transfers of a closing are read for the closing and closed stores only
+        const transfers =
+          row.status === 'active'
+            ? []
+            : await this.closing.transfers(trx, tenantId, row.id);
+        stores.push(toOwnerStore(row, transfers));
+      }
+      return { stores };
+    });
   }
 
   /**
@@ -131,6 +157,8 @@ export class StoresService {
       const store = await this.repository.findStore(trx, tenantId, storeId);
       if (store === null) throw notFound();
       if (store.status === 'closed') throw new ProblemException(409, 'store_closed');
+      // its stock is on the way out (spec 2026-10-15-store-closing, E9)
+      if (store.status === 'closing') throw new ProblemException(409, 'store_closing');
       const legalEntityId = await this.activeLegalEntity(trx, tenantId, request.legalEntityId);
       await this.repository.updateStore(trx, tenantId, storeId, {
         name: request.name,

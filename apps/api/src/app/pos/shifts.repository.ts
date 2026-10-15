@@ -71,6 +71,18 @@ export function isOpenShiftConflict(error: unknown): boolean {
 // spec 2026-10-13-pos-shift-sale, 4.4 and 4.6).
 @Injectable()
 export class ShiftsRepository {
+  /** The open shifts of a store (spec 2026-10-15-store-closing, E7). */
+  async openShiftsOfStore(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+  ): Promise<number> {
+    const result = await sql<{ open: number }>`
+      select count(*)::integer as open from pharmacy.shifts
+      where tenant_id = ${tenantId} and store_id = ${storeId} and status = 'open'`.execute(trx);
+    return result.rows[0].open;
+  }
+
   async openShiftOfTerminal(
     trx: TenantTransaction,
     tenantId: string,

@@ -59,7 +59,9 @@ export type NotificationKind =
   | 'shift_discrepancy'
   | 'negative_stock'
   | 'sync_conflict'
-  | 'license_expiring';
+  | 'license_expiring'
+  /** The operator approved (with a price), rejected or cancelled a service of the network (event). */
+  | 'service_decided';
 
 export interface ReminderParams {
   productName?: string;
@@ -79,6 +81,11 @@ export interface ReminderParams {
   positions?: number;
   operatorName?: string;
   shiftNumber?: string;
+  /** `service_decided`: the service, the decision and its price or reason. */
+  serviceName?: string;
+  decision?: 'approved' | 'rejected' | 'cancelled';
+  priceMinor?: number;
+  reason?: string;
 }
 
 export interface Reminder {

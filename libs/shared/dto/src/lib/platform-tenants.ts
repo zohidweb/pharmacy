@@ -186,17 +186,7 @@ export interface TenantPaymentItem {
   recordedBy: string;
 }
 
-export type ServiceBilling = 'one_time' | 'monthly';
-
-export interface TenantServiceItem {
-  id: string;
-  name: string;
-  billing: ServiceBilling;
-  /** Date-only. */
-  connectedOn: string;
-  status: 'active' | 'pending';
-  priceMinor: number;
-}
+// The «Услуги» tab of a company: `TenantServiceItem[]` of platform-billing.ts.
 
 export interface TenantDailySales {
   /** Date-only. */

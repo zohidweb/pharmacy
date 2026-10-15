@@ -29,4 +29,5 @@ export const KIND_PERMISSION: Readonly<Record<NotificationKind, Permission>> = {
   shift_discrepancy: 'shifts:view',
   sync_conflict: 'sync:view',
   license_expiring: 'stores:view',
+  service_decided: 'services:view',
 };

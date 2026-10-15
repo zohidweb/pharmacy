@@ -21,6 +21,7 @@ const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'negative_stock',
   'sync_conflict',
   'license_expiring',
+  'service_decided',
 ];
 
 function toSettings(row: NetworkSettingsRow): NetworkSettings {

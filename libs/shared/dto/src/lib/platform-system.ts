@@ -4,7 +4,7 @@
  * Event texts are not sent as prose: the server sends a kind + parameters and the client renders
  * them in the interface language (RU/TJ).
  */
-import type { Page, StoreMode, SyncSchedule } from './platform-tenants.js';
+import type { Page, StoreMode } from './platform-tenants.js';
 import type { OperatorProfile } from './operator-auth.js';
 import type { UiLocale } from './tenant-auth.js';
 
@@ -215,19 +215,32 @@ export interface OperatorAuditQuery {
 
 // ── Platform settings and the operator team ───────────────────────────────────────────────
 
+/**
+ * The requisites of the platform printed on every invoice (spec 2026-10-15-billing-services, A20):
+ * INN 9 digits, settlement and correspondent accounts 20 digits, BIK 9 digits; the payment purpose
+ * template contains `{number}` (the invoice number).
+ */
+export interface PlatformRequisites {
+  name: string;
+  inn: string;
+  bankAccount: string;
+  bankName: string;
+  bankBik: string;
+  bankCorrAccount: string;
+  paymentPurposeTemplate: string;
+}
+
+/**
+ * GET /operator/settings (`platform:view`); PUT /operator/settings (`platform:manage`, 403
+ * `fresh_auth_required` without a recent sign-in; 400). The tariff of a cloud pharmacy per month
+ * (1…10 000 000 000 dirams, without VAT) and the VAT rate (a whole percent 0–99) apply to invoices
+ * generated after the change; issued invoices keep their own (B14). The offline settings come with
+ * the offline stores (B6).
+ */
 export interface PlatformSettings {
   pricePerStoreMinor: number;
   vatRatePercent: number;
-  prorateByDays: boolean;
-  keyExpiryNoticeDays: number;
-  defaultSyncSchedule: SyncSchedule;
-  acceptLegacyVersionSync: boolean;
-  supplier: {
-    name: string;
-    inn: string;
-    bankAccount: string;
-    paymentPurposeTemplate: string;
-  };
+  supplier: PlatformRequisites;
 }
 
 export type OperatorStatus = 'active' | 'disabled';

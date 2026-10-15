@@ -40,6 +40,9 @@ export class NotificationSwitchesDto implements Record<
 
   @IsBoolean()
   license_expiring!: boolean;
+
+  @IsBoolean()
+  service_decided!: boolean;
 }
 
 /** PUT /settings (spec 2026-10-14-owner-cabinet, E14); the name of the network is not here. */

@@ -42,6 +42,18 @@ export class PriceListQueryDto implements PriceListQuery {
   @IsUUID()
   categoryId?: string;
 
+  /** Only the products with a price problem (spec 2026-10-15-nav-counters, E8). */
+  @IsOptional()
+  @Transform(
+    ({ value }: { value: unknown }) => value === true || value === 'true',
+  )
+  @IsBoolean()
+  problems?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

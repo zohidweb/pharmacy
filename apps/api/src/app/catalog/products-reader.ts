@@ -70,17 +70,40 @@ export class ProductsReader {
     return this.toPricing(trx, tenantId, rows);
   }
 
-  /** A page of active products in the order of the catalog list. */
+  /**
+   * The regulated maximum price of a pack of the active products among `ids` (null — not regulated);
+   * an archived or unknown product is absent. One light query for the price problems.
+   */
+  async activeMaxPrices(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, number | null>> {
+    return this.repository.activeMaxPrices(trx, tenantId, ids);
+  }
+
+  /** A page of active products in the order of the catalog list; `productIds` — only these. */
   async listForPricing(
     trx: TenantTransaction,
     tenantId: string,
-    query: { q?: string; categoryId?: string; limit: number; offset: number },
+    query: {
+      q?: string;
+      categoryId?: string;
+      productIds?: readonly string[];
+      limit: number;
+      offset: number;
+    },
   ): Promise<{ items: PricingProduct[]; total: number }> {
     const language = await this.repository.networkLanguage(trx, tenantId);
     const { ids, total } = await this.repository.listProductIds(
       trx,
       tenantId,
-      { q: query.q, categoryId: query.categoryId, status: 'active' },
+      {
+        q: query.q,
+        categoryId: query.categoryId,
+        status: 'active',
+        ids: query.productIds,
+      },
       { limit: query.limit, offset: query.offset },
       language,
     );
@@ -166,7 +189,9 @@ export class ProductsReader {
     const wanted = new Set(ids);
     const { locale } = requirePrincipal();
     const language = await this.repository.networkLanguage(trx, tenantId);
-    for (const row of await this.repository.categoryNamesByIds(trx, tenantId, [...wanted])) {
+    for (const row of await this.repository.categoryNamesByIds(trx, tenantId, [
+      ...wanted,
+    ])) {
       names.set(row.id, localizedName(row.name, locale, language));
     }
     return names;
@@ -215,7 +240,11 @@ export class ProductsReader {
     tenantId: string,
     since: Date,
   ): Promise<{ changed: string[]; archived: string[] }> {
-    const rows = await this.repository.productsChangedSince(trx, tenantId, since);
+    const rows = await this.repository.productsChangedSince(
+      trx,
+      tenantId,
+      since,
+    );
     return {
       changed: rows.filter((r) => r.status !== 'archived').map((r) => r.id),
       archived: rows.filter((r) => r.status === 'archived').map((r) => r.id),

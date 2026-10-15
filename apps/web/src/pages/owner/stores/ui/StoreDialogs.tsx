@@ -144,6 +144,8 @@ export function CloseStoreDialog({
       apiRequest('stores.closingPreview', { params: { id: store.id }, signal }),
     // a check, as the unposting check: a blocker resolved elsewhere is gone on the next opening
     staleTime: 0,
+    // once closed the store has no preview (409): the invalidation after the closing must not ask
+    enabled: done === null,
   });
   const empty = preview.data?.positions === 0;
   const close = useMutation({
@@ -156,7 +158,11 @@ export function CloseStoreDialog({
       ),
     onSuccess: (result) => {
       setDone(result.transferNumbers);
-      void queryClient.invalidateQueries({ queryKey: ['stores'] });
+      // not the preview of this dialog: a closing or closed store has none (409, final review I3)
+      void queryClient.invalidateQueries({
+        queryKey: ['stores'],
+        predicate: (query) => query.queryKey[1] !== 'closing',
+      });
       void queryClient.invalidateQueries({ queryKey: ['transfers'] });
       void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
     },

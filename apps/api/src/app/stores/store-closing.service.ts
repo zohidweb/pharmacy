@@ -140,9 +140,13 @@ export class StoreClosingService implements OnModuleInit {
     const { tenantId, employeeId } = requirePrincipal();
     const storeId = id.toLowerCase();
     return this.db.tenantTransaction(async (trx) => {
+      const peek = await this.repository.findStore(trx, tenantId, storeId);
+      if (peek === null) throw notFound();
+      this.inScope(storeId);
+      // the transfers first, then the store row — the order of an acceptance (final review I2)
+      await this.transfers.lockTransfers(trx, tenantId, storeId);
       const row = await this.repository.lockStore(trx, tenantId, storeId);
       if (row === null) throw notFound();
-      this.inScope(storeId);
       if (row.status === 'closed') throw new ProblemException(409, 'store_closed');
       if (row.status !== 'closing') throw notFound();
       const recalled = await this.transfers.cancel(
@@ -250,7 +254,7 @@ export class StoreClosingService implements OnModuleInit {
     if (receiverStoreId === null) throw invalid();
     const id = receiverStoreId.toLowerCase();
     if (id === storeId) throw invalid();
-    const receiver = await this.repository.findStore(trx, tenantId, id);
+    const receiver = await this.repository.shareStore(trx, tenantId, id);
     if (receiver === null || receiver.status !== 'active' || receiver.mode !== 'online') {
       throw invalid();
     }

@@ -140,6 +140,25 @@ export class StoresRepository {
     return locked ? this.findStore(trx, tenantId, id) : null;
   }
 
+  /**
+   * The store row locked `FOR SHARE`, then read: the receiver of a closing — its own closing, which
+   * holds the row `FOR UPDATE`, waits or is seen (final review I1).
+   */
+  async shareStore(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<StoreRow | null> {
+    const locked = await trx
+      .selectFrom('stores')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .forShare()
+      .executeTakeFirst();
+    return locked ? this.findStore(trx, tenantId, id) : null;
+  }
+
   /** The stores of the network in the status `active` (the last one is not closed). */
   async activeCount(trx: TenantTransaction, tenantId: string): Promise<number> {
     const row = await trx

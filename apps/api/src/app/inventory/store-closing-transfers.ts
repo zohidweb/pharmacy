@@ -76,8 +76,9 @@ export class StoreClosingTransfers {
       select
         count(*) filter (where d.type = 'inventory' and d.status = 'draft'
                            and d.store_id = ${storeId})::integer as stock_count,
+        -- a closing transfer to the store counts too: closed, the store could never accept it
+        -- and the goods would belong to no store (final review I1)
         count(*) filter (where d.type = 'transfer' and d.status = 'in_transit'
-                           and not d.store_closing
                            and d.destination_store_id = ${storeId})::integer as incoming,
         count(*) filter (where d.type = 'transfer' and d.status = 'in_transit'
                            and not d.store_closing and d.store_id = ${storeId})::integer as outgoing,
@@ -257,6 +258,23 @@ export class StoreClosingTransfers {
       select store_id from pharmacy.documents
       where tenant_id = ${tenantId} and id = ${transferId} and store_closing`.execute(trx);
     return result.rows[0]?.storeId ?? null;
+  }
+
+  /**
+   * The transfers of the closing of the store locked `FOR UPDATE`, by number: the cancellation locks
+   * them before the store row, as an acceptance does (the transfer, then the store in its listener) —
+   * one lock order, no deadlock (final review I2).
+   */
+  async lockTransfers(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+  ): Promise<void> {
+    await sql`
+      select id from pharmacy.documents
+      where tenant_id = ${tenantId} and store_id = ${storeId} and store_closing
+      order by number
+      for update`.execute(trx);
   }
 
   /** The transfers of the closing of the store, by number. */

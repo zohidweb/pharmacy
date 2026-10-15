@@ -171,6 +171,11 @@ export class EmployeesService {
         const editor = await loadEditor(this.repository, trx);
         const employee = await this.editable(trx, editor, employeeId);
         const sameRole = employee.roleId === body.roleId.toLowerCase();
+        // the closing and closed stores stay in the scope whatever the form sends (E12)
+        const kept =
+          body.storeIds === null
+            ? []
+            : await this.repository.closedStoreIdsOf(trx, tenantId, employee.id);
         // The scope as checkAssignment would store it: the owner role always has the whole network,
         // a list names each store once. A form repeating the stored assignment changes nothing (no
         // audit, no version bump, no own_assignment refusal).
@@ -179,7 +184,7 @@ export class EmployeesService {
             ? null
             : body.storeIds === null
               ? null
-              : [...new Set(body.storeIds.map((s) => s.toLowerCase()))];
+              : [...new Set([...body.storeIds.map((s) => s.toLowerCase()), ...kept])];
         const changed = !sameRole || !sameScope(scopeOfRow(employee), assigned);
         if (changed) {
           if (employee.id === principal.employeeId) {
@@ -188,7 +193,12 @@ export class EmployeesService {
           if (!principal.permissions.includes('employees:assign-role')) {
             throw new MissingPermissionException('employees:assign-role');
           }
-          const { roleId, scope, isOwner } = await this.checkAssignment(trx, editor, body);
+          const { roleId, scope, isOwner } = await this.checkAssignment(
+            trx,
+            editor,
+            body,
+            kept,
+          );
           if (
             employee.roleIsOwner &&
             !isOwner &&
@@ -313,6 +323,7 @@ export class EmployeesService {
     trx: TenantTransaction,
     editor: Editor,
     body: Pick<UpdateEmployeeRequest, 'roleId' | 'storeIds'>,
+    kept: readonly string[] = [],
   ): Promise<{ roleId: string; scope: Scope; isOwner: boolean }> {
     const { tenantId } = requirePrincipal();
     const role = await this.repository.findRole(trx, tenantId, body.roleId.toLowerCase());
@@ -325,16 +336,22 @@ export class EmployeesService {
       : body.storeIds === null
         ? null
         : [...new Set(body.storeIds.map((s) => s.toLowerCase()))];
-    if (scope !== null && scope.length === 0) throw invalid('storeIds', 'required');
+    // the stores the form names; the closing and closed ones already held are kept, not checked (E12)
+    const named = scope === null ? null : scope.filter((s) => !kept.includes(s));
+    if (named !== null && named.length === 0) throw invalid('storeIds', 'required');
     // The scope first: a store outside the editor's own is refused before its existence is told.
-    if (!scopeWithinEditor(editor, scope)) {
+    if (!scopeWithinEditor(editor, named)) {
       throw new ProblemException(403, 'store_not_in_scope');
     }
-    if (scope !== null) {
-      const active = await this.repository.activeStoreIds(trx, tenantId, scope);
-      if (active.length !== scope.length) throw invalid('storeIds', 'unknown_store');
+    if (named !== null) {
+      const active = await this.repository.activeStoreIds(trx, tenantId, named);
+      if (active.length !== named.length) throw invalid('storeIds', 'unknown_store');
     }
-    return { roleId: role.id, scope, isOwner: role.isOwner };
+    return {
+      roleId: role.id,
+      scope: named === null ? null : [...named, ...kept],
+      isOwner: role.isOwner,
+    };
   }
 
   // A visible employee or 404.

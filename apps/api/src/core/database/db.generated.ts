@@ -200,6 +200,7 @@ export interface Documents {
   sourceCustomerReturnId: string | null;
   sourceDocumentId: string | null;
   status: Generated<string>;
+  storeClosing: Generated<boolean>;
   storeId: string;
   supplierId: string | null;
   supplierInvoiceDate: string | null;
@@ -665,6 +666,9 @@ export interface StoreProducts {
 export interface Stores {
   address: string;
   closedAt: Timestamp | null;
+  closingReceiverStoreId: string | null;
+  closingStartedAt: Timestamp | null;
+  closingStartedBy: string | null;
   code: string;
   createdAt: Generated<Timestamp>;
   id: string;

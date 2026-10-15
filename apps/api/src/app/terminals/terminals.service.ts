@@ -214,6 +214,29 @@ export class TerminalsService {
     await this.afterRevoke(principal.tenantId, id);
   }
 
+  /**
+   * The closing of a store (spec 2026-10-15-store-closing, E12): every terminal of the store is
+   * revoked in the caller's transaction, as a revocation by hand (lock, checks, audit). Returns the
+   * revoked ids for `afterRevokeAll` once the transaction commits.
+   */
+  async revokeOfStore(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    revokedBy: string,
+  ): Promise<string[]> {
+    const ids = await this.repository.activeOfStore(trx, tenantId, storeId);
+    for (const id of ids) {
+      await this.revokeInTransaction(trx, tenantId, id, revokedBy);
+    }
+    return ids;
+  }
+
+  /** After the commit of `revokeOfStore`: the revocation flag and the live sessions of each. */
+  async afterRevokeAll(tenantId: string, terminalIds: readonly string[]): Promise<void> {
+    for (const id of terminalIds) await this.afterRevoke(tenantId, id);
+  }
+
   // The active terminal this browser holds in the principal's network, if any.
   private async previousTerminal(
     secret: string | null,

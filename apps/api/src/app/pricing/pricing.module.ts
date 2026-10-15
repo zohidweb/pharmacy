@@ -7,6 +7,7 @@ import { PricesController } from './prices.controller';
 import { PricesService } from './prices.service';
 import { PricingRepository } from './pricing.repository';
 import { PurchasePrices } from './purchase-prices';
+import { StoreDiscountDetachment } from './store-discount-detachment';
 import { StorePriceWriter } from './store-price-writer';
 import { StorePricesReader } from './store-prices-reader';
 
@@ -23,8 +24,16 @@ import { StorePricesReader } from './store-prices-reader';
     StorePriceWriter,
     StorePricesReader,
     PurchasePrices,
+    StoreDiscountDetachment,
   ],
   // PurchasePrices — a port the inventory module fills (spec 2026-10-14-owner-cabinet, E15)
-  exports: [StorePriceWriter, StorePricesReader, PurchasePrices],
+  // StoreDiscountDetachment — the stores module takes a closed store out of the discount rules
+  // (spec 2026-10-15-store-closing, E12)
+  exports: [
+    StorePriceWriter,
+    StorePricesReader,
+    PurchasePrices,
+    StoreDiscountDetachment,
+  ],
 })
 export class PricingModule {}

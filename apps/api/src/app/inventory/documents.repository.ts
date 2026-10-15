@@ -121,6 +121,8 @@ export interface HeaderValues {
   sourceCustomerReturnId?: string | null;
   destinationStoreId?: string | null;
   requestDocumentId?: string | null;
+  /** A transfer made by the closing of its store (spec 2026-10-15-store-closing, E6). */
+  storeClosing?: boolean;
   inventoryScope?: 'all' | 'category' | null;
   inventoryCategoryId?: string | null;
   /** The start of a stock count: the transaction time (`now()`), not the clock of the process. */

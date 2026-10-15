@@ -31,17 +31,20 @@ export interface PosSettings {
 // the catalog and the prices come through the public interfaces of their modules.
 @Injectable()
 export class PosRepository {
+  /** `lock: 'share'` — the opening of a shift and the closing of the store do not cross. */
   async store(
     trx: TenantTransaction,
     tenantId: string,
     storeId: string,
+    options: { lock?: 'share' } = {},
   ): Promise<PosStore | null> {
     const result = await sql<PosStore>`
       select s.id, s.code, s.name, s.address, s.mode, s.status, s.legal_entity_id,
              le.tax_id, le.closed_until::text as closed_until
       from pharmacy.stores s
       join pharmacy.legal_entities le on le.tenant_id = s.tenant_id and le.id = s.legal_entity_id
-      where s.tenant_id = ${tenantId} and s.id = ${storeId}`.execute(trx);
+      where s.tenant_id = ${tenantId} and s.id = ${storeId}
+      ${options.lock === 'share' ? sql`for share of s` : sql``}`.execute(trx);
     return result.rows[0] ?? null;
   }
 

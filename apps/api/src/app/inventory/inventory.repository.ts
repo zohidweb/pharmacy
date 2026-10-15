@@ -25,17 +25,23 @@ export interface StockSettings {
 // batches — the sum of their movements (data model 03: stock is never stored).
 @Injectable()
 export class InventoryRepository {
+  /**
+   * `lock: 'share'` — a write of the store waits for its closing, which holds the row `FOR UPDATE`,
+   * and then sees the store `closing` (spec 2026-10-15-store-closing, Review Focus 1).
+   */
   async store(
     trx: TenantTransaction,
     tenantId: string,
     storeId: string,
+    options: { lock?: 'share' } = {},
   ): Promise<StoreForWrite | null> {
     const result = await sql<StoreForWrite>`
       select s.id, s.code, s.name, s.mode, s.status, s.legal_entity_id,
              le.closed_until::text as closed_until
       from pharmacy.stores s
       join pharmacy.legal_entities le on le.tenant_id = s.tenant_id and le.id = s.legal_entity_id
-      where s.tenant_id = ${tenantId} and s.id = ${storeId}`.execute(trx);
+      where s.tenant_id = ${tenantId} and s.id = ${storeId}
+      ${options.lock === 'share' ? sql`for share of s` : sql``}`.execute(trx);
     return result.rows[0] ?? null;
   }
 

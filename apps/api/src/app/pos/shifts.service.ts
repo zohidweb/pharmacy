@@ -126,11 +126,15 @@ export class ShiftsService implements OnModuleInit {
     const op = await this.context.operation(body, 'shifts:create', sentAt);
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, op.tenantId, 'shift.open', id, body, 201, async () => {
+        // the store first, then the terminal — the order of a store closing, which holds the
+        // store row and revokes the terminals (final review I2)
+        const store = await this.context.cloudStore(trx, op.tenantId, op.storeId, {
+          lock: 'share',
+        });
         // a terminal being revoked gets no shift; a revocation waits for this opening (M7)
         if (!(await this.terminals.holdForShift(trx, op.tenantId, op.terminalId))) {
           throw new ProblemException(403, 'terminal_required');
         }
-        const store = await this.context.cloudStore(trx, op.tenantId, op.storeId);
         if (await this.shifts.openShiftOfTerminal(trx, op.tenantId, op.terminalId)) {
           throw new ProblemException(409, 'shift_open');
         }

@@ -123,13 +123,18 @@ export class PosContext {
     };
   }
 
-  /** An active cloud store of the network, else 404 / 409 `offline_store_read_only` (E19). */
+  /**
+   * An active cloud store of the network, else 404 / 409 `offline_store_read_only` (E19). The opening
+   * of a shift reads it `FOR SHARE`: a closing of the store (spec 2026-10-15-store-closing) holds the
+   * row `FOR UPDATE`, so the opening waits and sees the store `closing`.
+   */
   async cloudStore(
     trx: TenantTransaction,
     tenantId: string,
     storeId: string,
+    options: { lock?: 'share' } = {},
   ): Promise<PosStore> {
-    const store = await this.repository.store(trx, tenantId, storeId);
+    const store = await this.repository.store(trx, tenantId, storeId, options);
     if (store === null || store.status !== 'active') {
       throw new ProblemException(404, 'not_found');
     }

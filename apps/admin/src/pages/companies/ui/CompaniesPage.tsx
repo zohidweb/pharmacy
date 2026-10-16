@@ -5,7 +5,7 @@ import type {
   TenantListItem,
   TenantSortKey,
 } from '@pharmacy/shared-dto';
-import { formatDateOnly, formatMoney } from '@pharmacy/shared-util';
+import { formatMoney } from '@pharmacy/shared-util';
 import {
   Alert,
   Avatar,
@@ -67,7 +67,7 @@ export function CompaniesPage() {
 
   const columns: DataTableColumn<
     TenantListItem,
-    TenantSortKey | 'status' | 'actions'
+    TenantSortKey | 'status' | 'actions' | 'advance'
   >[] = [
     {
       key: 'name',
@@ -110,27 +110,30 @@ export function CompaniesPage() {
         }),
     },
     {
-      key: 'paidUntil',
-      header: t('columns.paidUntil'),
-      sortable: true,
-      nowrap: true,
-      cell: (tenant) =>
-        tenant.paidUntil ? formatDateOnly(tenant.paidUntil) : '—',
-    },
-    {
       key: 'status',
       header: t('columns.status'),
       nowrap: true,
       cell: (tenant) => <TenantStatusPill tenant={tenant} />,
     },
+    // what the invoices still miss and the payments not allocated (spec 2026-10-15-billing-services, B12)
     {
-      key: 'monthlyCharge',
-      header: t('columns.monthlyCharge'),
+      key: 'debt',
+      header: t('columns.debt'),
       sortable: true,
       numeric: true,
       nowrap: true,
-      cell: (tenant) =>
-        formatMoney(tenant.monthlyChargeMinor, { withSign: false }),
+      cell: (tenant) => (
+        <span className={tenant.overdue ? 'font-bold text-danger' : undefined}>
+          {formatMoney(tenant.debtMinor, { withSign: false })}
+        </span>
+      ),
+    },
+    {
+      key: 'advance',
+      header: t('columns.advance'),
+      numeric: true,
+      nowrap: true,
+      cell: (tenant) => formatMoney(tenant.advanceMinor, { withSign: false }),
     },
     {
       key: 'actions',
@@ -275,7 +278,7 @@ export function CompaniesPage() {
                       [
                         ['cloud', tenant.cloudStores],
                         ['offline', tenant.offlineStores],
-                        ['month', formatMoney(tenant.monthlyChargeMinor)],
+                        ['debt', formatMoney(tenant.debtMinor)],
                       ] as const
                     ).map(([key, value]) => (
                       <div
@@ -292,9 +295,8 @@ export function CompaniesPage() {
                     ))}
                   </dl>
                   <p className="flex items-center gap-2 text-xs text-fg-muted">
-                    <Icon name="calendar-check" size="sm" />
-                    {t('columns.paidUntil')}:{' '}
-                    {tenant.paidUntil ? formatDateOnly(tenant.paidUntil) : '—'}
+                    <Icon name="wallet" size="sm" />
+                    {t('card.advance')}: {formatMoney(tenant.advanceMinor)}
                   </p>
                   <div className="mt-auto flex items-center justify-end gap-2">
                     <Link

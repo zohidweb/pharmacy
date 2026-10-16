@@ -2,7 +2,7 @@
  * REST contract of the operator screens «Счета и платежи», «Услуги», «Лицензионные ключи»,
  * «Версии установок». Shapes only (apps/api implements class-validator DTOs; frontends use
  * `import type`, ADR-0015). Money: integer dirams, TJS only (ADR-0016); VAT is a separate line.
- * Financial writes (payments, invoice generation) carry an Idempotency-Key header.
+ * Payments carry their client `id` as the idempotency key; a repeated generation creates nothing.
  */
 import type {
   InvoiceStatus,
@@ -11,57 +11,102 @@ import type {
   PaymentMethod,
   SyncSchedule,
 } from './platform-tenants.js';
+import type { PlatformRequisites } from './platform-system.js';
 
-// ── Invoices and payments ─────────────────────────────────────────────────────────────────
+// ── Invoices and payments (spec 2026-10-15-billing-services, B1–B5, B10, A1–A11) ─────────────
 
 /** `YYYY-MM` billing period. */
 export type BillingPeriod = string;
 
+/** GET /operator/billing/summary?period — the period's invoices; the overdue debt over all periods. */
 export interface BillingSummary {
   period: BillingPeriod;
   issuedMinor: number;
+  /** Paid on the invoices of the period. */
   paidMinor: number;
   invoices: number;
   paidInvoices: number;
   overdueMinor: number;
   overdueTenants: number;
+  /** From the invoices of the period, otherwise the current settings. */
   pricePerStoreMinor: number;
   vatRatePercent: number;
 }
 
 export interface InvoiceListItem {
   id: string;
+  /** `СЧ-ГГГГ-ММ-NNN` (A4). */
   number: string;
   tenantId: string;
   tenantName: string;
   period: BillingPeriod;
+  /** Store lines of the invoice. */
   stores: number;
   hasServices: boolean;
   netMinor: number;
   vatMinor: number;
   totalMinor: number;
+  /** What the allocation of payments put on the invoice (A7). */
+  paidMinor: number;
+  remainingMinor: number;
+  /** Derived (A8): `paid` at paid = total, `partially_paid` above 0, otherwise `issued`. */
   status: InvoiceStatus;
+  /** A remainder after the due date (A8): a flag, not a status. */
+  overdue: boolean;
+  issuedAt: string;
   /** Date-only. */
   dueOn: string;
+  /** Date-only: the day the invoice became fully paid. */
+  paidOn: string | null;
 }
 
-export type InvoiceListFilter = 'all' | 'paid' | 'overdue';
+/** `unpaid` — a remainder above 0; `overdue` — a remainder after the due date. */
+export type InvoiceListFilter = 'all' | 'unpaid' | 'overdue' | 'paid';
 
-/** GET /operator/invoices?filter&limit&offset */
+/** GET /operator/invoices?filter&tenantId&period&limit&offset */
+export interface InvoiceListQuery {
+  filter?: InvoiceListFilter;
+  tenantId?: string;
+  period?: BillingPeriod;
+  limit?: number;
+  offset?: number;
+}
+
+/** Counts per filter over the same tenant and period. */
 export interface InvoiceListResponse extends Page<InvoiceListItem> {
   counts: Record<InvoiceListFilter, number>;
 }
 
+/**
+ * A line of an invoice. A store: its name, billed days of the month (A2) and the discount of the
+ * network (A10); a service: its Russian name and the day it was provided (A11).
+ */
 export interface InvoiceLine {
+  id: string;
   kind: 'store' | 'service';
   description: string;
-  /** Billed days of the period (proration); null for one-time services. */
+  storeId: string | null;
   days: number | null;
+  daysInMonth: number | null;
+  /** The charge of the store before the discount. */
+  baseMinor: number | null;
+  discountBp: number | null;
+  discountMinor: number | null;
+  tenantServiceId: string | null;
+  /** Date-only. */
+  providedOn: string | null;
   amountMinor: number;
 }
 
+/** GET /operator/invoices/{id} — with the snapshot taken when it was issued (A5), for the card and print. */
 export interface InvoiceDetails extends InvoiceListItem {
+  pricePerStoreMinor: number;
   vatRatePercent: number;
+  /** The requisites of the platform at issue; the purpose is resolved in `paymentPurpose`. */
+  supplier: Omit<PlatformRequisites, 'paymentPurposeTemplate'>;
+  payer: { name: string; inn: string };
+  paymentPurpose: string;
+  recalculatedAt: string | null;
   lines: InvoiceLine[];
 }
 
@@ -71,16 +116,22 @@ export type PeriodState = 'closed' | 'current' | 'future';
 export interface InvoiceGenerationPreview {
   period: BillingPeriod;
   state: PeriodState;
+  /** Date-only: the day invoices of the period can be generated from (A1). */
+  opensOn: string;
   rows: Array<{
     tenantId: string;
     tenantName: string;
-    activeStores: number;
+    stores: number;
+    services: number;
     totalMinor: number;
+    /** The invoice exists already; `totalMinor` is its total. */
+    invoiced: boolean;
   }>;
+  /** Total of the invoices not issued yet. */
   totalMinor: number;
 }
 
-/** POST /operator/invoices/generations — only for a closed period. */
+/** POST /operator/invoices/generations — only for a closed period; a repeat creates nothing. */
 export interface GenerateInvoicesRequest {
   period: BillingPeriod;
 }
@@ -89,7 +140,7 @@ export interface GenerateInvoicesResponse {
   created: number;
 }
 
-/** GET /operator/invoices/{id}/recalculation-preview */
+/** GET /operator/invoices/{id}/recalculation-preview — only an invoice without payments (A6). */
 export interface RecalculationPreview {
   beforeMinor: number;
   afterMinor: number;
@@ -101,37 +152,77 @@ export interface PaymentListItem {
   paidOn: string;
   tenantId: string;
   tenantName: string;
-  invoiceId: string;
-  invoiceNumber: string;
+  /** The invoice the payment goes to first (B2); the rest covers the oldest ones. */
+  invoiceId: string | null;
+  invoiceNumber: string | null;
   amountMinor: number;
   method: PaymentMethod;
   recordedBy: string;
-  comment: string;
+  comment: string | null;
   cancelled: boolean;
+  cancelReason: string | null;
 }
 
-/** POST /operator/payments */
+/** GET /operator/payments?tenantId&limit&offset — newest first. */
+export interface PaymentListQuery {
+  tenantId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * POST /operator/payments — a payment of a network (B2). `id` (UUIDv7) is made by the client and is
+ * the idempotency key (A9): the same body gets the same answer, another one 409.
+ */
 export interface RecordPaymentRequest {
-  invoiceId: string;
+  id: string;
+  tenantId: string;
+  invoiceId?: string | null;
   amountMinor: number;
+  /** Date-only, not in the future. */
   paidOn: string;
   method: PaymentMethod;
-  /** Date-only "paid until" applied to all cloud stores of the tenant. */
-  paidUntil?: string;
-  comment?: string;
+  comment?: string | null;
 }
 
-/** PATCH /operator/payments/{id} */
+/** PATCH /operator/payments/{id} — the allocation is computed again (A7). */
 export interface UpdatePaymentRequest {
   amountMinor: number;
   paidOn: string;
   method: PaymentMethod;
-  comment: string;
+  comment: string | null;
 }
 
 /** POST /operator/payments/{id}/cancellation — payments are cancelled, never deleted (audit). */
 export interface CancelPaymentRequest {
   reason: string;
+}
+
+/**
+ * A discount of a network on the store tariff for months `fromMonth`…`toMonth` (A10). Periods of one
+ * network do not overlap. `invoicedThrough` — the last month whose invoice took the discount: before
+ * it the period cannot end, and with it the discount cannot be removed.
+ */
+export interface TenantDiscount {
+  id: string;
+  /** 100…10 000 (1–100 %). */
+  percentBp: number;
+  /** `YYYY-MM`. */
+  fromMonth: string;
+  toMonth: string;
+  invoicedThrough: string | null;
+}
+
+/** POST /operator/tenants/{id}/discounts — needs a recent sign-in. */
+export interface AddTenantDiscountRequest {
+  percentBp: number;
+  fromMonth: string;
+  toMonth: string;
+}
+
+/** PATCH /operator/discounts/{id} — shortens the period; a longer one is a new discount. */
+export interface ShortenTenantDiscountRequest {
+  toMonth: string;
 }
 
 // ── Services (spec 2026-10-15-billing-services, B7–B9, A11–A14) ─────────────────────────────
@@ -219,9 +310,11 @@ export interface TenantServiceItem {
 
 /**
  * POST /operator/tenants/{id}/services → 201 `TenantServiceItem` (approved at once). 404 (unknown
- * network, unknown or archived service).
+ * network, unknown or archived service). `id` (UUIDv7) is made by the client and is the idempotency
+ * key (B17): the same body gets the same answer, another one 409 `idempotency_conflict`.
  */
 export interface AddTenantServiceRequest {
+  id: string;
   serviceId: string;
   priceMinor: number;
 }

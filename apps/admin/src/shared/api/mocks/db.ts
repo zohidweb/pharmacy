@@ -23,7 +23,6 @@ function store(
   return {
     status: 'active',
     closedOn: null,
-    paidUntil: partial.mode === 'cloud' ? '2026-10-31' : null,
     licenseValidUntil: null,
     lastSyncAt: null,
     monthSalesMinor: 0,
@@ -60,6 +59,7 @@ function seed(): MockDb {
       mode: 'cloud',
       monthSalesMinor: 9_640_000,
       monthReceipts: 2_310,
+      connectedOn: '2026-03-02',
     }),
     store({
       id: 's-102',
@@ -70,6 +70,7 @@ function seed(): MockDb {
       mode: 'cloud',
       monthSalesMinor: 7_215_050,
       monthReceipts: 1_904,
+      connectedOn: '2026-07-12',
     }),
     store({
       id: 's-103',
@@ -147,7 +148,7 @@ function seed(): MockDb {
       mode: 'cloud',
       status: 'closed',
       closedOn: '2026-09-08',
-      paidUntil: '2026-09-08',
+      connectedOn: '2026-03-02',
     }),
     store({
       id: 's-201',
@@ -158,6 +159,7 @@ function seed(): MockDb {
       mode: 'cloud',
       monthSalesMinor: 12_480_000,
       monthReceipts: 3_120,
+      connectedOn: '2026-05-15',
     }),
     store({
       id: 's-202',
@@ -166,7 +168,6 @@ function seed(): MockDb {
       name: 'Пример Мед — склад',
       address: 'Худжанд, ул. Складская, 3',
       mode: 'cloud',
-      paidUntil: '2026-09-15',
     }),
     store({
       id: 's-203',
@@ -195,6 +196,7 @@ function seed(): MockDb {
       mode: 'cloud',
       monthSalesMinor: 2_150_000,
       monthReceipts: 610,
+      connectedOn: '2026-08-20',
     }),
   ];
 
@@ -215,8 +217,10 @@ function seed(): MockDb {
       },
       cloudStores: 2,
       offlineStores: 2,
-      paidUntil: '2026-10-31',
-      monthlyChargeMinor: 24_000,
+      debtMinor: 0,
+      overdueDebtMinor: 0,
+      advanceMinor: 0,
+      discount: null,
     },
     {
       id: 't-2',
@@ -225,7 +229,7 @@ function seed(): MockDb {
       inn: '000000002',
       joinedOn: '2026-05-12',
       status: 'active',
-      overdue: true,
+      overdue: false,
       block: null,
       owner: {
         fullName: 'Владелица Пример',
@@ -234,8 +238,10 @@ function seed(): MockDb {
       },
       cloudStores: 2,
       offlineStores: 1,
-      paidUntil: '2026-09-15',
-      monthlyChargeMinor: 24_000,
+      debtMinor: 0,
+      overdueDebtMinor: 0,
+      advanceMinor: 0,
+      discount: null,
     },
     {
       id: 't-3',
@@ -253,8 +259,10 @@ function seed(): MockDb {
       },
       cloudStores: 1,
       offlineStores: 0,
-      paidUntil: '2026-10-31',
-      monthlyChargeMinor: 12_000,
+      debtMinor: 0,
+      overdueDebtMinor: 0,
+      advanceMinor: 0,
+      discount: null,
     },
   ];
 

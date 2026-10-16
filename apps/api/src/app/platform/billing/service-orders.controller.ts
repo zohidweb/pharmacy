@@ -73,14 +73,14 @@ export class ServiceOrdersController {
     return this.orders.ofTenant(id);
   }
 
-  /** 201, approved at once; 404 (network, unknown or archived service). */
+  /** 201, approved at once; 404 (network, unknown or archived service), 409 `idempotency_conflict`. */
   @RequireOperatorPermission('tenants:manage')
   @Post('tenants/:id/services')
   add(
     @Param('id', uuid()) id: string,
     @Body() body: AddTenantServiceDto,
   ): Promise<TenantServiceItem> {
-    return this.orders.add(id, body.serviceId, body.priceMinor);
+    return this.orders.add(id, body.serviceId, body.priceMinor, body.id);
   }
 
   /** 400 (`providedOn`: `future`, `before_decision`), 404, 409 `service_not_approved`. */

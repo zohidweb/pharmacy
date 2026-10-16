@@ -35,6 +35,7 @@ import {
   useTenantStats,
   useTenantStores,
 } from '@/entities/tenant';
+import { TenantDiscounts } from '@/features/tenant-discounts';
 import {
   AddTenantService,
   TenantServiceActions,
@@ -86,15 +87,11 @@ export function StoresTab({ tenantId }: { tenantId: string }) {
       key: 'term',
       header: t('columns.term'),
       nowrap: true,
-      cell: (store) => {
-        const date =
-          store.mode === 'cloud' ? store.paidUntil : store.licenseValidUntil;
-        return date
-          ? t(store.mode === 'cloud' ? 'paidUntil' : 'keyUntil', {
-              date: formatDateOnly(date),
-            })
-          : '—';
-      },
+      // a cloud store is billed by the invoices of the company (spec 2026-10-15-billing-services, B12)
+      cell: (store) =>
+        store.mode === 'offline' && store.licenseValidUntil
+          ? t('keyUntil', { date: formatDateOnly(store.licenseValidUntil) })
+          : '—',
     },
     {
       key: 'sync',
@@ -168,10 +165,27 @@ export function BillingTab({ tenantId }: { tenantId: string }) {
       cell: (invoice) => formatMoney(invoice.totalMinor, { withSign: false }),
     },
     {
+      key: 'paid',
+      header: t('columns.paid'),
+      numeric: true,
+      nowrap: true,
+      cell: (invoice) => formatMoney(invoice.paidMinor, { withSign: false }),
+    },
+    {
+      key: 'remaining',
+      header: t('columns.remaining'),
+      numeric: true,
+      nowrap: true,
+      cell: (invoice) =>
+        formatMoney(invoice.remainingMinor, { withSign: false }),
+    },
+    {
       key: 'status',
       header: t('columns.status'),
       nowrap: true,
-      cell: (invoice) => <InvoiceStatusPill status={invoice.status} />,
+      cell: (invoice) => (
+        <InvoiceStatusPill status={invoice.status} overdue={invoice.overdue} />
+      ),
     },
   ];
 
@@ -205,12 +219,26 @@ export function BillingTab({ tenantId }: { tenantId: string }) {
                     key={payment.id}
                     className="flex flex-col border-b border-border pb-3 last:border-b-0"
                   >
-                    <span className="font-bold tabular-nums">
+                    <span
+                      className={
+                        payment.cancelled
+                          ? 'font-bold tabular-nums text-fg-subtle line-through'
+                          : 'font-bold tabular-nums'
+                      }
+                    >
                       {formatMoney(payment.amountMinor)}
                     </span>
                     <span className="text-xs text-fg-subtle">
-                      {formatDateOnly(payment.paidOn)} ·{' '}
-                      {t(`method.${payment.method}`)} · {payment.recordedBy}
+                      {[
+                        formatDateOnly(payment.paidOn),
+                        t(`method.${payment.method}`),
+                        payment.recordedBy,
+                        payment.invoiceNumber &&
+                          t('toInvoice', { number: payment.invoiceNumber }),
+                        payment.cancelled && t('cancelled'),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                   </li>
                 ))}
@@ -219,6 +247,9 @@ export function BillingTab({ tenantId }: { tenantId: string }) {
           }
         </QueryState>
       </Card>
+      <div className="col-span-3">
+        <TenantDiscounts tenantId={tenantId} />
+      </div>
     </div>
   );
 }

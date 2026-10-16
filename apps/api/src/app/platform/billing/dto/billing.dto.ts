@@ -34,7 +34,7 @@ import { PRINTABLE_NAME } from '../../operators/dto/operator.dto';
 // Limits of spec 2026-10-15-billing-services (A14, A20, section 11).
 export const MAX_MONEY_MINOR = 10_000_000_000;
 /** A description may keep line breaks; other control and invisible characters are refused. */
-const PRINTABLE_TEXT = /^(?:[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]|\n)*$/u;
+export const PRINTABLE_TEXT = /^(?:[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]|\n)*$/u;
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -140,7 +140,7 @@ export class UpsertServiceDto implements UpsertServiceRequest {
 }
 
 /** A reason the owner sees: 5–500 characters, line breaks kept. */
-class ReasonDto {
+export class ReasonDto {
   @Transform(trim)
   @IsString()
   @Length(5, 500)
@@ -180,6 +180,10 @@ export class AddTenantServiceDto
   extends PriceDto
   implements AddTenantServiceRequest
 {
+  /** The idempotency key made by the client (B17). */
+  @IsUUID()
+  id!: string;
+
   @IsUUID()
   serviceId!: string;
 }

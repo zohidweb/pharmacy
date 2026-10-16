@@ -140,7 +140,9 @@ describe('CompanyPage', () => {
     fireEvent.click(
       await screen.findByRole('tab', { name: 'Счета и платежи' }),
     );
-    expect(await screen.findByText('СЧ-2026-09-001')).toBeTruthy();
+    expect(await screen.findByText('СЧ-2026-08-001')).toBeTruthy();
+    // debt, advance and the discount of the network (spec 2026-10-15-billing-services, B12)
+    expect(await screen.findByText('Скидки')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Аудит' }));
     expect(

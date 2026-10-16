@@ -1,4 +1,5 @@
 export * from './lib/audit-groups';
+export * from './lib/billing';
 export * from './lib/catalog';
 export * from './lib/discount';
 export * from './lib/expenses';

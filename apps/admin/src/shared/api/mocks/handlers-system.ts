@@ -2,6 +2,7 @@
  * Mock handlers of «Дашборд», «Статистика», «Уведомления», «Журнал действий», «Настройки
  * платформы», «Профиль» and the sidebar counters.
  */
+import { invoiceView } from './billing-ledger';
 import type {
   OperatorQueueItem,
   UsageStoreRow,
@@ -63,6 +64,14 @@ function storeRow(storeId: string): UsageStoreRow | null {
   };
 }
 
+function lastPeriodInvoices(db: ReturnType<typeof mockDb>) {
+  const last = db.billing.invoices
+    .map((invoice) => invoice.period)
+    .sort()
+    .at(-1);
+  return db.billing.invoices.filter((invoice) => invoice.period === last);
+}
+
 export const systemHandlers: Pick<
   MockHandlers,
   | 'attention.counts'
@@ -98,9 +107,9 @@ export const systemHandlers: Pick<
   'dashboard.get': () => {
     const db = mockDb();
     const active = db.stores.filter((store) => store.status === 'active');
-    const overdue = db.billing.invoices.filter(
-      (invoice) => invoice.status === 'overdue',
-    );
+    const overdue = db.billing.invoices
+      .map(invoiceView)
+      .filter((invoice) => invoice.overdue);
     const sales = new Map<string, number>();
     for (const tenant of db.tenants) {
       for (const day of mockStats(tenant.id).daily) {
@@ -114,7 +123,7 @@ export const systemHandlers: Pick<
         params: {
           tenantName: invoice.tenantName,
           invoiceNumber: invoice.number,
-          amountMinor: invoice.totalMinor,
+          amountMinor: invoice.remainingMinor,
         },
         target: { screen: 'tenant' as const, id: invoice.tenantId },
         at: `${invoice.dueOn}T00:00:00Z`,
@@ -160,8 +169,9 @@ export const systemHandlers: Pick<
         cloudStores: active.filter((store) => store.mode === 'cloud').length,
         offlineStores: active.filter((store) => store.mode === 'offline')
           .length,
-        accruedMinor: db.tenants.reduce(
-          (sum, tenant) => sum + tenant.monthlyChargeMinor,
+        // the invoices of the last invoiced period
+        accruedMinor: lastPeriodInvoices(db).reduce(
+          (sum, invoice) => sum + invoice.totalMinor,
           0,
         ),
         attention: {

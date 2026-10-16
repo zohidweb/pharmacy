@@ -1,6 +1,6 @@
 /*
- * Printing: only the print root reaches the printer (receipts, Z-reports); black on white,
- * no page margins so Chrome prints no headers and footers.
+ * Printing: only the print root reaches the printer (receipts, Z-reports, A4 invoices); black on
+ * white, no page margins so Chrome prints no headers and footers.
  */
 .ph-print-root {
   display: none;
@@ -36,6 +36,35 @@
 
   .ph-print-line {
     white-space: pre;
+    break-inside: avoid;
+  }
+
+  /*
+   * An A4 document: the named page `sheet`. Its page margin stays 0 (no headers and footers); the
+   * margin is the padding of the sheet, repeated on every page by box-decoration-break.
+   */
+  @page sheet {
+    size: A4;
+    margin: 0;
+  }
+
+  .ph-print-root.ph-print-sheet {
+    page: sheet;
+    inline-size: auto;
+    padding: var(--ph-sheet-margin);
+    box-decoration-break: clone;
+    font-family: var(--ph-font-sans);
+    font-size: var(--ph-sheet-font-size);
+    line-height: var(--ph-sheet-line-height);
+  }
+
+  .ph-print-sheet * {
+    color: black !important; /* ignore-design: a printed document is black on white */
+    border-color: black !important; /* ignore-design: a printed document is black on white */
+    background: none !important; /* ignore-design: a printed document is black on white */
+  }
+
+  .ph-sheet-row {
     break-inside: avoid;
   }
 }

@@ -109,6 +109,14 @@ export {
 } from './lib/print/ReceiptPrint';
 
 export {
+  InvoiceSheet,
+  type InvoiceSheetProps,
+  type InvoiceSheetRow,
+} from './lib/print/InvoiceSheet';
+
+export { SheetPrint, type SheetPrintProps } from './lib/print/SheetPrint';
+
+export {
   BarChart,
   type BarChartItem,
   type BarChartProps,

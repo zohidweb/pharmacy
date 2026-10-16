@@ -9,6 +9,11 @@
   --ph-receipt-padding-inline: 1mm;
   --ph-receipt-cols: 32;
   --ph-receipt-width: 48mm; /* printable width of 58 mm paper */
+
+  /* A4 documents (an invoice): the page margin is the padding of the sheet, see styles/print.css */
+  --ph-sheet-margin: 15mm;
+  --ph-sheet-font-size: 10pt;
+  --ph-sheet-line-height: 1.35;
 }
 
 [data-receipt-width='80'] {

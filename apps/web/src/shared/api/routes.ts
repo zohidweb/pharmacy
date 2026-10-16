@@ -95,6 +95,7 @@ import type {
   SaveStockCountRequest,
   StartStockCountRequest,
   StockCount,
+  StockCountVersion,
   StockCountListItem,
   StockDocumentKind,
   StockListQuery,
@@ -769,6 +770,10 @@ export const apiRoutes = {
   'stockCounts.get': route<StockCount, undefined, { id: string }>(
     'GET',
     (p) => `/stock-counts/${id(p)}`,
+  ),
+  'stockCounts.version': route<StockCountVersion, undefined, { id: string }>(
+    'GET',
+    (p) => `/stock-counts/${id(p)}/version`,
   ),
   'stockCounts.start': route<StockCount, StartStockCountRequest>(
     'POST',

@@ -15,6 +15,7 @@ import type {
   StockCount,
   StockCountLine,
   StockCountListItem,
+  StockCountVersion,
 } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
 import {
@@ -47,6 +48,15 @@ export class StockCountsController {
   @Get(':id')
   get(@Param('id', new ParseUUIDPipe()) id: string): Promise<StockCount> {
     return this.counts.get(id);
+  }
+
+  /** The fingerprint a running count polls; 404 as the count itself. */
+  @RequirePermission('inventory:view')
+  @Get(':id/version')
+  version(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<StockCountVersion> {
+    return this.counts.version(id);
   }
 
   /** The snapshot of the book stock; freezes the scope. 409 `stock_count_in_progress`. */

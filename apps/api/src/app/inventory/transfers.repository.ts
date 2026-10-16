@@ -45,6 +45,18 @@ const ofStores = (storeIds: readonly string[] | null) =>
     : sql`and (d.store_id in (${sql.join([...storeIds])})
            or d.destination_store_id in (${sql.join([...storeIds])}))`;
 
+/**
+ * A draft is its author's until it is sent (tr-M7, decided 2026-10-16): the author side is
+ * `store_id` — the sender of a transfer, the requester of a request; an employee without that store
+ * in their scope (null — the whole network) does not see it, whatever store the overview is of.
+ */
+const draftsOfAuthor = (scope: readonly string[] | null) =>
+  scope === null
+    ? sql``
+    : scope.length === 0
+      ? sql`and d.status <> 'draft'`
+      : sql`and (d.status <> 'draft' or d.store_id in (${sql.join([...scope])}))`;
+
 // The lines of transfer requests and transfers (spec 2026-10-12-supplier-returns-transfers, 3.2);
 // the headers live in DocumentsRepository.
 @Injectable()
@@ -202,7 +214,8 @@ export class TransfersRepository {
   /**
    * Requests or transfers of the stores (either side; null — every store), newest first (spec
    * 5.4): every open one, and the closed ones of the business dates from `since`, at most `limit`
-   * of them — an open document never drops out of the only screen it is acted on.
+   * of them — an open document never drops out of the only screen it is acted on. Drafts — of the
+   * author side only.
    */
   async overview(
     trx: TenantTransaction,
@@ -211,6 +224,7 @@ export class TransfersRepository {
     storeIds: readonly string[] | null,
     since: string,
     limit: number,
+    scope: readonly string[] | null,
   ): Promise<OverviewRow[]> {
     if (storeIds !== null && storeIds.length === 0) return [];
     const open =
@@ -234,6 +248,7 @@ export class TransfersRepository {
       from pharmacy.documents d
       where d.tenant_id = ${tenantId} and d.type = ${type}
         ${ofStores(storeIds)}
+        ${draftsOfAuthor(scope)}
         and ${which}
       order by d.document_date desc, d.number desc
       ${tail}`;

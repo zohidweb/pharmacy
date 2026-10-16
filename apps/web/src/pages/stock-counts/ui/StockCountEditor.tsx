@@ -209,16 +209,42 @@ export function StockCountEditor({
   const tDocs = useTranslations('stockDocs');
   const queryClient = useQueryClient();
   const queryKey = ['stock-counts', 'one', document.id];
-  // the entries of the other tablets come with a periodic refetch while the count runs
   const current = useQuery({
     queryKey,
     queryFn: ({ signal }) =>
       apiRequest('stockCounts.get', { params: { id: document.id }, signal }),
     initialData: document,
-    refetchInterval: (query) =>
-      query.state.data?.status === 'in_progress' ? 10_000 : false,
   });
   const doc = current.data;
+  // the entries of the other tablets: while the count runs (and the tab is visible) a light version
+  // is polled, and the whole document — at 10 000 lines megabytes — is reloaded only when it changed
+  const version = useQuery({
+    queryKey: [...queryKey, 'version'],
+    queryFn: ({ signal }) =>
+      apiRequest('stockCounts.version', {
+        params: { id: document.id },
+        signal,
+      }),
+    enabled: doc.status === 'in_progress',
+    refetchInterval: 10_000,
+  });
+  // the version a loaded document showed; moved on only when its reload succeeded, so a failed one
+  // is tried again at the next poll
+  const seenVersion = useRef<string | null>(null);
+  const latestVersion = version.data?.version ?? null;
+  const polledAt = version.dataUpdatedAt;
+  const reload = current.refetch;
+  useEffect(() => {
+    if (latestVersion === null) return;
+    if (seenVersion.current === null) {
+      seenVersion.current = latestVersion;
+      return;
+    }
+    if (seenVersion.current === latestVersion) return;
+    void reload().then((result) => {
+      if (!result.isError) seenVersion.current = latestVersion;
+    });
+  }, [latestVersion, polledAt, reload]);
   // a poll in flight must not overwrite a fresh answer: an entry that disappears for a few
   // seconds would be entered again and counted twice
   const setDoc = (next: StockCount) => {

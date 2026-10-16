@@ -80,6 +80,7 @@ export class TransfersService {
         storeIds,
         since,
         OVERVIEW_LIMIT,
+        this.stores.scope(),
       );
       const transferRows = await this.lines.overview(
         trx,
@@ -88,6 +89,7 @@ export class TransfersService {
         storeIds,
         since,
         OVERVIEW_LIMIT,
+        this.stores.scope(),
       );
       const stores = await this.inventory.activeStores(trx, tenantId, null);
       return {

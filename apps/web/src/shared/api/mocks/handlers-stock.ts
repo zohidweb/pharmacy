@@ -1763,6 +1763,21 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     inScope(session, doc.storeId, correlationId);
     return countView(doc, canSeeCost, author().name);
   },
+  // as the API: anything the count shows changes the version
+  'stockCounts.version': ({ params, correlationId }) => {
+    const { session, author, canSeeCost } = context(
+      correlationId,
+      'inventory:view',
+    );
+    const doc = findDoc(db().stockCounts, params.id, correlationId);
+    inScope(session, doc.storeId, correlationId);
+    const shown = JSON.stringify(countView(doc, canSeeCost, author().name));
+    let hash = 0;
+    for (let i = 0; i < shown.length; i += 1) {
+      hash = (hash * 31 + shown.charCodeAt(i)) | 0;
+    }
+    return { version: `${shown.length}:${hash}` };
+  },
   'stockCounts.start': ({ body, correlationId }) => {
     // the start freezes the stock of the scope: a manager's step (spec 2026-10-12, R1)
     const { session, author, canSeeCost } = context(
@@ -2077,11 +2092,23 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     if (query?.storeId) inScope(session, query.storeId, correlationId);
     const mine = (...ids: string[]) =>
       query?.storeId ? ids.includes(query.storeId) : involves(session, ...ids);
+    // a draft only to the author side: the requester, the sender (tr-M7)
+    const author = (status: string, storeId: string) =>
+      status !== 'draft' ||
+      session.scope === 'network' ||
+      involves(session, storeId);
     const requests = db()
-      .transferRequests.filter((r) => mine(r.requesterStoreId, r.fromStoreId))
+      .transferRequests.filter(
+        (r) =>
+          mine(r.requesterStoreId, r.fromStoreId) &&
+          author(r.status, r.requesterStoreId),
+      )
       .sort((a, b) => b.number.localeCompare(a.number));
     const transfers = db()
-      .transfers.filter((t) => mine(t.fromStoreId, t.toStoreId))
+      .transfers.filter(
+        (t) =>
+          mine(t.fromStoreId, t.toStoreId) && author(t.status, t.fromStoreId),
+      )
       .sort(
         (a, b) =>
           b.date.localeCompare(a.date) || b.number.localeCompare(a.number),

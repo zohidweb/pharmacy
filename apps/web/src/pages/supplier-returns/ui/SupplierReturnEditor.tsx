@@ -70,6 +70,13 @@ export function SupplierReturnEditor({
   const [loaded, setLoaded] = useState(!document);
   const [touched, setTouched] = useState(false);
   const [unposting, setUnposting] = useState(false);
+  // another supplier for a return with lines: its lines are of the old one (sr-M6, 2026-10-16)
+  const [nextSupplier, setNextSupplier] = useState<string | null>(null);
+  const chooseSupplier = (id: string) => {
+    setSupplierId(id);
+    setReceiptId(null);
+    setLines([]);
+  };
   /** Exactly these products of the store with their batches of the supplier in stock. */
   const productsById = (ids: readonly string[]) =>
     queryClient.fetchQuery({
@@ -319,13 +326,14 @@ export function SupplierReturnEditor({
             <Select
               label={t('supplier')}
               required
-              disabled={!editable || lines.length > 0}
+              // while a saved draft loads its lines are not there yet: no change without the dialog
+              disabled={!editable || !loaded}
               placeholder={t('supplierPlaceholder')}
               value={supplierId}
               error={touched && !supplierId ? t('supplierRequired') : undefined}
               onChange={(event) => {
-                setSupplierId(event.target.value);
-                setReceiptId(null);
+                if (lines.length > 0) setNextSupplier(event.target.value);
+                else chooseSupplier(event.target.value);
               }}
               options={(suppliers.data ?? []).map((s) => ({
                 value: s.id,
@@ -431,6 +439,31 @@ export function SupplierReturnEditor({
           )}
           <p className="text-xs text-fg-subtle">{t('hint')}</p>
         </div>
+      </Dialog>
+      <Dialog
+        open={nextSupplier !== null}
+        onClose={() => setNextSupplier(null)}
+        title={t('changeSupplier.title')}
+        closeLabel={tDocs('close')}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setNextSupplier(null)}>
+              {tDocs('cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (nextSupplier !== null) chooseSupplier(nextSupplier);
+                setNextSupplier(null);
+              }}
+            >
+              {t('changeSupplier.confirm')}
+            </Button>
+          </>
+        }
+      >
+        <p className="m-0">{t('changeSupplier.body')}</p>
       </Dialog>
       {doc && (
         <UnpostDialog

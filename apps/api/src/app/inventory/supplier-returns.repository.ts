@@ -36,19 +36,23 @@ export interface ReturnBatch {
 
 /**
  * Amount of a line at the purchase price of its batch (spec 2026-10-12-supplier-returns-transfers,
- * R2): pieces × price of a pack / pieces per pack, rounded — a return line may be in pieces. A goods
- * receipt, always in packs, counts packs × price; one formula for all documents is an open
- * architect question (triage sr-M1).
+ * R2): the price of its unit × the quantity, so the lines add up to the document — packs × price of
+ * a pack (as a goods receipt), pieces × cost of a piece rounded up: a line in pieces is counted so in
+ * every document (the rule of the ТЗ, decided by the architect 2026-10-16, sr-M1).
  */
 export const returnAmount = (line: {
   qtyPieces: number;
+  unit: 'pack' | 'piece';
   purchasePricePerPackDirams: bigint;
+  costPerPieceDirams: bigint;
   piecesPerPack: number;
 }): number =>
-  Math.round(
-    (line.qtyPieces * Number(line.purchasePricePerPackDirams)) /
-      line.piecesPerPack,
-  );
+  line.unit === 'piece'
+    ? line.qtyPieces * Number(line.costPerPieceDirams)
+    : Math.round(
+        (line.qtyPieces * Number(line.purchasePricePerPackDirams)) /
+          line.piecesPerPack,
+      );
 
 /**
  * The lines with the pieces per pack of their products. The products are read through the catalog's

@@ -12,18 +12,19 @@ import {
 } from '@pharmacy/shared-domain';
 import type {
   Expense,
+  InvoiceDetails,
   LegalEntity,
   NetworkSettings,
   OfflineQueueItem,
   ReturnPolicy,
   OwnerStore,
   TenantAuditEntry,
-  TenantInvoice,
   ServiceOrder,
   TenantTerminal,
 } from '@pharmacy/shared-dto';
 import { toAppDate } from '@pharmacy/shared-util';
 import { DAY_MS, dateIn } from './fixtures-pos';
+import { type MockDiscount, seedOwnerInvoices } from './owner-billing-seed';
 
 export interface MockService {
   id: string;
@@ -75,7 +76,10 @@ export interface OwnerMockDb {
   services: MockService[];
   /** The orders of the network: requests and the operator's decisions, newest first. */
   serviceOrders: MockServiceOrder[];
-  invoices: TenantInvoice[];
+  /** The invoices of the network with their snapshot (spec 2026-10-15-billing-services, A5). */
+  invoices: InvoiceDetails[];
+  discounts: MockDiscount[];
+  billingAdvanceMinor: number;
   audit: TenantAuditEntry[];
   settings: NetworkSettings;
   /** The return window and policy of the network (spec 2026-10-13-customer-returns, R3). */
@@ -124,7 +128,6 @@ function templateRole(key: RoleTemplateKey): MockRole {
 const details = (
   code: string,
   legalEntityId: string,
-  paidUntil: string | null,
   licenseValidUntil: string | null = null,
 ): StoreDetails => ({
   code,
@@ -132,7 +135,6 @@ const details = (
   legalEntityId,
   printReceiptDefault: true,
   status: 'active',
-  paidUntil,
   licenseValidUntil,
   closedOn: null,
   stockMovedTo: null,
@@ -170,6 +172,9 @@ function seedExpenses(): Expense[] {
   ];
 }
 
+/** The day the demo service «Перенос данных» was provided: it is on an invoice of the past. */
+const PROVIDED_ON = dateIn(-38);
+
 export function createOwnerDb(): OwnerMockDb {
   return {
     roles: [
@@ -193,10 +198,10 @@ export function createOwnerDb(): OwnerMockDb {
       },
     ],
     storeDetails: {
-      'store-1': details('DSH1', 'le-1', dateIn(30)),
-      'store-2': details('DSH2', 'le-1', dateIn(30)),
-      'store-3': details('RDK1', 'le-2', dateIn(30)),
-      'store-4': details('KHJ1', 'le-2', null, dateIn(14)),
+      'store-1': details('DSH1', 'le-1'),
+      'store-2': details('DSH2', 'le-1'),
+      'store-3': details('RDK1', 'le-2'),
+      'store-4': details('KHJ1', 'le-2', dateIn(14)),
     },
     // Synthetic requisites (ADR-0011: no real client data).
     legalEntities: [
@@ -232,7 +237,6 @@ export function createOwnerDb(): OwnerMockDb {
         printReceiptDefault: true,
         mode: 'cloud',
         status: 'closed',
-        paidUntil: null,
         licenseValidUntil: null,
         receiptsThisMonth: 0,
         closedOn: dateIn(-90),
@@ -280,36 +284,26 @@ export function createOwnerDb(): OwnerMockDb {
         requestedAt: daysAgo(40),
         priceMinor: 120_000,
         reason: null,
-        providedOn: dateIn(-38),
+        providedOn: PROVIDED_ON,
         decidedAt: daysAgo(39),
       },
     ],
-    invoices: [
+    invoices: seedOwnerInvoices([
       {
-        number: 'СЧ-2026-09-014',
-        period: dateIn(-15).slice(0, 7),
-        amountMinor: 120_000,
-        dueOn: dateIn(4),
-        paidOn: null,
-        status: 'due',
+        tenantServiceId: 'req-demo-1',
+        name: 'Перенос данных из прежней системы',
+        priceMinor: 120_000,
+        providedOn: PROVIDED_ON,
       },
+    ]),
+    discounts: [
       {
-        number: 'СЧ-2026-08-014',
-        period: dateIn(-45).slice(0, 7),
-        amountMinor: 120_000,
-        dueOn: dateIn(-26),
-        paidOn: dateIn(-28),
-        status: 'paid',
-      },
-      {
-        number: 'СЧ-2026-07-014',
-        period: dateIn(-75).slice(0, 7),
-        amountMinor: 160_000,
-        dueOn: dateIn(-56),
-        paidOn: dateIn(-57),
-        status: 'paid',
+        percentBp: 1_000,
+        fromMonth: toAppDate().slice(0, 7),
+        toMonth: dateIn(60).slice(0, 7),
       },
     ],
+    billingAdvanceMinor: 0,
     audit: [
       audit(11, 20, {
         employeeName: 'Зарина Рахимова',
@@ -419,6 +413,7 @@ export function createOwnerDb(): OwnerMockDb {
         negative_stock: true,
         license_expiring: true,
         service_decided: true,
+        invoice_overdue: true,
       },
     },
     returnPolicy: {

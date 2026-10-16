@@ -1,6 +1,8 @@
 'use client';
 
 import type {
+  InvoiceLine,
+  InvoiceStatus,
   OwnerStore,
   OwnerStoreStatus,
   TenantInvoice,
@@ -14,6 +16,7 @@ import {
 import {
   Alert,
   Button,
+  buttonClassName,
   Card,
   CardHeader,
   DataTable,
@@ -23,13 +26,15 @@ import {
   type StatusTone,
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { StoreModeBadge } from '@/entities/store';
 import { can, canWrite, useSession } from '@/entities/session';
 import { apiRequest } from '@/shared/api';
+import { routes } from '@/shared/config';
 import { WithMessages } from '@/shared/i18n';
-import { DemoDataNotice, QueryState } from '@/shared/ui';
+import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { ServicesSection } from './ServicesSection';
 import {
@@ -136,8 +141,8 @@ function StoresTab() {
         row.status === 'closed' ? '—' : <StoreModeBadge mode={row.mode} />,
     },
     {
-      key: 'paid',
-      header: t('columns.paid'),
+      key: 'license',
+      header: t('columns.license'),
       nowrap: true,
       cell: (row) =>
         row.licenseValidUntil
@@ -145,9 +150,7 @@ function StoresTab() {
               date: formatDateOnly(row.licenseValidUntil),
               days: daysBetween(today, row.licenseValidUntil),
             })
-          : row.paidUntil
-            ? t('paidUntil', { date: formatDateOnly(row.paidUntil) })
-            : '—',
+          : '—',
     },
     {
       key: 'activity',
@@ -231,12 +234,21 @@ function StoresTab() {
   );
 }
 
-const invoiceTone = {
+const invoiceTone: Record<InvoiceStatus, StatusTone> = {
+  issued: 'info',
+  partially_paid: 'warning',
   paid: 'success',
-  due: 'info',
-  overdue: 'danger',
-} as const;
+};
 
+type EstimateLine = Omit<InvoiceLine, 'id'>;
+
+const percentOf = (bp: number) => `${bp / 100}`.replace('.', ',');
+
+/**
+ * «Оплата» (spec 2026-10-15-billing-services, 9, A19): the estimate of the current month by the
+ * formulas of an invoice, the debt, the overdue debt and the advance, the discounts, the invoices
+ * with a print page each.
+ */
 function BillingTab() {
   const t = useTranslations('ownerStores.billing');
   const billing = useQuery({
@@ -247,83 +259,240 @@ function BillingTab() {
     const [year, month] = value.split('-');
     return t('period', { month: Number(month), year });
   };
-  const columns: DataTableColumn<TenantInvoice>[] = [
+  const lineColumns: DataTableColumn<EstimateLine>[] = [
     {
-      key: 'period',
-      header: t('periodHeader'),
-      cell: (row) => period(row.period),
+      key: 'line',
+      header: t('line'),
+      cell: (line) =>
+        line.providedOn === null ? (
+          line.description
+        ) : (
+          <span className="flex flex-col">
+            <span>{line.description}</span>
+            <span className="text-xs text-fg-subtle">
+              {t('providedOn', { date: formatDateOnly(line.providedOn) })}
+            </span>
+          </span>
+        ),
     },
-    { key: 'number', header: t('number'), cell: (row) => row.number },
+    {
+      key: 'days',
+      header: t('days'),
+      numeric: true,
+      nowrap: true,
+      cell: (line) =>
+        line.days === null
+          ? '—'
+          : t('daysValue', {
+              days: line.days,
+              daysInMonth: line.daysInMonth ?? 0,
+            }),
+    },
     {
       key: 'amount',
       header: t('amount'),
       numeric: true,
       nowrap: true,
-      cell: (row) => formatMoney(row.amountMinor, { withSign: false }),
+      cell: (line) => (
+        <span className="flex flex-col items-end">
+          <span>{formatMoney(line.amountMinor, { withSign: false })}</span>
+          {line.discountBp ? (
+            <span className="text-xs text-fg-subtle">
+              {t('discountValue', { percent: percentOf(line.discountBp) })}
+            </span>
+          ) : null}
+        </span>
+      ),
+    },
+  ];
+  const invoiceColumns: DataTableColumn<TenantInvoice>[] = [
+    { key: 'number', header: t('columns.number'), cell: (row) => row.number },
+    {
+      key: 'period',
+      header: t('columns.period'),
+      nowrap: true,
+      cell: (row) => period(row.period),
+    },
+    {
+      key: 'total',
+      header: t('columns.total'),
+      numeric: true,
+      nowrap: true,
+      cell: (row) => formatMoney(row.totalMinor, { withSign: false }),
+    },
+    {
+      key: 'paid',
+      header: t('columns.paid'),
+      numeric: true,
+      nowrap: true,
+      cell: (row) => formatMoney(row.paidMinor, { withSign: false }),
+    },
+    {
+      key: 'remaining',
+      header: t('columns.remaining'),
+      numeric: true,
+      nowrap: true,
+      cell: (row) => formatMoney(row.remainingMinor, { withSign: false }),
+    },
+    {
+      key: 'dueOn',
+      header: t('columns.dueOn'),
+      nowrap: true,
+      cell: (row) => formatDateOnly(row.dueOn),
     },
     {
       key: 'paidOn',
-      header: t('paidOn'),
+      header: t('columns.paidOn'),
       nowrap: true,
       cell: (row) => (row.paidOn ? formatDateOnly(row.paidOn) : '—'),
     },
     {
       key: 'status',
-      header: t('status'),
+      header: t('columns.status'),
       cell: (row) => (
-        <StatusPill tone={invoiceTone[row.status]}>
-          {t(`statuses.${row.status}`)}
-        </StatusPill>
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <StatusPill tone={invoiceTone[row.status]}>
+            {t(`statuses.${row.status}`)}
+          </StatusPill>
+          {row.overdue && <StatusPill tone="danger">{t('overdue')}</StatusPill>}
+        </span>
+      ),
+    },
+    {
+      key: 'print',
+      header: <span className="sr-only">{t('print')}</span>,
+      cell: (row) => (
+        <Link
+          href={routes.invoicePrint(row.id)}
+          aria-label={t('printInvoice', { number: row.number })}
+          className={buttonClassName({ variant: 'tertiary' })}
+        >
+          {t('print')}
+        </Link>
       ),
     },
   ];
   return (
-    <div className="flex flex-col gap-4">
-      <DemoDataNotice routes={['billing.get']} />
-      <QueryState query={billing}>
-        {(data) => (
-          <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">
+    <QueryState query={billing}>
+      {(data) => {
+        const { estimate } = data;
+        const balance = [
+          ['debt', data.debtMinor],
+          ['overdueDebt', data.overdueDebtMinor],
+          ['advance', data.advanceMinor],
+        ] as const;
+        return (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">
+              <Card padding="none">
+                <CardHeader
+                  title={t('estimate', { period: period(estimate.period) })}
+                  description={t('estimateNote', {
+                    date: formatDateOnly(estimate.through),
+                    price: formatMoney(estimate.pricePerStoreMinor),
+                  })}
+                  inset
+                />
+                {estimate.lines.length === 0 ? (
+                  <p className="m-0 px-(--ph-card-padding) text-sm text-fg-muted">
+                    {t('noActivity')}
+                  </p>
+                ) : (
+                  <DataTable
+                    caption={t('lines')}
+                    rowKey={(line) =>
+                      `${line.kind}-${line.storeId ?? line.tenantServiceId}`
+                    }
+                    rows={estimate.lines}
+                    columns={lineColumns}
+                  />
+                )}
+                <dl className="m-0 flex flex-col gap-1 px-(--ph-card-padding) py-4 text-sm">
+                  {(
+                    [
+                      ['net', estimate.netMinor],
+                      ['vat', estimate.vatMinor],
+                      ['total', estimate.totalMinor],
+                    ] as const
+                  ).map(([key, value]) => (
+                    <div key={key} className="flex justify-between gap-4">
+                      <dt
+                        className={
+                          key === 'total' ? 'font-bold' : 'text-fg-muted'
+                        }
+                      >
+                        {t(key, { rate: estimate.vatRatePercent })}
+                      </dt>
+                      <dd
+                        className={
+                          key === 'total'
+                            ? 'm-0 text-lg font-bold tabular-nums'
+                            : 'm-0 tabular-nums'
+                        }
+                      >
+                        {formatMoney(value)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Card>
+              <div className="flex flex-col gap-4">
+                <Card>
+                  <dl className="m-0 flex flex-col gap-3">
+                    {balance.map(([key, value]) => (
+                      <div key={key} className="flex flex-col gap-1">
+                        <dt className="text-sm text-fg-muted">{t(key)}</dt>
+                        <dd
+                          className={
+                            key === 'overdueDebt' && value > 0
+                              ? 'm-0 text-xl font-bold text-danger tabular-nums'
+                              : 'm-0 text-xl font-bold tabular-nums'
+                          }
+                        >
+                          {formatMoney(value)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Card>
+                <Card className="flex flex-col gap-2">
+                  <h3 className="m-0 text-md font-semibold">
+                    {t('discounts')}
+                  </h3>
+                  {data.discounts.length === 0 ? (
+                    <p className="m-0 text-sm text-fg-muted">
+                      {t('noDiscounts')}
+                    </p>
+                  ) : (
+                    <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
+                      {data.discounts.map((discount) => (
+                        <li key={`${discount.fromMonth}-${discount.toMonth}`}>
+                          {t('discountItem', {
+                            percent: percentOf(discount.percentBp),
+                            from: period(discount.fromMonth),
+                            to: period(discount.toMonth),
+                          })}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+              </div>
+            </div>
             <Card padding="none">
               <CardHeader title={t('history')} inset />
               <DataTable
                 caption={t('history')}
-                rowKey={(row) => row.number}
-                rows={data.history}
-                columns={columns}
+                rowKey={(row) => row.id}
+                rows={data.invoices}
+                columns={invoiceColumns}
+                empty={t('noInvoices')}
               />
             </Card>
-            <Card className="flex flex-col gap-2">
-              <span className="text-sm text-fg-muted">{t('current')}</span>
-              <b className="text-2xl tabular-nums">
-                {formatMoney(data.current.amountMinor)}
-              </b>
-              <span className="text-sm text-fg-muted">
-                {t('formula', {
-                  period: period(data.current.period),
-                  stores: data.current.activeStores,
-                  price: formatMoney(data.current.pricePerStoreMinor),
-                })}
-              </span>
-              <span className="text-sm">
-                {t('dueOn', { date: formatDateOnly(data.current.dueOn) })}
-              </span>
-              <Button
-                variant="secondary"
-                iconStart="download"
-                className="self-start"
-                disabled
-                aria-describedby="invoice-pdf-pending"
-              >
-                {t('pdf')}
-              </Button>
-              <p id="invoice-pdf-pending" className="text-xs text-fg-subtle">
-                {t('pdfPending')}
-              </p>
-            </Card>
           </div>
-        )}
-      </QueryState>
-    </div>
+        );
+      }}
+    </QueryState>
   );
 }
 

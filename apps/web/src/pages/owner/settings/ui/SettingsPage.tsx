@@ -36,6 +36,7 @@ const NOTIFICATIONS: NotificationKind[] = [
   'negative_stock',
   'license_expiring',
   'service_decided',
+  'invoice_overdue',
 ];
 
 type NumberField =

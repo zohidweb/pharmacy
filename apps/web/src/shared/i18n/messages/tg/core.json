@@ -289,6 +289,10 @@
     "service_decided": {
       "title": "{decision, select, approved {Хизматрасонии «{service}» тасдиқ шуд} rejected {Дархост барои «{service}» рад шуд} other {Хизматрасонии «{service}» бекор шуд}}",
       "detail": "{decision, select, approved {Нарх {price}} other {Сабаб: {reason}}}"
+    },
+    "invoice_overdue": {
+      "title": "Мӯҳлати ҳисобномаи {document} гузашт",
+      "detail": "Боқимонда {amount} · мӯҳлат {dueDate} буд"
     }
   },
   "signOut": {

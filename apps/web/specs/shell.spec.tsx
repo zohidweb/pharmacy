@@ -123,7 +123,7 @@ describe('AppShell', () => {
       </AppShell>,
     );
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Уведомления, новых: 3' }),
+      await screen.findByRole('button', { name: 'Уведомления, новых: 4' }),
     );
     const panel = screen.getByRole('region', { name: 'Уведомления' });
     expect(

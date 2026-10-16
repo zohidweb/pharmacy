@@ -1,5 +1,9 @@
 /* Mutable in-memory database of the mocks; resetMockDb() restores the initial data set. */
-import type { MyTerminal, TenantNotification } from '@pharmacy/shared-dto';
+import type {
+  InvoiceDetails,
+  MyTerminal,
+  TenantNotification,
+} from '@pharmacy/shared-dto';
 
 /**
  * A notification of the mocks: `read` — read by everybody at the start, `readBy` — the employees
@@ -47,8 +51,30 @@ const minutesAgo = (minutes: number) =>
 
 const daysAgo = (days: number) => minutesAgo(days * 24 * 60);
 
-function initialNotifications(): MockNotification[] {
+function initialNotifications(
+  invoices: readonly InvoiceDetails[],
+): MockNotification[] {
+  // an invoice of the platform with a remainder after its due date (spec
+  // 2026-10-15-billing-services, A17): a state of the whole network, no store. One notification —
+  // of the oldest overdue invoice, overdue on any day — keeps the unread count the same every day.
+  const overdue = invoices
+    .filter((invoice) => invoice.overdue)
+    .slice(-1)
+    .map((invoice): MockNotification => ({
+      id: `n-invoice-${invoice.id}`,
+      kind: 'invoice_overdue',
+      storeId: null,
+      readBy: [],
+      params: {
+        documentNumber: invoice.number,
+        amountMinor: invoice.remainingMinor,
+        dueDate: invoice.dueOn,
+      },
+      createdAt: `${invoice.dueOn}T03:00:00.000Z`,
+      read: false,
+    }));
   return [
+    ...overdue,
     {
       id: 'n-1',
       kind: 'batch_expiring',
@@ -143,6 +169,7 @@ function createDb(): MockDb {
   // the store list is shared by reference with the handlers: reset it in place
   stores.splice(0, stores.length, ...initialStores());
   const pos = createPosDb();
+  const owner = createOwnerDb();
   return {
     employees: employees.map((employee) => ({
       ...employee,
@@ -154,12 +181,12 @@ function createDb(): MockDb {
       status: employee.blocked ? 'blocked' : 'active',
     })),
     terminal: { ...boundTerminal },
-    notifications: initialNotifications(),
+    notifications: initialNotifications(owner.invoices),
     terminals: initialTerminals(),
     pos,
     stock: createStockDb(pos.products),
     catalog: createCatalogDb(),
-    owner: createOwnerDb(),
+    owner,
   };
 }
 

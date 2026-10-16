@@ -20,6 +20,7 @@ import type {
   Export1cPreview,
   Export1cRequest,
   Export1cResult,
+  InvoiceDetails,
   NetworkSettings,
   UpdateNetworkSettingsRequest,
   OfflineQueueResponse,
@@ -547,6 +548,10 @@ export const apiRoutes = {
     (p) => `/service-requests/${id(p)}`,
   ),
   'billing.get': route<TenantBilling>('GET', () => '/billing'),
+  'billing.invoice': route<InvoiceDetails, undefined, { id: string }>(
+    'GET',
+    (p) => `/billing/invoices/${id(p)}`,
+  ),
 
   'reports.get': route<
     ReportTable,

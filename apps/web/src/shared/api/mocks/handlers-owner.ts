@@ -7,6 +7,7 @@
  */
 import {
   checkPin,
+  composeInvoice,
   daysInMonth,
   expenseKinds,
   hasPermissions,
@@ -31,6 +32,8 @@ import type {
   LegalEntity,
   LegalEntityInput,
   ServiceOrder,
+  TenantBilling,
+  TenantInvoice,
 } from '@pharmacy/shared-dto';
 import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
@@ -40,6 +43,12 @@ import type { MockServiceOrder } from './db-owner';
 import { categories } from './fixtures-pos';
 import { storeDay, stores } from './fixtures';
 import { debtOf } from './handlers-purchasing';
+import {
+  invoiceState,
+  MOCK_FIRST_SALE,
+  MOCK_PRICE_PER_STORE_MINOR,
+  MOCK_VAT_BP,
+} from './owner-billing-seed';
 import { closeStore, legalEntityName, ownerStore } from './owner-stores';
 import { appendAudit } from './handlers-staff';
 import { context, findDoc, stockAt, stockHandlers } from './handlers-stock';
@@ -54,6 +63,7 @@ type OwnerRoute = Extract<
   | 'serviceRequests.create'
   | 'serviceRequests.withdraw'
   | 'billing.get'
+  | 'billing.invoice'
   | 'reports.get'
   | `expenses.${string}`
   | `export1c.${string}`
@@ -86,7 +96,6 @@ const activeCategories = () =>
     .catalog.categories.filter((c) => c.status === 'active')
     .map((c) => ({ id: c.id, name: c.nameRu }));
 const today = () => toAppDate();
-const PRICE_PER_STORE_MINOR = 40_000;
 
 const validation = (correlationId: string, field: string, code: string) =>
   new ApiError(422, 'validation_failed', correlationId, [{ field, code }]);
@@ -1059,7 +1068,6 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       legalEntityId,
       printReceiptDefault: body.printReceiptDefault,
       status: 'active',
-      paidUntil: null,
       licenseValidUntil: null,
       closedOn: null,
       stockMovedTo: null,
@@ -1360,21 +1368,100 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       storeName: null,
     });
   },
-  'billing.get': ({ correlationId }) => {
-    context(correlationId, 'billing:view');
-    const [current, ...history] = owner().invoices;
-    const activeStores = stores.filter(
-      (s) => s.mode === 'cloud' && (storeDay[s.id]?.receipts ?? 0) > 0,
-    ).length;
+  // the estimate of the month by the formulas of an invoice, as the API (spec
+  // 2026-10-15-billing-services, A19): cloud pharmacies with sales this month, through today
+  'billing.get': ({ correlationId }): TenantBilling => {
+    const { session } = context(correlationId, 'billing:view');
+    const day = today();
+    const period = day.slice(0, 7);
+    const db = owner();
+    const discounts = db.discounts
+      .filter((discount) => discount.toMonth >= period)
+      .sort((a, b) => a.fromMonth.localeCompare(b.fromMonth));
+    const current = discounts.find((discount) => discount.fromMonth <= period);
+    const active = [
+      ...stores.map((store) => ownerStore(store.id)),
+      ...db.extraStores,
+    ].filter(
+      (store): store is OwnerStore =>
+        store !== null &&
+        store.kind === 'pharmacy' &&
+        store.mode === 'cloud' &&
+        store.receiptsThisMonth > 0 &&
+        (store.closedOn === null || store.closedOn >= `${period}-01`),
+    );
+    const invoiced = new Set(
+      db.invoices.flatMap((invoice) =>
+        invoice.lines.map((line) => line.tenantServiceId),
+      ),
+    );
+    const estimate = composeInvoice({
+      period,
+      pricePerStoreMinor: MOCK_PRICE_PER_STORE_MINOR,
+      vatBp: MOCK_VAT_BP,
+      discountBp: current?.percentBp ?? null,
+      stores: active.map((store) => ({
+        storeId: store.id,
+        name: store.name,
+        firstSaleEver: MOCK_FIRST_SALE,
+        closedOn:
+          store.closedOn !== null && store.closedOn < day
+            ? store.closedOn
+            : day,
+      })),
+      services: db.serviceOrders
+        .filter(
+          (order) =>
+            order.status === 'provided' &&
+            order.providedOn !== null &&
+            order.providedOn <= day &&
+            !invoiced.has(order.requestId),
+        )
+        .map((order) => ({
+          tenantServiceId: order.requestId ?? order.serviceId,
+          name: withName(order, session.locale).serviceName,
+          priceMinor: order.priceMinor ?? 0,
+          providedOn: order.providedOn ?? day,
+        })),
+    });
+    const invoices: TenantInvoice[] = [...db.invoices]
+      .sort((a, b) => b.period.localeCompare(a.period))
+      .map((invoice) => ({
+        id: invoice.id,
+        number: invoice.number,
+        period: invoice.period,
+        totalMinor: invoice.totalMinor,
+        paidMinor: invoice.paidMinor,
+        dueOn: invoice.dueOn,
+        paidOn: invoice.paidOn,
+        ...invoiceState(invoice, day),
+      }));
     return {
-      current: {
-        ...current,
-        activeStores,
-        pricePerStoreMinor: PRICE_PER_STORE_MINOR,
-        amountMinor: activeStores * PRICE_PER_STORE_MINOR,
+      estimate: {
+        period,
+        through: day,
+        pricePerStoreMinor: MOCK_PRICE_PER_STORE_MINOR,
+        vatRatePercent: MOCK_VAT_BP / 100,
+        discountBp: current?.percentBp ?? null,
+        lines: estimate.lines,
+        netMinor: estimate.subtotalMinor,
+        vatMinor: estimate.vatMinor,
+        totalMinor: estimate.totalMinor,
       },
-      history,
+      debtMinor: invoices.reduce((sum, i) => sum + i.remainingMinor, 0),
+      overdueDebtMinor: invoices
+        .filter((invoice) => invoice.overdue)
+        .reduce((sum, i) => sum + i.remainingMinor, 0),
+      advanceMinor: db.billingAdvanceMinor,
+      discounts,
+      invoices,
     };
+  },
+  'billing.invoice': ({ params, correlationId }) => {
+    context(correlationId, 'billing:view');
+    const invoice = owner().invoices.find((i) => i.id === params.id);
+    if (!invoice) throw new ApiError(404, 'not_found', correlationId);
+    return { ...invoice, ...invoiceState(invoice, today()) };
   },
 
   'reports.get': ({ params, query, correlationId }) => {

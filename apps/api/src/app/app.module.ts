@@ -47,6 +47,7 @@ import { ReportsModule } from './reports/reports.module';
 import { ReturnsModule } from './returns/returns.module';
 import { BillingModule } from './billing/billing.module';
 import { SyncModule } from './sync/sync.module';
+import { SyncCoreModule } from '../core/sync';
 import { FiscalModule } from './fiscal/fiscal.module';
 import { Export1cModule } from './export-1c/export-1c.module';
 import { AuditModule } from './audit/audit.module';
@@ -63,6 +64,7 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       validate: validateEnv,
     }),
     DatabaseModule,
+    SyncCoreModule,
     CryptoModule,
     RedisModule,
     SessionsModule,

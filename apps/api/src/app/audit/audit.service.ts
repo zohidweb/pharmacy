@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { SyncAuditRow } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
 import {
   getPrincipal,
@@ -41,6 +42,40 @@ export class AuditService {
       config.getOrThrow<string>('STORE_MODE') === 'cloud'
         ? 'cloud'
         : 'offline_store';
+  }
+
+  /**
+   * A row of the audit journal of an offline store, as the store wrote it (ADR-0014 §4; spec
+   * 2026-10-16-offline-sync, E9): its id, employee, terminal, correlation id and business date stay; the time
+   * of recording is the cloud's (the journal is partitioned by it, and the clock of a store PC is not trusted
+   * for that), the store's own time goes to `details.storeRecordedAt`.
+   */
+  async appendFact(
+    trx: TenantTransaction,
+    tenantId: string,
+    row: SyncAuditRow,
+    storeId: string,
+  ): Promise<void> {
+    await trx
+      .insertInto('auditLog')
+      .values({
+        tenantId,
+        id: row.id,
+        businessDate: row.businessDate,
+        employeeId: row.employeeId,
+        terminalId: row.terminalId,
+        storeId: row.storeId ?? storeId,
+        correlationId: row.correlationId,
+        action: row.action,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        details: JSON.stringify({
+          ...row.details,
+          storeRecordedAt: row.recordedAt,
+        }),
+        source: 'offline_store',
+      })
+      .execute();
   }
 
   async append(trx: TenantTransaction, event: AuditEvent): Promise<void> {

@@ -15,7 +15,7 @@ export const reminderIcon: Record<NotificationKind, IconName> = {
   sync_conflict: 'refresh-cw',
   license_expiring: 'key-round',
   service_decided: 'sparkles',
-  invoice_overdue: 'receipt',
+  invoice_overdue: 'file-text',
 };
 
 export const reminderTone: Record<NotificationKind, StatusTone> = {

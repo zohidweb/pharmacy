@@ -1,105 +1,26 @@
 'use client';
 
-import type { InvoiceDetails } from '@pharmacy/shared-dto';
-import { formatDateOnly, formatMoney, toAppDate } from '@pharmacy/shared-util';
 import {
   Button,
   Card,
+  EmptyState,
   Icon,
   InvoiceSheet,
-  type InvoiceSheetProps,
-  printReceipt,
+  invoiceSheetOf,
+  printDocument,
   SheetPrint,
   Spinner,
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useTranslations } from 'use-intl';
 import { billingKeys } from '@/entities/invoice';
 import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
-
-type Translate = ReturnType<typeof useTranslations<'invoicePrint'>>;
-
-/** The invoice as a document (spec 2026-10-15-billing-services, 6.3): its snapshot, not the registry. */
-function toSheet(invoice: InvoiceDetails, t: Translate): InvoiceSheetProps {
-  const { supplier, payer } = invoice;
-  return {
-    title: t('title', {
-      number: invoice.number,
-      date: formatDateOnly(toAppDate(new Date(invoice.issuedAt))),
-      period: formatDateOnly(`${invoice.period}-01`).slice(3),
-    }),
-    parties: [
-      {
-        label: t('supplier'),
-        lines: [
-          supplier.name,
-          supplier.inn && t('inn', { inn: supplier.inn }),
-          supplier.bankAccount &&
-            t('account', { account: supplier.bankAccount }),
-          supplier.bankName,
-          supplier.bankBik && t('bik', { bik: supplier.bankBik }),
-          supplier.bankCorrAccount &&
-            t('corrAccount', { account: supplier.bankCorrAccount }),
-        ].filter(Boolean),
-      },
-      {
-        label: t('payer'),
-        lines: [payer.name, payer.inn && t('inn', { inn: payer.inn })].filter(
-          Boolean,
-        ),
-      },
-    ],
-    columns: {
-      line: t('columns.line'),
-      detail: t('columns.detail'),
-      amount: t('columns.amount'),
-    },
-    rows: invoice.lines.map((line) => ({
-      line: line.description,
-      detail:
-        line.kind === 'service'
-          ? t('providedOn', { date: formatDateOnly(line.providedOn ?? '') })
-          : [
-              t('storeDays', {
-                days: line.days ?? 0,
-                daysInMonth: line.daysInMonth ?? 0,
-                price: formatMoney(invoice.pricePerStoreMinor),
-              }),
-              line.discountBp
-                ? t('discount', {
-                    percent: `${line.discountBp / 100}`.replace('.', ','),
-                    amount: formatMoney(line.discountMinor ?? 0),
-                  })
-                : '',
-            ]
-              .filter(Boolean)
-              .join(' · '),
-      amount: formatMoney(line.amountMinor, { withSign: false }),
-    })),
-    totals: [
-      { label: t('net'), value: formatMoney(invoice.netMinor) },
-      {
-        label: t('vat', { rate: invoice.vatRatePercent }),
-        value: formatMoney(invoice.vatMinor),
-      },
-      {
-        label: t('total'),
-        value: formatMoney(invoice.totalMinor),
-        strong: true,
-      },
-    ],
-    notes: [
-      { label: t('dueOn'), value: formatDateOnly(invoice.dueOn) },
-      { label: t('purpose'), value: invoice.paymentPurpose },
-    ],
-  };
-}
 
 function InvoicePrintView() {
   const t = useTranslations('invoicePrint');
@@ -110,19 +31,31 @@ function InvoicePrintView() {
       apiRequest('invoices.get', { params: { id }, signal }),
     enabled: id !== '',
   });
+  const heading = invoice.data
+    ? t('heading', { number: invoice.data.number })
+    : null;
+  // Chrome names a PDF saved from the print dialog after the page title
+  useEffect(() => {
+    if (heading === null) return;
+    const before = document.title;
+    document.title = heading;
+    return () => {
+      document.title = before;
+    };
+  }, [heading]);
+  // the last loaded invoice is what reaches the paper, even while a refetch fails
+  const sheet = invoice.data
+    ? invoiceSheetOf(invoice.data, (key, values) => t(key, values))
+    : null;
   return (
     <>
       <PageHeader
-        title={
-          invoice.data
-            ? t('heading', { number: invoice.data.number })
-            : t('pageTitle')
-        }
+        title={heading ?? t('pageTitle')}
         actions={
           <Button
             iconStart="printer"
-            disabled={!invoice.data}
-            onClick={() => void printReceipt()}
+            disabled={sheet === null}
+            onClick={() => void printDocument()}
           >
             {t('print')}
           </Button>
@@ -136,21 +69,27 @@ function InvoicePrintView() {
           <Icon name="arrow-left" size="sm" />
           {t('back')}
         </Link>
-        <QueryState query={invoice}>
-          {(data) => {
-            const sheet = toSheet(data, t);
-            return (
-              <>
-                <Card className="max-w-(--ph-sheet-preview-width)">
+        {id === '' ? (
+          <EmptyState icon="file-text" title={t('notFound')} />
+        ) : (
+          <QueryState query={invoice}>
+            {() =>
+              sheet && (
+                <Card
+                  padding="none"
+                  className="w-full max-w-(--ph-sheet-preview-width) p-(--ph-sheet-margin)"
+                >
                   <InvoiceSheet {...sheet} headingLevel={2} />
                 </Card>
-                <SheetPrint>
-                  <InvoiceSheet {...sheet} />
-                </SheetPrint>
-              </>
-            );
-          }}
-        </QueryState>
+              )
+            }
+          </QueryState>
+        )}
+        {sheet && (
+          <SheetPrint>
+            <InvoiceSheet {...sheet} />
+          </SheetPrint>
+        )}
       </div>
     </>
   );

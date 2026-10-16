@@ -4,6 +4,8 @@ import {
   formatDateOnly,
   formatDateTime,
   formatMoney,
+  formatPercentBp,
+  formatPeriod,
 } from '@pharmacy/shared-util';
 import {
   Alert,
@@ -116,14 +118,10 @@ function CompanyView() {
                         'discount',
                         company.discount
                           ? t('summary.discountValue', {
-                              percent:
-                                `${company.discount.percentBp / 100}`.replace(
-                                  '.',
-                                  ',',
-                                ),
-                              month: formatDateOnly(
-                                `${company.discount.toMonth}-01`,
-                              ).slice(3),
+                              percent: formatPercentBp(
+                                company.discount.percentBp,
+                              ),
+                              month: formatPeriod(company.discount.toMonth),
                             })
                           : t('summary.noDiscount'),
                       ],

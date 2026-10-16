@@ -15,6 +15,11 @@
     display: none !important; /* ignore-design: only the print root may reach the printer */
   }
 
+  html,
+  body {
+    background: var(--ph-print-paper);
+  }
+
   * {
     box-shadow: none !important; /* ignore-design: thermal print has no shadows */
     print-color-adjust: economy;
@@ -30,7 +35,7 @@
     font-family: var(--ph-receipt-font);
     font-size: var(--ph-receipt-font-size);
     line-height: var(--ph-receipt-line-height);
-    color: black; /* ignore-design: thermal print is monochrome by definition */
+    color: var(--ph-print-ink);
     background: none;
   }
 
@@ -56,13 +61,20 @@
     font-family: var(--ph-font-sans);
   }
 
+  /* ignore-design: the screen colours of the kit's utilities must not reach the paper */
   .ph-print-sheet * {
-    color: black !important; /* ignore-design: a printed document is black on white */
-    border-color: black !important; /* ignore-design: a printed document is black on white */
-    background: none !important; /* ignore-design: a printed document is black on white */
+    color: var(--ph-print-ink) !important;
+    border-color: var(--ph-print-ink) !important;
+    background: none !important;
   }
 
-  .ph-sheet-row {
+  /* a row, the parties, the totals and the notes stay whole; the title stays with what follows */
+  .ph-sheet-row,
+  .ph-sheet-block {
     break-inside: avoid;
+  }
+
+  .ph-sheet-title {
+    break-after: avoid;
   }
 }

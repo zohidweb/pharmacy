@@ -1,7 +1,7 @@
 'use client';
 
 import type { TenantDiscount } from '@pharmacy/shared-dto';
-import { formatDateOnly } from '@pharmacy/shared-util';
+import { formatPercentBp, formatPeriod } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -30,9 +30,6 @@ function percentBp(value: string): number | null {
   const bp = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
   return bp >= 100 && bp <= 10_000 ? bp : null;
 }
-
-const percentText = (bp: number) => `${bp / 100}`.replace('.', ',');
-const monthText = (month: string) => formatDateOnly(`${month}-01`).slice(3);
 
 type Mode =
   | { kind: 'add' }
@@ -141,15 +138,15 @@ export function TenantDiscounts({ tenantId }: { tenantId: string }) {
               <span className="flex flex-col">
                 <span className="font-bold tabular-nums">
                   {t('row', {
-                    percent: percentText(discount.percentBp),
-                    from: monthText(discount.fromMonth),
-                    to: monthText(discount.toMonth),
+                    percent: formatPercentBp(discount.percentBp),
+                    from: formatPeriod(discount.fromMonth),
+                    to: formatPeriod(discount.toMonth),
                   })}
                 </span>
                 {discount.invoicedThrough && (
                   <span className="text-xs text-fg-subtle">
                     {t('invoicedThrough', {
-                      month: monthText(discount.invoicedThrough),
+                      month: formatPeriod(discount.invoicedThrough),
                     })}
                   </span>
                 )}
@@ -184,7 +181,7 @@ export function TenantDiscounts({ tenantId }: { tenantId: string }) {
               ? t('shortenTitle')
               : mode?.kind === 'remove'
                 ? t('removeTitle', {
-                    percent: percentText(mode.discount.percentBp),
+                    percent: formatPercentBp(mode.discount.percentBp),
                   })
                 : ''
         }

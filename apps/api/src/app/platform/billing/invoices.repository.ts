@@ -244,7 +244,8 @@ export class InvoicesRepository {
              count(*) filter (where l.kind = 'store') as stores,
              count(*) filter (where l.kind = 'service') as services
       from pharmacy.invoices i
-      left join pharmacy.invoice_lines l on l.invoice_id = i.id and l.removed_at is null
+      left join pharmacy.invoice_lines l
+        on l.tenant_id = i.tenant_id and l.invoice_id = i.id and l.removed_at is null
       where i.period_month = ${month}::date
       group by i.id`.execute(trx);
     return new Map(
@@ -368,6 +369,12 @@ export class InvoicesRepository {
     let query = trx
       .updateTable('invoiceLines')
       .set({ removedAt: sql`now()`, removedReason: reason })
+      .where('tenantId', '=', (eb) =>
+        eb
+          .selectFrom('invoices')
+          .select('tenantId')
+          .where('id', '=', invoiceId),
+      )
       .where('invoiceId', '=', invoiceId)
       .where('removedAt', 'is', null);
     query =
@@ -411,7 +418,8 @@ export class InvoicesRepository {
       select id, kind, store_id, store_name, days, days_in_month, base_dirams, discount_bp,
              tenant_service_id, description, provided_on::text as provided_on, amount_dirams
       from pharmacy.invoice_lines
-      where invoice_id = ${invoiceId} and removed_at is null
+      where tenant_id = (select tenant_id from pharmacy.invoices where id = ${invoiceId})
+        and invoice_id = ${invoiceId} and removed_at is null
       order by case kind when 'store' then 0 else 1 end, position, id`.execute(
       trx,
     );
@@ -427,10 +435,11 @@ export class InvoicesRepository {
              i.supplier_bank_account, i.supplier_bank_name, i.supplier_bank_bik,
              i.supplier_bank_corr_account, i.payment_purpose, i.recalculated_at,
              (select count(*) from pharmacy.invoice_lines l
-              where l.invoice_id = i.id and l.kind = 'store' and l.removed_at is null) as stores,
+              where l.tenant_id = i.tenant_id and l.invoice_id = i.id and l.kind = 'store'
+                and l.removed_at is null) as stores,
              exists (select 1 from pharmacy.invoice_lines l
-                     where l.invoice_id = i.id and l.kind = 'service' and l.removed_at is null)
-               as has_services,
+                     where l.tenant_id = i.tenant_id and l.invoice_id = i.id
+                       and l.kind = 'service' and l.removed_at is null) as has_services,
              (i.paid_dirams < i.total_dirams and i.due_on < ${today}::date) as overdue
       from pharmacy.invoices i`;
   }

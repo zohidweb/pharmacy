@@ -9,6 +9,10 @@ export function textOf(map: unknown, key: 'ru' | 'tj'): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/** The text in the language of the employee; the Russian one without a Tajik text (A14). */
+export const localized = (map: unknown, locale: 'ru' | 'tg'): string =>
+  (locale === 'tg' ? textOf(map, 'tj') : null) ?? textOf(map, 'ru') ?? '';
+
 export interface CatalogRow {
   id: string;
   name: unknown;

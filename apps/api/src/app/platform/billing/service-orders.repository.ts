@@ -190,7 +190,7 @@ export class ServiceOrdersRepository {
     }>`
       select l.invoice_id, i.paid_dirams, i.vat_bp
       from pharmacy.invoice_lines l
-      join pharmacy.invoices i on i.id = l.invoice_id
+      join pharmacy.invoices i on i.tenant_id = l.tenant_id and i.id = l.invoice_id
       where l.tenant_service_id = ${tenantServiceId} and l.removed_at is null`.execute(
       trx,
     );

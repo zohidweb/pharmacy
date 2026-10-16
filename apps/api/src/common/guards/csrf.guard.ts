@@ -6,7 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { ProblemException } from '../errors/problem.exception';
-import { isOperatorPath } from '../http/contour';
+import { isOperatorPath, isSyncPath, licenseKeyIdOf } from '../http/contour';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -48,6 +48,15 @@ export class CsrfGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
     if (SAFE_METHODS.has(req.method.toUpperCase())) return true;
+    // An offline store is not a browser: it sends its license key in Authorization (spec
+    // 2026-10-16-offline-sync, E10), so there is no ambient credential a foreign site could ride on. A
+    // browser cannot set that header cross-site without a CORS preflight the API never grants.
+    if (
+      isSyncPath(req.originalUrl) &&
+      licenseKeyIdOf(header(req, 'authorization')) !== null
+    ) {
+      return true;
+    }
 
     const fetchSite = header(req, 'sec-fetch-site');
     const sameOrigin =

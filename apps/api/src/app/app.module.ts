@@ -150,7 +150,11 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       BillingModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
-    SyncModule,
+    // The cloud side of the offline-store sync: an offline store calls the cloud, never itself (ADR-0014).
+    ConditionalModule.registerWhen(
+      SyncModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     FiscalModule,
     Export1cModule,
     AuditModule,

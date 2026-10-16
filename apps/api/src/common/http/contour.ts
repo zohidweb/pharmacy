@@ -3,6 +3,7 @@
 // The contour is chosen by the path only, so a token of the other contour is never even read.
 
 const OPERATOR_PREFIX = '/api/v1/operator';
+const SYNC_PREFIX = '/api/v1/sync';
 
 export function isOperatorPath(originalUrl: string | undefined): boolean {
   // Express always sets originalUrl; without one there is no operator route to reach.
@@ -15,4 +16,23 @@ export function isOperatorPath(originalUrl: string | undefined): boolean {
   // Express routing is case-insensitive by default, so the comparison is too.
   const path = originalUrl.split('?')[0].toLowerCase();
   return path === OPERATOR_PREFIX || path.startsWith(`${OPERATOR_PREFIX}/`);
+}
+
+// The sync contour of offline stores (ADR-0014 §6; spec 2026-10-16-offline-sync, E10): a store authenticates with
+// its license key, not with a session cookie. Origin-form paths only.
+export function isSyncPath(originalUrl: string | undefined): boolean {
+  if (typeof originalUrl !== 'string' || !originalUrl.startsWith('/'))
+    return false;
+  const path = originalUrl.split('?')[0].toLowerCase();
+  return path === SYNC_PREFIX || path.startsWith(`${SYNC_PREFIX}/`);
+}
+
+// `Authorization: Bearer phk_<keyId>_<secret>` — the open key id, or null for any other header.
+export function licenseKeyIdOf(
+  authorization: string | undefined,
+): string | null {
+  const match = /^Bearer phk_([0-9a-f]{16})_[A-Za-z0-9_-]{43}$/.exec(
+    authorization ?? '',
+  );
+  return match ? match[1] : null;
 }

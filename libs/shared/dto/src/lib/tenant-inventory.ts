@@ -585,13 +585,6 @@ export interface StockCountLine {
 }
 
 /**
- * GET /api/v1/stock-counts/{id}. Posting (`POST …/posting`, `inventory:post`): 422
- * `validation_failed` at `lines.i.counted` / `lines.i.expiresOn` / `lines.i.costMinor`,
- * `period_closed`; unposting (`POST …/unposting`, `inventory:unpost`): 409 `unpost_blocked`,
- * `stock_count_in_progress`; cancellation (`POST …/cancellation`, `inventory:delete`): only in
- * progress, 409 `document_posted` / `document_cancelled`.
- */
-/**
  * GET /api/v1/stock-counts/{id}/version (`inventory:view`): a fingerprint of everything the count
  * shows — the status and comment, the lines, the entries of every tablet and the movements of its
  * batches (sales during the count). A running count polls it and reloads the document only when it
@@ -601,6 +594,13 @@ export interface StockCountVersion {
   version: string;
 }
 
+/**
+ * GET /api/v1/stock-counts/{id}. Posting (`POST …/posting`, `inventory:post`): 422
+ * `validation_failed` at `lines.i.counted` / `lines.i.expiresOn` / `lines.i.costMinor`,
+ * `period_closed`; unposting (`POST …/unposting`, `inventory:unpost`): 409 `unpost_blocked`,
+ * `stock_count_in_progress`; cancellation (`POST …/cancellation`, `inventory:delete`): only in
+ * progress, 409 `document_posted` / `document_cancelled`.
+ */
 export interface StockCount {
   id: string;
   number: string;
@@ -843,7 +843,9 @@ export interface TransferListItem {
 
 /**
  * GET /api/v1/transfers/overview?storeId= — the requests and transfers of the stores of the scope:
- * open ones and those closed in the last 30 days, newest first, ≤ 200 of each.
+ * open ones and those closed in the last 30 days, newest first, ≤ 200 of each. A draft only to
+ * employees with its author store in their scope — the sender of a transfer, the requester of a
+ * request (tr-M7, 2026-10-16).
  */
 export interface TransferOverview {
   requests: TransferRequest[];

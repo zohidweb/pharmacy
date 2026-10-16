@@ -36,9 +36,9 @@ export interface ReturnBatch {
 
 /**
  * Amount of a line at the purchase price of its batch (spec 2026-10-12-supplier-returns-transfers,
- * R2): the price of its unit × the quantity, so the lines add up to the document — packs × price
- * of a pack (as a goods receipt), pieces × cost of a piece rounded up (as a write-off, the rule of
- * the ТЗ). One formula for all documents, decided by the architect 2026-10-16 (sr-M1).
+ * R2): the price of its unit × the quantity, so the lines add up to the document — packs × price of
+ * a pack (as a goods receipt), pieces × cost of a piece rounded up: a line in pieces is counted so in
+ * every document (the rule of the ТЗ, decided by the architect 2026-10-16, sr-M1).
  */
 export const returnAmount = (line: {
   qtyPieces: number;

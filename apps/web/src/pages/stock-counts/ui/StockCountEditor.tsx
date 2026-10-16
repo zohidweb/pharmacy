@@ -228,16 +228,23 @@ export function StockCountEditor({
     enabled: doc.status === 'in_progress',
     refetchInterval: 10_000,
   });
+  // the version a loaded document showed; moved on only when its reload succeeded, so a failed one
+  // is tried again at the next poll
   const seenVersion = useRef<string | null>(null);
   const latestVersion = version.data?.version ?? null;
+  const polledAt = version.dataUpdatedAt;
   const reload = current.refetch;
   useEffect(() => {
     if (latestVersion === null) return;
-    if (seenVersion.current !== null && seenVersion.current !== latestVersion) {
-      void reload();
+    if (seenVersion.current === null) {
+      seenVersion.current = latestVersion;
+      return;
     }
-    seenVersion.current = latestVersion;
-  }, [latestVersion, reload]);
+    if (seenVersion.current === latestVersion) return;
+    void reload().then((result) => {
+      if (!result.isError) seenVersion.current = latestVersion;
+    });
+  }, [latestVersion, polledAt, reload]);
   // a poll in flight must not overwrite a fresh answer: an entry that disappears for a few
   // seconds would be entered again and counted twice
   const setDoc = (next: StockCount) => {

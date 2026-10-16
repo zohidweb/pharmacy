@@ -47,12 +47,15 @@ const ofStores = (storeIds: readonly string[] | null) =>
 
 /**
  * A draft is its author's until it is sent (tr-M7, decided 2026-10-16): the author side is
- * `store_id` — the sender of a transfer, the requester of a request; the other side does not see it.
+ * `store_id` — the sender of a transfer, the requester of a request; an employee without that store
+ * in their scope (null — the whole network) does not see it, whatever store the overview is of.
  */
-const draftsOfAuthor = (storeIds: readonly string[] | null) =>
-  storeIds === null
+const draftsOfAuthor = (scope: readonly string[] | null) =>
+  scope === null
     ? sql``
-    : sql`and (d.status <> 'draft' or d.store_id in (${sql.join([...storeIds])}))`;
+    : scope.length === 0
+      ? sql`and d.status <> 'draft'`
+      : sql`and (d.status <> 'draft' or d.store_id in (${sql.join([...scope])}))`;
 
 // The lines of transfer requests and transfers (spec 2026-10-12-supplier-returns-transfers, 3.2);
 // the headers live in DocumentsRepository.
@@ -221,6 +224,7 @@ export class TransfersRepository {
     storeIds: readonly string[] | null,
     since: string,
     limit: number,
+    scope: readonly string[] | null,
   ): Promise<OverviewRow[]> {
     if (storeIds !== null && storeIds.length === 0) return [];
     const open =
@@ -244,7 +248,7 @@ export class TransfersRepository {
       from pharmacy.documents d
       where d.tenant_id = ${tenantId} and d.type = ${type}
         ${ofStores(storeIds)}
-        ${draftsOfAuthor(storeIds)}
+        ${draftsOfAuthor(scope)}
         and ${which}
       order by d.document_date desc, d.number desc
       ${tail}`;

@@ -326,7 +326,8 @@ export function SupplierReturnEditor({
             <Select
               label={t('supplier')}
               required
-              disabled={!editable}
+              // while a saved draft loads its lines are not there yet: no change without the dialog
+              disabled={!editable || !loaded}
               placeholder={t('supplierPlaceholder')}
               value={supplierId}
               error={touched && !supplierId ? t('supplierRequired') : undefined}

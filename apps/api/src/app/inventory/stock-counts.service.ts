@@ -141,7 +141,13 @@ export class StockCountsService {
     const { tenantId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const doc = await this.visible(trx, tenantId, id);
-      return { version: await this.counts.version(trx, tenantId, doc.id) };
+      // a movement of a transaction that began before the start may commit after it
+      const since = new Date(
+        (doc.inventoryStartedAt as Date).getTime() - 10 * 60_000,
+      );
+      return {
+        version: await this.counts.version(trx, tenantId, doc.id, since),
+      };
     });
   }
 

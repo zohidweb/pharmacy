@@ -169,17 +169,24 @@ export class StockCountsRepository {
   /**
    * A fingerprint of the count as `lines` and `entries` show it, in one statement: the header, the
    * number and quantities of lines and entries (an entry is deleted for good, so the count and the
-   * last moment both matter) and the movements of the batches of its lines.
+   * last moment both matter), the found lines with what can be corrected on them, and the movements
+   * of the batches of its lines since `since` — movements are append-only, older ones never change.
    */
   async version(
     trx: TenantTransaction,
     tenantId: string,
     documentId: string,
+    since: Date,
   ): Promise<string> {
     const result = await sql<{ version: string }>`
       select concat_ws(':',
                d.status, extract(epoch from d.updated_at), md5(coalesce(d.comment, '')),
-               (select concat_ws('/', count(*), coalesce(sum(l.counted_qty_pieces), 0))
+               (select concat_ws('/', count(*), coalesce(sum(l.counted_qty_pieces), 0),
+                                 md5(coalesce(string_agg(
+                                   concat_ws('|', l.id, l.product_id, l.surplus_lot_number,
+                                             l.surplus_expiry_date, l.surplus_purchase_price_per_pack_dirams,
+                                             l.surplus_batch_id),
+                                   ',' order by l.id) filter (where l.is_found), '')))
                 from pharmacy.inventory_lines l
                 where l.tenant_id = d.tenant_id and l.document_id = d.id),
                (select concat_ws('/', count(*), coalesce(sum(e.qty_pieces), 0),
@@ -192,6 +199,7 @@ export class StockCountsRepository {
                   on b.tenant_id = l.tenant_id and b.id = coalesce(l.batch_id, l.surplus_batch_id)
                 join pharmacy.stock_movements m
                   on m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
+                 and m.recorded_at >= ${since}
                 where l.tenant_id = d.tenant_id and l.document_id = d.id)) as version
       from pharmacy.documents d
       where d.tenant_id = ${tenantId} and d.id = ${documentId}`.execute(trx);

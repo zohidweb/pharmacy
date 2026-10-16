@@ -2092,11 +2092,23 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     if (query?.storeId) inScope(session, query.storeId, correlationId);
     const mine = (...ids: string[]) =>
       query?.storeId ? ids.includes(query.storeId) : involves(session, ...ids);
+    // a draft only to the author side: the requester, the sender (tr-M7)
+    const author = (status: string, storeId: string) =>
+      status !== 'draft' ||
+      session.scope === 'network' ||
+      involves(session, storeId);
     const requests = db()
-      .transferRequests.filter((r) => mine(r.requesterStoreId, r.fromStoreId))
+      .transferRequests.filter(
+        (r) =>
+          mine(r.requesterStoreId, r.fromStoreId) &&
+          author(r.status, r.requesterStoreId),
+      )
       .sort((a, b) => b.number.localeCompare(a.number));
     const transfers = db()
-      .transfers.filter((t) => mine(t.fromStoreId, t.toStoreId))
+      .transfers.filter(
+        (t) =>
+          mine(t.fromStoreId, t.toStoreId) && author(t.status, t.fromStoreId),
+      )
       .sort(
         (a, b) =>
           b.date.localeCompare(a.date) || b.number.localeCompare(a.number),

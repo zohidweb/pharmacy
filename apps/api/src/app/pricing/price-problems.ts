@@ -20,13 +20,19 @@ export class PriceProblems {
     private readonly purchasePrices: PurchasePrices,
   ) {}
 
+  /**
+   * `stocked` — the products in stock the caller already has (`${storeId}/${productId}`, any stores);
+   * without it they are read through the port.
+   */
   async count(
     trx: TenantTransaction,
     tenantId: string,
     pharmacyIds: readonly string[],
     canSeeCost: boolean,
+    stocked?: ReadonlySet<string>,
   ): Promise<number> {
-    return (await this.pairs(trx, tenantId, pharmacyIds, canSeeCost)).length;
+    return (await this.pairs(trx, tenantId, pharmacyIds, canSeeCost, stocked))
+      .length;
   }
 
   /** The products with a problem at any of the pharmacies. */
@@ -50,8 +56,10 @@ export class PriceProblems {
     tenantId: string,
     pharmacyIds: readonly string[],
     canSeeCost: boolean,
+    known?: ReadonlySet<string>,
   ): Promise<Array<{ storeId: string; productId: string }>> {
     if (pharmacyIds.length === 0) return [];
+    const pharmacies = new Set(pharmacyIds);
     const price = new Map(
       (await this.repository.pricesOfStores(trx, tenantId, pharmacyIds)).map(
         (cell) => [
@@ -60,17 +68,23 @@ export class PriceProblems {
         ],
       ),
     );
-    const stocked = await this.stocked.stockedAt(trx, tenantId, pharmacyIds);
+    const stocked = known
+      ? new Set([...known].filter((key) => pharmacies.has(key.split('/')[0])))
+      : await this.stocked.stockedAt(trx, tenantId, pharmacyIds);
     const keys = new Set([...price.keys(), ...stocked]);
     const maxPrice = await this.products.activeMaxPrices(trx, tenantId, [
       ...new Set([...keys].map((key) => key.split('/')[1])),
     ]);
     const { warnBelowCost } = await this.repository.settings(trx, tenantId);
+    // a product without a price cannot be below its cost: only the priced ones are looked up
+    const priced = new Set([...price.keys()].map((key) => key.split('/')[1]));
     const costs =
       canSeeCost && warnBelowCost
-        ? await this.purchasePrices.lastPackCosts(trx, tenantId, [
-            ...maxPrice.keys(),
-          ])
+        ? await this.purchasePrices.lastPackCosts(
+            trx,
+            tenantId,
+            [...maxPrice.keys()].filter((id) => priced.has(id)),
+          )
         : new Map<string, number>();
     const pairs: Array<{ storeId: string; productId: string }> = [];
     for (const key of keys) {

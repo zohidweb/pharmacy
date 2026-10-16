@@ -1,9 +1,10 @@
 'use client';
 
 import { CountBadge, cx, Icon } from '@pharmacy/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useRef } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
 import { apiRequest, isApiRouteAvailable } from '@/shared/api';
@@ -21,6 +22,8 @@ export function Sidebar() {
   const active = activeRoute(pathname ?? '/');
   const { data: session } = useSession();
   const storeId = session?.currentStoreId ?? null;
+  const onPos = active === 'pos';
+  const queryClient = useQueryClient();
   // Numbers of the working store (E2, E9): a minute old at most, refreshed at once after any own
   // change (the mutation cache of the app invalidates navCountersKey); an error keeps the last
   // numbers silently.
@@ -32,11 +35,18 @@ export function Sidebar() {
         signal,
       }),
     enabled: !!session && isApiRouteAvailable('navCounters.get'),
-    // not on the POS screen: a new version of the app activates there between receipts, and a
-    // request in flight at that moment keeps the waiting worker from activating (web-e2e); the own
-    // actions there still refresh the numbers
-    refetchInterval: active === 'pos' ? false : 60_000,
+    // not on the POS screen: there a waiting new version of the app activates between receipts,
+    // and with this polling on it stayed waiting in the web-e2e run (cause not established); the
+    // sales there go through the outbox, so leaving the POS refreshes the numbers at once
+    refetchInterval: onPos ? false : 60_000,
   });
+  const wasOnPos = useRef(onPos);
+  useEffect(() => {
+    if (wasOnPos.current && !onPos) {
+      void queryClient.invalidateQueries({ queryKey: navCountersKey });
+    }
+    wasOnPos.current = onPos;
+  }, [onPos, queryClient]);
 
   return (
     <nav

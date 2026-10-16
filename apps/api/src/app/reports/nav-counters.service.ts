@@ -38,11 +38,11 @@ export class NavCountersService {
       ).filter((store) => !storeId || store.id === storeId);
       const storeIds = stores.map((store) => store.id);
       const counters: NavCounters = {};
-      if (has('inventory:view')) {
-        counters.lowStock = (
-          await this.alerts.lowStock(trx, tenantId, storeIds)
-        ).reduce((sum, store) => sum + store.positions, 0);
-      }
+      // one pass over the movements gives the products below the minimum and those in stock
+      const signals = has('inventory:view')
+        ? await this.alerts.stockSignals(trx, tenantId, storeIds)
+        : null;
+      if (signals) counters.lowStock = signals.lines.length;
       if (has('inventory:receive')) {
         counters.incomingTransfers = (
           await this.alerts.transfersInTransit(trx, tenantId, storeIds)
@@ -56,6 +56,7 @@ export class NavCountersService {
             .filter((store) => store.kind === 'pharmacy')
             .map((store) => store.id),
           has('finance:view-cost'),
+          signals?.stocked,
         );
       }
       return counters;

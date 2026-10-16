@@ -130,6 +130,8 @@ function StockPageView({
         signal,
       }),
     enabled: reorder,
+    // opened from the menu counter: the list must match its number, not a cache up to 30 s old
+    refetchOnMount: 'always',
   });
 
   const reset = () => {

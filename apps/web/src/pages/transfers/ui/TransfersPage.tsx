@@ -58,6 +58,8 @@ function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
   const overview = useQuery({
     queryKey: ['transfers', 'overview'],
     queryFn: ({ signal }) => apiRequest('transfers.overview', { signal }),
+    // opened from the menu counter: «К приёмке» must match its number
+    refetchOnMount: 'always',
   });
   const stores = overview.data?.stores ?? [];
   const isSender = (storeId: string) =>

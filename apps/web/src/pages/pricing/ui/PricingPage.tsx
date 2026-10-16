@@ -156,6 +156,8 @@ function PricesTab({ initial }: { initial: ProblemsFilter }) {
         signal,
       }),
     placeholderData: (previous) => previous,
+    // opened from the menu counter: the list must match its number, not a cache up to 30 s old
+    refetchOnMount: 'always',
   });
 
   return (

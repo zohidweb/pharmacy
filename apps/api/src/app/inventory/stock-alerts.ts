@@ -9,6 +9,12 @@ export interface LowStockOfStore {
   positions: number;
 }
 
+export interface StockSignals {
+  lines: LowStockLine[];
+  /** Keys `${storeId}/${productId}` of the products with positive stock at the stores. */
+  stocked: Set<string>;
+}
+
 export interface LowStockLine {
   storeId: string;
   productId: string;
@@ -73,7 +79,21 @@ export class StockAlerts {
     tenantId: string,
     storeIds?: readonly string[],
   ): Promise<LowStockLine[]> {
-    if (storeIds !== undefined && storeIds.length === 0) return [];
+    return (await this.stockSignals(trx, tenantId, storeIds)).lines;
+  }
+
+  /**
+   * `lowStockLines` and the products in stock from one pass over the movements: the menu counters
+   * (spec 2026-10-15-nav-counters) need both every minute.
+   */
+  async stockSignals(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeIds?: readonly string[],
+  ): Promise<StockSignals> {
+    if (storeIds !== undefined && storeIds.length === 0) {
+      return { lines: [], stocked: new Set() };
+    }
     const stock = await sql<{
       storeId: string;
       productId: string;
@@ -89,6 +109,9 @@ export class StockAlerts {
     const totals = new Map(
       stock.rows.map((row) => [`${row.storeId}/${row.productId}`, row.qty]),
     );
+    const stocked = new Set(
+      [...totals].filter(([, qty]) => qty > 0).map(([key]) => key),
+    );
     const allStores =
       storeIds ??
       (
@@ -99,7 +122,7 @@ export class StockAlerts {
     const priced = await this.prices.pricedAt(trx, tenantId, allStores);
     const pairs = new Set([...totals.keys(), ...priced.keys()]);
     const productIds = [...new Set([...pairs].map((key) => key.split('/')[1]))];
-    if (productIds.length === 0) return [];
+    if (productIds.length === 0) return { lines: [], stocked };
     const products = await sql<{ id: string; minPieces: number }>`
       select id, default_min_stock_pieces as min_pieces
       from pharmacy.products
@@ -117,7 +140,7 @@ export class StockAlerts {
       if (min === undefined || qty >= min) continue;
       lines.push({ storeId, productId, qtyPieces: qty, minPieces: min });
     }
-    return lines;
+    return { lines, stocked };
   }
 
   /** Batches with stock that expire within `thresholdDays` of today, the expired ones included. */

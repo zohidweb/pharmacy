@@ -6,11 +6,26 @@ import { useTranslations } from 'use-intl';
 
 const tone: Record<InvoiceStatus, StatusTone> = {
   issued: 'info',
+  partially_paid: 'warning',
   paid: 'success',
-  overdue: 'danger',
 };
 
-export function InvoiceStatusPill({ status }: { status: InvoiceStatus }) {
-  const t = useTranslations('invoice.status');
-  return <StatusPill tone={tone[status]}>{t(status)}</StatusPill>;
+/**
+ * The status of an invoice derived from what is paid on it, and the overdue mark beside it: overdue
+ * is a remainder after the due date, not a status (spec 2026-10-15-billing-services, A8).
+ */
+export function InvoiceStatusPill({
+  status,
+  overdue = false,
+}: {
+  status: InvoiceStatus;
+  overdue?: boolean;
+}) {
+  const t = useTranslations('invoice');
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <StatusPill tone={tone[status]}>{t(`status.${status}`)}</StatusPill>
+      {overdue && <StatusPill tone="danger">{t('overdue')}</StatusPill>}
+    </span>
+  );
 }

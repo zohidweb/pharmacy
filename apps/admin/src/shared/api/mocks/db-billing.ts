@@ -2,6 +2,14 @@
  * Synthetic billing, services, license and installation data of the mock transport
  * (fictional companies, keys and people). Resets on page reload or resetMockDb().
  */
+import {
+  allocatePayments,
+  type ComposeInput,
+  composeInvoice,
+  invoiceDueOn,
+  invoiceNumber,
+  invoiceStatus,
+} from '@pharmacy/shared-domain';
 import type {
   InstallationItem,
   InvoiceDetails,
@@ -10,6 +18,7 @@ import type {
   PlatformService,
   Release,
   ServiceRequestItem,
+  TenantDiscount,
   TenantServiceItem,
 } from '@pharmacy/shared-dto';
 
@@ -20,233 +29,328 @@ import type {
 export const DEFAULT_VAT_RATE_PERCENT = 14;
 export const PRICE_PER_STORE_MINOR = 12_000;
 
-/** Mock-only VAT split; the real calculation and rounding belong to apps/api. */
-export function withVat(netMinor: number, ratePercent: number) {
-  const vatMinor = Math.round((netMinor * ratePercent) / 100);
-  return { netMinor, vatMinor, totalMinor: netMinor + vatMinor };
+/** Stores the mock bills as a warehouse: never on an invoice (B4); apps/api reads `stores.kind`. */
+export const WAREHOUSES = new Set(['s-202']);
+
+const SUPPLIER = {
+  name: 'ООО «Платформа» (демо)',
+  inn: '000000000',
+  bankAccount: '00000000000000000000',
+  bankName: 'Демо-банк',
+  bankBik: '000000000',
+  bankCorrAccount: '00000000000000000000',
+};
+const PURPOSE = 'Оплата по счёту № {number} за обслуживание точек';
+
+/** A payment of the mock with what apps/api keeps beside it: the order of the day and the request. */
+export interface MockPayment extends PaymentListItem {
+  createdAt: string;
+  /** The body of the first request (A9): a repeat with another one is a conflict. */
+  request: string;
 }
 
-function invoice(
-  partial: Omit<
-    InvoiceDetails,
-    'netMinor' | 'vatMinor' | 'totalMinor' | 'vatRatePercent'
-  >,
-): InvoiceDetails {
-  const net = partial.lines.reduce((sum, line) => sum + line.amountMinor, 0);
+export interface MockDiscount extends TenantDiscount {
+  tenantId: string;
+}
+
+/** A service of a network with the body of the request that added it without an order (B17). */
+export type MockTenantService = TenantServiceItem & { request?: string };
+
+/** An invoice as apps/api would compose it (spec 2026-10-15-billing-services, A2–A5). */
+export function composedInvoice(spec: {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  tenantInn: string;
+  period: string;
+  sequence: number;
+  issuedOn: string;
+  pricePerStoreMinor: number;
+  vatRatePercent: number;
+  discountBp: number | null;
+  stores: ComposeInput['stores'];
+  services: ComposeInput['services'];
+  supplier?: typeof SUPPLIER;
+  purposeTemplate?: string;
+}): InvoiceDetails {
+  const composed = composeInvoice({
+    period: spec.period,
+    pricePerStoreMinor: spec.pricePerStoreMinor,
+    vatBp: spec.vatRatePercent * 100,
+    discountBp: spec.discountBp,
+    stores: spec.stores,
+    services: spec.services,
+  });
+  const number = invoiceNumber(spec.period, spec.sequence);
   return {
-    ...partial,
-    ...withVat(net, DEFAULT_VAT_RATE_PERCENT),
-    vatRatePercent: DEFAULT_VAT_RATE_PERCENT,
+    id: spec.id,
+    number,
+    tenantId: spec.tenantId,
+    tenantName: spec.tenantName,
+    period: spec.period,
+    stores: composed.lines.filter((line) => line.kind === 'store').length,
+    hasServices: composed.lines.some((line) => line.kind === 'service'),
+    netMinor: composed.subtotalMinor,
+    vatMinor: composed.vatMinor,
+    totalMinor: composed.totalMinor,
+    paidMinor: 0,
+    remainingMinor: composed.totalMinor,
+    status: 'issued',
+    overdue: false,
+    issuedAt: `${spec.issuedOn}T04:00:00.000Z`,
+    dueOn: invoiceDueOn(spec.period, spec.issuedOn),
+    paidOn: null,
+    pricePerStoreMinor: spec.pricePerStoreMinor,
+    vatRatePercent: spec.vatRatePercent,
+    supplier: spec.supplier ?? SUPPLIER,
+    payer: { name: spec.tenantName, inn: spec.tenantInn },
+    paymentPurpose: (spec.purposeTemplate ?? PURPOSE)
+      .split('{number}')
+      .join(number),
+    recalculatedAt: null,
+    lines: composed.lines.map((line, index) => ({
+      id: `${spec.id}-l${index + 1}`,
+      ...line,
+    })),
   };
 }
 
+const seeded = (
+  spec: Omit<
+    Parameters<typeof composedInvoice>[0],
+    'pricePerStoreMinor' | 'vatRatePercent' | 'services' | 'discountBp'
+  > & { services?: ComposeInput['services'] },
+) =>
+  composedInvoice({
+    ...spec,
+    pricePerStoreMinor: PRICE_PER_STORE_MINOR,
+    vatRatePercent: DEFAULT_VAT_RATE_PERCENT,
+    discountBp: null,
+    services: spec.services ?? [],
+  });
+
+/**
+ * The allocation of the active payments of a network to its invoices, as TenantAllocation of
+ * apps/api (spec 2026-10-15-billing-services, A7, A8): paid amounts, statuses and the advance.
+ */
+export function settleBilling(db: BillingDb, tenantId: string): void {
+  const invoices = db.invoices.filter(
+    (invoice) => invoice.tenantId === tenantId,
+  );
+  const result = allocatePayments(
+    invoices.map((invoice) => ({
+      id: invoice.id,
+      period: invoice.period,
+      number: invoice.number,
+      totalMinor: invoice.totalMinor,
+      issuedOn: invoice.issuedAt.slice(0, 10),
+    })),
+    db.payments
+      .filter((payment) => payment.tenantId === tenantId && !payment.cancelled)
+      .map((payment) => ({
+        id: payment.id,
+        amountMinor: payment.amountMinor,
+        paidOn: payment.paidOn,
+        createdAt: payment.createdAt,
+        preferredInvoiceId: payment.invoiceId,
+      })),
+  );
+  for (const invoice of invoices) {
+    const paid = result.invoices[invoice.id];
+    invoice.paidMinor = paid.paidMinor;
+    invoice.paidOn = paid.paidOn;
+    invoice.remainingMinor = invoice.totalMinor - paid.paidMinor;
+    invoice.status = invoiceStatus(invoice.totalMinor, paid.paidMinor);
+  }
+  db.advances[tenantId] = result.advanceMinor;
+}
+
 export interface BillingDb {
+  /** Paid amounts, statuses and advances are set by the allocation (mocks/billing-ledger.ts). */
   invoices: InvoiceDetails[];
-  payments: PaymentListItem[];
+  payments: MockPayment[];
+  discounts: MockDiscount[];
+  /** The advance of each network: payments not allocated to invoices. */
+  advances: Record<string, number>;
   services: Omit<PlatformService, 'tenants'>[];
   /** Pending requests: a decision moves a request to `tenantServices`. */
   serviceRequests: ServiceRequestItem[];
-  tenantServices: TenantServiceItem[];
+  tenantServices: MockTenantService[];
   licenses: LicenseListItem[];
   installations: InstallationItem[];
   releases: Release[];
 }
 
+const DEMO = {
+  tenantId: 't-1',
+  tenantName: 'Демо Фарм',
+  tenantInn: '000000001',
+};
+const EXAMPLE = {
+  tenantId: 't-2',
+  tenantName: 'Пример Мед',
+  tenantInn: '000000002',
+};
+const TEST = {
+  tenantId: 't-3',
+  tenantName: 'Тест Аптека',
+  tenantInn: '000000003',
+};
+const DEMO_1 = {
+  storeId: 's-101',
+  name: 'Демо Фарм №1',
+  firstSaleEver: '2026-03-02',
+  closedOn: null,
+};
+const DEMO_2 = {
+  storeId: 's-102',
+  name: 'Демо Фарм №2',
+  firstSaleEver: '2026-07-12',
+  closedOn: null,
+};
+const DEMO_5 = {
+  storeId: 's-105',
+  name: 'Демо Фарм №5',
+  firstSaleEver: '2026-03-02',
+  closedOn: '2026-09-08',
+};
+
 export function seedBilling(): BillingDb {
-  return {
+  const db: BillingDb = {
+    // July and August are invoiced; September closes on 2026-10-03 (A1).
     invoices: [
-      invoice({
-        id: 'inv-1',
-        number: 'СЧ-2026-09-001',
-        tenantId: 't-1',
-        tenantName: 'Демо Фарм',
-        period: '2026-09',
-        stores: 2,
-        hasServices: true,
-        status: 'paid',
-        dueOn: '2026-10-15',
-        lines: [
-          {
-            kind: 'store',
-            description: 'Демо Фарм №1 — полный месяц',
-            days: 30,
-            amountMinor: 12_000,
-          },
-          {
-            kind: 'store',
-            description: 'Демо Фарм №2 — полный месяц',
-            days: 30,
-            amountMinor: 12_000,
-          },
-          {
-            kind: 'service',
-            description: 'Перенос данных из прежней системы',
-            days: null,
-            amountMinor: 120_000,
-          },
-          {
-            kind: 'service',
-            description: 'Расширенная аналитика',
-            days: 30,
-            amountMinor: 26_200,
-          },
-        ],
-      }),
-      invoice({
-        id: 'inv-3',
-        number: 'СЧ-2026-09-003',
-        tenantId: 't-2',
-        tenantName: 'Пример Мед',
-        period: '2026-09',
-        stores: 2,
-        hasServices: false,
-        status: 'overdue',
-        dueOn: '2026-09-15',
-        lines: [
-          {
-            kind: 'store',
-            description: 'Пример Мед — центральная — полный месяц',
-            days: 30,
-            amountMinor: 12_000,
-          },
-          {
-            kind: 'store',
-            description: 'Пример Мед — склад — 8 дней',
-            days: 8,
-            amountMinor: 3_200,
-          },
-        ],
-      }),
-      invoice({
-        id: 'inv-4',
-        number: 'СЧ-2026-09-002',
-        tenantId: 't-3',
-        tenantName: 'Тест Аптека',
-        period: '2026-09',
-        stores: 1,
-        hasServices: false,
-        status: 'issued',
-        dueOn: '2026-10-15',
-        lines: [
-          {
-            kind: 'store',
-            description: 'Тест Аптека — 11 дней',
-            days: 11,
-            amountMinor: 4_400,
-          },
-        ],
-      }),
-      invoice({
-        id: 'inv-2',
-        number: 'СЧ-2026-08-001',
-        tenantId: 't-1',
-        tenantName: 'Демо Фарм',
-        period: '2026-08',
-        stores: 2,
-        hasServices: false,
-        status: 'paid',
-        dueOn: '2026-09-15',
-        lines: [
-          {
-            kind: 'store',
-            description: 'Демо Фарм №1 — полный месяц',
-            days: 31,
-            amountMinor: 12_000,
-          },
-          {
-            kind: 'store',
-            description: 'Демо Фарм №2 — полный месяц',
-            days: 31,
-            amountMinor: 12_000,
-          },
-        ],
-      }),
-      invoice({
-        id: 'inv-5',
-        number: 'СЧ-2026-08-002',
-        tenantId: 't-2',
-        tenantName: 'Пример Мед',
-        period: '2026-08',
-        stores: 1,
-        hasServices: false,
-        status: 'paid',
-        dueOn: '2026-09-15',
-        lines: [
-          {
-            kind: 'store',
-            description: 'Пример Мед — центральная — полный месяц',
-            days: 31,
-            amountMinor: 12_000,
-          },
-        ],
-      }),
-      invoice({
+      seeded({
+        ...DEMO,
         id: 'inv-6',
-        number: 'СЧ-2026-07-001',
-        tenantId: 't-1',
-        tenantName: 'Демо Фарм',
         period: '2026-07',
-        stores: 2,
-        hasServices: false,
-        status: 'paid',
-        dueOn: '2026-08-15',
-        lines: [
+        sequence: 1,
+        issuedOn: '2026-08-03',
+        stores: [DEMO_1, DEMO_2, DEMO_5],
+      }),
+      seeded({
+        ...DEMO,
+        id: 'inv-2',
+        period: '2026-08',
+        sequence: 1,
+        issuedOn: '2026-09-03',
+        stores: [DEMO_1, DEMO_2, DEMO_5],
+        services: [
           {
-            kind: 'store',
-            description: 'Демо Фарм №1 — полный месяц',
-            days: 31,
-            amountMinor: 12_000,
+            tenantServiceId: 'ts-1',
+            name: 'Перенос данных из прежней системы',
+            priceMinor: 120_000,
+            providedOn: '2026-08-12',
           },
+        ],
+      }),
+      seeded({
+        ...EXAMPLE,
+        id: 'inv-5',
+        period: '2026-08',
+        sequence: 2,
+        issuedOn: '2026-09-03',
+        stores: [
           {
-            kind: 'store',
-            description: 'Демо Фарм №2 — 20 дней',
-            days: 20,
-            amountMinor: 7_740,
+            storeId: 's-201',
+            name: 'Пример Мед — центральная',
+            firstSaleEver: '2026-05-15',
+            closedOn: null,
+          },
+        ],
+      }),
+      seeded({
+        ...TEST,
+        id: 'inv-7',
+        period: '2026-08',
+        sequence: 3,
+        issuedOn: '2026-09-03',
+        stores: [
+          {
+            storeId: 's-301',
+            name: 'Тест Аптека',
+            firstSaleEver: '2026-08-20',
+            closedOn: null,
           },
         ],
       }),
     ],
     payments: [
       {
-        id: 'pay-1',
-        paidOn: '2026-09-05',
-        tenantId: 't-1',
-        tenantName: 'Демо Фарм',
-        invoiceId: 'inv-1',
-        invoiceNumber: 'СЧ-2026-09-001',
-        amountMinor: 195_730,
-        method: 'bank_transfer',
-        recordedBy: 'Демо Оператор',
-        comment: 'Платёжное поручение № 0001 (тест)',
-        cancelled: false,
-      },
-      {
         id: 'pay-2',
         paidOn: '2026-08-04',
+        createdAt: '2026-08-04T06:00:00.000Z',
+        tenantId: 't-1',
+        tenantName: 'Демо Фарм',
+        invoiceId: null,
+        invoiceNumber: null,
+        amountMinor: 50_000,
+        method: 'cash',
+        recordedBy: 'Демо Оператор',
+        comment: null,
+        cancelled: false,
+        cancelReason: null,
+        request: '',
+      },
+      {
+        id: 'pay-1',
+        paidOn: '2026-09-10',
+        createdAt: '2026-09-10T06:00:00.000Z',
         tenantId: 't-1',
         tenantName: 'Демо Фарм',
         invoiceId: 'inv-2',
         invoiceNumber: 'СЧ-2026-08-001',
-        amountMinor: 27_600,
-        method: 'cash',
+        amountMinor: 170_000,
+        method: 'bank_transfer',
         recordedBy: 'Демо Оператор',
-        comment: '',
+        comment: 'Платёжное поручение № 0001 (тест)',
         cancelled: false,
+        cancelReason: null,
+        request: '',
       },
       {
         id: 'pay-3',
-        paidOn: '2026-08-10',
+        paidOn: '2026-09-20',
+        createdAt: '2026-09-20T06:00:00.000Z',
         tenantId: 't-2',
         tenantName: 'Пример Мед',
-        invoiceId: 'inv-5',
-        invoiceNumber: 'СЧ-2026-08-002',
-        amountMinor: 13_800,
+        invoiceId: null,
+        invoiceNumber: null,
+        amountMinor: 5_000,
+        method: 'cash',
+        recordedBy: 'Демо Оператор',
+        comment: null,
+        cancelled: false,
+        cancelReason: null,
+        request: '',
+      },
+      {
+        id: 'pay-4',
+        paidOn: '2026-09-12',
+        createdAt: '2026-09-12T06:00:00.000Z',
+        tenantId: 't-3',
+        tenantName: 'Тест Аптека',
+        invoiceId: null,
+        invoiceNumber: null,
+        amountMinor: 5_295,
         method: 'bank_transfer',
         recordedBy: 'Демо Оператор',
-        comment: '',
+        comment: null,
         cancelled: false,
+        cancelReason: null,
+        request: '',
       },
     ],
+    discounts: [
+      {
+        id: 'disc-1',
+        tenantId: 't-1',
+        percentBp: 1_000,
+        fromMonth: '2026-09',
+        toMonth: '2026-12',
+        invoicedThrough: null,
+      },
+    ],
+    advances: {},
     // One-time services of the catalog (spec 2026-10-15-billing-services, B7); the count of
     // networks is computed by the handler, as apps/api does.
     services: [
@@ -316,11 +420,11 @@ export function seedBilling(): BillingDb {
         priceMinor: 120_000,
         reason: null,
         requestId: 'req-0',
-        requestedAt: '2026-03-01T06:00:00Z',
+        requestedAt: '2026-08-01T06:00:00Z',
         comment: null,
-        decidedAt: '2026-03-01T09:30:00Z',
+        decidedAt: '2026-08-01T09:30:00Z',
         decidedBy: 'Демо Оператор',
-        providedOn: '2026-03-02',
+        providedOn: '2026-08-12',
       },
       {
         id: 'ts-2',
@@ -467,4 +571,6 @@ export function seedBilling(): BillingDb {
       },
     ],
   };
+  for (const tenantId of ['t-1', 't-2', 't-3']) settleBilling(db, tenantId);
+  return db;
 }

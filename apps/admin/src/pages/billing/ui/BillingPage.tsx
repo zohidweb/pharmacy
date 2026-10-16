@@ -43,7 +43,7 @@ import {
 
 const INVOICE_PAGE = 5;
 const PAYMENT_PAGE = 10;
-const filters: InvoiceListFilter[] = ['all', 'paid', 'overdue'];
+const filters: InvoiceListFilter[] = ['all', 'unpaid', 'overdue', 'paid'];
 
 function previousPeriod(): string {
   const [year, month] = toAppDate().split('-').map(Number);
@@ -155,10 +155,26 @@ export function BillingPage() {
       ),
     },
     {
+      key: 'paid',
+      header: t('columns.paid'),
+      numeric: true,
+      nowrap: true,
+      cell: (row) => formatMoney(row.paidMinor, { withSign: false }),
+    },
+    {
+      key: 'remaining',
+      header: t('columns.remaining'),
+      numeric: true,
+      nowrap: true,
+      cell: (row) => formatMoney(row.remainingMinor, { withSign: false }),
+    },
+    {
       key: 'status',
       header: t('columns.status'),
       nowrap: true,
-      cell: (row) => <InvoiceStatusPill status={row.status} />,
+      cell: (row) => (
+        <InvoiceStatusPill status={row.status} overdue={row.overdue} />
+      ),
     },
     {
       key: 'actions',
@@ -174,7 +190,8 @@ export function BillingPage() {
           >
             {t('open')}
           </Button>
-          {row.status !== 'paid' && (
+          {/* only an invoice without payments is recalculated (A6) */}
+          {row.paidMinor === 0 && row.totalMinor > 0 && (
             <Button
               variant="tertiary"
               onClick={() => setRecalculating(row)}
@@ -204,7 +221,12 @@ export function BillingPage() {
       key: 'invoice',
       header: t('payments.columns.invoice'),
       nowrap: true,
-      cell: (row) => <span className="font-mono">{row.invoiceNumber}</span>,
+      cell: (row) =>
+        row.invoiceNumber === null ? (
+          <span className="text-fg-subtle">{t('payments.noInvoice')}</span>
+        ) : (
+          <span className="font-mono">{row.invoiceNumber}</span>
+        ),
     },
     {
       key: 'amount',
@@ -251,7 +273,10 @@ export function BillingPage() {
         <Button
           variant="tertiary"
           onClick={() => setPayment(row)}
-          aria-label={t('payments.openFor', { number: row.invoiceNumber })}
+          aria-label={t('payments.openFor', {
+            tenant: row.tenantName,
+            date: formatDateOnly(row.paidOn),
+          })}
         >
           {t('open')}
         </Button>

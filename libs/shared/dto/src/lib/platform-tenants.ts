@@ -18,10 +18,9 @@ export interface Page<T> {
 /** Access state of a tenant set by the operator; billing debt is reported separately. */
 export type TenantStatus = 'active' | 'blocked';
 
-/** List filter of GET /operator/tenants; `unpaid` = has an overdue invoice. */
+/** List filter of GET /operator/tenants; `unpaid` = has an overdue debt. */
 export type TenantListFilter = 'all' | 'active' | 'unpaid' | 'blocked';
-export type TenantSortKey =
-  'name' | 'owner' | 'stores' | 'paidUntil' | 'monthlyCharge';
+export type TenantSortKey = 'name' | 'owner' | 'stores' | 'debt';
 
 export interface TenantOwner {
   fullName: string;
@@ -37,14 +36,18 @@ export interface TenantListItem {
   city: string;
   owner: TenantOwner;
   status: TenantStatus;
-  /** At least one invoice is past due. */
+  /** An overdue debt above 0. */
   overdue: boolean;
   cloudStores: number;
   offlineStores: number;
-  /** Date-only; latest "paid until" over the tenant's cloud stores, null if none. */
-  paidUntil: string | null;
-  /** Charge for the current month without VAT. */
-  monthlyChargeMinor: number;
+  /** Σ (total − paid) of the invoices (spec 2026-10-15-billing-services, 5; B12). */
+  debtMinor: number;
+  /** The same over the invoices past their due date. */
+  overdueDebtMinor: number;
+  /** Payments not allocated to invoices (B2). */
+  advanceMinor: number;
+  /** The discount of the current month (A10). */
+  discount: { percentBp: number; toMonth: string } | null;
 }
 
 /** GET /operator/tenants?filter&q&sort&direction&limit&offset */
@@ -95,8 +98,6 @@ export interface StoreSummary {
   status: StoreStatus;
   /** Date-only, when status is closed. */
   closedOn: string | null;
-  /** Cloud stores: date-only "paid until". */
-  paidUntil: string | null;
   /** Offline stores: date-only license key expiry. */
   licenseValidUntil: string | null;
   /** Offline stores: last successful sync instant. */
@@ -162,7 +163,8 @@ export interface MigrateStoreToCloudRequest {
 
 // ── Tenant tabs ───────────────────────────────────────────────────────────────────────────
 
-export type InvoiceStatus = 'issued' | 'paid' | 'overdue';
+/** Derived from the allocation (spec 2026-10-15-billing-services, A8); overdue is a flag. */
+export type InvoiceStatus = 'issued' | 'partially_paid' | 'paid';
 
 export interface TenantInvoiceItem {
   id: string;
@@ -172,7 +174,12 @@ export interface TenantInvoiceItem {
   stores: number;
   hasServices: boolean;
   totalMinor: number;
+  paidMinor: number;
+  remainingMinor: number;
   status: InvoiceStatus;
+  overdue: boolean;
+  /** Date-only. */
+  dueOn: string;
 }
 
 export type PaymentMethod = 'bank_transfer' | 'cash';
@@ -184,6 +191,10 @@ export interface TenantPaymentItem {
   amountMinor: number;
   method: PaymentMethod;
   recordedBy: string;
+  /** The invoice the payment goes to first, if chosen. */
+  invoiceNumber: string | null;
+  comment: string | null;
+  cancelled: boolean;
 }
 
 // The «Услуги» tab of a company: `TenantServiceItem[]` of platform-billing.ts.

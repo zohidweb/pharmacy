@@ -8,7 +8,14 @@ export const tenantKeys = {
   detail: (id: string) => ['tenants', 'detail', id] as const,
   tab: (
     id: string,
-    tab: 'stores' | 'invoices' | 'payments' | 'services' | 'stats' | 'audit',
+    tab:
+      | 'stores'
+      | 'invoices'
+      | 'payments'
+      | 'discounts'
+      | 'services'
+      | 'stats'
+      | 'audit',
     extra?: unknown,
   ) => ['tenants', 'detail', id, tab, extra] as const,
 };

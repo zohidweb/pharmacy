@@ -14,12 +14,10 @@ import {
 import {
   Alert,
   Button,
-  buttonClassName,
   Chip,
   ChipGroup,
   DataTable,
   Dialog,
-  Icon,
   Select,
   TextareaField,
   TextField,
@@ -28,9 +26,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { billingKeys, invoicePdfHref } from '@/entities/invoice';
+import { billingKeys } from '@/entities/invoice';
 import { tenantKeys } from '@/entities/tenant';
-import { apiMocksEnabled, apiRequest, useApiErrorMessage } from '@/shared/api';
+import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 
 export function formatPeriod(period: string): string {
@@ -43,7 +41,10 @@ function shiftPeriod(period: string, months: number): string {
   return date.toISOString().slice(0, 7);
 }
 
-/** «Сформировать счета за период» — preview first; only a closed period can be generated. */
+/**
+ * «Сформировать счета за период» — preview first (it refreshes the activity of the stores); only a
+ * closed period can be generated, from the 3rd of the next month (A1). A repeat creates nothing.
+ */
 export function GenerateInvoices() {
   const t = useTranslations('billing.generate');
   const tCommon = useTranslations('common');
@@ -125,7 +126,9 @@ export function GenerateInvoices() {
           {(data) => (
             <>
               <Alert tone={data.state === 'closed' ? 'info' : 'warning'}>
-                {t(`state.${data.state}`)}
+                {t(`state.${data.state}`, {
+                  date: formatDateOnly(data.opensOn),
+                })}
               </Alert>
               <DataTable
                 caption={t('previewCaption', {
@@ -141,7 +144,13 @@ export function GenerateInvoices() {
                     key: 'stores',
                     header: t('columns.stores'),
                     numeric: true,
-                    cell: (row) => row.activeStores,
+                    cell: (row) => row.stores,
+                  },
+                  {
+                    key: 'services',
+                    header: t('columns.services'),
+                    numeric: true,
+                    cell: (row) => row.services,
                   },
                   {
                     key: 'total',
@@ -152,6 +161,12 @@ export function GenerateInvoices() {
                       data.state === 'future'
                         ? '—'
                         : formatMoney(row.totalMinor, { withSign: false }),
+                  },
+                  {
+                    key: 'state',
+                    header: t('columns.state'),
+                    nowrap: true,
+                    cell: (row) => (row.invoiced ? t('invoiced') : t('draft')),
                   },
                 ]}
                 rows={data.rows}
@@ -172,7 +187,11 @@ export function GenerateInvoices() {
   );
 }
 
-/** Invoice details: lines with proration days, VAT as a separate line, PDF from apps/api. */
+/**
+ * Invoice details with the snapshot of its issue (A5): store lines with their days and discount,
+ * services with the day they were provided, VAT as a separate line, what is paid and left. Print is
+ * a page of PR 3; no PDF on the server (B11).
+ */
 export function InvoiceDetailsDialog({
   invoice,
   onClose,
@@ -182,7 +201,6 @@ export function InvoiceDetailsDialog({
 }) {
   const t = useTranslations('billing.details');
   const tCommon = useTranslations('common');
-  const toast = useToast();
   const details = useQuery({
     queryKey: billingKeys.invoice(invoice?.id ?? ''),
     queryFn: ({ signal }) =>
@@ -202,29 +220,9 @@ export function InvoiceDetailsDialog({
       closeLabel={tCommon('close')}
       size="lg"
       footer={
-        <>
-          <Button variant="tertiary" onClick={onClose}>
-            {tCommon('close')}
-          </Button>
-          {invoice &&
-            (apiMocksEnabled ? (
-              <Button
-                iconStart="download"
-                onClick={() => toast.show(t('pdfMock'))}
-              >
-                {t('pdf')}
-              </Button>
-            ) : (
-              <a
-                href={invoicePdfHref(invoice.id)}
-                download
-                className={buttonClassName({})}
-              >
-                <Icon name="download" size="sm" />
-                <span>{t('pdf')}</span>
-              </a>
-            ))}
-        </>
+        <Button variant="tertiary" onClick={onClose}>
+          {tCommon('close')}
+        </Button>
       }
     >
       <QueryState query={details}>
@@ -236,13 +234,39 @@ export function InvoiceDetailsDialog({
                 {
                   key: 'description',
                   header: t('columns.line'),
-                  cell: (line) => line.description,
+                  cell: (line) =>
+                    line.providedOn === null ? (
+                      line.description
+                    ) : (
+                      <span className="flex flex-col">
+                        <span>{line.description}</span>
+                        <span className="text-xs text-fg-subtle">
+                          {t('providedOn', {
+                            date: formatDateOnly(line.providedOn),
+                          })}
+                        </span>
+                      </span>
+                    ),
                 },
                 {
                   key: 'days',
                   header: t('columns.days'),
                   numeric: true,
-                  cell: (line) => line.days ?? '—',
+                  nowrap: true,
+                  cell: (line) =>
+                    line.days === null
+                      ? '—'
+                      : `${line.days}/${line.daysInMonth ?? ''}`,
+                },
+                {
+                  key: 'discount',
+                  header: t('columns.discount'),
+                  numeric: true,
+                  nowrap: true,
+                  cell: (line) =>
+                    line.discountBp === null || line.discountBp === 0
+                      ? '—'
+                      : `${line.discountBp / 100}% · ${formatMoney(line.discountMinor ?? 0, { withSign: false })}`,
                 },
                 {
                   key: 'amount',
@@ -254,7 +278,7 @@ export function InvoiceDetailsDialog({
                 },
               ]}
               rows={data.lines}
-              rowKey={(line) => line.description}
+              rowKey={(line) => line.id}
               minWidth="none"
             />
             <dl className="m-0 flex flex-col gap-1 text-sm">
@@ -263,6 +287,8 @@ export function InvoiceDetailsDialog({
                   ['net', data.netMinor],
                   ['vat', data.vatMinor],
                   ['total', data.totalMinor],
+                  ['paid', data.paidMinor],
+                  ['remaining', data.remainingMinor],
                 ] as const
               ).map(([key, value]) => (
                 <div key={key} className="flex justify-between">
@@ -283,6 +309,11 @@ export function InvoiceDetailsDialog({
                 </div>
               ))}
             </dl>
+            <p className="m-0 text-sm text-fg-muted">
+              {t('dueOn', { date: formatDateOnly(data.dueOn) })}
+              {data.recalculatedAt &&
+                ` · ${t('recalculatedAt', { date: formatDateOnly(data.recalculatedAt.slice(0, 10)) })}`}
+            </p>
           </>
         )}
       </QueryState>
@@ -290,7 +321,7 @@ export function InvoiceDetailsDialog({
   );
 }
 
-/** «Пересчитать счёт» — shows before/after; a paid invoice cannot be recalculated. */
+/** «Пересчитать счёт» — shows before/after; only an invoice without payments (A6). */
 export function RecalculateDialog({
   invoice,
   onClose,
@@ -404,7 +435,7 @@ export function PaymentDialog({
     );
     setPaidOn(payment.paidOn);
     setMethod(payment.method);
-    setComment(payment.comment);
+    setComment(payment.comment ?? '');
     setCancelReason(null);
   }
   const invalidate = () => {
@@ -425,7 +456,7 @@ export function PaymentDialog({
           amountMinor: parseMoneyToMinor(amount) ?? 0,
           paidOn,
           method,
-          comment: comment.trim(),
+          comment: comment.trim() || null,
         },
       }),
     onSuccess: () => {
@@ -455,10 +486,18 @@ export function PaymentDialog({
     <Dialog
       open={payment !== null}
       onClose={close}
-      title={t('title', { number: payment?.invoiceNumber ?? '' })}
+      title={t('title', {
+        tenant: payment?.tenantName ?? '',
+        date: payment ? formatDateOnly(payment.paidOn) : '',
+      })}
       description={
         payment
-          ? `${payment.tenantName} · ${t('recordedBy', { name: payment.recordedBy })}`
+          ? [
+              payment.invoiceNumber,
+              t('recordedBy', { name: payment.recordedBy }),
+            ]
+              .filter(Boolean)
+              .join(' · ')
           : undefined
       }
       closeLabel={tCommon('close')}

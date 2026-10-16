@@ -1,6 +1,6 @@
 'use client';
 
-import { formatMoney, parseMoneyToMinor } from '@pharmacy/shared-util';
+import { formatMoney, parseMoneyToMinor, uuidv7 } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -18,7 +18,8 @@ import { invalidateServices, serviceKeys } from '../lib/invalidate';
 /**
  * A service the operator adds to a network without a request (spec 2026-10-15-billing-services,
  * A13): approved at once, at the price set here (the base price by default). Archived services are
- * not offered; hidden ones are, with a mark.
+ * not offered; hidden ones are, with a mark. The UUIDv7 `id` made when the dialog opens is the
+ * idempotency key (B17): a retried submit cannot add the service twice.
  */
 export function AddTenantService({
   tenantId,
@@ -32,6 +33,7 @@ export function AddTenantService({
   const toast = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [key, setKey] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [price, setPrice] = useState('');
   const catalog = useQuery({
@@ -44,7 +46,7 @@ export function AddTenantService({
     mutationFn: () =>
       apiRequest('tenants.addService', {
         params: { id: tenantId },
-        body: { serviceId, priceMinor: parseMoneyToMinor(price) ?? 0 },
+        body: { id: key, serviceId, priceMinor: parseMoneyToMinor(price) ?? 0 },
       }),
     onSuccess: (added) => {
       invalidateServices(queryClient, tenantId);
@@ -78,7 +80,10 @@ export function AddTenantService({
       <Button
         variant="secondary"
         iconStart="plus"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setKey(uuidv7());
+          setOpen(true);
+        }}
       >
         {t('action')}
       </Button>

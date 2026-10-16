@@ -2,9 +2,11 @@
 // pharmacy is listed here and vice versa; catalog.int-spec.ts checks this against pg_catalog.
 //   tenant        - tenant data, RLS by app.tenant_id for pharmacy_app;
 //   tenant-export - tenant-owned aggregates without personal data, readable by the platform;
-//   platform      - platform registry: pharmacy_app reads at most its own rows of `tenants` and
-//                   `tenant_services`; `operators`, `operator_credentials` and
-//                   `platform_audit_log` are open to pharmacy_platform only;
+//   platform      - platform registry: pharmacy_app reads at most its own rows of `tenants`,
+//                   `tenant_services`, `invoices`, `invoice_lines` and `tenant_discounts`;
+//                   `operators`, `operator_credentials`, `platform_audit_log`, `tenant_payments`
+//                   and `tenant_payment_allocations` are open to pharmacy_platform only, which
+//                   never deletes their rows (spec 2026-10-15-billing-services, B18);
 //   shared        - reference data shared by all tenants;
 //   system        - internal service tables (job queue).
 export type TableClass =
@@ -71,6 +73,12 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     operator_credentials: 'platform',
     platform_audit_log: 'platform',
     tenant_services: 'platform',
+    store_usage_monthly: 'tenant-export',
+    invoices: 'platform',
+    invoice_lines: 'platform',
+    tenant_payments: 'platform',
+    tenant_payment_allocations: 'platform',
+    tenant_discounts: 'platform',
     platform_settings: 'shared',
     services: 'shared',
   });

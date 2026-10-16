@@ -23,6 +23,8 @@ export interface DecisionValues {
   status: 'approved' | 'rejected';
   reason: string | null;
   decidedBy: string;
+  /** The hash of the request that added a service without an order (B17). */
+  requestHash?: Buffer | null;
 }
 
 export interface TenantServiceFilter {
@@ -154,8 +156,45 @@ export class ServiceOrdersRepository {
         status: values.status,
         reason: values.reason,
         decidedBy: values.decidedBy,
+        requestHash: values.requestHash ?? null,
       })
       .execute();
+  }
+
+  /** The request hash of a service; undefined when there is no service with this id. */
+  async requestHashOf(
+    trx: Transaction<DB>,
+    id: string,
+  ): Promise<Buffer | null | undefined> {
+    const row = await trx
+      .selectFrom('tenantServices')
+      .select('requestHash')
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row === undefined ? undefined : row.requestHash;
+  }
+
+  /** The invoice a service is still on (A13), with what is paid on it and its VAT rate. */
+  async activeLine(
+    trx: Transaction<DB>,
+    tenantServiceId: string,
+  ): Promise<{
+    invoiceId: string;
+    paidDirams: bigint | string | number;
+    vatBp: number;
+  } | null> {
+    const { rows } = await sql<{
+      invoiceId: string;
+      paidDirams: bigint | string | number;
+      vatBp: number;
+    }>`
+      select l.invoice_id, i.paid_dirams, i.vat_bp
+      from pharmacy.invoice_lines l
+      join pharmacy.invoices i on i.id = l.invoice_id
+      where l.tenant_service_id = ${tenantServiceId} and l.removed_at is null`.execute(
+      trx,
+    );
+    return rows[0] ?? null;
   }
 
   /**

@@ -5,7 +5,8 @@
  * closing a store moves its stock by a transfer and completes when the receiver accepts it. Offline stores (ADR-0014):
  * the cloud shows their synchronisation; an offline store decides its product duplicates itself.
  */
-import type { Page, StoreMode } from './platform-tenants.js';
+import type { InvoiceLine } from './platform-billing.js';
+import type { InvoiceStatus, Page, StoreMode } from './platform-tenants.js';
 import type { ExpenseKind } from '@pharmacy/shared-domain';
 import type { NotificationKind } from './tenant-home.js';
 
@@ -70,8 +71,6 @@ export interface OwnerStore {
    * to the receiver, the store sells and posts nothing; `closed` — the receiver accepted it.
    */
   status: OwnerStoreStatus;
-  /** Cloud store: paid until; null until billing for the owner exists. */
-  paidUntil: string | null;
   /** Offline store: the license key is valid until; null until offline stores exist. */
   licenseValidUntil: string | null;
   /** 0 until the POS module exists. */
@@ -254,25 +253,56 @@ export interface CreateServiceRequestBody {
   comment: string | null;
 }
 
-export type TenantInvoiceStatus = 'paid' | 'due' | 'overdue';
-
+/** An invoice of the network (spec 2026-10-15-billing-services, 6.2; status and overdue — A8). */
 export interface TenantInvoice {
+  id: string;
   number: string;
   /** YYYY-MM */
   period: string;
-  amountMinor: number;
+  totalMinor: number;
+  paidMinor: number;
+  remainingMinor: number;
+  status: InvoiceStatus;
+  /** A remainder after the due date. */
+  overdue: boolean;
+  /** Date-only. */
   dueOn: string;
+  /** Date-only: the day the invoice became fully paid. */
   paidOn: string | null;
-  status: TenantInvoiceStatus;
 }
 
-/** GET /api/v1/billing — a store with at least one sale in the month is active for billing. */
+/**
+ * The estimate of the month `period` by `through` (A19): the formulas of an invoice (A2, A3, A10)
+ * over the sales from the 1st to today, at the current tariff, rate and discount; services provided
+ * and not invoiced yet. The final sum is the invoice's.
+ */
+export interface TenantBillingEstimate {
+  /** YYYY-MM */
+  period: string;
+  /** Date-only, inclusive. */
+  through: string;
+  pricePerStoreMinor: number;
+  vatRatePercent: number;
+  discountBp: number | null;
+  lines: Array<Omit<InvoiceLine, 'id'>>;
+  netMinor: number;
+  vatMinor: number;
+  totalMinor: number;
+}
+
+/**
+ * GET /api/v1/billing (`billing:view`, 6.2): the estimate of the current month, the debt, the overdue
+ * debt and the advance of the network, its discounts of the current month and later, its invoices,
+ * newest first. GET /api/v1/billing/invoices/{id} gives `InvoiceDetails` (platform-billing.ts) for
+ * print; 404 for an invoice of another network.
+ */
 export interface TenantBilling {
-  current: TenantInvoice & {
-    activeStores: number;
-    pricePerStoreMinor: number;
-  };
-  history: TenantInvoice[];
+  estimate: TenantBillingEstimate;
+  debtMinor: number;
+  overdueDebtMinor: number;
+  advanceMinor: number;
+  discounts: Array<{ percentBp: number; fromMonth: string; toMonth: string }>;
+  invoices: TenantInvoice[];
 }
 
 /* ---------------- reports ---------------- */

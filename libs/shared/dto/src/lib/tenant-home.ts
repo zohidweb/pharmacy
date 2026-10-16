@@ -61,7 +61,13 @@ export type NotificationKind =
   | 'sync_conflict'
   | 'license_expiring'
   /** The operator approved (with a price), rejected or cancelled a service of the network (event). */
-  | 'service_decided';
+  | 'service_decided'
+  /**
+   * An invoice of the network is past its due date with a remainder (state: gone when it is paid):
+   * `documentNumber` — the number, `amountMinor` — the remainder, `dueDate` (spec
+   * 2026-10-15-billing-services, A17).
+   */
+  | 'invoice_overdue';
 
 export interface ReminderParams {
   productName?: string;

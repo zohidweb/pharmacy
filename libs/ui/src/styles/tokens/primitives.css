@@ -106,6 +106,7 @@
   --ph-size-table-lg: 57.5rem; /* 920 */
   --ph-size-chart-height: 10rem; /* 160 */
   --ph-size-receipt-preview: 30rem; /* 480 — on-screen receipt paper height */
+  --ph-size-sheet-preview: 52.5rem; /* 840 — on-screen A4 sheet (an invoice) */
 
   /* Typography: families (--ph-font-face-sans comes from fonts.css), sizes in rem only (WCAG 1.4.4) */
   --ph-font-sans:

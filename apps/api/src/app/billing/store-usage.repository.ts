@@ -48,4 +48,43 @@ export class StoreUsageRepository {
       trx,
     );
   }
+
+  /**
+   * The activity of `month` (YYYY-MM-01) by `through` (inclusive), read without writing: the stores
+   * `refresh` would take with the receipts up to that day (the estimate of the owner, A19).
+   */
+  async activity(
+    trx: TenantTransaction,
+    tenantId: string,
+    month: string,
+    through: string,
+  ): Promise<ActivityRow[]> {
+    const { rows } = await sql<ActivityRow>`
+      select s.id as store_id, s.name, e.first_ever::text as first_sale_ever,
+             (s.closed_at at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date::text
+               as closed_on
+      from pharmacy.stores s
+      join lateral (
+        select min(r.business_date) as first_ever
+        from pharmacy.receipts r
+        where r.tenant_id = s.tenant_id and r.store_id = s.id
+      ) e on true
+      left join pharmacy.tenant_settings ts on ts.tenant_id = s.tenant_id
+      where s.tenant_id = ${tenantId} and s.kind = 'pharmacy' and s.mode = 'online'
+        and exists (
+          select 1 from pharmacy.receipts r
+          where r.tenant_id = s.tenant_id and r.store_id = s.id
+            and r.business_date >= ${month}::date and r.business_date <= ${through}::date)`.execute(
+      trx,
+    );
+    return rows;
+  }
+}
+
+/** A store active in a month: what an invoice or the estimate needs. */
+export interface ActivityRow {
+  storeId: string;
+  name: string;
+  firstSaleEver: string;
+  closedOn: string | null;
 }

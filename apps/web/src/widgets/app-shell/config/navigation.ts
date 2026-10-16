@@ -14,10 +14,10 @@ export type NavSectionKey =
   | 'owner'
   | 'settings';
 
-/** Screens that have a menu item (sign-in and profile live elsewhere). */
+/** Screens that have a menu item (sign-in and profile live elsewhere; a tab is not a screen). */
 export type NavRoute = Exclude<
   StaticRouteName,
-  'login' | 'activate' | 'profile'
+  'login' | 'activate' | 'profile' | 'storesBilling'
 >;
 
 export interface NavItem {

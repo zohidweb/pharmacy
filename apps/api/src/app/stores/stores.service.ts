@@ -48,7 +48,6 @@ export function toOwnerStore(
         : row.mode === 'offline_pending'
           ? 'pending'
           : 'active',
-    paidUntil: null,
     licenseValidUntil: null,
     receiptsThisMonth: 0,
     closedOn: row.status === 'closed' ? row.closedOn : null,

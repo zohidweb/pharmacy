@@ -63,6 +63,7 @@ const KIND_PERMISSION: Record<NotificationKind, Permission> = {
   sync_conflict: 'sync:view',
   license_expiring: 'stores:view',
   service_decided: 'services:view',
+  invoice_overdue: 'billing:view',
 };
 
 /** The notifications the employee receives, newest first, with their own read marks. */

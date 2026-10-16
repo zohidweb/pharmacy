@@ -8,7 +8,6 @@
     "new": "Добавить точку",
     "storesCount": "Точки · {count}",
     "billingRule": "Для биллинга активной считается точка, у которой в расчётном месяце была хотя бы одна продажа.",
-    "paidUntil": "оплачено до {date}",
     "keyUntil": "ключ до {date} · {days, plural, one {# день} few {# дня} many {# дней} other {# дня}}",
     "receipts": "{count, plural, one {# чек} few {# чека} many {# чеков} other {# чека}}",
     "closedInfo": "закрыта {date} · остатки — {store}",
@@ -20,7 +19,7 @@
     "columns": {
       "store": "Точка",
       "mode": "Режим",
-      "paid": "Оплачено / ключ",
+      "license": "Ключ офлайн-точки",
       "activity": "Активность за месяц",
       "status": "Статус",
       "code": "Код",
@@ -117,23 +116,45 @@
       "scopeHint": "Услуги заказываются на всю сеть; цену назначает и подтверждает оператор платформы. Оказанная услуга попадает в счёт за месяц, когда её оказали."
     },
     "billing": {
-      "current": "Текущий счёт",
-      "formula": "За {period} · активных облачных точек: {stores} × {price}",
-      "dueOn": "Оплатить до {date}",
-      "pdf": "Счёт PDF",
-      "pdfPending": "PDF счёта появится после выбора способа формирования документов (ADR).",
-      "history": "История оплат",
-      "period": "{month, select, 1 {январь} 2 {февраль} 3 {март} 4 {апрель} 5 {май} 6 {июнь} 7 {июль} 8 {август} 9 {сентябрь} 10 {октябрь} 11 {ноябрь} 12 {декабрь} other {—}} {year}",
-      "periodHeader": "Период",
-      "number": "Счёт",
+      "estimate": "Оценка за {period}",
+      "estimateNote": "По продажам с 1-го числа по {date}, по текущему тарифу {price} за точку в месяц. Окончательная сумма — в счёте.",
+      "noActivity": "В этом месяце продаж ещё не было — оценка появится после первой продажи.",
+      "lines": "Строки оценки",
+      "line": "Точка или услуга",
+      "days": "Дней",
+      "daysValue": "{days} из {daysInMonth}",
+      "discountValue": "−{percent}%",
+      "providedOn": "оказана {date}",
       "amount": "Сумма, с",
-      "paidOn": "Оплачен",
-      "status": "Статус",
+      "net": "Без НДС",
+      "vat": "НДС {rate}%",
+      "total": "Итого",
+      "debt": "Долг",
+      "overdueDebt": "Просрочено",
+      "advance": "Аванс",
+      "discounts": "Скидки",
+      "discountItem": "{percent}% · {from} — {to}",
+      "noDiscounts": "Скидок нет",
+      "history": "Счета",
+      "noInvoices": "Счетов пока нет",
+      "period": "{month, select, 1 {январь} 2 {февраль} 3 {март} 4 {апрель} 5 {май} 6 {июнь} 7 {июль} 8 {август} 9 {сентябрь} 10 {октябрь} 11 {ноябрь} 12 {декабрь} other {—}} {year}",
+      "columns": {
+        "number": "Счёт",
+        "total": "Сумма, с",
+        "remaining": "Остаток, с",
+        "status": "Статус"
+      },
       "statuses": {
-        "paid": "Оплачен",
-        "due": "К оплате",
-        "overdue": "Просрочен"
-      }
+        "issued": "Выставлен",
+        "partially_paid": "Частично оплачен",
+        "paid": "Оплачен"
+      },
+      "overdue": "Просрочен",
+      "paidOnValue": "оплачен {date}",
+      "paidValue": "оплачено {amount}",
+      "dueValue": "срок {date}",
+      "print": "Печать",
+      "printInvoice": "Печать счёта {number}"
     },
     "kinds": {
       "pharmacy": "Аптека",
@@ -141,6 +162,32 @@
     },
     "closingInfo": "закрывается · остатки — {store} · перемещения {transfers}",
     "closedEmptyInfo": "закрыта {date} · остатков не было"
+  },
+  "invoicePrint": {
+    "pageTitle": "Счёт",
+    "heading": "Счёт {number}",
+    "print": "Печать",
+    "back": "К оплате",
+    "title": "Счёт № {number} от {date} за {period}",
+    "supplier": "Поставщик",
+    "payer": "Плательщик",
+    "inn": "ИНН {inn}",
+    "account": "Р/с {account}",
+    "bik": "БИК {bik}",
+    "corrAccount": "К/с {account}",
+    "columns": {
+      "line": "Точка или услуга",
+      "detail": "Расчёт",
+      "amount": "Сумма, с"
+    },
+    "storeDays": "{days} из {daysInMonth} дн. по тарифу {price}",
+    "discount": "скидка {percent}% ({amount})",
+    "providedOn": "оказана {date}",
+    "net": "Без НДС",
+    "vat": "НДС {rate}%",
+    "total": "К оплате",
+    "dueOn": "Оплатить до",
+    "purpose": "Назначение платежа"
   },
   "employees": {
     "title": "Сотрудники и роли",
@@ -527,6 +574,10 @@
         "service_decided": {
           "title": "Решения по услугам",
           "hint": "Оператор платформы подтвердил, отклонил или отменил заказанную услугу"
+        },
+        "invoice_overdue": {
+          "title": "Просроченные счета платформы",
+          "hint": "Счёт оператора не оплачен полностью после срока оплаты"
         }
       }
     },

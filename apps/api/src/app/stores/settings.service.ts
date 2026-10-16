@@ -22,6 +22,7 @@ const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'sync_conflict',
   'license_expiring',
   'service_decided',
+  'invoice_overdue',
 ];
 
 function toSettings(row: NetworkSettingsRow): NetworkSettings {

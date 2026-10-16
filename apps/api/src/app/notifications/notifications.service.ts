@@ -167,9 +167,12 @@ export class NotificationsService {
       params.days = dayNumber(params.expiresOn) - dayNumber(today);
     }
     const amount = stored['amountMinor'];
-    // a debt to a supplier is a purchase amount (finance:view-cost); a cash discrepancy is not
+    // a debt to a supplier is a purchase amount (finance:view-cost); a cash discrepancy is not; the
+    // debt of an invoice of the platform is for whoever sees the billing of the network
     const canSeeAmount =
       row.kind === 'shift_discrepancy' ||
+      (row.kind === 'invoice_overdue' &&
+        hasPermissions(principal.permissions, 'billing:view')) ||
       hasPermissions(principal.permissions, 'finance:view-cost');
     if (typeof amount === 'number' && canSeeAmount) params.amountMinor = amount;
     return {

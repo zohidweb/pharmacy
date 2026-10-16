@@ -58,14 +58,12 @@ export function StoreDialog({
           <dl className="grid grid-cols-3 gap-4 text-sm">
             <div className="flex flex-col gap-1 rounded-md bg-surface-sunken p-3">
               <dt className="text-xs text-fg-muted">
-                {tStores('columns.paid')}
+                {tStores('columns.license')}
               </dt>
               <dd className="font-bold">
-                {store.paidUntil
-                  ? formatDateOnly(store.paidUntil)
-                  : store.licenseValidUntil
-                    ? formatDateOnly(store.licenseValidUntil)
-                    : '—'}
+                {store.licenseValidUntil
+                  ? formatDateOnly(store.licenseValidUntil)
+                  : '—'}
               </dd>
             </div>
             <div className="flex flex-col gap-1 rounded-md bg-surface-sunken p-3">

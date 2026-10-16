@@ -105,9 +105,9 @@ pharmacy/
   `inventory`, `pos`, `purchasing`, `terminals`, `pricing` ← `stores` (закрытие точки: `StoreClosingTransfers`,
   `TransferAcceptance`, `PosShifts`, `SupplierDues`, `TerminalsService`, `StoreDiscountDetachment`); о приёмке
   перемещения `inventory` сообщает через порт `TransferAcceptance`, который заполняет `stores`.
-  `billing` ← `notifications` (`ServiceDecisions` — решения оператора по услугам сети); платформенная часть
-  биллинга — `app/platform/billing`, ей `billing` отдаёт `StoreUsage` (активность точек за месяц для счетов,
-  в контексте сети).
+  `billing` ← `notifications` (`ServiceDecisions` — решения оператора по услугам сети, `OverdueInvoices` —
+  просроченные счета сети); платформенная часть биллинга — `app/platform/billing`, ей `billing` отдаёт
+  `StoreUsage` (активность точек за месяц для счетов, в контексте сети).
 
 ## Build / test / lint
 
@@ -123,10 +123,11 @@ npx nx run web:dev-api               # то же, но готовые маршр
                                      #   инвентаризация, возврат поставщику, перемещения и заявки, остатки,
                                      #   касса и смена, возвраты покупателей, главная, уведомления,
                                      #   журнал действий, настройки сети, отчёты, расходы, закрытие точки,
-                                     #   услуги, счётчики меню) — в apps/api
+                                     #   услуги, счётчики меню, оплата и печать счёта) — в apps/api
 npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
 npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети, журнал операторов,
-                                     #   команда и профиль, настройки платформы, услуги) — в apps/api
+                                     #   команда и профиль, настройки платформы, услуги, счета, платежи,
+                                     #   скидки, печать счёта) — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
 npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)

@@ -32,6 +32,8 @@ export const routes = {
   auditLog: () => '/audit-log',
 
   stores: () => '/stores',
+  storesBilling: () => '/stores?tab=billing',
+  invoicePrint: (id: string) => `/stores/invoice?id=${encodeURIComponent(id)}`,
   employees: () => '/employees',
 
   settings: () => '/settings',

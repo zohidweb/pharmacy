@@ -147,6 +147,8 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'services.list',
   'serviceRequests.create',
   'serviceRequests.withdraw',
+  'billing.get',
+  'billing.invoice',
   'stores.create',
   'stores.update',
   'stores.closingPreview',

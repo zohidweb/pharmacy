@@ -14,6 +14,7 @@ import {
 import {
   Alert,
   Button,
+  buttonClassName,
   Chip,
   ChipGroup,
   DataTable,
@@ -24,11 +25,13 @@ import {
   useToast,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { billingKeys } from '@/entities/invoice';
 import { tenantKeys } from '@/entities/tenant';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 
 export function formatPeriod(period: string): string {
@@ -190,7 +193,7 @@ export function GenerateInvoices() {
 /**
  * Invoice details with the snapshot of its issue (A5): store lines with their days and discount,
  * services with the day they were provided, VAT as a separate line, what is paid and left. Print is
- * a page of PR 3; no PDF on the server (B11).
+ * a page of its own (`routes.invoicePrint`); no PDF on the server (B11).
  */
 export function InvoiceDetailsDialog({
   invoice,
@@ -220,9 +223,19 @@ export function InvoiceDetailsDialog({
       closeLabel={tCommon('close')}
       size="lg"
       footer={
-        <Button variant="tertiary" onClick={onClose}>
-          {tCommon('close')}
-        </Button>
+        <>
+          <Button variant="tertiary" onClick={onClose}>
+            {tCommon('close')}
+          </Button>
+          {invoice && (
+            <Link
+              href={routes.invoicePrint(invoice.id)}
+              className={buttonClassName({ variant: 'secondary' })}
+            >
+              {t('print')}
+            </Link>
+          )}
+        </>
       }
     >
       <QueryState query={details}>

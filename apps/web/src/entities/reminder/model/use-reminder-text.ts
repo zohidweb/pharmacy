@@ -15,6 +15,7 @@ export const reminderIcon: Record<NotificationKind, IconName> = {
   sync_conflict: 'refresh-cw',
   license_expiring: 'key-round',
   service_decided: 'sparkles',
+  invoice_overdue: 'receipt',
 };
 
 export const reminderTone: Record<NotificationKind, StatusTone> = {
@@ -27,6 +28,7 @@ export const reminderTone: Record<NotificationKind, StatusTone> = {
   sync_conflict: 'warning',
   license_expiring: 'warning',
   service_decided: 'info',
+  invoice_overdue: 'danger',
 };
 
 /** Title and detail of a reminder in the interface language (the API sends kind + parameters). */

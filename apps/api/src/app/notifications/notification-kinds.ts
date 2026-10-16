@@ -12,6 +12,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'sync_conflict',
   'license_expiring',
   'service_decided',
+  'invoice_overdue',
 ];
 
 /** Facts that never resolve: shown for 30 days after they appear (E12). */
@@ -32,4 +33,5 @@ export const KIND_PERMISSION: Readonly<Record<NotificationKind, Permission>> = {
   sync_conflict: 'sync:view',
   license_expiring: 'stores:view',
   service_decided: 'services:view',
+  invoice_overdue: 'billing:view',
 };

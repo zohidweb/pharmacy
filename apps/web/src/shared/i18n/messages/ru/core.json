@@ -294,6 +294,10 @@
     "service_decided": {
       "title": "{decision, select, approved {Услуга «{service}» подтверждена} rejected {Заявка на «{service}» отклонена} other {Услуга «{service}» отменена}}",
       "detail": "{decision, select, approved {Цена {price}} other {Причина: {reason}}}"
+    },
+    "invoice_overdue": {
+      "title": "Счёт {document} просрочен",
+      "detail": "Остаток {amount} · срок был {dueDate}"
     }
   },
   "signOut": {

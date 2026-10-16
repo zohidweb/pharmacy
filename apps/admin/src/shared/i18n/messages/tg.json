@@ -533,6 +533,32 @@
     },
     "overdue": "Мӯҳлаташ гузашт"
   },
+  "invoicePrint": {
+    "pageTitle": "Ҳисобнома",
+    "heading": "Ҳисобномаи {number}",
+    "print": "Чоп",
+    "back": "Ба ҳисобномаҳо",
+    "title": "Ҳисобномаи № {number} аз {date} барои {period}",
+    "supplier": "Таъминкунанда",
+    "payer": "Пардохткунанда",
+    "inn": "РМА {inn}",
+    "account": "Суратҳисоб {account}",
+    "bik": "БИК {bik}",
+    "corrAccount": "Суратҳисоби вакилӣ {account}",
+    "columns": {
+      "line": "Нуқта ё хизматрасонӣ",
+      "detail": "Ҳисоб",
+      "amount": "Маблағ, с"
+    },
+    "storeDays": "{days} аз {daysInMonth} рӯз бо тарифи {price}",
+    "discount": "тахфиф {percent}% ({amount})",
+    "providedOn": "иҷро шуд {date}",
+    "net": "Бе ААИ",
+    "vat": "ААИ {rate}%",
+    "total": "Барои пардохт",
+    "dueOn": "Пардохт то",
+    "purpose": "Таъиноти пардохт"
+  },
   "license": {
     "status": {
       "active": "Фаъол",
@@ -675,7 +701,8 @@
       "paid": "Пардохт шуд",
       "remaining": "Боқимонда",
       "dueOn": "Мӯҳлати пардохт {date}",
-      "recalculatedAt": "Аз нав ҳисоб шуд {date}"
+      "recalculatedAt": "Аз нав ҳисоб шуд {date}",
+      "print": "Чоп"
     },
     "paymentCard": {
       "title": "Пардохти {tenant} аз {date}",

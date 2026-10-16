@@ -406,6 +406,22 @@ export interface LegalEntities {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface LicenseKeys {
+  id: string;
+  issuedAt: Generated<Timestamp>;
+  issuedBy: string | null;
+  keyHash: Buffer;
+  keyId: string;
+  notifyBeforeDays: Generated<number>;
+  replacesKeyId: string | null;
+  revokedAt: Timestamp | null;
+  revokedBy: string | null;
+  status: Generated<string>;
+  storeId: string;
+  tenantId: string;
+  validUntil: Timestamp;
+}
+
 export interface NotificationReads {
   employeeId: string;
   notificationId: string;
@@ -495,8 +511,12 @@ export interface PlatformAuditLog {
 }
 
 export interface PlatformSettings {
+  feedWindowDays: Generated<number>;
   id: number;
+  minSupportedProtocol: Generated<number>;
   paymentPurposeTemplate: Generated<string>;
+  recommendedProtocol: Generated<number>;
+  revokedKeyGraceDays: Generated<number>;
   storeMonthlyPriceDirams: Generated<bigint>;
   supplierBankAccount: Generated<string>;
   supplierBankBik: Generated<string>;
@@ -766,6 +786,26 @@ export interface Stores {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface StoreSyncStatus {
+  appVersion: string;
+  checkpointMismatch: Generated<boolean>;
+  clockSkewSec: Generated<number>;
+  feedCursor: string | null;
+  lastCheckpoint: Json | null;
+  lastContactAt: Timestamp;
+  lastRunId: string | null;
+  lastSuccessAt: Timestamp | null;
+  licenseStatus: string;
+  oldestPendingAt: Timestamp | null;
+  outboxDepth: number;
+  protocolVersion: number;
+  quarantined: Generated<number>;
+  schemaVersion: string;
+  storeId: string;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface StoreUsageMonthly {
   closedOn: string | null;
   computedAt: Generated<Timestamp>;
@@ -850,6 +890,61 @@ export interface Suppliers {
   taxId: string | null;
   tenantId: string;
   updatedAt: Generated<Timestamp>;
+}
+
+export interface SyncConflicts {
+  cloudValue: Json;
+  createdAt: Generated<Timestamp>;
+  entityId: string;
+  id: string;
+  kind: string;
+  localValue: Json;
+  resolution: string | null;
+  resolvedAt: Timestamp | null;
+  resolvedBy: string | null;
+  status: Generated<string>;
+  storeId: string;
+  tenantId: string;
+}
+
+export interface SyncInbox {
+  appliedAt: Timestamp | null;
+  attempts: Generated<number>;
+  envelope: Json;
+  operationId: string;
+  payloadHash: string;
+  reason: string | null;
+  receivedAt: Generated<Timestamp>;
+  status: string;
+  storeId: string;
+  storeSeq: bigint;
+  tenantId: string;
+  type: string;
+  typeVersion: number;
+}
+
+export interface SyncRuns {
+  applied: Generated<number>;
+  appVersion: string;
+  bytesReceived: Generated<bigint>;
+  clientReport: Json | null;
+  correlationId: string;
+  duplicate: Generated<number>;
+  feedCursor: string | null;
+  finishedAt: Timestamp | null;
+  id: string;
+  oldestPendingAt: Timestamp | null;
+  operationsReceived: Generated<number>;
+  outboxDepth: number;
+  pendingDependency: Generated<number>;
+  protocolVersion: number;
+  quarantined: Generated<number>;
+  rejected: Generated<number>;
+  result: Generated<string>;
+  schemaVersion: string;
+  startedAt: Generated<Timestamp>;
+  storeId: string;
+  tenantId: string;
 }
 
 export interface TenantDiscounts {
@@ -1030,6 +1125,7 @@ export interface DB {
   invoiceLines: InvoiceLines;
   invoices: Invoices;
   legalEntities: LegalEntities;
+  licenseKeys: LicenseKeys;
   notificationReads: NotificationReads;
   notificationRefresh: NotificationRefresh;
   notifications: Notifications;
@@ -1055,6 +1151,7 @@ export interface DB {
   stockMovements: StockMovements;
   storeProducts: StoreProducts;
   stores: Stores;
+  storeSyncStatus: StoreSyncStatus;
   storeUsageMonthly: StoreUsageMonthly;
   supplierLedgerEntries: SupplierLedgerEntries;
   supplierPaymentAllocations: SupplierPaymentAllocations;
@@ -1062,6 +1159,9 @@ export interface DB {
   supplierReturnAllocations: SupplierReturnAllocations;
   supplierReturnLines: SupplierReturnLines;
   suppliers: Suppliers;
+  syncConflicts: SyncConflicts;
+  syncInbox: SyncInbox;
+  syncRuns: SyncRuns;
   tenantDiscounts: TenantDiscounts;
   tenantPaymentAllocations: TenantPaymentAllocations;
   tenantPayments: TenantPayments;

@@ -3,7 +3,8 @@
 //   tenant        - tenant data, RLS by app.tenant_id for pharmacy_app;
 //   tenant-export - tenant-owned aggregates without personal data, readable by the platform;
 //   platform      - platform registry: pharmacy_app reads at most its own rows of `tenants`,
-//                   `tenant_services`, `invoices`, `invoice_lines` and `tenant_discounts`;
+//                   `tenant_services`, `invoices`, `invoice_lines`, `tenant_discounts` and
+//                   `license_keys`;
 //                   `operators`, `operator_credentials`, `platform_audit_log`, `tenant_payments`
 //                   and `tenant_payment_allocations` are open to pharmacy_platform only, which
 //                   never deletes their rows (spec 2026-10-15-billing-services, B18);
@@ -68,6 +69,10 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     expenses: 'tenant',
     audit_log: 'tenant',
     sessions: 'tenant',
+    sync_inbox: 'tenant',
+    sync_runs: 'tenant',
+    sync_conflicts: 'tenant',
+    store_sync_status: 'tenant-export',
     service_requests: 'tenant-export',
     operators: 'platform',
     operator_credentials: 'platform',
@@ -79,6 +84,7 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     tenant_payments: 'platform',
     tenant_payment_allocations: 'platform',
     tenant_discounts: 'platform',
+    license_keys: 'platform',
     platform_settings: 'shared',
     services: 'shared',
   });
@@ -102,10 +108,11 @@ export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
 
 // SECURITY DEFINER resolver functions owned by pharmacy_resolver (ADR-0013 p. 3 and its
 // amendment 2026-10-02: resolve_login replaces resolve_tenant_by_code; resolve_terminal - auth
-// part 2).
+// part 2; resolve_license_key - the sync contour of offline stores, spec 2026-10-16-offline-sync, E10).
 export const RESOLVER_FUNCTIONS: readonly string[] = Object.freeze([
   'resolve_login',
   'resolve_terminal',
+  'resolve_license_key',
 ]);
 
 // SECURITY DEFINER tenant provisioning functions owned by pharmacy_provisioner (ADR-0013, amendment

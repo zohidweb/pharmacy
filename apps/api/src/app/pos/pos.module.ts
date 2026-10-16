@@ -25,6 +25,8 @@ import { ShiftsController } from './shifts.controller';
 import { ShiftsRepository } from './shifts.repository';
 import { ShiftsService } from './shifts.service';
 import { SoldReceipts } from './sold-receipts';
+import { PosFacts } from './pos-facts';
+import { SyncCoreModule } from '../../core/sync';
 
 // The POS of a cloud store (spec 2026-10-13-pos-shift-sale): catalog snapshot, shifts, receipts and
 // held receipts. Cloud only: the POS of an offline store comes with the sync (ADR-0014). Catalog,
@@ -41,6 +43,7 @@ import { SoldReceipts } from './sold-receipts';
     PricingModule,
     InventoryModule,
     TerminalsModule,
+    SyncCoreModule,
   ],
   controllers: [
     CatalogSnapshotController,
@@ -65,6 +68,8 @@ import { SoldReceipts } from './sold-receipts';
     PosShifts,
     PosAlerts,
     SalesFigures,
+    // applies the receipts and shifts of offline stores (spec 2026-10-16-offline-sync, PR 1)
+    PosFacts,
   ],
   // PosAlerts, SalesFigures — the POS events of the notifications, the sales of the home and the
   // reports (spec 2026-10-14-owner-cabinet)

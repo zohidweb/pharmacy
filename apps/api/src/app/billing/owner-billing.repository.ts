@@ -104,10 +104,15 @@ export class OwnerBillingRepository {
     return rows;
   }
 
-  /** Provided services up to `through` without a line in an invoice (A11). */
+  /**
+   * The provided services the invoice of `month` (YYYY-MM-01) would take by `through`, without a line
+   * in an invoice (A11): those of the month, and the earlier ones only once the network has the
+   * invoice of the previous month — until then they go into that invoice.
+   */
   async pendingServices(
     trx: TenantTransaction,
     tenantId: string,
+    month: string,
     through: string,
   ): Promise<PendingServiceRow[]> {
     const { rows } = await sql<PendingServiceRow>`
@@ -117,6 +122,10 @@ export class OwnerBillingRepository {
       join pharmacy.services s on s.id = ts.service_id
       where ts.tenant_id = ${tenantId} and ts.status = 'provided'
         and ts.provided_on <= ${through}::date
+        and (ts.provided_on >= ${month}::date
+             or exists (select 1 from pharmacy.invoices i
+                        where i.tenant_id = ts.tenant_id
+                          and i.period_month = (${month}::date - interval '1 month')::date))
         and not exists (select 1 from pharmacy.invoice_lines l
                         where l.tenant_id = ts.tenant_id and l.tenant_service_id = ts.id
                           and l.removed_at is null)`.execute(trx);

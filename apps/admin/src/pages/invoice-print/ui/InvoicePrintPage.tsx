@@ -142,7 +142,7 @@ function InvoicePrintView() {
             return (
               <>
                 <Card className="max-w-(--ph-sheet-preview-width)">
-                  <InvoiceSheet {...sheet} />
+                  <InvoiceSheet {...sheet} headingLevel={2} />
                 </Card>
                 <SheetPrint>
                   <InvoiceSheet {...sheet} />

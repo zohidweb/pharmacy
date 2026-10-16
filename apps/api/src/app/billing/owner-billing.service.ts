@@ -89,6 +89,7 @@ export class OwnerBillingService {
       const services = await this.repository.pendingServices(
         trx,
         tenantId,
+        month,
         today,
       );
       // A19: the days from the 1st to today — a store still open is billed through today

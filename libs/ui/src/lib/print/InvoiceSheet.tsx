@@ -3,6 +3,7 @@
  * A4 print (inside `SheetPrint`). Every value comes formatted by the app — the kit knows no DTO and
  * no money.
  */
+import { useId } from 'react';
 import { cx } from '../cx';
 
 export interface InvoiceSheetRow {
@@ -23,6 +24,8 @@ export interface InvoiceSheetProps {
   totals: ReadonlyArray<{ label: string; value: string; strong?: boolean }>;
   /** The due date, the purpose of payment. */
   notes: ReadonlyArray<{ label: string; value: string }>;
+  /** 1 on paper; 2 on a screen page that has its own h1. */
+  headingLevel?: 1 | 2;
   /** Layout only. */
   className?: string;
 }
@@ -34,19 +37,26 @@ export function InvoiceSheet({
   rows,
   totals,
   notes,
+  headingLevel = 1,
   className,
 }: InvoiceSheetProps) {
+  const titleId = useId();
+  const Title = headingLevel === 1 ? 'h1' : 'h2';
+  const Party = headingLevel === 1 ? 'h2' : 'h3';
   return (
     <article
+      aria-labelledby={titleId}
       className={cx('flex flex-col gap-6 text-md text-fg', className)}
     >
-      <h1 className="m-0 text-xl font-semibold">{title}</h1>
+      <Title id={titleId} className="m-0 text-xl font-semibold">
+        {title}
+      </Title>
       <div className="grid grid-cols-2 gap-6">
         {parties.map((party) => (
           <section key={party.label} className="flex flex-col gap-1">
-            <h2 className="m-0 text-sm font-semibold text-fg-muted">
+            <Party className="m-0 text-sm font-semibold text-fg-muted">
               {party.label}
-            </h2>
+            </Party>
             {party.lines.map((line, index) => (
               <p key={index} className="m-0 wrap-anywhere">
                 {line}
@@ -55,7 +65,10 @@ export function InvoiceSheet({
           </section>
         ))}
       </div>
-      <table className="w-full border-collapse text-sm tabular-nums">
+      <table
+        aria-labelledby={titleId}
+        className="w-full border-collapse text-sm tabular-nums"
+      >
         <thead>
           <tr className="border-b border-border-strong">
             <th scope="col" className="px-2 py-2 text-left font-semibold">
@@ -64,7 +77,10 @@ export function InvoiceSheet({
             <th scope="col" className="px-2 py-2 text-left font-semibold">
               {columns.detail}
             </th>
-            <th scope="col" className="px-2 py-2 text-right font-semibold">
+            <th
+              scope="col"
+              className="px-2 py-2 text-right font-semibold whitespace-nowrap"
+            >
               {columns.amount}
             </th>
           </tr>

@@ -48,6 +48,7 @@ import {
   MOCK_FIRST_SALE,
   MOCK_PRICE_PER_STORE_MINOR,
   MOCK_VAT_BP,
+  shiftPeriod,
 } from './owner-billing-seed';
 import { closeStore, legalEntityName, ownerStore } from './owner-stores';
 import { appendAudit } from './handlers-staff';
@@ -1395,6 +1396,10 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
         invoice.lines.map((line) => line.tenantServiceId),
       ),
     );
+    // an earlier service goes into the invoice of the previous month until that one is out (A11)
+    const previousOut = db.invoices.some(
+      (invoice) => invoice.period === shiftPeriod(period, -1),
+    );
     const estimate = composeInvoice({
       period,
       pricePerStoreMinor: MOCK_PRICE_PER_STORE_MINOR,
@@ -1415,6 +1420,7 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
             order.status === 'provided' &&
             order.providedOn !== null &&
             order.providedOn <= day &&
+            (order.providedOn >= `${period}-01` || previousOut) &&
             !invoiced.has(order.requestId),
         )
         .map((order) => ({

@@ -130,8 +130,8 @@ function InvoicePrintView() {
       />
       <div className="flex flex-col gap-4 p-6">
         <Link
-          href={routes.stores()}
-          className="inline-flex items-center gap-1 self-start text-sm text-primary hover:text-primary-hover"
+          href={routes.storesBilling()}
+          className="inline-flex min-h-touch items-center gap-1 self-start text-sm text-primary hover:text-primary-hover"
         >
           <Icon name="arrow-left" size="sm" />
           {t('back')}
@@ -142,7 +142,7 @@ function InvoicePrintView() {
             return (
               <>
                 <Card className="max-w-(--ph-sheet-preview-width)">
-                  <InvoiceSheet {...sheet} />
+                  <InvoiceSheet {...sheet} headingLevel={2} />
                 </Card>
                 <SheetPrint>
                   <InvoiceSheet {...sheet} />

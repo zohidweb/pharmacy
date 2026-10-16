@@ -273,8 +273,9 @@ export interface TenantInvoice {
 
 /**
  * The estimate of the month `period` by `through` (A19): the formulas of an invoice (A2, A3, A10)
- * over the sales from the 1st to today, at the current tariff, rate and discount; services provided
- * and not invoiced yet. The final sum is the invoice's.
+ * over the sales from the 1st to today, at the current tariff, rate and discount; the services the
+ * invoice of the month would take (A11) — provided this month, or earlier and not invoiced once the
+ * invoice of the previous month is out. The final sum is the invoice's.
  */
 export interface TenantBillingEstimate {
   /** YYYY-MM */

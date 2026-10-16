@@ -54,8 +54,6 @@
     padding: var(--ph-sheet-margin);
     box-decoration-break: clone;
     font-family: var(--ph-font-sans);
-    font-size: var(--ph-sheet-font-size);
-    line-height: var(--ph-sheet-line-height);
   }
 
   .ph-print-sheet * {

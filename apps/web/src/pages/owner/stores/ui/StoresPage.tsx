@@ -20,6 +20,7 @@ import {
   Card,
   CardHeader,
   DataTable,
+  Icon,
   StatusPill,
   Tabs,
   type DataTableColumn,
@@ -27,7 +28,8 @@ import {
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { StoreModeBadge } from '@/entities/store';
 import { can, canWrite, useSession } from '@/entities/session';
@@ -44,6 +46,8 @@ import {
 } from './StoreDialogs';
 
 type Tab = 'stores' | 'services' | 'billing';
+
+const TABS: readonly Tab[] = ['stores', 'services', 'billing'];
 
 const statusTone: Record<OwnerStoreStatus, StatusTone> = {
   pending: 'info',
@@ -306,55 +310,64 @@ function BillingTab() {
     },
   ];
   const invoiceColumns: DataTableColumn<TenantInvoice>[] = [
-    { key: 'number', header: t('columns.number'), cell: (row) => row.number },
     {
-      key: 'period',
-      header: t('columns.period'),
-      nowrap: true,
-      cell: (row) => period(row.period),
+      key: 'number',
+      header: t('columns.number'),
+      cell: (row) => (
+        <span className="flex flex-col">
+          <span className="font-medium whitespace-nowrap">{row.number}</span>
+          <span className="text-xs text-fg-subtle">{period(row.period)}</span>
+        </span>
+      ),
     },
     {
       key: 'total',
       header: t('columns.total'),
       numeric: true,
       nowrap: true,
-      cell: (row) => formatMoney(row.totalMinor, { withSign: false }),
-    },
-    {
-      key: 'paid',
-      header: t('columns.paid'),
-      numeric: true,
-      nowrap: true,
-      cell: (row) => formatMoney(row.paidMinor, { withSign: false }),
+      cell: (row) => (
+        <span className="flex flex-col items-end">
+          <span>{formatMoney(row.totalMinor, { withSign: false })}</span>
+          <span className="text-xs text-fg-subtle">
+            {t('paidValue', {
+              amount: formatMoney(row.paidMinor, { withSign: false }),
+            })}
+          </span>
+        </span>
+      ),
     },
     {
       key: 'remaining',
       header: t('columns.remaining'),
       numeric: true,
       nowrap: true,
-      cell: (row) => formatMoney(row.remainingMinor, { withSign: false }),
-    },
-    {
-      key: 'dueOn',
-      header: t('columns.dueOn'),
-      nowrap: true,
-      cell: (row) => formatDateOnly(row.dueOn),
-    },
-    {
-      key: 'paidOn',
-      header: t('columns.paidOn'),
-      nowrap: true,
-      cell: (row) => (row.paidOn ? formatDateOnly(row.paidOn) : '—'),
+      cell: (row) => (
+        <span className="flex flex-col items-end">
+          <span>{formatMoney(row.remainingMinor, { withSign: false })}</span>
+          <span className="text-xs text-fg-subtle">
+            {t('dueValue', { date: formatDateOnly(row.dueOn) })}
+          </span>
+        </span>
+      ),
     },
     {
       key: 'status',
       header: t('columns.status'),
       cell: (row) => (
-        <span className="inline-flex flex-wrap items-center gap-1">
-          <StatusPill tone={invoiceTone[row.status]}>
-            {t(`statuses.${row.status}`)}
-          </StatusPill>
-          {row.overdue && <StatusPill tone="danger">{t('overdue')}</StatusPill>}
+        <span className="flex flex-col items-start gap-1">
+          <span className="inline-flex flex-wrap items-center gap-1">
+            <StatusPill tone={invoiceTone[row.status]}>
+              {t(`statuses.${row.status}`)}
+            </StatusPill>
+            {row.overdue && (
+              <StatusPill tone="danger">{t('overdue')}</StatusPill>
+            )}
+          </span>
+          {row.paidOn && (
+            <span className="text-xs text-fg-subtle">
+              {t('paidOnValue', { date: formatDateOnly(row.paidOn) })}
+            </span>
+          )}
         </span>
       ),
     },
@@ -365,9 +378,10 @@ function BillingTab() {
         <Link
           href={routes.invoicePrint(row.id)}
           aria-label={t('printInvoice', { number: row.number })}
+          title={t('printInvoice', { number: row.number })}
           className={buttonClassName({ variant: 'tertiary' })}
         >
-          {t('print')}
+          <Icon name="printer" size="md" />
         </Link>
       ),
     },
@@ -400,6 +414,7 @@ function BillingTab() {
                 ) : (
                   <DataTable
                     caption={t('lines')}
+                    minWidth="none"
                     rowKey={(line) =>
                       `${line.kind}-${line.storeId ?? line.tenantServiceId}`
                     }
@@ -496,11 +511,17 @@ function BillingTab() {
   );
 }
 
-/** Stores, services and payment of the network (UI mockup «Кабинет владельца»). */
+/**
+ * Stores, services and payment of the network (UI mockup «Кабинет владельца»); `?tab=billing` opens
+ * «Оплата» (the way back from an invoice print page).
+ */
 function StoresPageView() {
   const t = useTranslations('ownerStores');
   const { data: session } = useSession();
-  const [tab, setTab] = useState<Tab>('stores');
+  const requested = useSearchParams()?.get('tab');
+  const [tab, setTab] = useState<Tab>(
+    TABS.find((value) => value === requested) ?? 'stores',
+  );
   const items = [
     { value: 'stores' as const, label: t('tabs.stores'), panel: <StoresTab /> },
     ...(can(session, 'services:view')
@@ -529,7 +550,7 @@ function StoresPageView() {
         {session?.impersonation && <Alert tone="info">{t('readOnly')}</Alert>}
         <Tabs
           label={t('title')}
-          value={tab}
+          value={items.some((item) => item.value === tab) ? tab : 'stores'}
           onValueChange={setTab}
           items={items}
         />
@@ -541,7 +562,9 @@ function StoresPageView() {
 export function StoresPage() {
   return (
     <WithMessages groups={['owner']}>
-      <StoresPageView />
+      <Suspense>
+        <StoresPageView />
+      </Suspense>
     </WithMessages>
   );
 }

@@ -34,7 +34,10 @@ import { canWrite, currentStoreOf, useSession } from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
 import { useOutboxCounts, useTerminalRuntime } from '@/entities/terminal';
 import { apiRequest, useApiCodeMessage } from '@/shared/api';
-import type { PosOutboxRecord } from '@/shared/lib/offline-queue';
+import type {
+  PosOutboxRecord,
+  TerminalRuntime,
+} from '@/shared/lib/offline-queue';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { withPending } from '../lib/pending';
@@ -350,7 +353,8 @@ function ShiftPageView() {
       }),
     enabled: Boolean(storeId) && onTerminal,
   });
-  const writable = canWrite(session, 'shifts:update');
+  // an operation goes to the buffer first (ADR-0015): no action before the IndexedDB of the terminal opens
+  const writable = canWrite(session, 'shifts:update') && runtime !== null;
   const context = () => ({
     id: uuidv7(),
     storeId: storeId ?? '',
@@ -359,10 +363,12 @@ function ShiftPageView() {
     occurredAt: new Date().toISOString(),
   });
 
-  const run = async (work: () => Promise<void>) => {
+  // the actions wait for the buffer of the terminal: without it the dialog stays open, nothing is dropped
+  const run = async (work: (terminal: TerminalRuntime) => Promise<void>) => {
+    if (!runtime) return;
     setBusy(true);
     try {
-      await work();
+      await work(runtime);
       setDialog(null);
     } finally {
       setBusy(false);
@@ -378,11 +384,11 @@ function ShiftPageView() {
   };
 
   const openShift = (openingCashMinor: number) =>
-    run(async () => {
-      if (!runtime || !session) return;
+    run(async (terminal) => {
+      if (!session) return;
       const payload = { ...context(), openingCashMinor };
       refreshAfterDelivery(payload.id);
-      await runtime.enqueue({ kind: 'shift.open', payload });
+      await terminal.enqueue({ kind: 'shift.open', payload });
       // the POS can sell at once, even before the server confirms (the id is ours)
       const zero = () => ({ count: 0, amountMinor: 0 });
       const local: Shift = {
@@ -424,11 +430,10 @@ function ShiftPageView() {
       comment: string;
     },
   ) =>
-    run(async () => {
-      if (!runtime) return;
+    run(async (terminal) => {
       const payload = { ...context(), shiftId: current.id, ...input };
       refreshAfterDelivery(payload.id);
-      await runtime.enqueue({ kind: 'shift.cash', payload });
+      await terminal.enqueue({ kind: 'shift.cash', payload });
       toast.show(input.kind === 'in' ? t('cashInDone') : t('cashOutDone'));
     });
 
@@ -440,12 +445,11 @@ function ShiftPageView() {
       terminalTotals: Record<'card' | 'qr' | 'nfc', number>;
     },
   ) =>
-    run(async () => {
-      if (!runtime) return;
+    run(async (terminal) => {
       const payload = { ...context(), shiftId: current.id, ...input };
       refreshAfterDelivery(payload.id);
       // the terminal's own Z-report at once; the server's replaces it whenever the closing is delivered
-      const unsubscribe = runtime.queue.onDelivered((record, response) => {
+      const unsubscribe = terminal.queue.onDelivered((record, response) => {
         if (record.id !== payload.id) return;
         unsubscribe();
         const server = response as ZReport;
@@ -455,7 +459,7 @@ function ShiftPageView() {
         );
         setPreliminary(false);
       });
-      await runtime.enqueue({ kind: 'shift.close', payload });
+      await terminal.enqueue({ kind: 'shift.close', payload });
       setPreliminary(true);
       setReport({
         shift: { ...current, status: 'closed', closedAt: payload.occurredAt },
@@ -564,7 +568,9 @@ function ShiftPageView() {
                   </>
                 ) : (
                   <Button
-                    disabled={!canWrite(session, 'shifts:create')}
+                    disabled={
+                      !canWrite(session, 'shifts:create') || runtime === null
+                    }
                     onClick={() => setDialog('open')}
                   >
                     {t('openAction')}

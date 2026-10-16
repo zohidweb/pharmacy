@@ -34,6 +34,18 @@ export interface OwnerInvoiceRow {
   overdue: boolean;
 }
 
+export interface OwnerInvoiceListRow {
+  id: string;
+  number: string;
+  /** YYYY-MM. */
+  period: string;
+  dueOn: string;
+  totalDirams: Money;
+  paidDirams: Money;
+  paidOn: string | null;
+  overdue: boolean;
+}
+
 export interface OwnerLineRow {
   id: string;
   kind: 'store' | 'service';
@@ -132,15 +144,6 @@ export class OwnerBillingRepository {
     return rows;
   }
 
-  async advance(trx: TenantTransaction, tenantId: string): Promise<number> {
-    const row = await trx
-      .selectFrom('tenants')
-      .select('billingAdvanceDirams')
-      .where('id', '=', tenantId)
-      .executeTakeFirstOrThrow();
-    return Number(row.billingAdvanceDirams);
-  }
-
   /** The invoices of the network with a remainder after their due date, oldest first. */
   async overdue(
     trx: TenantTransaction,
@@ -180,16 +183,36 @@ export class OwnerBillingRepository {
       from pharmacy.invoices i`;
   }
 
-  /** The invoices of the network, newest first. */
+  /**
+   * The invoices of the network, newest first — what the list shows, without the snapshot — and its
+   * advance, in one statement: the list, the debt summed from it and the advance are one snapshot, so
+   * a payment allocated meanwhile shows either before or after, never half of it.
+   */
   async invoices(
     trx: TenantTransaction,
     tenantId: string,
     today: string,
-  ): Promise<OwnerInvoiceRow[]> {
-    const { rows } = await sql<OwnerInvoiceRow>`
-      ${this.select(today)} where i.tenant_id = ${tenantId}
-      order by i.period_month desc, i.id`.execute(trx);
-    return rows;
+  ): Promise<{ invoices: OwnerInvoiceListRow[]; advanceMinor: number }> {
+    const { rows } = await sql<
+      { advance: Money } & {
+        [K in keyof OwnerInvoiceListRow]: OwnerInvoiceListRow[K] | null;
+      }
+    >`
+      select t.billing_advance_dirams as advance, i.id, i.number,
+             to_char(i.period_month, 'YYYY-MM') as period, i.due_on::text as due_on,
+             i.total_dirams, i.paid_dirams, i.paid_on::text as paid_on,
+             (i.paid_dirams < i.total_dirams and i.due_on < ${today}::date) as overdue
+      from pharmacy.tenants t
+      left join pharmacy.invoices i on i.tenant_id = t.id
+      where t.id = ${tenantId}
+      order by i.period_month desc nulls last, i.id`.execute(trx);
+    return {
+      invoices: rows.filter(
+        (row): row is { advance: Money } & OwnerInvoiceListRow =>
+          row.id !== null,
+      ),
+      advanceMinor: Number(rows[0]?.advance ?? 0),
+    };
   }
 
   async invoice(

@@ -2,6 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
 
+// The stores an invoice bills (A2) and what it needs of them (A21), shared by the refresh of the
+// activity and the owner's estimate so the two never select differently: cloud pharmacies of the
+// network, their first sale ever (receipts_store_date_idx) and the business date of the closing in
+// the time zone of the network. `s` is pharmacy.stores, `ts` its tenant_settings.
+const billedStores = sql`
+  from pharmacy.stores s
+  join lateral (
+    select min(r.business_date) as first_ever
+    from pharmacy.receipts r
+    where r.tenant_id = s.tenant_id and r.store_id = s.id
+  ) e on true
+  left join pharmacy.tenant_settings ts on ts.tenant_id = s.tenant_id`;
+const billedWhere = (tenantId: string) =>
+  sql`s.tenant_id = ${tenantId} and s.kind = 'pharmacy' and s.mode = 'online'`;
+const closedOn = sql`(s.closed_at at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date`;
+
 // The monthly activity of the stores of a network for its invoices (spec
 // 2026-10-15-billing-services, A2, A21; table store_usage_monthly, tenant-export).
 @Injectable()
@@ -28,8 +44,8 @@ export class StoreUsageRepository {
         (tenant_id, store_id, month, receipts_count, first_sale_date, last_sale_date,
          first_sale_ever_date, closed_on)
       select s.tenant_id, s.id, ${month}::date, m.receipts, m.first_sale, m.last_sale, e.first_ever,
-             (s.closed_at at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date
-      from pharmacy.stores s
+             ${closedOn}
+      ${billedStores}
       join lateral (
         select count(*)::int as receipts, min(r.business_date) as first_sale,
                max(r.business_date) as last_sale
@@ -38,15 +54,7 @@ export class StoreUsageRepository {
           and r.business_date >= ${month}::date
           and r.business_date < (${month}::date + interval '1 month')::date
       ) m on m.receipts > 0
-      join lateral (
-        select min(r.business_date) as first_ever
-        from pharmacy.receipts r
-        where r.tenant_id = s.tenant_id and r.store_id = s.id
-      ) e on true
-      left join pharmacy.tenant_settings ts on ts.tenant_id = s.tenant_id
-      where s.tenant_id = ${tenantId} and s.kind = 'pharmacy' and s.mode = 'online'`.execute(
-      trx,
-    );
+      where ${billedWhere(tenantId)}`.execute(trx);
   }
 
   /**
@@ -61,16 +69,9 @@ export class StoreUsageRepository {
   ): Promise<ActivityRow[]> {
     const { rows } = await sql<ActivityRow>`
       select s.id as store_id, s.name, e.first_ever::text as first_sale_ever,
-             (s.closed_at at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date::text
-               as closed_on
-      from pharmacy.stores s
-      join lateral (
-        select min(r.business_date) as first_ever
-        from pharmacy.receipts r
-        where r.tenant_id = s.tenant_id and r.store_id = s.id
-      ) e on true
-      left join pharmacy.tenant_settings ts on ts.tenant_id = s.tenant_id
-      where s.tenant_id = ${tenantId} and s.kind = 'pharmacy' and s.mode = 'online'
+             ${closedOn}::text as closed_on
+      ${billedStores}
+      where ${billedWhere(tenantId)}
         and exists (
           select 1 from pharmacy.receipts r
           where r.tenant_id = s.tenant_id and r.store_id = s.id

@@ -11,6 +11,7 @@ import {
   daysBetween,
   formatDateOnly,
   formatMoney,
+  formatPercentBp,
   toAppDate,
 } from '@pharmacy/shared-util';
 import {
@@ -246,8 +247,6 @@ const invoiceTone: Record<InvoiceStatus, StatusTone> = {
 
 type EstimateLine = Omit<InvoiceLine, 'id'>;
 
-const percentOf = (bp: number) => `${bp / 100}`.replace('.', ',');
-
 /**
  * «Оплата» (spec 2026-10-15-billing-services, 9, A19): the estimate of the current month by the
  * formulas of an invoice, the debt, the overdue debt and the advance, the discounts, the invoices
@@ -302,7 +301,9 @@ function BillingTab() {
           <span>{formatMoney(line.amountMinor, { withSign: false })}</span>
           {line.discountBp ? (
             <span className="text-xs text-fg-subtle">
-              {t('discountValue', { percent: percentOf(line.discountBp) })}
+              {t('discountValue', {
+                percent: formatPercentBp(line.discountBp),
+              })}
             </span>
           ) : null}
         </span>
@@ -397,7 +398,7 @@ function BillingTab() {
         ] as const;
         return (
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">
+            <div className="grid grid-cols-(--ph-split-columns) items-start gap-4">
               <Card padding="none">
                 <CardHeader
                   title={t('estimate', { period: period(estimate.period) })}
@@ -452,7 +453,8 @@ function BillingTab() {
                 </dl>
               </Card>
               <div className="flex flex-col gap-4">
-                <Card>
+                <Card as="section" aria-labelledby="billing-balance">
+                  <CardHeader titleId="billing-balance" title={t('balance')} />
                   <dl className="m-0 flex flex-col gap-3">
                     {balance.map(([key, value]) => (
                       <div key={key} className="flex flex-col gap-1">
@@ -470,10 +472,11 @@ function BillingTab() {
                     ))}
                   </dl>
                 </Card>
-                <Card className="flex flex-col gap-2">
-                  <h3 className="m-0 text-md font-semibold">
-                    {t('discounts')}
-                  </h3>
+                <Card as="section" aria-labelledby="billing-discounts">
+                  <CardHeader
+                    titleId="billing-discounts"
+                    title={t('discounts')}
+                  />
                   {data.discounts.length === 0 ? (
                     <p className="m-0 text-sm text-fg-muted">
                       {t('noDiscounts')}
@@ -483,7 +486,7 @@ function BillingTab() {
                       {data.discounts.map((discount) => (
                         <li key={`${discount.fromMonth}-${discount.toMonth}`}>
                           {t('discountItem', {
-                            percent: percentOf(discount.percentBp),
+                            percent: formatPercentBp(discount.percentBp),
                             from: period(discount.fromMonth),
                             to: period(discount.toMonth),
                           })}

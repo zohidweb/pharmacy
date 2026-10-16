@@ -11,10 +11,10 @@ import { ProblemException } from '../../common/errors/problem.exception';
 import { TenantDatabase } from '../../core/database';
 import {
   OwnerBillingRepository,
-  type OwnerInvoiceRow,
+  type OwnerInvoiceListRow,
   type OwnerLineRow,
 } from './owner-billing.repository';
-import { textOf } from './owner-services.repository';
+import { localized } from './owner-services.repository';
 import { StoreUsageRepository } from './store-usage.repository';
 
 const notFound = () => new ProblemException(404, 'not_found');
@@ -22,11 +22,7 @@ const notFound = () => new ProblemException(404, 'not_found');
 const num = (value: bigint | string | number | null): number | null =>
   value === null ? null : Number(value);
 
-/** The text in the language of the employee; the Russian one without a Tajik text (A14). */
-const localized = (map: unknown, locale: 'ru' | 'tg'): string =>
-  (locale === 'tg' ? textOf(map, 'tj') : null) ?? textOf(map, 'ru') ?? '';
-
-function toInvoice(row: OwnerInvoiceRow): TenantInvoice {
+function toInvoice(row: OwnerInvoiceListRow): TenantInvoice {
   const totalMinor = Number(row.totalDirams);
   const paidMinor = Number(row.paidDirams);
   return {
@@ -112,9 +108,8 @@ export class OwnerBillingService {
           providedOn: service.providedOn,
         })),
       });
-      const invoices = (
-        await this.repository.invoices(trx, tenantId, today)
-      ).map(toInvoice);
+      const listed = await this.repository.invoices(trx, tenantId, today);
+      const invoices = listed.invoices.map(toInvoice);
       return {
         estimate: {
           period,
@@ -131,7 +126,7 @@ export class OwnerBillingService {
         overdueDebtMinor: invoices
           .filter((invoice) => invoice.overdue)
           .reduce((sum, i) => sum + i.remainingMinor, 0),
-        advanceMinor: await this.repository.advance(trx, tenantId),
+        advanceMinor: listed.advanceMinor,
         discounts: discounts.map(({ percentBp, fromMonth, toMonth }) => ({
           percentBp,
           fromMonth,

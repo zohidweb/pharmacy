@@ -114,7 +114,17 @@ export {
   type InvoiceSheetRow,
 } from './lib/print/InvoiceSheet';
 
-export { SheetPrint, type SheetPrintProps } from './lib/print/SheetPrint';
+export {
+  printDocument,
+  SheetPrint,
+  type SheetPrintProps,
+} from './lib/print/SheetPrint';
+
+export {
+  invoiceSheetOf,
+  type InvoiceSheetMessage,
+  type InvoiceSheetTranslate,
+} from './lib/print/invoice-sheet-of';
 
 export {
   BarChart,

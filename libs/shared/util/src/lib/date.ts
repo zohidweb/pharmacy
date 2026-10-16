@@ -19,6 +19,18 @@ export function formatDateOnly(isoDate: string): string {
   return `${day}.${month}.${year}`;
 }
 
+const PERIOD = /^(\d{4})-(\d{2})$/;
+
+/** Formats a month of billing ('2026-10' → '10.2026'). */
+export function formatPeriod(period: string): string {
+  const match = PERIOD.exec(period);
+  if (!match) {
+    throw new RangeError(`Expected a YYYY-MM period, got "${period}"`);
+  }
+  const [, year, month] = match;
+  return `${month}.${year}`;
+}
+
 const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
   timeZone: APP_TIME_ZONE,
   day: '2-digit',

@@ -5,7 +5,12 @@ import type {
   InvoiceListItem,
   PaymentListItem,
 } from '@pharmacy/shared-dto';
-import { formatDateOnly, formatMoney, toAppDate } from '@pharmacy/shared-util';
+import {
+  formatDateOnly,
+  formatMoney,
+  formatPeriod,
+  toAppDate,
+} from '@pharmacy/shared-util';
 import {
   Button,
   Card,
@@ -34,7 +39,6 @@ import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import {
-  formatPeriod,
   GenerateInvoices,
   InvoiceDetailsDialog,
   PaymentDialog,

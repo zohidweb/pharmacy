@@ -1,7 +1,6 @@
 /*
- * An invoice as a document (spec 2026-10-15-billing-services, 6.3): the same sheet on screen and in
- * A4 print (inside `SheetPrint`). Every value comes formatted by the app — the kit knows no DTO and
- * no money.
+ * An invoice as a document (spec 2026-10-15-billing-services, A5, B11): the same sheet on screen and
+ * in A4 print (inside `SheetPrint`). Every value comes formatted — by `invoiceSheetOf`.
  */
 import { useId } from 'react';
 import { cx } from '../cx';
@@ -48,10 +47,10 @@ export function InvoiceSheet({
       aria-labelledby={titleId}
       className={cx('flex flex-col gap-6 text-md text-fg', className)}
     >
-      <Title id={titleId} className="m-0 text-xl font-semibold">
+      <Title id={titleId} className="ph-sheet-title m-0 text-xl font-semibold">
         {title}
       </Title>
-      <div className="grid grid-cols-2 gap-6">
+      <div className="ph-sheet-block grid grid-cols-2 gap-6">
         {parties.map((party) => (
           <section key={party.label} className="flex flex-col gap-1">
             <Party className="m-0 text-sm font-semibold text-fg-muted">
@@ -71,15 +70,15 @@ export function InvoiceSheet({
       >
         <thead>
           <tr className="border-b border-border-strong">
-            <th scope="col" className="px-2 py-2 text-left font-semibold">
+            <th scope="col" className="px-2 py-2 text-start font-semibold">
               {columns.line}
             </th>
-            <th scope="col" className="px-2 py-2 text-left font-semibold">
+            <th scope="col" className="px-2 py-2 text-start font-semibold">
               {columns.detail}
             </th>
             <th
               scope="col"
-              className="px-2 py-2 text-right font-semibold whitespace-nowrap"
+              className="px-2 py-2 text-end font-semibold whitespace-nowrap"
             >
               {columns.amount}
             </th>
@@ -92,14 +91,14 @@ export function InvoiceSheet({
               <td className="px-2 py-2 align-top text-fg-muted">
                 {row.detail}
               </td>
-              <td className="px-2 py-2 text-right align-top whitespace-nowrap">
+              <td className="px-2 py-2 text-end align-top whitespace-nowrap">
                 {row.amount}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <dl className="m-0 ms-auto flex flex-col gap-1 tabular-nums">
+      <dl className="ph-sheet-block m-0 ms-auto flex flex-col gap-1 tabular-nums">
         {totals.map((total) => (
           <div
             key={total.label}
@@ -109,11 +108,11 @@ export function InvoiceSheet({
             )}
           >
             <dt>{total.label}</dt>
-            <dd className="m-0 text-right whitespace-nowrap">{total.value}</dd>
+            <dd className="m-0 text-end whitespace-nowrap">{total.value}</dd>
           </div>
         ))}
       </dl>
-      <dl className="m-0 flex flex-col gap-2">
+      <dl className="ph-sheet-block m-0 flex flex-col gap-2">
         {notes.map((note) => (
           <div key={note.label} className="flex flex-col gap-1">
             <dt className="text-sm font-semibold text-fg-muted">

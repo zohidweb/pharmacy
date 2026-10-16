@@ -10,6 +10,7 @@ import {
   formatDateOnly,
   formatDateTime,
   formatMoney,
+  formatPeriod,
 } from '@pharmacy/shared-util';
 import {
   BarChart,
@@ -147,7 +148,7 @@ export function BillingTab({ tenantId }: { tenantId: string }) {
       key: 'period',
       header: t('columns.period'),
       nowrap: true,
-      cell: (invoice) => formatDateOnly(`${invoice.period}-01`).slice(3),
+      cell: (invoice) => formatPeriod(invoice.period),
     },
     {
       key: 'stores',

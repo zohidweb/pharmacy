@@ -10,8 +10,16 @@
   --ph-receipt-cols: 32;
   --ph-receipt-width: 48mm; /* printable width of 58 mm paper */
 
-  /* A4 documents (an invoice): the page margin is the padding of the sheet, see styles/print.css */
+  /* Ink and paper of everything printed: receipts on thermal paper and A4 documents */
+  --ph-print-ink: black;
+  --ph-print-paper: white;
+
+  /*
+   * A4 documents (an invoice): the page margin is the padding of the sheet, see styles/print.css; the
+   * width is the paper's, so the sheet on screen wraps its lines as the printout does
+   */
   --ph-sheet-margin: 15mm;
+  --ph-sheet-width: 210mm;
 }
 
 [data-receipt-width='80'] {

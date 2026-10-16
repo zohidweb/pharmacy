@@ -83,10 +83,17 @@ function notificationsOf(session: EmployeeSession): TenantNotification[] {
     .sort((x, y) => y.createdAt.localeCompare(x.createdAt))
     .map(({ readBy, read, params, ...rest }) => {
       const { amountMinor, ...shown } = params;
+      // as the API: a cash discrepancy is no purchase amount; an invoice's remainder is for whoever
+      // sees the billing of the network
+      const canSeeAmount =
+        canSeeCost ||
+        rest.kind === 'shift_discrepancy' ||
+        (rest.kind === 'invoice_overdue' &&
+          hasPermissions(session.permissions, 'billing:view'));
       return {
         ...rest,
         params:
-          canSeeCost && amountMinor !== undefined
+          canSeeAmount && amountMinor !== undefined
             ? { ...shown, amountMinor }
             : shown,
         read: read || readBy.includes(session.employee.id),

@@ -8,6 +8,8 @@ import type {
 import {
   formatDateOnly,
   formatMoney,
+  formatPercentBp,
+  formatPeriod,
   parseMoneyToMinor,
   toAppDate,
 } from '@pharmacy/shared-util';
@@ -33,10 +35,6 @@ import { tenantKeys } from '@/entities/tenant';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
-
-export function formatPeriod(period: string): string {
-  return formatDateOnly(`${period}-01`).slice(3);
-}
 
 function shiftPeriod(period: string, months: number): string {
   const [year, month] = period.split('-').map(Number);
@@ -279,7 +277,7 @@ export function InvoiceDetailsDialog({
                   cell: (line) =>
                     line.discountBp === null || line.discountBp === 0
                       ? '—'
-                      : `${line.discountBp / 100}% · ${formatMoney(line.discountMinor ?? 0, { withSign: false })}`,
+                      : `${formatPercentBp(line.discountBp)}% · ${formatMoney(line.discountMinor ?? 0, { withSign: false })}`,
                 },
                 {
                   key: 'amount',
@@ -325,7 +323,7 @@ export function InvoiceDetailsDialog({
             <p className="m-0 text-sm text-fg-muted">
               {t('dueOn', { date: formatDateOnly(data.dueOn) })}
               {data.recalculatedAt &&
-                ` · ${t('recalculatedAt', { date: formatDateOnly(data.recalculatedAt.slice(0, 10)) })}`}
+                ` · ${t('recalculatedAt', { date: formatDateOnly(toAppDate(new Date(data.recalculatedAt))) })}`}
             </p>
           </>
         )}

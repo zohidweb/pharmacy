@@ -14,17 +14,13 @@ import {
 } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 import {
+  localized,
   type OrderRow,
   OwnerServicesRepository,
-  textOf,
 } from './owner-services.repository';
 
 const notFound = () => new ProblemException(404, 'not_found');
 const decided = () => new ProblemException(409, 'service_decided');
-
-/** The text in the language of the employee; the Russian one without a Tajik text (A14). */
-const localized = (map: unknown, locale: 'ru' | 'tg'): string =>
-  (locale === 'tg' ? textOf(map, 'tj') : null) ?? textOf(map, 'ru') ?? '';
 
 function toOrder(row: OrderRow, locale: 'ru' | 'tg'): ServiceOrder {
   return {

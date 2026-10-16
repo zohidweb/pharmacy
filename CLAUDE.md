@@ -323,8 +323,10 @@ npm run prod:build / prod:up / prod:down
 - Ключ офлайн-точки (спецификация 2026-10-16-offline-sync, E10–E15; до экранов админки — скриптами, ролью
   `pharmacy_platform`): `node --env-file=.env apps/api/scripts/issue-license-key.mjs --store <id> --valid-until
   <YYYY-MM-DD>` печатает `phk_<keyId>_<secret>` один раз (в БД — только SHA-256; ключ — в env-файл точки, не в git),
-  действующий ключ точки при этом отзывается; `revoke-license-key.mjs --store <id> [--hard]` — отзыв (облако ещё
-  `revoked_key_grace_days` дней принимает операции точки; `--hard` — ничего); `reapply-quarantine.mjs --store <id>`
+  действующий ключ точки при этом отзывается; `revoke-license-key.mjs --store <id>` — отзыв действующего ключа
+  (облако ещё `revoked_key_grace_days` дней принимает операции точки); `--hard --key <keyId>` — названный ключ
+  больше ничего не принимает (украденный ПК: сначала выдать новый ключ, затем `--hard` по старому; без `--key`
+  скрипт только печатает ключи точки); `reapply-quarantine.mjs --store <id>`
   возвращает операции из карантина в очередь — облако переприменит их в конце следующего батча точки.
 - Порты в compose публикуются только на `127.0.0.1`.
 

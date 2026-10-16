@@ -20,6 +20,17 @@ import { type RunCounters, SyncRunsRepository } from './sync-runs.repository';
 import type { SyncStore } from './sync-store.context';
 import { upcast } from './upcasters';
 
+// lock_not_available, query_canceled (statement timeout), deadlock_detected, serialization_failure,
+// too_many_connections, cannot_connect_now; class 08 (connection exceptions) is checked by its prefix.
+const TRANSIENT_SQLSTATES = new Set([
+  '55P03',
+  '57014',
+  '40P01',
+  '40001',
+  '53300',
+  '57P03',
+]);
+
 // Retries of the waiting operations of a store after one batch; each pass needs progress to go on.
 const MAX_PENDING_PASSES = 10;
 
@@ -53,18 +64,30 @@ export class SyncApplyService {
     if (envelope.operations.length > SYNC_BATCH_LIMITS.maxOperations) {
       throw new ProblemException(413, 'batch_too_large');
     }
+    // An online store is written by the cloud POS: facts of a store PC must not land in it (the mirror of E8) —
+    // a key issued before the kit, or the key of a store moved back to the cloud in its grace days.
+    if (store.storeMode === 'online') {
+      throw new ProblemException(409, 'store_online');
+    }
 
     const results = new Map<string, SyncOperationResult>();
     const ordered = [...envelope.operations].sort(
       (a, b) => a.storeSeq - b.storeSeq,
     );
+    // The stock checkpoint compares the stock up to its position (E19): it runs after the operations that
+    // waited for a dependency arrived with this batch, not before them.
+    const checkpoints = ordered.filter((op) => op.type === 'stock.checkpoint');
     for (const operation of ordered) {
+      if (operation.type === 'stock.checkpoint') continue;
       results.set(operation.operationId, await this.applyNew(store, operation));
     }
     for (const result of await this.retryPending(store)) {
       // An operation of this batch that waited and is now applied reports its final state.
       if (results.has(result.operationId))
         results.set(result.operationId, result);
+    }
+    for (const operation of checkpoints) {
+      results.set(operation.operationId, await this.applyNew(store, operation));
     }
 
     const orderedResults = envelope.operations.map(
@@ -118,7 +141,7 @@ export class SyncApplyService {
       });
     } catch (error) {
       const failure = this.failureOf(error, operation);
-      await this.db.withTenant(store.tenantId, async (trx) => {
+      return this.db.withTenant(store.tenantId, async (trx) => {
         await this.inbox.lockStore(trx, store.storeId);
         const inserted = await this.inbox.insert(trx, {
           tenantId: store.tenantId,
@@ -127,10 +150,18 @@ export class SyncApplyService {
           status: failure.status,
           reason: failure.reason,
         });
-        // A concurrent request stored the same operation meanwhile: its state stands.
-        if (!inserted) return;
+        if (inserted) return { operationId, ...failure };
+        // A concurrent request stored the same operation meanwhile: its state stands and is the answer.
+        const stored = await this.inbox.find(
+          trx,
+          store.tenantId,
+          store.storeId,
+          operationId,
+        );
+        return stored
+          ? repeatOf(stored, operation)
+          : { operationId, ...failure };
       });
-      return { operationId, ...failure };
     }
   }
 
@@ -188,17 +219,32 @@ export class SyncApplyService {
       });
     } catch (error) {
       const failure = this.failureOf(error, operation);
-      await this.db.withTenant(store.tenantId, (trx) =>
-        this.inbox.setStatus(trx, {
+      // Under the store lock and only while the row still waits: a concurrent batch may have applied it meanwhile,
+      // and then its state stands and is the answer.
+      return this.db.withTenant(store.tenantId, async (trx) => {
+        await this.inbox.lockStore(trx, store.storeId);
+        const updated = await this.inbox.setStatus(trx, {
           tenantId: store.tenantId,
           storeId: store.storeId,
           operationId,
           status: failure.status,
           reason: failure.reason,
           countAttempt: true,
-        }),
-      );
-      return { operationId, ...failure };
+          onlyIfStatus: 'pending_dependency',
+        });
+        if (updated) return { operationId, ...failure };
+        const stored = await this.inbox.find(
+          trx,
+          store.tenantId,
+          store.storeId,
+          operationId,
+        );
+        return {
+          operationId,
+          status: stored?.status ?? failure.status,
+          ...(stored?.reason ? { reason: stored.reason } : {}),
+        } as SyncOperationResult;
+      });
     }
   }
 
@@ -240,6 +286,14 @@ export class SyncApplyService {
     const code = (error as { code?: unknown })?.code;
     const sqlstate =
       typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : 'error';
+    // A transient failure (a lock or statement timeout, a deadlock, a serialization failure, a lost connection) is
+    // no fault of the operation: the batch fails, the store sends it again, the applied part answers `duplicate`.
+    if (TRANSIENT_SQLSTATES.has(sqlstate) || sqlstate.startsWith('08')) {
+      this.logger.warn(
+        `Sync batch interrupted by ${sqlstate} [correlationId=${getRequestContext()?.correlationId ?? ''}]`,
+      );
+      throw new ProblemException(503, 'retry_later');
+    }
     this.logger.warn(
       `Sync operation ${operation?.operationId ?? '?'} (${operation?.type ?? '?'}) quarantined: ` +
         `${error instanceof Error ? error.name : typeof error} ${sqlstate} ` +

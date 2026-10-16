@@ -95,9 +95,11 @@ export class InboxRepository {
       status: InboxStatus;
       reason: string | null;
       countAttempt: boolean;
+      /** Update only a row in this state; the answer says whether one was updated. */
+      onlyIfStatus?: InboxStatus;
     },
-  ): Promise<void> {
-    await trx
+  ): Promise<boolean> {
+    let query = trx
       .updateTable('syncInbox')
       .set((eb) => ({
         status: input.status,
@@ -109,8 +111,12 @@ export class InboxRepository {
       }))
       .where('tenantId', '=', input.tenantId)
       .where('storeId', '=', input.storeId)
-      .where('operationId', '=', input.operationId)
-      .execute();
+      .where('operationId', '=', input.operationId);
+    if (input.onlyIfStatus) {
+      query = query.where('status', '=', input.onlyIfStatus);
+    }
+    const result = await query.executeTakeFirst();
+    return result.numUpdatedRows > 0n;
   }
 
   /** Operations of the store waiting for a fact they refer to, in the order of the store. */

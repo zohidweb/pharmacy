@@ -137,8 +137,9 @@ export class PosFacts implements FactApplier {
     const { shift } = payload;
     const current = await this.shiftOf(trx, tenantId, storeId, shift.id);
     if (current.status !== 'open') throw new SyncApplyError('shift_closed');
+    // the expected cash may be negative: a cash-out above it is only a warning on the POS (E15 of the POS spec)
     if (
-      !isMoney(shift.expectedCashDirams) ||
+      !Number.isSafeInteger(shift.expectedCashDirams) ||
       !isMoney(shift.countedCashDirams) ||
       !Number.isSafeInteger(shift.discrepancyDirams) ||
       shift.discrepancyDirams !==
@@ -240,6 +241,7 @@ export class PosFacts implements FactApplier {
       throw new SyncApplyError('batch_mismatch');
     }
     const lineIds = new Set(lines.map((line) => line.id));
+    const lineBatch = new Map(lines.map((line) => [line.id, line.batchId]));
     if (
       controlledRecords.some((record) => !lineIds.has(record.receiptLineId))
     ) {
@@ -254,6 +256,7 @@ export class PosFacts implements FactApplier {
         m.sourceId !== receipt.id ||
         !m.sourceLineId ||
         !lineIds.has(m.sourceLineId) ||
+        m.batchId !== lineBatch.get(m.sourceLineId) ||
         m.qtyDeltaPieces >= 0
       ) {
         throw new SyncApplyError('movement_mismatch');

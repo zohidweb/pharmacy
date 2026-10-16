@@ -26,6 +26,15 @@ const WIDE_SPACES = new RegExp('[\u00a0\u202f]', 'g');
 const plain = (text: string | null | undefined) =>
   (text ?? '').replace(WIDE_SPACES, ' ');
 
+// the shift actions wait for the buffer of the terminal (IndexedDB), which opens after the shift loads
+async function clickWhenEnabled(name: string) {
+  const button = (await screen.findByRole('button', {
+    name,
+  })) as HTMLButtonElement;
+  await waitFor(() => expect(button.disabled).toBe(false));
+  fireEvent.click(button);
+}
+
 describe('ShiftPage', () => {
   it('shows totals by payment method and the cash drawer', async () => {
     await signInByPin('emp-cashier', '2580');
@@ -45,7 +54,7 @@ describe('ShiftPage', () => {
   it('records a cash-in through the buffer and refreshes the drawer', async () => {
     await signInByPin('emp-cashier', '2580');
     renderWithProviders(<ShiftPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Внесение' }));
+    await clickWhenEnabled('Внесение');
     const dialog = await screen.findByRole('dialog', { name: 'Внесение' });
     fireEvent.change(within(dialog).getByLabelText(/^Сумма/), {
       target: { value: '200' },
@@ -74,9 +83,7 @@ describe('ShiftPage', () => {
   it('closes the shift with reconciliation and shows the Z-report', async () => {
     await signInByPin('emp-cashier', '2580');
     renderWithProviders(<ShiftPage />);
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Закрыть смену' }),
-    );
+    await clickWhenEnabled('Закрыть смену');
     const dialog = await screen.findByRole('dialog', {
       name: 'Закрытие смены',
     });
@@ -113,9 +120,7 @@ describe('ShiftPage', () => {
     await scenario('no-shift');
     await signInByPin('emp-cashier', '2580');
     renderWithProviders(<ShiftPage />);
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Открыть смену' }),
-    );
+    await clickWhenEnabled('Открыть смену');
     const dialog = await screen.findByRole('dialog', {
       name: 'Открытие смены',
     });

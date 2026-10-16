@@ -5,10 +5,31 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app/app.module';
+import { isSyncPath } from './common/http/contour';
 import { createValidationPipe } from './common/validation/validation-pipe';
+import { SYNC_BODY_LIMIT } from './core/sync/protocol';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // The body parsers are registered by hand: the sync contour of offline stores takes a batch of up to 2 MB of
+  // JSON after gzip is inflated (ADR-0014 §6), every other route keeps the default 100 KB.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
+  app.useBodyParser('json', {
+    limit: SYNC_BODY_LIMIT,
+    type: (req: {
+      originalUrl?: string;
+      url?: string;
+      headers: Record<string, unknown>;
+    }) =>
+      isSyncPath(req.originalUrl ?? req.url) &&
+      String(req.headers['content-type'] ?? '')
+        .split(';')[0]
+        .trim()
+        .toLowerCase() === 'application/json',
+  });
+  app.useBodyParser('json');
+  app.useBodyParser('urlencoded', { extended: true });
 
   // req.ip (the guest/login/activation throttling keys, the audit `ip`) is the socket address
   // unless TRUST_PROXY (hop count of the reverse proxy, default 0 = off) says how many proxies to

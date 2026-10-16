@@ -18,13 +18,15 @@ import { TerminalsController } from './terminals.controller';
 import { TerminalRevocationChecks } from './terminal-revocation-checks';
 import { TerminalsRepository } from './terminals.repository';
 import { TerminalsService } from './terminals.service';
+import { TerminalFacts } from './terminal-facts';
+import { SyncCoreModule } from '../../core/sync';
 
 // Terminals and PIN sessions of the web contour (auth design 2026-10-02, section 8). TenantDatabase
 // and ContextResolvers come from the global DatabaseModule, PasswordHasher from the global
 // CryptoModule, the Redis client from the global RedisModule; the session issuer and the principal
 // loader from AuthModule.
 @Module({
-  imports: [SessionsModule, AuditModule, AuthModule],
+  imports: [SessionsModule, AuditModule, AuthModule, SyncCoreModule],
   controllers: [TerminalsController, TerminalSessionsController, MePinController],
   providers: [
     TerminalsRepository,
@@ -32,6 +34,8 @@ import { TerminalsService } from './terminals.service';
     TerminalsService,
     TerminalSessionsService,
     MePinService,
+    // applies the terminals of offline stores (spec 2026-10-16-offline-sync, PR 1)
+    TerminalFacts,
     {
       provide: TERMINAL_PIN_LIMITER,
       inject: [REDIS_CLIENT, ConfigService],

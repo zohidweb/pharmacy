@@ -140,6 +140,11 @@ export class TerminalsService {
       if (row.kind !== 'pharmacy') {
         throw new ProblemException(422, 'store_not_pharmacy');
       }
+      // The terminals of an offline store are its own facts: bound and revoked on the store only
+      // (ADR-0014 §1; spec 2026-10-16-offline-sync, E8).
+      if (row.mode !== 'online') {
+        throw new ProblemException(409, 'offline_store_read_only');
+      }
       if (previous !== null) {
         await this.revokeInTransaction(trx, principal.tenantId, previous, principal.employeeId);
       }
@@ -206,6 +211,10 @@ export class TerminalsService {
           !principal.storeScope.includes(terminal.storeId))
       ) {
         throw new ProblemException(404, 'not_found');
+      }
+      const store = await this.repository.findStore(trx, principal.tenantId, terminal.storeId);
+      if (store !== null && store.mode !== 'online') {
+        throw new ProblemException(409, 'offline_store_read_only');
       }
       if (terminal.revokedAt === null) {
         await this.revokeInTransaction(trx, principal.tenantId, id, principal.employeeId);

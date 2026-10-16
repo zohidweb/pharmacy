@@ -15,6 +15,9 @@ export class PrincipalThrottlerGuard extends ThrottlerGuard {
     if (principal) return principal.employeeId;
     const operator = getOperator();
     if (operator) return `op:${operator.operatorId}`;
+    // An offline store (the sync contour) by its IP, as a guest: the key is checked only after this guard, so a
+    // bucket per claimed key id would give every guessed id a fresh limit (spec 2026-10-16-offline-sync, E10:
+    // failed attempts by IP). A store is one PC; a run is tens of requests, far below the limit.
     return super.getTracker(req);
   }
 

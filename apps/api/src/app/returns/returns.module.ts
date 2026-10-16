@@ -12,6 +12,8 @@ import { ReturnableService } from './returnable.service';
 import { ReturnsController } from './returns.controller';
 import { ReturnsRepository } from './returns.repository';
 import { ReturnsService } from './returns.service';
+import { ReturnFacts } from './return-facts';
+import { SyncCoreModule } from '../../core/sync';
 
 // Customer returns of a cloud store (spec 2026-10-13-customer-returns): the receipt, the stock and
 // the catalog come through the exports of pos, inventory and catalog (E16); the returns of a shift
@@ -20,7 +22,14 @@ import { ReturnsService } from './returns.service';
 // sync (ADR-0014).
 // Domain module boundary (ADR-0002). Other modules use only what is listed in `exports`.
 @Module({
-  imports: [AuditModule, AuthModule, CatalogModule, InventoryModule, PosModule],
+  imports: [
+    AuditModule,
+    AuthModule,
+    CatalogModule,
+    InventoryModule,
+    PosModule,
+    SyncCoreModule,
+  ],
   controllers: [
     ReturnsController,
     ReturnableController,
@@ -32,6 +41,8 @@ import { ReturnsService } from './returns.service';
     ReturnableService,
     ReturnPolicyService,
     ReturnFigures,
+    // applies the customer returns of offline stores (spec 2026-10-16-offline-sync, PR 1)
+    ReturnFacts,
   ],
   // the refunds by store and day for the home and the reports (spec 2026-10-14-owner-cabinet)
   exports: [ReturnFigures],

@@ -13,6 +13,7 @@ import {
   UnauthenticatedError,
 } from '../context/request-context';
 import { LockedException, ProblemException } from '../errors/problem.exception';
+import { isSyncPath } from '../http/contour';
 import {
   CORRELATION_ID_HEADER,
   incomingCorrelationId,
@@ -116,6 +117,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       known ?? (req ? incomingCorrelationId(req) : null) ?? randomUUID();
 
     const body = this.toBody(error, correlationId);
+    // A batch of an offline store over the body limit of the sync contour (ADR-0014 §6).
+    if (body.status === 413 && isSyncPath(req?.originalUrl)) {
+      body.code = 'batch_too_large';
+    }
     if (res.headersSent) return;
     // An error before the correlation middleware ran (a body the parser refused, a path outside
     // /api): the header carries the id of the body too, as on every other answer. Debug only: any

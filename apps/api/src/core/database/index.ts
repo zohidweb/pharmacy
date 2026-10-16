@@ -4,6 +4,7 @@
 export {
   ContextResolvers,
   type LoginKind,
+  type ResolvedLicenseKey,
   type ResolvedLogin,
   type ResolvedTerminal,
 } from './context-resolvers';

@@ -47,6 +47,7 @@ import { ReportsModule } from './reports/reports.module';
 import { ReturnsModule } from './returns/returns.module';
 import { BillingModule } from './billing/billing.module';
 import { SyncModule } from './sync/sync.module';
+import { SyncCoreModule } from '../core/sync';
 import { FiscalModule } from './fiscal/fiscal.module';
 import { Export1cModule } from './export-1c/export-1c.module';
 import { AuditModule } from './audit/audit.module';
@@ -63,6 +64,7 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       validate: validateEnv,
     }),
     DatabaseModule,
+    SyncCoreModule,
     CryptoModule,
     RedisModule,
     SessionsModule,
@@ -150,7 +152,11 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       BillingModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
-    SyncModule,
+    // The cloud side of the offline-store sync: an offline store calls the cloud, never itself (ADR-0014).
+    ConditionalModule.registerWhen(
+      SyncModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
     FiscalModule,
     Export1cModule,
     AuditModule,

@@ -472,11 +472,7 @@ function BillingTab() {
                     ))}
                   </dl>
                 </Card>
-                <Card
-                  as="section"
-                  aria-labelledby="billing-discounts"
-                  className="flex flex-col gap-2"
-                >
+                <Card as="section" aria-labelledby="billing-discounts">
                   <CardHeader
                     titleId="billing-discounts"
                     title={t('discounts')}

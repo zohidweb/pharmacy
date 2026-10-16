@@ -108,10 +108,8 @@ export class OwnerBillingService {
           providedOn: service.providedOn,
         })),
       });
-      const invoices = (
-        await this.repository.invoices(trx, tenantId, today)
-      ).map(toInvoice);
-      const balance = await this.repository.balance(trx, tenantId, today);
+      const listed = await this.repository.invoices(trx, tenantId, today);
+      const invoices = listed.invoices.map(toInvoice);
       return {
         estimate: {
           period,
@@ -124,7 +122,11 @@ export class OwnerBillingService {
           vatMinor: estimate.vatMinor,
           totalMinor: estimate.totalMinor,
         },
-        ...balance,
+        debtMinor: invoices.reduce((sum, i) => sum + i.remainingMinor, 0),
+        overdueDebtMinor: invoices
+          .filter((invoice) => invoice.overdue)
+          .reduce((sum, i) => sum + i.remainingMinor, 0),
+        advanceMinor: listed.advanceMinor,
         discounts: discounts.map(({ percentBp, fromMonth, toMonth }) => ({
           percentBp,
           fromMonth,

@@ -372,8 +372,8 @@ export class InvoicesRepository {
       .where('tenantId', '=', (eb) =>
         eb
           .selectFrom('invoices')
-          .select('tenantId')
-          .where('id', '=', invoiceId),
+          .select('invoices.tenantId')
+          .where('invoices.id', '=', invoiceId),
       )
       .where('invoiceId', '=', invoiceId)
       .where('removedAt', 'is', null);
@@ -418,7 +418,7 @@ export class InvoicesRepository {
       select id, kind, store_id, store_name, days, days_in_month, base_dirams, discount_bp,
              tenant_service_id, description, provided_on::text as provided_on, amount_dirams
       from pharmacy.invoice_lines
-      where tenant_id = (select tenant_id from pharmacy.invoices where id = ${invoiceId})
+      where tenant_id = (select i.tenant_id from pharmacy.invoices i where i.id = ${invoiceId})
         and invoice_id = ${invoiceId} and removed_at is null
       order by case kind when 'store' then 0 else 1 end, position, id`.execute(
       trx,

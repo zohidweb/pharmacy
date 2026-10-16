@@ -34,7 +34,8 @@ function InvoicePrintView() {
   const heading = invoice.data
     ? t('heading', { number: invoice.data.number })
     : null;
-  // Chrome names a PDF saved from the print dialog after the page title
+  // Chrome names a PDF saved from the print dialog after the page title; the root layout has one
+  // static title, which comes back when the page is left
   useEffect(() => {
     if (heading === null) return;
     const before = document.title;
@@ -43,10 +44,11 @@ function InvoicePrintView() {
       document.title = before;
     };
   }, [heading]);
-  // the last loaded invoice is what reaches the paper, even while a refetch fails
-  const sheet = invoice.data
-    ? invoiceSheetOf(invoice.data, (key, values) => t(key, values))
-    : null;
+  // the paper gets what the screen shows: nothing to print while it shows an error
+  const sheet =
+    invoice.data && !invoice.isError
+      ? invoiceSheetOf(invoice.data, (key, values) => t(key, values))
+      : null;
   return (
     <>
       <PageHeader

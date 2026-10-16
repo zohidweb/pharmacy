@@ -144,38 +144,6 @@ export class OwnerBillingRepository {
     return rows;
   }
 
-  /**
-   * The debt, the overdue debt and the advance of the network in one statement — one snapshot, so a
-   * payment allocated meanwhile shows either before or after, never half of it.
-   */
-  async balance(
-    trx: TenantTransaction,
-    tenantId: string,
-    today: string,
-  ): Promise<{
-    debtMinor: number;
-    overdueDebtMinor: number;
-    advanceMinor: number;
-  }> {
-    const { rows } = await sql<{
-      debt: Money;
-      overdueDebt: Money;
-      advance: Money;
-    }>`
-      select coalesce(sum(i.total_dirams - i.paid_dirams), 0) as debt,
-             coalesce(sum(i.total_dirams - i.paid_dirams) filter (where i.due_on < ${today}::date), 0)
-               as overdue_debt,
-             (select t.billing_advance_dirams from pharmacy.tenants t where t.id = ${tenantId})
-               as advance
-      from pharmacy.invoices i
-      where i.tenant_id = ${tenantId}`.execute(trx);
-    return {
-      debtMinor: Number(rows[0].debt),
-      overdueDebtMinor: Number(rows[0].overdueDebt),
-      advanceMinor: Number(rows[0].advance),
-    };
-  }
-
   /** The invoices of the network with a remainder after their due date, oldest first. */
   async overdue(
     trx: TenantTransaction,
@@ -215,20 +183,36 @@ export class OwnerBillingRepository {
       from pharmacy.invoices i`;
   }
 
-  /** The invoices of the network, newest first: what the list shows, without the snapshot. */
+  /**
+   * The invoices of the network, newest first — what the list shows, without the snapshot — and its
+   * advance, in one statement: the list, the debt summed from it and the advance are one snapshot, so
+   * a payment allocated meanwhile shows either before or after, never half of it.
+   */
   async invoices(
     trx: TenantTransaction,
     tenantId: string,
     today: string,
-  ): Promise<OwnerInvoiceListRow[]> {
-    const { rows } = await sql<OwnerInvoiceListRow>`
-      select i.id, i.number, to_char(i.period_month, 'YYYY-MM') as period,
-             i.due_on::text as due_on, i.total_dirams, i.paid_dirams, i.paid_on::text as paid_on,
+  ): Promise<{ invoices: OwnerInvoiceListRow[]; advanceMinor: number }> {
+    const { rows } = await sql<
+      { advance: Money } & {
+        [K in keyof OwnerInvoiceListRow]: OwnerInvoiceListRow[K] | null;
+      }
+    >`
+      select t.billing_advance_dirams as advance, i.id, i.number,
+             to_char(i.period_month, 'YYYY-MM') as period, i.due_on::text as due_on,
+             i.total_dirams, i.paid_dirams, i.paid_on::text as paid_on,
              (i.paid_dirams < i.total_dirams and i.due_on < ${today}::date) as overdue
-      from pharmacy.invoices i
-      where i.tenant_id = ${tenantId}
-      order by i.period_month desc, i.id`.execute(trx);
-    return rows;
+      from pharmacy.tenants t
+      left join pharmacy.invoices i on i.tenant_id = t.id
+      where t.id = ${tenantId}
+      order by i.period_month desc nulls last, i.id`.execute(trx);
+    return {
+      invoices: rows.filter(
+        (row): row is { advance: Money } & OwnerInvoiceListRow =>
+          row.id !== null,
+      ),
+      advanceMinor: Number(rows[0]?.advance ?? 0),
+    };
   }
 
   async invoice(

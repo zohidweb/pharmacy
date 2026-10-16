@@ -1,11 +1,16 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import type {
   ProductBatchRow,
+  ReorderLine,
   StockListResponse,
   StockProductOption,
 } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
-import { StockListQueryDto, StockProductsQueryDto } from './dto/stock.dto';
+import {
+  ReorderQueryDto,
+  StockListQueryDto,
+  StockProductsQueryDto,
+} from './dto/stock.dto';
 import { StockService } from './stock.service';
 
 // Stock of the stores (spec 2026-10-09-inventory-purchasing, section 4.2).
@@ -17,6 +22,13 @@ export class StockController {
   @Get('stock')
   list(@Query() query: StockListQueryDto): Promise<StockListResponse> {
     return this.stock.list(query);
+  }
+
+  /** «Надо заказать» — the products below their minimum (spec 2026-10-15-nav-counters, N4). */
+  @RequirePermission('inventory:view')
+  @Get('stock/reorder')
+  reorder(@Query() query: ReorderQueryDto): Promise<ReorderLine[]> {
+    return this.stock.reorder(query);
   }
 
   /** Batches of a product with stock in the stores of the scope (the product card). */

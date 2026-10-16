@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  ReorderLine,
   StockRow,
   StockSortKey,
   StockStateFilter,
@@ -25,7 +26,8 @@ import {
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
 import { StockStatePill } from '@/entities/stock-document';
@@ -45,27 +47,51 @@ const STATES: StockStateFilter[] = [
   'out',
 ];
 
-function quantityText(
-  row: StockRow,
+function piecesText(
+  quantityPieces: number,
+  piecesPerPack: number,
   t: ReturnType<typeof useTranslations<'stock'>>,
 ) {
-  const packs = Math.trunc(row.quantityPieces / row.piecesPerPack);
-  const pieces = Math.abs(row.quantityPieces % row.piecesPerPack);
+  const packs = Math.trunc(quantityPieces / piecesPerPack);
+  const pieces = Math.abs(quantityPieces % piecesPerPack);
   return pieces > 0
     ? t('packsPieces', { packs, pieces })
     : t('packs', { packs });
 }
 
-/** Stock by batch (UI mockup «Остатки»): the whole network or one store of the scope. */
-function StockPageView() {
+const quantityText = (
+  row: StockRow,
+  t: ReturnType<typeof useTranslations<'stock'>>,
+) => piecesText(row.quantityPieces, row.piecesPerPack, t);
+
+const matches = (name: string, q: string) =>
+  name
+    .normalize('NFC')
+    .toLowerCase()
+    .includes(q.normalize('NFC').toLowerCase());
+
+/**
+ * Stock by batch (UI mockup «Остатки»): the whole network or one store of the scope. The menu counter
+ * opens it with `?view=reorder&storeId=` — the list «Надо заказать» of that store.
+ */
+function StockPageView({
+  initialReorder,
+  initialStoreId,
+}: {
+  initialReorder: boolean;
+  initialStoreId: string | null;
+}) {
   const t = useTranslations('stock');
   const tCommon = useTranslations('stockDocs');
   const { data: session } = useSession();
   const access = useStockAccess();
   const stores = session?.stores ?? [];
   // defaults follow the session until the employee chooses (the session may load after mount)
-  const [viewChoice, setView] = useState<'network' | 'store' | null>(null);
-  const [storeChoice, setStoreId] = useState<string | null>(null);
+  const [viewChoice, setView] = useState<'network' | 'store' | null>(
+    initialStoreId ? 'store' : null,
+  );
+  const [storeChoice, setStoreId] = useState<string | null>(initialStoreId);
+  const [reorder, setReorder] = useState(initialReorder);
   const view = viewChoice ?? (stores.length > 1 ? 'network' : 'store');
   const storeId = storeChoice ?? session?.currentStoreId ?? stores[0]?.id ?? '';
   const [q, setQ] = useState('');
@@ -93,6 +119,19 @@ function StockPageView() {
         signal,
       }),
     placeholderData: (previous) => previous,
+    enabled: !reorder,
+  });
+  // «Надо заказать» (spec 2026-10-15-nav-counters, N4): one row per product, the whole list at once
+  const reorderList = useQuery({
+    queryKey: ['stock', 'reorder', view, storeId],
+    queryFn: ({ signal }) =>
+      apiRequest('stock.reorder', {
+        query: view === 'store' ? { storeId } : {},
+        signal,
+      }),
+    enabled: reorder,
+    // opened from the menu counter: the list must match its number, not a cache up to 30 s old
+    refetchOnMount: 'always',
   });
 
   const reset = () => {
@@ -224,6 +263,43 @@ function StockPageView() {
       cell: (row) => <StockStatePill state={row.state} />,
     },
   ];
+  const reorderColumns: DataTableColumn<ReorderLine>[] = [
+    {
+      key: 'product',
+      header: t('product'),
+      cell: (line) => (
+        <span className="flex flex-col gap-0.5">
+          <span className="font-medium">{line.productName}</span>
+          {view === 'network' && (
+            <span className="text-xs text-fg-subtle">{line.storeName}</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'stock',
+      header: t('reorder.stock'),
+      numeric: true,
+      nowrap: true,
+      cell: (line) => piecesText(line.stockPieces, line.piecesPerPack, t),
+    },
+    {
+      key: 'min',
+      header: t('reorder.min'),
+      numeric: true,
+      nowrap: true,
+      cell: (line) => piecesText(line.minPieces, line.piecesPerPack, t),
+    },
+    {
+      key: 'shortage',
+      header: t('reorder.shortage'),
+      numeric: true,
+      nowrap: true,
+      cell: (line) => (
+        <b>{piecesText(line.shortagePieces, line.piecesPerPack, t)}</b>
+      ),
+    },
+  ];
 
   const counts = list.data?.counts;
   return (
@@ -299,7 +375,7 @@ function StockPageView() {
               {STATES.map((value) => (
                 <Chip
                   key={value}
-                  selected={state === value}
+                  selected={!reorder && state === value}
                   count={
                     value === 'low'
                       ? counts?.low
@@ -311,12 +387,23 @@ function StockPageView() {
                   }
                   onClick={() => {
                     setState(value);
+                    setReorder(false);
                     reset();
                   }}
                 >
                   {t(`filters.${value}`)}
                 </Chip>
               ))}
+              <Chip
+                selected={reorder}
+                count={reorderList.data?.length}
+                onClick={() => {
+                  setReorder(true);
+                  reset();
+                }}
+              >
+                {t('filters.reorder')}
+              </Chip>
             </ChipGroup>
           </div>
           {selected.size > 0 && (
@@ -352,53 +439,97 @@ function StockPageView() {
               </span>
             </div>
           )}
-          <QueryState query={list}>
-            {(data) => (
-              <>
-                <DataTable
-                  caption={t('table')}
-                  rowKey={(row) => row.id}
-                  rows={data.items}
-                  columns={columns}
-                  sort={sort}
-                  onSortChange={(next) => {
-                    setSort(next as SortState<StockSortKey>);
-                    reset();
-                  }}
-                  sortLabel={(direction) => tCommon(`sort.${direction}`)}
-                  rowVariant={(row) =>
-                    row.state === 'out' ? 'muted' : 'default'
-                  }
-                  empty={<EmptyState icon="package" title={t('empty')} />}
-                />
-                {data.total > PAGE && (
-                  <Pagination
-                    className="px-4 py-3"
-                    total={data.total}
-                    limit={PAGE}
-                    offset={offset}
-                    onOffsetChange={setOffset}
-                    labels={{
-                      nav: t('pagination'),
-                      previous: tCommon('previous'),
-                      next: tCommon('next'),
-                      range: (range) => tCommon('shown', range),
-                    }}
+          {reorder ? (
+            <QueryState query={reorderList}>
+              {(lines) => (
+                <>
+                  <DataTable
+                    caption={t('reorder.table')}
+                    rowKey={(line) => `${line.storeId}/${line.productId}`}
+                    rows={
+                      q.trim()
+                        ? lines.filter((line) =>
+                            matches(line.productName, q.trim()),
+                          )
+                        : lines
+                    }
+                    columns={reorderColumns}
+                    rowVariant={(line) =>
+                      line.stockPieces === 0 ? 'muted' : 'default'
+                    }
+                    empty={
+                      <EmptyState icon="package" title={t('reorder.empty')} />
+                    }
                   />
-                )}
-              </>
-            )}
-          </QueryState>
+                  <p className="px-4 py-3 text-xs text-fg-subtle">
+                    {t('reorder.hint')}
+                  </p>
+                </>
+              )}
+            </QueryState>
+          ) : (
+            <QueryState query={list}>
+              {(data) => (
+                <>
+                  <DataTable
+                    caption={t('table')}
+                    rowKey={(row) => row.id}
+                    rows={data.items}
+                    columns={columns}
+                    sort={sort}
+                    onSortChange={(next) => {
+                      setSort(next as SortState<StockSortKey>);
+                      reset();
+                    }}
+                    sortLabel={(direction) => tCommon(`sort.${direction}`)}
+                    rowVariant={(row) =>
+                      row.state === 'out' ? 'muted' : 'default'
+                    }
+                    empty={<EmptyState icon="package" title={t('empty')} />}
+                  />
+                  {data.total > PAGE && (
+                    <Pagination
+                      className="px-4 py-3"
+                      total={data.total}
+                      limit={PAGE}
+                      offset={offset}
+                      onOffsetChange={setOffset}
+                      labels={{
+                        nav: t('pagination'),
+                        previous: tCommon('previous'),
+                        next: tCommon('next'),
+                        range: (range) => tCommon('shown', range),
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </QueryState>
+          )}
         </Card>
       </div>
     </>
   );
 }
 
+/** The filter comes from the address; a new address (a click on the menu counter) starts afresh. */
+function StockPageRoute() {
+  const params = useSearchParams();
+  return (
+    <StockPageView
+      key={params?.toString() ?? ''}
+      initialReorder={params?.get('view') === 'reorder'}
+      initialStoreId={params?.get('storeId') || null}
+    />
+  );
+}
+
 export function StockPage() {
   return (
     <WithMessages groups={['stock']}>
-      <StockPageView />
+      <Suspense>
+        <StockPageRoute />
+      </Suspense>
     </WithMessages>
   );
 }

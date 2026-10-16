@@ -16,6 +16,8 @@ import {
   Button,
   Card,
   CardHeader,
+  Chip,
+  ChipGroup,
   DataTable,
   EmptyState,
   Icon,
@@ -28,7 +30,8 @@ import {
   type StatusTone,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
 import {
@@ -50,8 +53,17 @@ const ruleTone: Record<DiscountRuleStatus, StatusTone> = {
   expired: 'neutral',
 };
 
-/** Prices and discounts (UI mockup «Цены и скидки»). */
-function PricingPageView() {
+interface ProblemsFilter {
+  problems: boolean;
+  /** The pharmacy of the problems; null — any pharmacy of the scope. */
+  storeId: string | null;
+}
+
+/**
+ * Prices and discounts (UI mockup «Цены и скидки»). The menu counter opens it with
+ * `?problems=1&storeId=` — only the products with a price problem at the working store.
+ */
+function PricingPageView({ initial }: { initial: ProblemsFilter }) {
   const t = useTranslations('pricing');
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
@@ -77,7 +89,11 @@ function PricingPageView() {
           value={tab}
           onValueChange={setTab}
           items={[
-            { value: 'prices', label: t('tabs.prices'), panel: <PricesTab /> },
+            {
+              value: 'prices',
+              label: t('tabs.prices'),
+              panel: <PricesTab initial={initial} />,
+            },
             ...(canDiscounts
               ? [
                   {
@@ -104,10 +120,14 @@ function PricingPageView() {
   );
 }
 
-function PricesTab() {
+function PricesTab({ initial }: { initial: ProblemsFilter }) {
   const t = useTranslations('pricing');
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
+  const [filter, setFilter] = useState<ProblemsFilter>(initial);
+  const filterStore = filter.storeId
+    ? (session?.stores.find((s) => s.id === filter.storeId)?.name ?? null)
+    : null;
   const canEdit =
     canWrite(session, 'pricing:update-store') ||
     canWrite(session, 'pricing:update-network');
@@ -121,18 +141,23 @@ function PricesTab() {
     staleTime: 5 * 60_000,
   });
   const list = useQuery({
-    queryKey: ['prices', 'list', q, categoryId, offset],
+    queryKey: ['prices', 'list', q, categoryId, filter, offset],
     queryFn: ({ signal }) =>
       apiRequest('prices.list', {
         query: {
           q: q || undefined,
           categoryId: categoryId || undefined,
+          ...(filter.problems
+            ? { problems: true, storeId: filter.storeId ?? undefined }
+            : {}),
           limit: PAGE,
           offset,
         },
         signal,
       }),
     placeholderData: (previous) => previous,
+    // opened from the menu counter: the list must match its number, not a cache up to 30 s old
+    refetchOnMount: 'always',
   });
 
   return (
@@ -165,6 +190,26 @@ function PricesTab() {
             })),
           ]}
         />
+      </div>
+      <div className="px-(--ph-card-padding) pb-3">
+        <ChipGroup label={t('problemsFilter')}>
+          <Chip
+            selected={filter.problems}
+            onClick={() => {
+              // the chip of the screen looks at every pharmacy; the menu counter — at its store
+              setFilter(
+                filter.problems
+                  ? { problems: false, storeId: null }
+                  : { problems: true, storeId: null },
+              );
+              setOffset(0);
+            }}
+          >
+            {filter.problems && filterStore
+              ? t('problemsOnlyAt', { store: filterStore })
+              : t('problemsOnly')}
+          </Chip>
+        </ChipGroup>
       </div>
       <QueryState query={list}>
         {(data) => {
@@ -214,6 +259,14 @@ function PricesTab() {
               cell: (row: PriceRow) => {
                 const price = row.prices[index];
                 if (!price) return '—';
+                if (price.warnings.includes('no_price')) {
+                  return (
+                    <span className="inline-flex items-center gap-1 text-danger">
+                      <Icon name="triangle-alert" size="sm" />
+                      {t('warnings.no_price')}
+                    </span>
+                  );
+                }
                 return (
                   <span className="inline-flex items-center gap-1">
                     {price.warnings.length > 0 && (
@@ -259,7 +312,12 @@ function PricesTab() {
                 rowKey={(row) => row.productId}
                 rows={data.items}
                 columns={columns}
-                empty={<EmptyState icon="tag" title={t('empty')} />}
+                empty={
+                  <EmptyState
+                    icon="tag"
+                    title={filter.problems ? t('problemsEmpty') : t('empty')}
+                  />
+                }
               />
               <p className="flex flex-wrap gap-4 px-(--ph-card-padding) py-3 text-xs text-fg-subtle">
                 <span className="inline-flex items-center gap-1">
@@ -539,10 +597,26 @@ function ConflictsTab({ rows }: { rows: PriceConflict[] }) {
   );
 }
 
+/** The filter comes from the address; a new address (a click on the menu counter) starts afresh. */
+function PricingPageRoute() {
+  const params = useSearchParams();
+  return (
+    <PricingPageView
+      key={params?.toString() ?? ''}
+      initial={{
+        problems: params?.get('problems') === '1',
+        storeId: params?.get('storeId') || null,
+      }}
+    />
+  );
+}
+
 export function PricingPage() {
   return (
     <WithMessages groups={['stock', 'purchasing']}>
-      <PricingPageView />
+      <Suspense>
+        <PricingPageRoute />
+      </Suspense>
     </WithMessages>
   );
 }

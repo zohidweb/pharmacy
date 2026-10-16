@@ -15,8 +15,10 @@ import {
   type PricingProduct,
   ProductsReader,
 } from '../catalog/products-reader';
+import { PriceProblems } from './price-problems';
 import { PricingRepository, type StoreRef } from './pricing.repository';
 import { PurchasePrices } from './purchase-prices';
+import { StockedProducts } from './stocked-products';
 import { StorePriceWriter } from './store-price-writer';
 
 const notFound = () => new ProblemException(404, 'not_found');
@@ -42,21 +44,41 @@ export class PricesService {
     private readonly products: ProductsReader,
     private readonly writer: StorePriceWriter,
     private readonly purchasePrices: PurchasePrices,
+    private readonly stocked: StockedProducts,
+    private readonly problems: PriceProblems,
   ) {}
 
   async list(query: PriceListQuery): Promise<PriceListResponse> {
-    const { tenantId, storeScope } = requirePrincipal();
+    const { tenantId, storeScope, permissions } = requirePrincipal();
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
+    const scope = scopeIds(storeScope);
+    const storeId = query.storeId?.toLowerCase();
+    if (storeId && scope !== null && !scope.includes(storeId)) {
+      throw new ProblemException(403, 'store_not_in_scope');
+    }
     return this.db.tenantTransaction(async (trx) => {
-      const stores = await this.repository.activeStores(
-        trx,
-        tenantId,
-        scopeIds(storeScope),
-      );
+      const stores = await this.repository.activeStores(trx, tenantId, scope);
+      // «Только с проблемами» (spec 2026-10-15-nav-counters, E8): at the pharmacy `storeId`, else at
+      // any pharmacy of the scope — the rule of the menu counter
+      const productIds = query.problems
+        ? await this.problems.productIds(
+            trx,
+            tenantId,
+            stores
+              .filter(
+                (store) =>
+                  store.kind === 'pharmacy' &&
+                  (!storeId || store.id === storeId),
+              )
+              .map((store) => store.id),
+            hasPermissions(permissions, 'finance:view-cost'),
+          )
+        : undefined;
       const page = await this.products.listForPricing(trx, tenantId, {
         q: query.q,
         categoryId: query.categoryId,
+        productIds,
         limit,
         offset,
       });
@@ -187,6 +209,13 @@ export class PricesService {
         cell.priceDirams,
       ]),
     );
+    // in stock without a price — the till cannot sell it (E7); a warehouse does not sell
+    const stocked = await this.stocked.stockedAt(
+      trx,
+      tenantId,
+      stores.filter((store) => store.kind === 'pharmacy').map((s) => s.id),
+      products.map((product) => product.id),
+    );
     return products.map((product) => ({
       productId: product.id,
       productName: product.name,
@@ -200,16 +229,12 @@ export class PricesService {
           storeId: store.id,
           storeName: store.name,
           priceMinor,
-          warnings:
-            priceMinor === null
-              ? []
-              : priceWarnings({
-                  priceMinor,
-                  costMinor: warnBelowCost
-                    ? (costs.get(product.id) ?? null)
-                    : null,
-                  maxPriceMinor: product.maxPriceMinor,
-                }),
+          warnings: priceWarnings({
+            priceMinor,
+            costMinor: warnBelowCost ? (costs.get(product.id) ?? null) : null,
+            maxPriceMinor: product.maxPriceMinor,
+            inStock: stocked.has(`${store.id}/${product.id}`),
+          }),
         };
       }),
     }));

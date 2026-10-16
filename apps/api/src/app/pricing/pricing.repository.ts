@@ -5,6 +5,8 @@ import type { TenantTransaction } from '../../core/database';
 export interface StoreRef {
   id: string;
   name: string;
+  /** 'pharmacy' | 'warehouse': a warehouse does not sell, so it has no price problems. */
+  kind: string;
 }
 
 export interface PriceCell {
@@ -65,7 +67,7 @@ export class PricingRepository {
     if (scope !== null && scope.length === 0) return [];
     let query = trx
       .selectFrom('stores')
-      .select(['id', 'name'])
+      .select(['id', 'name', 'kind'])
       .where('tenantId', '=', tenantId)
       .where('status', '=', 'active');
     if (scope !== null) query = query.where('id', 'in', [...scope]);

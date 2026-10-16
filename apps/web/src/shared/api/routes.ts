@@ -98,6 +98,10 @@ import type {
   StockDocumentKind,
   StockListQuery,
   StockListResponse,
+  ReorderLine,
+  ReorderQuery,
+  NavCounters,
+  NavCountersQuery,
   StockProductOption,
   StockProductsQuery,
   StockCountEntryRequest,
@@ -227,6 +231,11 @@ export const apiRoutes = {
   >('GET', () => '/notifications'),
   'notifications.readAll': route<void>('POST', () => '/notifications/read-all'),
 
+  'navCounters.get': route<NavCounters, undefined, undefined, NavCountersQuery>(
+    'GET',
+    () => '/nav-counters',
+  ),
+
   'me.get': route<EmployeeMe>('GET', () => '/me'),
   'me.update': route<EmployeeMe, UpdateEmployeeMeRequest>('PATCH', () => '/me'),
   'me.changePassword': route<void, ChangePasswordRequest>(
@@ -298,6 +307,10 @@ export const apiRoutes = {
   'stock.list': route<StockListResponse, undefined, undefined, StockListQuery>(
     'GET',
     () => '/stock',
+  ),
+  'stock.reorder': route<ReorderLine[], undefined, undefined, ReorderQuery>(
+    'GET',
+    () => '/stock/reorder',
   ),
   'stock.products': route<
     StockProductOption[],
@@ -554,10 +567,12 @@ export const apiRoutes = {
     { kind: ReportKind },
     { from: string; to: string; storeId?: string }
   >('GET', (p) => `/reports/${p.kind}`),
-  'expenses.list': route<ExpenseListResponse, undefined, undefined, ExpenseQuery>(
-    'GET',
-    () => '/expenses',
-  ),
+  'expenses.list': route<
+    ExpenseListResponse,
+    undefined,
+    undefined,
+    ExpenseQuery
+  >('GET', () => '/expenses'),
   'expenses.create': route<Expense, CreateExpenseRequest>(
     'POST',
     () => '/expenses',

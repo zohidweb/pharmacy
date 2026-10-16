@@ -5,6 +5,8 @@ export interface CountBadgeProps {
   tone?: 'danger' | 'neutral' | 'primary';
   /** Localized context for screen readers, e.g. "2 запроса ждут решения". */
   label?: string;
+  /** Above it the badge shows «max+» (e.g. «99+»); the label keeps the exact number. */
+  max?: number;
   /** Layout only. */
   className?: string;
 }
@@ -20,6 +22,7 @@ export function CountBadge({
   count,
   tone = 'danger',
   label,
+  max,
   className,
 }: CountBadgeProps) {
   if (count <= 0) return null;
@@ -31,7 +34,9 @@ export function CountBadge({
         className,
       )}
     >
-      <span aria-hidden={label ? true : undefined}>{count}</span>
+      <span aria-hidden={label ? true : undefined}>
+        {max !== undefined && count > max ? `${max}+` : count}
+      </span>
       {label && <span className="ph-visually-hidden">{label}</span>}
     </span>
   );

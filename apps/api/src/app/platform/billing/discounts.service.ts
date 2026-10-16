@@ -34,13 +34,16 @@ const toDiscount = (row: DiscountRow): TenantDiscount => ({
   invoicedThrough: row.invoicedThrough,
 });
 
-// `invoicedThrough` — the last month of the period that has an invoice of the network (A10).
+// `invoicedThrough` — the last month whose invoice took the discount: an active store line names it
+// (A10). A discount given after the invoice of a month reached no invoice until a recalculation.
 const SELECT = sql`
   select d.id, d.tenant_id, d.percent_bp, to_char(d.from_month, 'YYYY-MM') as from_month,
          to_char(d.to_month, 'YYYY-MM') as to_month,
-         (select to_char(max(i.period_month), 'YYYY-MM') from pharmacy.invoices i
-          where i.tenant_id = d.tenant_id
-            and i.period_month between d.from_month and d.to_month) as invoiced_through
+         (select to_char(max(i.period_month), 'YYYY-MM')
+          from pharmacy.invoice_lines l
+          join pharmacy.invoices i on i.tenant_id = l.tenant_id and i.id = l.invoice_id
+          where l.tenant_id = d.tenant_id and l.discount_id = d.id
+            and l.removed_at is null) as invoiced_through
   from pharmacy.tenant_discounts d`;
 
 // Discounts of networks on the store tariff (spec 2026-10-15-billing-services, A10, B10, B18): periods
@@ -65,7 +68,7 @@ export class DiscountsService {
     tenantId: string,
   ): Promise<boolean> {
     const { rows } = await sql`
-      select id from pharmacy.tenants where id = ${tenantId} for update`.execute(
+      select id from pharmacy.tenants where id = ${tenantId} for no key update`.execute(
       trx,
     );
     return rows.length > 0;

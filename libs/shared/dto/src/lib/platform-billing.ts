@@ -200,8 +200,8 @@ export interface CancelPaymentRequest {
 
 /**
  * A discount of a network on the store tariff for months `fromMonth`…`toMonth` (A10). Periods of one
- * network do not overlap. `invoicedThrough` — the last month of the period with an invoice: before it
- * the period cannot end, and with it the discount cannot be removed.
+ * network do not overlap. `invoicedThrough` — the last month whose invoice took the discount: before
+ * it the period cannot end, and with it the discount cannot be removed.
  */
 export interface TenantDiscount {
   id: string;

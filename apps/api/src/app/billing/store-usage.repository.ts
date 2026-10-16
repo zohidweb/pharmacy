@@ -16,6 +16,10 @@ export class StoreUsageRepository {
     tenantId: string,
     month: string,
   ): Promise<void> {
+    // refreshes of one network and month run one after another (a preview beside a generation)
+    await sql`select pg_advisory_xact_lock(hashtextextended(${`store-usage:${tenantId}:${month}`}, 0))`.execute(
+      trx,
+    );
     await sql`
       delete from pharmacy.store_usage_monthly
       where tenant_id = ${tenantId} and month = ${month}::date`.execute(trx);

@@ -65,14 +65,18 @@ export function tenantInvoiceItem(invoice: InvoiceDetails): TenantInvoiceItem {
   };
 }
 
-/** The last month of a discount with an invoice of its network (A10). */
+/** The last month whose invoice took the discount: its store lines carry the percent (A10). */
 export function discountView(discount: MockDiscount): TenantDiscount {
   const periods = billing()
     .invoices.filter(
       (invoice) =>
         invoice.tenantId === discount.tenantId &&
         invoice.period >= discount.fromMonth &&
-        invoice.period <= discount.toMonth,
+        invoice.period <= discount.toMonth &&
+        invoice.lines.some(
+          (line) =>
+            line.kind === 'store' && line.discountBp === discount.percentBp,
+        ),
     )
     .map((invoice) => invoice.period)
     .sort();

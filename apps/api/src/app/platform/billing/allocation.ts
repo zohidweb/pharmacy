@@ -7,13 +7,14 @@ type Money = bigint | string | number;
 
 // The allocation of the payments of a network to its invoices (spec 2026-10-15-billing-services, A7,
 // B2, B18): computed again as a whole after every change of its payments or invoices, in the
-// caller's transaction, under the lock of the network's row (the first lock of every money change).
+// caller's transaction, under the lock of the network's row (the first lock of every money change;
+// FOR NO KEY UPDATE, so the foreign-key checks of the network's own inserts are not blocked).
 // Allocation rows are never deleted: a pair that no longer covers an invoice keeps 0. Writes what is
 // paid on the invoices and the advance of the network.
 @Injectable()
 export class TenantAllocation {
   async recompute(trx: Transaction<DB>, tenantId: string): Promise<void> {
-    await sql`select id from pharmacy.tenants where id = ${tenantId} for update`.execute(
+    await sql`select id from pharmacy.tenants where id = ${tenantId} for no key update`.execute(
       trx,
     );
     const { rows: invoices } = await sql<{

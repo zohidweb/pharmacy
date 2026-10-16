@@ -87,6 +87,8 @@ create table pharmacy.invoice_lines (
   description text,
   provided_on date,
   amount_dirams bigint not null check (amount_dirams >= 0),
+  -- the discount the store line took (A10: a discount on an invoice is not removed)
+  discount_id uuid,
   removed_at timestamptz,
   removed_reason text check (removed_reason in ('recalculated', 'service_cancelled')),
   foreign key (tenant_id, invoice_id) references pharmacy.invoices (tenant_id, id),
@@ -100,6 +102,7 @@ create table pharmacy.invoice_lines (
   check (kind <> 'service' or (tenant_service_id is not null and description is not null
     and provided_on is not null)),
   check (kind = 'service' or tenant_service_id is null),
+  check (kind = 'store' or discount_id is null),
   check ((removed_at is null) = (removed_reason is null))
 );
 create index invoice_lines_invoice_idx on pharmacy.invoice_lines (tenant_id, invoice_id);
@@ -107,6 +110,8 @@ create index invoice_lines_store_idx on pharmacy.invoice_lines (tenant_id, store
   where store_id is not null;
 create unique index invoice_lines_service_uq on pharmacy.invoice_lines (tenant_service_id)
   where removed_at is null;
+create index invoice_lines_discount_idx on pharmacy.invoice_lines (discount_id)
+  where discount_id is not null;
 
 -- A payment of a network (B1, B2, A9): id is the idempotency key made by the client, request_hash —
 -- the hash of the first request. A cancelled payment stays with its reason.
@@ -162,9 +167,13 @@ create table pharmacy.tenant_discounts (
   removed_at timestamptz,
   removed_by uuid references pharmacy.operators (id),
   check (from_month <= to_month),
-  check ((removed_at is null) = (removed_by is null))
+  check ((removed_at is null) = (removed_by is null)),
+  unique (tenant_id, id)
 );
 create index tenant_discounts_tenant_idx on pharmacy.tenant_discounts (tenant_id, from_month);
+
+alter table pharmacy.invoice_lines
+  add foreign key (tenant_id, discount_id) references pharmacy.tenant_discounts (tenant_id, id);
 
 -- The advance of a network: payments not allocated to invoices (3.1 p. 3), written by the allocation.
 alter table pharmacy.tenants

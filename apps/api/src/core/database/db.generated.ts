@@ -347,6 +347,7 @@ export interface InvoiceLines {
   daysInMonth: number | null;
   description: string | null;
   discountBp: number | null;
+  discountId: string | null;
   id: string;
   invoiceId: string;
   kind: string;

@@ -79,6 +79,9 @@ export class PaymentsService {
       const existing = await this.payments.find(trx, id);
       if (existing !== null) return this.replay(trx, existing, hash);
       if (!(await this.payments.lockTenant(trx, tenantId))) throw notFound();
+      // a parallel repeat with the key committed while this request waited for the lock
+      const raced = await this.payments.find(trx, id);
+      if (raced !== null) return this.replay(trx, raced, hash);
       if (input.paidOn > (await this.invoices.today(trx))) throw future();
       if (invoiceId !== null) {
         const invoice = await this.payments.invoiceOf(trx, invoiceId);

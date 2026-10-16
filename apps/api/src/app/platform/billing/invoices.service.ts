@@ -113,20 +113,23 @@ export class InvoicesService {
     trx: Transaction<DB>,
     period: string,
     tenants: ReadonlyArray<{ id: string }>,
-  ): Promise<Map<string, ComposedInvoice>> {
+  ): Promise<Map<string, ComposedInvoice & { discountId: string | null }>> {
     const month = monthOf(period);
     const ids = tenants.map((tenant) => tenant.id);
     const settings = await this.billing.settings(trx);
     const usage = await this.invoices.usage(trx, month, ids);
     const discounts = await this.invoices.discounts(trx, month, ids);
     const services = await this.invoices.pendingServices(trx, month, ids);
-    const drafts = new Map<string, ComposedInvoice>();
+    const drafts = new Map<
+      string,
+      ComposedInvoice & { discountId: string | null }
+    >();
     for (const id of ids) {
       const draft = composeInvoice({
         period,
         pricePerStoreMinor: settings.pricePerStoreMinor,
         vatBp: settings.vatRatePercent * 100,
-        discountBp: discounts.get(id) ?? null,
+        discountBp: discounts.get(id)?.percentBp ?? null,
         stores: usage
           .filter((row) => row.tenantId === id)
           .map((row) => ({
@@ -144,7 +147,9 @@ export class InvoicesService {
             providedOn: row.providedOn,
           })),
       });
-      if (draft.lines.length > 0) drafts.set(id, draft);
+      if (draft.lines.length > 0) {
+        drafts.set(id, { ...draft, discountId: discounts.get(id)?.id ?? null });
+      }
     }
     return drafts;
   }
@@ -384,7 +389,13 @@ export class InvoicesService {
             .join(number),
           createdBy: actor.operatorId,
         });
-        await this.invoices.insertLines(trx, tenant.id, id, draft.lines);
+        await this.invoices.insertLines(
+          trx,
+          tenant.id,
+          id,
+          draft.lines,
+          draft.discountId,
+        );
         await this.allocation.recompute(trx, tenant.id);
         await this.audit.append(trx, {
           action: 'invoice.generated',
@@ -403,18 +414,19 @@ export class InvoicesService {
   private async recomposed(
     trx: Transaction<DB>,
     row: InvoiceRow,
-  ): Promise<ComposedInvoice> {
+  ): Promise<ComposedInvoice & { discountId: string | null }> {
     const month = monthOf(row.period);
     const usage = await this.invoices.usage(trx, month, [row.tenantId]);
     const discounts = await this.invoices.discounts(trx, month, [row.tenantId]);
     const services = (await this.invoices.activeLines(trx, row.id)).filter(
       (line) => line.kind === 'service',
     );
-    return composeInvoice({
+    const discount = discounts.get(row.tenantId) ?? null;
+    const composed = composeInvoice({
       period: row.period,
       pricePerStoreMinor: Number(row.pricePerStoreDirams),
       vatBp: row.vatBp,
-      discountBp: discounts.get(row.tenantId) ?? null,
+      discountBp: discount?.percentBp ?? null,
       stores: usage.map((store) => ({
         storeId: store.storeId,
         name: store.name,
@@ -428,6 +440,7 @@ export class InvoicesService {
         providedOn: line.providedOn ?? '',
       })),
     });
+    return { ...composed, discountId: discount?.id ?? null };
   }
 
   /** An invoice without payments, before the refresh of its month; 404, 409 `invoice_paid`. */
@@ -476,6 +489,7 @@ export class InvoicesService {
         row.tenantId,
         id,
         next.lines.filter((line) => line.kind === 'store'),
+        next.discountId,
       );
       await this.invoices.updateSums(trx, id, next, true);
       await this.allocation.recompute(trx, row.tenantId);

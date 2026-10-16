@@ -146,7 +146,11 @@ export class InvoicesRepository {
     );
   }
 
-  /** The rows of the networks, in the order of their ids (the lock order of the plan). */
+  /**
+   * The rows of the networks, in the order of their ids (the lock order of the plan). FOR NO KEY
+   * UPDATE: every tenant table references `tenants`, and the KEY SHARE of their foreign-key checks
+   * (a sale of the network) must not wait for billing.
+   */
   async lockTenants(
     trx: Transaction<DB>,
     ids: readonly string[],
@@ -154,7 +158,7 @@ export class InvoicesRepository {
     if (ids.length === 0) return;
     await sql`
       select id from pharmacy.tenants where id = any(${sql.val([...ids])}::uuid[])
-      order by id for update`.execute(trx);
+      order by id for no key update`.execute(trx);
   }
 
   async usage(
@@ -179,13 +183,22 @@ export class InvoicesRepository {
     trx: Transaction<DB>,
     month: string,
     tenantIds: readonly string[],
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, { id: string; percentBp: number }>> {
     if (tenantIds.length === 0) return new Map();
-    const { rows } = await sql<{ tenantId: string; percentBp: number }>`
-      select tenant_id, percent_bp from pharmacy.tenant_discounts
+    const { rows } = await sql<{
+      tenantId: string;
+      id: string;
+      percentBp: number;
+    }>`
+      select tenant_id, id, percent_bp from pharmacy.tenant_discounts
       where removed_at is null and from_month <= ${month}::date and to_month >= ${month}::date
         and tenant_id = any(${sql.val([...tenantIds])}::uuid[])`.execute(trx);
-    return new Map(rows.map((row) => [row.tenantId, row.percentBp]));
+    return new Map(
+      rows.map((row) => [
+        row.tenantId,
+        { id: row.id, percentBp: row.percentBp },
+      ]),
+    );
   }
 
   /** Provided services up to the end of `month` without a line in an invoice (A11). */
@@ -308,11 +321,13 @@ export class InvoicesRepository {
       .execute();
   }
 
+  /** `discountId` — the discount the store lines took, written on those that have one. */
   async insertLines(
     trx: Transaction<DB>,
     tenantId: string,
     invoiceId: string,
     lines: readonly ComposedLine[],
+    discountId: string | null,
   ): Promise<void> {
     if (lines.length === 0) return;
     await trx
@@ -334,6 +349,10 @@ export class InvoicesRepository {
           description: line.kind === 'service' ? line.description : null,
           providedOn: line.providedOn,
           amountDirams: BigInt(line.amountMinor),
+          discountId:
+            line.kind === 'store' && (line.discountBp ?? 0) > 0
+              ? discountId
+              : null,
         })),
       )
       .execute();
@@ -423,7 +442,7 @@ export class InvoicesRepository {
     forUpdate = false,
   ): Promise<InvoiceRow | null> {
     const { rows } = await sql<InvoiceRow>`
-      ${this.select(today)} where i.id = ${id} ${forUpdate ? sql`for update of i` : sql``}`.execute(
+      ${this.select(today)} where i.id = ${id} ${forUpdate ? sql`for no key update of i` : sql``}`.execute(
       trx,
     );
     return rows[0] ?? null;

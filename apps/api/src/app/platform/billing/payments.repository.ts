@@ -72,14 +72,14 @@ export class PaymentsRepository {
       select id, tenant_id, status, amount_dirams, paid_on::text as paid_on, method, comment,
              request_hash
       from pharmacy.tenant_payments where id = ${id}
-      ${forUpdate ? sql`for update` : sql``}`.execute(trx);
+      ${forUpdate ? sql`for no key update` : sql``}`.execute(trx);
     return rows[0] ?? null;
   }
 
   /** Locks the row of the network (the first lock of a money change); false for an unknown one. */
   async lockTenant(trx: Transaction<DB>, tenantId: string): Promise<boolean> {
     const { rows } = await sql`
-      select id from pharmacy.tenants where id = ${tenantId} for update`.execute(
+      select id from pharmacy.tenants where id = ${tenantId} for no key update`.execute(
       trx,
     );
     return rows.length > 0;

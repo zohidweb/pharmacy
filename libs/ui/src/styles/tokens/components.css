@@ -48,6 +48,7 @@
   --ph-nav-counter-fg: var(--ph-color-danger);
 
   --ph-receipt-preview-height: var(--ph-size-receipt-preview);
+  --ph-sheet-preview-width: var(--ph-size-sheet-preview);
 
   /* POS: catalog | receipt panel; the screen height under the top bar minus the bottom padding of main */
   --ph-pos-height: calc(var(--ph-shell-body-height) - var(--ph-space-6));

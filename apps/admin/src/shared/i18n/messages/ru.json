@@ -533,6 +533,32 @@
     },
     "overdue": "Просрочен"
   },
+  "invoicePrint": {
+    "pageTitle": "Счёт",
+    "heading": "Счёт {number}",
+    "print": "Печать",
+    "back": "К счетам",
+    "title": "Счёт № {number} от {date} за {period}",
+    "supplier": "Поставщик",
+    "payer": "Плательщик",
+    "inn": "ИНН {inn}",
+    "account": "Р/с {account}",
+    "bik": "БИК {bik}",
+    "corrAccount": "К/с {account}",
+    "columns": {
+      "line": "Точка или услуга",
+      "detail": "Расчёт",
+      "amount": "Сумма, с"
+    },
+    "storeDays": "{days} из {daysInMonth} дн. по тарифу {price}",
+    "discount": "скидка {percent}% ({amount})",
+    "providedOn": "оказана {date}",
+    "net": "Без НДС",
+    "vat": "НДС {rate}%",
+    "total": "К оплате",
+    "dueOn": "Оплатить до",
+    "purpose": "Назначение платежа"
+  },
   "license": {
     "status": {
       "active": "Активен",
@@ -675,7 +701,8 @@
       "paid": "Оплачено",
       "remaining": "Остаток",
       "dueOn": "Срок оплаты {date}",
-      "recalculatedAt": "Пересчитан {date}"
+      "recalculatedAt": "Пересчитан {date}",
+      "print": "Печать"
     },
     "paymentCard": {
       "title": "Платёж {tenant} от {date}",

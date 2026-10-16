@@ -12,6 +12,7 @@ export const routes = {
   company: (id: string) => `/companies/view?id=${encodeURIComponent(id)}`,
   store: (id: string) => `/stores/view?id=${encodeURIComponent(id)}`,
   invoices: () => '/billing',
+  invoicePrint: (id: string) => `/billing/invoice?id=${encodeURIComponent(id)}`,
   services: () => '/billing/services',
   licenses: () => '/offline/licenses',
   versions: () => '/offline/versions',

@@ -29,6 +29,8 @@ const CODE = /^[a-z0-9_.:-]{1,64}$/;
 
 export interface OperatorAuditFilter {
   operatorId: string | null;
+  /** `operatorId` as the actor only — «Мои последние действия»; else also what was done to them. */
+  actorOnly?: boolean;
   tenantId: string | null;
   type: OperatorActionType | null;
   from: string | null;
@@ -146,7 +148,16 @@ export class OperatorAuditRepository {
 
   private conditions(filter: OperatorAuditFilter): RawBuilder<SqlBool> {
     const parts: RawBuilder<unknown>[] = [sql`true`];
-    if (filter.operatorId) parts.push(sql`l.operator_id = ${filter.operatorId}`);
+    // everything about the operator: what they did and what was done to their account — a failed
+    // sign-in is recorded by the operator-auth job with the operator as its entity (auth3-M3)
+    if (filter.operatorId && filter.actorOnly) {
+      parts.push(sql`l.operator_id = ${filter.operatorId}`);
+    } else if (filter.operatorId) {
+      parts.push(
+        sql`(l.operator_id = ${filter.operatorId}
+             or (l.entity_type = 'operator' and l.entity_id = ${filter.operatorId}))`,
+      );
+    }
     if (filter.tenantId) parts.push(sql`l.tenant_id = ${filter.tenantId}`);
     if (filter.type === 'access') {
       parts.push(sql`not ${startsWithAny(Object.values(KIND_PREFIXES).flat())}`);

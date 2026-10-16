@@ -200,8 +200,9 @@ export interface OperatorAuditEntry {
 }
 
 /**
- * GET /operator/operator-audit-log — read only, newest first. `operatorId` — who acted; `from` and
- * `to` — calendar dates (YYYY-MM-DD) of the platform time zone, both included.
+ * GET /operator/operator-audit-log — read only, newest first. `operatorId` — everything about the
+ * operator: what they did and what was done to their account, such as a failed sign-in (auth3-M3,
+ * 2026-10-16); `from` and `to` — calendar dates (YYYY-MM-DD) of the platform time zone, both included.
  */
 export interface OperatorAuditQuery {
   operatorId?: string;

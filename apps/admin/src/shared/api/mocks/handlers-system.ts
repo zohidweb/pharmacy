@@ -306,9 +306,11 @@ export const systemHandlers: Pick<
   'operatorAudit.list': ({ query }) => {
     const items = system().operatorAudit.filter(
       (entry) =>
+        // as the API: what the operator did and what was done to their account (auth3-M3)
         (!query?.operatorId ||
           (entry.actor.kind === 'operator' &&
-            entry.actor.operatorId === query.operatorId)) &&
+            entry.actor.operatorId === query.operatorId) ||
+          entry.operator?.id === query.operatorId) &&
         (!query?.tenantId || entry.tenant?.id === query.tenantId) &&
         (!query?.type || entry.type === query.type) &&
         // calendar days of the platform (Asia/Dushanbe), as apps/api

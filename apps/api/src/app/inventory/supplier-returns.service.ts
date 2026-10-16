@@ -318,7 +318,9 @@ export class SupplierReturnsService {
           : line.quantity * product.piecesPerPack;
       total += returnAmount({
         qtyPieces,
+        unit: line.unit,
         purchasePricePerPackDirams: batch.purchasePricePerPackDirams,
+        costPerPieceDirams: batch.costPerPieceDirams,
         piecesPerPack: product.piecesPerPack,
       });
       return {

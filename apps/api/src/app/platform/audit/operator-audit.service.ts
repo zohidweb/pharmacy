@@ -26,6 +26,7 @@ export class OperatorAuditLogService {
     return this.db.platformTransaction({ kind: 'operator', operatorId }, (trx) =>
       this.repository.entries(trx, {
         operatorId,
+        actorOnly: true,
         tenantId: null,
         type: null,
         from: null,

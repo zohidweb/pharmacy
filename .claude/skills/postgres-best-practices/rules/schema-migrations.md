@@ -33,7 +33,12 @@ tags: migrations, node-pg-migrate, rls, grants, backfill, offline-store
 5. **Совместимость с офлайн-точками** (ADR-0014): точки обновляются не одновременно —
    expand/contract: сначала добавить (nullable-колонка, новая таблица), потом переключить код,
    потом удалить старое отдельной миграцией.
-6. **Ревью.** Каждую миграцию проверяет агент `postgresql-database-reviewer`; затем
+6. **Расширение CHECK на больших таблицах** (`stock_movements` с партициями, `documents`,
+   `idempotency_keys`; решение архитектора 2026-10-16): `drop constraint` + `add constraint … not valid`
+   в одной миграции, `validate constraint` — отдельной миграцией (своя транзакция, `SHARE UPDATE
+   EXCLUSIVE`). Иначе `add constraint` проверяет все строки под `ACCESS EXCLUSIVE` до конца транзакции и
+   останавливает продажи (`docs/architecture/data-model/README.md`, «Сквозные соглашения»).
+7. **Ревью.** Каждую миграцию проверяет агент `postgresql-database-reviewer`; затем
    `npx nx run api:db-types` и `npx nx run api:db-types-verify`.
 
 **Incorrect (новая таблица без изоляции и прав, бэкфилл без контекста):**

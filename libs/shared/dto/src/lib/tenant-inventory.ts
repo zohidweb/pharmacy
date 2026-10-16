@@ -591,6 +591,16 @@ export interface StockCountLine {
  * `stock_count_in_progress`; cancellation (`POST …/cancellation`, `inventory:delete`): only in
  * progress, 409 `document_posted` / `document_cancelled`.
  */
+/**
+ * GET /api/v1/stock-counts/{id}/version (`inventory:view`): a fingerprint of everything the count
+ * shows — the status and comment, the lines, the entries of every tablet and the movements of its
+ * batches (sales during the count). A running count polls it and reloads the document only when it
+ * changed (cnt-poll, decided 2026-10-16).
+ */
+export interface StockCountVersion {
+  version: string;
+}
+
 export interface StockCount {
   id: string;
   number: string;

@@ -8,6 +8,7 @@ import type {
   StockCount,
   StockCountEntryRequest,
   StockCountLine,
+  StockCountVersion,
   StockCountListItem,
   StockCountListQuery,
   UnpostCheck,
@@ -133,6 +134,15 @@ export class StockCountsService {
     return this.db.tenantTransaction(async (trx) =>
       this.toDto(trx, tenantId, await this.visible(trx, tenantId, id)),
     );
+  }
+
+  /** What a running count polls (cnt-poll): the full document is reloaded only when it changes. */
+  async version(id: string): Promise<StockCountVersion> {
+    const { tenantId } = requirePrincipal();
+    return this.db.tenantTransaction(async (trx) => {
+      const doc = await this.visible(trx, tenantId, id);
+      return { version: await this.counts.version(trx, tenantId, doc.id) };
+    });
   }
 
   async unpostCheck(id: string): Promise<UnpostCheck> {

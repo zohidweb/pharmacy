@@ -264,6 +264,7 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'transferRequests.reject',
   'stockCounts.list',
   'stockCounts.get',
+  'stockCounts.version',
   'stockCounts.start',
   'stockCounts.save',
   'stockCounts.addEntry',

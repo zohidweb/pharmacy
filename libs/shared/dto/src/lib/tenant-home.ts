@@ -115,6 +115,25 @@ export interface TenantDashboard {
   recentActivity: TenantAuditEntry[];
 }
 
+/**
+ * GET /api/v1/nav-counters?storeId= — any signed-in employee (cloud only). `storeId` must be in the
+ * scope (403 `store_not_in_scope`); without it — every active store of the scope; a PIN session —
+ * always the store of its terminal.
+ */
+export interface NavCountersQuery {
+  storeId?: string;
+}
+
+/** Numbers of the side menu; a field is absent without its permission. */
+export interface NavCounters {
+  /** Products below the minimum (`inventory:view`) — «Остатки». */
+  lowStock?: number;
+  /** Transfers in transit to the stores (`inventory:receive`) — «Перемещения и заявки». */
+  incomingTransfers?: number;
+  /** Product × pharmacy pairs with a price problem (`pricing:view`) — «Цены и скидки». */
+  priceProblems?: number;
+}
+
 export interface TenantNotification extends Reminder {
   /** null — a notification of the whole network. */
   storeId: string | null;

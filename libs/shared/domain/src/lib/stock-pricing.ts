@@ -66,18 +66,23 @@ export function stockState(input: {
   return 'ok';
 }
 
-export type PriceWarning = 'above_max' | 'below_cost';
+export type PriceWarning = 'above_max' | 'below_cost' | 'no_price';
 
 /**
  * Warnings of a retail price (UI mockup «Цены и скидки»): above the regulated maximum — a soft
- * warning the manager confirms (ТЗ: no ban); below the last purchase price of a pack.
+ * warning the manager confirms (ТЗ: no ban); below the last purchase price of a pack; no price of a
+ * product in stock — the till cannot sell it (menu counters, E5).
  */
 export function priceWarnings(input: {
-  priceMinor: number;
+  /** Price of a pack; null — the product has no price at the store. */
+  priceMinor: number | null;
   /** Last purchase price of a pack; undefined without `finance:view-cost`. */
   costMinor?: number | null;
   maxPriceMinor: number | null;
+  /** The product has positive stock at the store (pharmacies only). */
+  inStock?: boolean;
 }): PriceWarning[] {
+  if (input.priceMinor === null) return input.inStock ? ['no_price'] : [];
   const warnings: PriceWarning[] = [];
   if (input.maxPriceMinor !== null && input.priceMinor > input.maxPriceMinor) {
     warnings.push('above_max');

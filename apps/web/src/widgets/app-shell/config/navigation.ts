@@ -1,5 +1,5 @@
 import type { Permission } from '@pharmacy/shared-domain';
-import type { EmployeeSession } from '@pharmacy/shared-dto';
+import type { EmployeeSession, NavCounters } from '@pharmacy/shared-dto';
 import type { IconName } from '@pharmacy/ui';
 import { can } from '@/entities/session';
 import { routes, type StaticRouteName } from '@/shared/config';
@@ -27,6 +27,15 @@ export interface NavItem {
   permission: Permission;
   /** False for screens of the next stages: shown, but not a link yet. */
   ready: boolean;
+  /**
+   * Number of waiting work next to the item (spec 2026-10-15-nav-counters, E10): a positive number
+   * turns the item into a link to the screen filtered by that work at the working store.
+   */
+  counter?: {
+    key: keyof NavCounters;
+    tone: 'primary' | 'danger';
+    href: (storeId: string) => string;
+  };
 }
 
 export interface NavSection {
@@ -78,6 +87,12 @@ export const navigation: NavSection[] = [
         icon: 'package',
         permission: 'inventory:view',
         ready: true,
+        counter: {
+          key: 'lowStock',
+          tone: 'primary',
+          href: (storeId) =>
+            `${routes.stock()}?view=reorder&storeId=${encodeURIComponent(storeId)}`,
+        },
       },
       {
         route: 'goodsReceipts',
@@ -96,6 +111,11 @@ export const navigation: NavSection[] = [
         icon: 'arrow-left-right',
         permission: 'inventory:view',
         ready: true,
+        counter: {
+          key: 'incomingTransfers',
+          tone: 'primary',
+          href: () => `${routes.transfers()}?incoming=1`,
+        },
       },
       {
         route: 'writeOffs',
@@ -148,6 +168,12 @@ export const navigation: NavSection[] = [
         icon: 'tag',
         permission: 'pricing:view',
         ready: true,
+        counter: {
+          key: 'priceProblems',
+          tone: 'danger',
+          href: (storeId) =>
+            `${routes.pricing()}?problems=1&storeId=${encodeURIComponent(storeId)}`,
+        },
       },
     ],
   },

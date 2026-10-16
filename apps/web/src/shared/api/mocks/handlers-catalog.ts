@@ -34,7 +34,7 @@ import { mockDb } from './db';
 import type { DiscountRuleRecord, ProductExtras } from './db-catalog';
 import { stores } from './fixtures';
 import { appendAudit } from './handlers-staff';
-import { context, findDoc, page, storeName } from './handlers-stock';
+import { context, findDoc, inScope, page, storeName } from './handlers-stock';
 import { piecePrice, setStorePrice, storePrice } from './pricing';
 import { authorize } from './session';
 import type { MockHandlers } from './types';
@@ -162,6 +162,27 @@ function pricesOf(
       }),
     };
   });
+}
+
+/**
+ * Product × store pairs with a price problem — the menu counter «Цены и скидки» and the filter «Только с
+ * проблемами» (spec 2026-10-15-nav-counters, E5). Every mock store is a pharmacy.
+ */
+export function priceProblems(
+  session: EmployeeSession,
+  canSeeCost: boolean,
+  storeIds: readonly string[],
+): Array<{ productId: string; storeId: string }> {
+  return products()
+    .filter((p) => statusOf(p) === 'active')
+    .flatMap((p) =>
+      pricesOf(p, session, canSeeCost)
+        .filter(
+          (price) =>
+            storeIds.includes(price.storeId) && price.warnings.length > 0,
+        )
+        .map((price) => ({ productId: p.id, storeId: price.storeId })),
+    );
 }
 
 function productInput(
@@ -488,9 +509,20 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
 
   'prices.list': ({ query, correlationId }) => {
     const { session, canSeeCost } = context(correlationId, 'pricing:view');
+    if (query?.storeId) inScope(session, query.storeId, correlationId);
+    const problems = query?.problems
+      ? new Set(
+          priceProblems(
+            session,
+            canSeeCost,
+            query.storeId ? [query.storeId] : session.stores.map((s) => s.id),
+          ).map((pair) => pair.productId),
+        )
+      : null;
     const needle = (query?.q ?? '').trim().toLocaleLowerCase('ru');
     const rows = products()
       .filter((p) => statusOf(p) === 'active')
+      .filter((p) => !problems || problems.has(p.id))
       .filter(
         (p) =>
           !needle ||

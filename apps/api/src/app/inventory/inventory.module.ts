@@ -14,6 +14,7 @@ import { ReturnStock } from './return-stock';
 import { OpeningBalancesController } from './opening-balances.controller';
 import { DocumentPosting } from './posting';
 import { PurchasePricesSource } from './purchase-prices-source';
+import { StockedProductsSource } from './stocked-products-source';
 import { StockDocumentsService } from './stock-documents.service';
 import { StockAlerts } from './stock-alerts';
 import { StockFigures } from './stock-figures';
@@ -91,6 +92,8 @@ import { WriteOffsService } from './write-offs.service';
     CustomerReturnNumbers,
     // fills the PurchasePrices port of pricing (spec 2026-10-14-owner-cabinet, E15)
     PurchasePricesSource,
+    // fills the StockedProducts port of pricing (spec 2026-10-15-nav-counters, E6)
+    StockedProductsSource,
     StockAlerts,
     StockFigures,
     StoreClosingTransfers,

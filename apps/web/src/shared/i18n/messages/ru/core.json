@@ -169,6 +169,11 @@
       "settings": "Настройки",
       "offline": "Офлайн-точка",
       "openingBalances": "Начальные остатки"
+    },
+    "counters": {
+      "lowStock": "{count, plural, one {# товар} few {# товара} other {# товаров}} мало на складе — надо заказать",
+      "incomingTransfers": "{count, plural, one {# перемещение ждёт} few {# перемещения ждут} other {# перемещений ждут}} приёмки",
+      "priceProblems": "{count, plural, one {# товар} few {# товара} other {# товаров}} с проблемой цены"
     }
   },
   "store": {

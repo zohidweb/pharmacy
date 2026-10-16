@@ -1,4 +1,5 @@
 import type {
+  ReorderQuery,
   StockListQuery,
   StockSortKey,
   StockStateFilter,
@@ -29,6 +30,12 @@ const STATES: StockStateFilter[] = [
 const SORTS: StockSortKey[] = ['product', 'expiresOn', 'quantity', 'price'];
 
 /** GET /api/v1/stock. */
+export class ReorderQueryDto implements ReorderQuery {
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
+}
+
 export class StockListQueryDto implements StockListQuery {
   @IsOptional()
   @IsUUID()

@@ -169,6 +169,11 @@
       "settings": "Танзимот",
       "offline": "Нуқтаи офлайн",
       "openingBalances": "Бақияи ибтидоӣ"
+    },
+    "counters": {
+      "lowStock": "{count} мол дар анбор кам аст — фармоиш додан лозим",
+      "incomingTransfers": "{count} интиқол қабулро интизор аст",
+      "priceProblems": "{count} мол бо мушкилии нарх"
     }
   },
   "store": {

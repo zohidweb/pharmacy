@@ -89,6 +89,8 @@ export interface ProductFilter {
   flag?: CatalogFlag;
   /** Without it — every status (the stock still lists archived products with stock). */
   status?: CatalogStatus;
+  /** Only these products (the price problems, spec 2026-10-15-nav-counters). */
+  ids?: readonly string[];
 }
 
 /** Columns of a product as written by the catalog (barcodes are written separately). */
@@ -145,6 +147,13 @@ export class CatalogRepository {
   ): Expression<SqlBool> {
     const parts = [sql`p.tenant_id = ${tenantId}`];
     if (filter.status) parts.push(sql`p.status = ${filter.status}`);
+    if (filter.ids) {
+      parts.push(
+        filter.ids.length === 0
+          ? sql`false`
+          : sql`p.id = any(${sql.val([...filter.ids])}::uuid[])`,
+      );
+    }
     const q = filter.q?.trim() ?? '';
     if (q !== '') {
       const pattern = `%${escapeLike(q.toLocaleLowerCase('ru'))}%`;
@@ -275,6 +284,26 @@ export class CatalogRepository {
       .where('defaultMinStockPieces', '>', 0)
       .execute();
     return rows.map((r) => r.id);
+  }
+
+  /** The regulated maximum price of a pack of the active products among `ids`; null — not regulated. */
+  async activeMaxPrices(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, number | null>> {
+    if (ids.length === 0) return new Map();
+    const result = await sql<{ id: string; maxPrice: string | null }>`
+      select p.id, p.max_retail_price_per_pack_dirams as max_price
+      from pharmacy.products p
+      where p.tenant_id = ${tenantId} and p.status = 'active'
+        and p.id = any(${sql.val([...ids])}::uuid[])`.execute(trx);
+    return new Map(
+      result.rows.map((row) => [
+        row.id,
+        row.maxPrice === null ? null : Number(row.maxPrice),
+      ]),
+    );
   }
 
   async findProducts(
@@ -615,7 +644,9 @@ export class CatalogRepository {
   ): Promise<{ status: string } | null> {
     const row = await sql<{ status: string }>`
       select status from pharmacy.products
-      where tenant_id = ${tenantId} and id = ${id} for no key update`.execute(trx);
+      where tenant_id = ${tenantId} and id = ${id} for no key update`.execute(
+      trx,
+    );
     return row.rows[0] ?? null;
   }
 
@@ -623,7 +654,10 @@ export class CatalogRepository {
    * Serialises the category name checks of the network until the commit: two writes with the same
    * new name cannot both find it free (names are compared in code across languages).
    */
-  async lockCategoryNames(trx: TenantTransaction, tenantId: string): Promise<void> {
+  async lockCategoryNames(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<void> {
     await sql`select pg_advisory_xact_lock(hashtextextended(${`category-names:${tenantId}`}, 0))`.execute(
       trx,
     );

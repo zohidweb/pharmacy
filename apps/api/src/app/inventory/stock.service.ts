@@ -7,6 +7,8 @@ import {
 import type {
   DeficitLine,
   ProductBatchRow,
+  ReorderLine,
+  ReorderQuery,
   StockListQuery,
   StockListResponse,
   StockProductOption,
@@ -18,6 +20,7 @@ import { TenantDatabase } from '../../core/database';
 import { ProductsReader, type StockProduct } from '../catalog/products-reader';
 import { StorePriceWriter } from '../pricing/store-price-writer';
 import { InventoryRepository } from './inventory.repository';
+import { StockAlerts } from './stock-alerts';
 import { StockRepository } from './stock.repository';
 
 const DAY_MS = 86_400_000;
@@ -67,7 +70,64 @@ export class StockService {
     private readonly inventory: InventoryRepository,
     private readonly products: ProductsReader,
     private readonly prices: StorePriceWriter,
+    private readonly alerts: StockAlerts,
   ) {}
+
+  /**
+   * «Надо заказать» (spec 2026-10-15-nav-counters, N4): the products below their minimum at the active
+   * stores of the scope — the rule of `StockAlerts.lowStock`, so the list matches the menu counter and
+   * the home tile. An ended product has 0 in stock; the shortage is counted from the shown stock.
+   */
+  async reorder(query: ReorderQuery): Promise<ReorderLine[]> {
+    const { tenantId, storeScope } = requirePrincipal();
+    const scope = storeScope === 'all' ? null : storeScope;
+    const storeId = query.storeId?.toLowerCase();
+    if (storeId && scope !== null && !scope.includes(storeId)) {
+      throw new ProblemException(403, 'store_not_in_scope');
+    }
+    return this.db.tenantTransaction(async (trx) => {
+      const stores = (
+        await this.inventory.activeStores(trx, tenantId, scope)
+      ).filter((s) => !storeId || s.id === storeId);
+      const lines = await this.alerts.lowStockLines(
+        trx,
+        tenantId,
+        stores.map((s) => s.id),
+      );
+      const products = new Map(
+        (
+          await this.products.findForStock(trx, tenantId, [
+            ...new Set(lines.map((line) => line.productId)),
+          ])
+        ).map((p) => [p.id, p]),
+      );
+      const storeName = new Map(stores.map((s) => [s.id, s.name]));
+      return lines
+        .flatMap((line): ReorderLine[] => {
+          const product = products.get(line.productId);
+          if (!product) return [];
+          const stockPieces = Math.max(line.qtyPieces, 0);
+          return [
+            {
+              storeId: line.storeId,
+              storeName: storeName.get(line.storeId) ?? '—',
+              productId: line.productId,
+              productName: product.name,
+              stockPieces,
+              minPieces: line.minPieces,
+              shortagePieces: line.minPieces - stockPieces,
+              piecesPerPack: product.piecesPerPack,
+            },
+          ];
+        })
+        .sort(
+          (a, b) =>
+            a.storeName.localeCompare(b.storeName, 'ru') ||
+            a.productName.localeCompare(b.productName, 'ru') ||
+            a.productId.localeCompare(b.productId),
+        );
+    });
+  }
 
   async list(query: StockListQuery): Promise<StockListResponse> {
     const { tenantId, storeScope, permissions } = requirePrincipal();

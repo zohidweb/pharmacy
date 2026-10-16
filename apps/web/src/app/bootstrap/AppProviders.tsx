@@ -8,6 +8,7 @@
  */
 import { ToastProvider } from '@pharmacy/ui';
 import {
+  MutationCache,
   onlineManager,
   QueryClient,
   QueryClientProvider,
@@ -35,14 +36,22 @@ import {
   type Locale,
   type CoreMessages,
 } from '@/shared/i18n';
+import { navCountersKey } from '@/widgets/app-shell';
 import { ServiceWorker } from './ServiceWorker';
 
 function createQueryClient() {
-  return new QueryClient({
+  const client: QueryClient = new QueryClient({
     defaultOptions: {
       queries: { staleTime: 30_000, refetchOnWindowFocus: false },
     },
+    // the menu counters follow the employee's own changes at once — an accepted transfer, a price,
+    // a posted document (spec 2026-10-15-nav-counters, E9); others' changes — within a minute
+    mutationCache: new MutationCache({
+      onSuccess: () =>
+        void client.invalidateQueries({ queryKey: navCountersKey }),
+    }),
   });
+  return client;
 }
 
 function useMessages(locale: Locale) {

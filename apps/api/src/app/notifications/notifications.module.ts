@@ -12,9 +12,9 @@ import { NotificationsService } from './notifications.service';
 import { Reminders } from './reminders';
 
 // The notifications of the network (spec 2026-10-14-owner-cabinet, E9–E13). Cloud only, as the
-// modules it reads: the stock signals, the supplier payments due, the POS events and the operator's
-// decisions on services come through their exports (StockAlerts, SupplierDues, PosAlerts,
-// ServiceDecisions); the reports module reads Reminders.
+// modules it reads: the stock signals, the supplier payments due, the POS events, the operator's
+// decisions on services and the overdue invoices come through their exports (StockAlerts,
+// SupplierDues, PosAlerts, ServiceDecisions, OverdueInvoices); the reports module reads Reminders.
 @Module({
   imports: [
     AuditModule,

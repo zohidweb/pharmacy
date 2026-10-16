@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { NotificationKind } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
+import { OverdueInvoices } from '../billing/overdue-invoices';
 import { ServiceDecisions } from '../billing/service-decisions';
 import { StockAlerts } from '../inventory/stock-alerts';
 import { PosAlerts } from '../pos/pos-alerts';
@@ -37,6 +38,7 @@ export class NotificationsRefresh {
     private readonly dues: SupplierDues,
     private readonly pos: PosAlerts,
     private readonly services: ServiceDecisions,
+    private readonly invoices: OverdueInvoices,
   ) {}
 
   async run(trx: TenantTransaction, tenantId: string): Promise<void> {
@@ -225,6 +227,28 @@ export class NotificationsRefresh {
               priceMinor: decision.priceMinor,
             }),
             ...(decision.reason !== null && { reason: decision.reason }),
+          },
+        })),
+      );
+    }
+    if (enabled('invoice_overdue')) {
+      // an invoice of the platform with a remainder after its due date, until it is paid (spec
+      // 2026-10-15-billing-services, A17)
+      const overdue = await this.invoices.list(trx, tenantId);
+      await this.state(
+        trx,
+        tenantId,
+        'invoice_overdue',
+        overdue.map((invoice) => ({
+          kind: 'invoice_overdue',
+          storeId: null,
+          dedupeKey: `invoice_overdue:${invoice.id}`,
+          entityType: 'invoice',
+          entityId: invoice.id,
+          params: {
+            documentNumber: invoice.number,
+            amountMinor: invoice.remainingMinor,
+            dueDate: invoice.dueOn,
           },
         })),
       );

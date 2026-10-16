@@ -103,9 +103,9 @@ pharmacy/
   `inventory`, `pos`, `purchasing`, `terminals`, `pricing` ← `stores` (закрытие точки: `StoreClosingTransfers`,
   `TransferAcceptance`, `PosShifts`, `SupplierDues`, `TerminalsService`, `StoreDiscountDetachment`); о приёмке
   перемещения `inventory` сообщает через порт `TransferAcceptance`, который заполняет `stores`.
-  `billing` ← `notifications` (`ServiceDecisions` — решения оператора по услугам сети); платформенная часть
-  биллинга — `app/platform/billing`, ей `billing` отдаёт `StoreUsage` (активность точек за месяц для счетов,
-  в контексте сети).
+  `billing` ← `notifications` (`ServiceDecisions` — решения оператора по услугам сети, `OverdueInvoices` —
+  просроченные счета сети); платформенная часть биллинга — `app/platform/billing`, ей `billing` отдаёт
+  `StoreUsage` (активность точек за месяц для счетов, в контексте сети).
 
 ## Build / test / lint
 

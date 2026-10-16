@@ -262,6 +262,8 @@ export class FakeApi {
           session() ??
           json({ items: [], total: 0, limit: 20, offset: 0, unread: 0 })
         );
+      case 'GET /nav-counters':
+        return session() ?? json({});
       case 'GET /sync/status':
         return problem(404, 'not_found');
       case 'GET /shifts/current':

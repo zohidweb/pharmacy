@@ -9,6 +9,7 @@ import { useSession } from '@/entities/session';
 import { apiRequest, isApiRouteAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { activeRoute, visibleNavigation } from '../config/navigation';
+import { navCountersKey } from '../model/nav-counters';
 
 const itemClass =
   'flex min-h-touch items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors';
@@ -20,17 +21,21 @@ export function Sidebar() {
   const active = activeRoute(pathname ?? '/');
   const { data: session } = useSession();
   const storeId = session?.currentStoreId ?? null;
-  // Numbers of the working store (E2, E9): a minute old at most, refreshed at once by the mutations
-  // that change them (they invalidate ['nav-counters']); an error keeps the last numbers silently.
+  // Numbers of the working store (E2, E9): a minute old at most, refreshed at once after any own
+  // change (the mutation cache of the app invalidates navCountersKey); an error keeps the last
+  // numbers silently.
   const { data: counters } = useQuery({
-    queryKey: ['nav-counters', storeId],
+    queryKey: [...navCountersKey, storeId],
     queryFn: ({ signal }) =>
       apiRequest('navCounters.get', {
         query: storeId ? { storeId } : {},
         signal,
       }),
     enabled: !!session && isApiRouteAvailable('navCounters.get'),
-    refetchInterval: 60_000,
+    // not on the POS screen: a new version of the app activates there between receipts, and a
+    // request in flight at that moment keeps the waiting worker from activating (web-e2e); the own
+    // actions there still refresh the numbers
+    refetchInterval: active === 'pos' ? false : 60_000,
   });
 
   return (

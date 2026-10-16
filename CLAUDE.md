@@ -98,7 +98,9 @@ pharmacy/
   заполняет `returns`.
   `pos`, `returns`, `inventory`, `purchasing` ← `notifications` ← `reports` (`SalesFigures`, `PosAlerts`,
   `ReturnFigures`, `StockAlerts`, `SupplierDues`, `Reminders`); `audit` ← все (`AuditService`, журнал `AuditJournal`);
-  цену последнего прихода `pricing` получает через порт `PurchasePrices`, который заполняет `inventory`.
+  цену последнего прихода `pricing` получает через порт `PurchasePrices`, который заполняет `inventory`, а
+  остатки точек (проблема «нет цены») — через порт `StockedProducts`, который тоже заполняет `inventory`;
+  `inventory`, `pricing` ← `reports` (счётчики меню: `StockAlerts`, `PriceProblems`).
   Прочие расходы — своя таблица модуля `reports`; изъятия кассы «на расходы» он получает через `SalesFigures`.
   `inventory`, `pos`, `purchasing`, `terminals`, `pricing` ← `stores` (закрытие точки: `StoreClosingTransfers`,
   `TransferAcceptance`, `PosShifts`, `SupplierDues`, `TerminalsService`, `StoreDiscountDetachment`); о приёмке
@@ -120,7 +122,7 @@ npx nx run web:dev-api               # то же, но готовые маршр
                                      #   инвентаризация, возврат поставщику, перемещения и заявки, остатки,
                                      #   касса и смена, возвраты покупателей, главная, уведомления,
                                      #   журнал действий, настройки сети, отчёты, расходы, закрытие точки,
-                                     #   услуги) — в apps/api
+                                     #   услуги, счётчики меню) — в apps/api
 npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
 npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети, журнал операторов,
                                      #   команда и профиль, настройки платформы, услуги) — в apps/api

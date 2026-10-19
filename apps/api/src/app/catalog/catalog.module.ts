@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { SyncCoreModule } from '../../core/sync';
 import { AuditModule } from '../audit/audit.module';
+import { CatalogFacts } from './catalog-facts';
 import { CatalogRepository } from './catalog.repository';
 import {
   CategoriesController,
@@ -14,13 +16,14 @@ import { ProductsService } from './products.service';
 // forms and markups. Cloud only for now: an offline store gets the catalog by the change feed
 // (ADR-0014). Other modules read products only through ProductsReader (ADR-0002).
 @Module({
-  imports: [AuditModule],
+  imports: [AuditModule, SyncCoreModule],
   controllers: [ProductsController, CategoriesController, MarkupsController],
   providers: [
     CatalogRepository,
     ProductsService,
     CategoriesService,
     ProductsReader,
+    CatalogFacts,
   ],
   exports: [ProductsReader],
 })

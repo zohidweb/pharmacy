@@ -258,7 +258,9 @@ export class ProductsService {
       const language = await this.repository.networkLanguage(trx, tenantId);
       // Locked before it is read: the changed fields of the audit and the archived check are those
       // of the row this edit replaces.
-      if ((await this.repository.lockProduct(trx, tenantId, productId)) === null) {
+      if (
+        (await this.repository.lockProduct(trx, tenantId, productId)) === null
+      ) {
         throw notFound();
       }
       const current = await this.repository.findProduct(
@@ -298,15 +300,23 @@ export class ProductsService {
     const productId = id.toLowerCase();
     return this.db.tenantTransaction(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);
-      if ((await this.repository.lockProduct(trx, tenantId, productId)) === null) {
-        throw notFound();
-      }
+      const locked = await this.repository.lockProduct(
+        trx,
+        tenantId,
+        productId,
+      );
+      if (locked === null) throw notFound();
       const current = await this.repository.findProduct(
         trx,
         tenantId,
         productId,
       );
       if (current === null) throw notFound();
+      // A card an offline store merged into a card of the network stays archived (spec 2026-10-16-offline-sync,
+      // E35): its facts are reported through the alias.
+      if (status === 'active' && locked.mergedIntoProductId !== null) {
+        throw new ProblemException(409, 'product_merged');
+      }
       if (current.status !== status && status === 'active') {
         // A product is restored only into an active category: in an archived one its card could
         // not be saved any more.

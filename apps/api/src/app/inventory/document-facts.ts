@@ -118,11 +118,26 @@ export class DocumentFacts implements FactApplier {
     }
     const productIds = [...new Set(lines.map((line) => line.productId))];
     await requireProducts(trx, tenantId, productIds);
-    const packs = await this.piecesPerPack(trx, tenantId, productIds);
+    // The packs of the store's card at the posting: the cloud card may have changed since. The total is the
+    // supplier invoice as the store computed it, checked against its lines (spec 4.3) and taken as the debt.
     for (const line of lines) {
-      if (line.qtyPieces % (packs.get(line.productId) ?? 1) !== 0) {
+      if (
+        !(
+          Number.isSafeInteger(line.piecesPerPack) && line.piecesPerPack >= 1
+        ) ||
+        line.qtyPieces % line.piecesPerPack !== 0
+      ) {
         throw new SyncApplyError('pack_mismatch');
       }
+    }
+    const total = packsTotal(
+      lines.map((line) => ({
+        packs: line.qtyPieces / line.piecesPerPack,
+        pricePerPack: line.purchasePricePerPackDirams,
+      })),
+    );
+    if (document.totalDirams !== total) {
+      throw new SyncApplyError('total_mismatch');
     }
 
     // one new batch per line, made by this document
@@ -216,12 +231,6 @@ export class DocumentFacts implements FactApplier {
       }
     }
 
-    const total = packsTotal(
-      lines.map((line) => ({
-        packs: line.qtyPieces / (packs.get(line.productId) ?? 1),
-        pricePerPack: line.purchasePricePerPackDirams,
-      })),
-    );
     await trx
       .insertInto('documents')
       .values({
@@ -373,20 +382,6 @@ export class DocumentFacts implements FactApplier {
       },
       null,
     );
-  }
-
-  private async piecesPerPack(
-    trx: TenantTransaction,
-    tenantId: string,
-    ids: readonly string[],
-  ): Promise<Map<string, number>> {
-    const rows = await trx
-      .selectFrom('products')
-      .select(['id', 'piecesPerPack'])
-      .where('tenantId', '=', tenantId)
-      .where('id', 'in', [...ids])
-      .execute();
-    return new Map(rows.map((row) => [row.id, row.piecesPerPack]));
   }
 
   /** Suppliers of the network (cloud-owned, any status): a missing one is a quarantine. */

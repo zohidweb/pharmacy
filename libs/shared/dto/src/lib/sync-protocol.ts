@@ -463,6 +463,11 @@ export interface SyncStockDocumentRow extends SyncDocumentRow {
   supplierInvoiceDate: string | null;
   paymentDueDate: string | null;
   purchaseOrderId: string | null;
+  /**
+   * The total of a goods receipt or opening balances as the store computed it (packs of its card × the price of a
+   * pack) — the supplier invoice; null for a write-off (the cloud computes pieces × the cost of a piece).
+   */
+  totalDirams: number | null;
 }
 
 export interface SyncGoodsReceiptLineRow {
@@ -475,6 +480,8 @@ export interface SyncGoodsReceiptLineRow {
   expiryDate: string;
   lotNumber: string | null;
   qtyPieces: number;
+  /** Pieces in a pack of the store's card at the posting (not stored: the total is checked with it). */
+  piecesPerPack: number;
   purchasePricePerPackDirams: number;
   orderPricePerPackDirams: number | null;
   purchaseOrderLineId: string | null;
@@ -491,6 +498,8 @@ export interface SyncOpeningBalanceLineRow {
   expiryDate: string;
   lotNumber: string | null;
   qtyPieces: number;
+  /** Pieces in a pack of the store's card at the posting (not stored: the total is checked with it). */
+  piecesPerPack: number;
   purchasePricePerPackDirams: number;
   retailPriceDraftDirams: number | null;
   supplierId: string | null;

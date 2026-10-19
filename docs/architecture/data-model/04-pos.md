@@ -144,7 +144,7 @@ erDiagram
 
 **`customer_returns`:**
 - `id` — UUIDv7 операции клиента, он же ключ идемпотентности (отдельного `operation_id` нет);
-- `store_id`, `shift_id` (открытая смена терминала сессии; продажа могла быть в другой смене и другой день), `terminal_id`, `cashier_id`;
+- `store_id`, `shift_id` (открытая смена терминала сессии; продажа могла быть в другой смене и другой день), `terminal_id`, `cashier_id`; смена — смена этой точки: `(tenant_id, store_id, shift_id)` → `shifts (tenant_id, store_id, id)` (cr-M9);
 - `receipt_id` — обязателен; ссылка `(tenant_id, store_id, receipt_id) → receipts (tenant_id, store_id, id)`, поэтому возврат на другой точке невозможен;
 - `number` (`ВЗ-<код точки>-<год>-<6 цифр>`, счётчик `customer_return`), `returned_at`, `business_date`;
 - `reason` — `customer` (по желанию покупателя) / `defect` (брак);
@@ -153,7 +153,7 @@ erDiagram
 
 Возврат — факт: не правится и не отменяется.
 
-**`customer_return_lines`:** `receipt_line_id`, `qty_pieces > 0` — штуки (целое число единиц продажи строки чека), `amount_dirams` (по цене, без скидки), `discount_share_dirams` (доля скидки этого возврата, ≤ `amount_dirams`); в одном возврате строка чека — не больше одного раза (по частям её возвращают несколько возвратов). Сумма возвратов по строке ≤ проданному: проверка под транзакционной advisory-блокировкой по чеку (строки чека только для добавления, `FOR UPDATE` на них нет).
+**`customer_return_lines`:** `receipt_id` (чек возврата) и `receipt_line_id` — составные ключи: строка чека принадлежит чеку возврата (`(tenant_id, receipt_id, receipt_line_id)` → `receipt_lines (tenant_id, receipt_id, id)`), а чек — тому же возврату (`(tenant_id, customer_return_id, receipt_id)` → `customer_returns (tenant_id, id, receipt_id)`). Решение архитектора 2026-10-16 (cr-M9), миграции `audit-entity-index-return-keys` и `return-keys-validate`; `receipt_id` старых строк заполнен разово в миграции. `qty_pieces > 0` — штуки (целое число единиц продажи строки чека), `amount_dirams` (по цене, без скидки), `discount_share_dirams` (доля скидки этого возврата, ≤ `amount_dirams`); в одном возврате строка чека — не больше одного раза (по частям её возвращают несколько возвратов). Сумма возвратов по строке ≤ проданному: проверка под транзакционной advisory-блокировкой по чеку (строки чека только для добавления, `FOR UPDATE` на них нет).
 
 **`customer_return_refunds`:** `kind` (`cash` / `card` / `qr` / `nfc`), `amount_dirams > 0`; один вид — одна строка. По виду — не больше оплаченного этим видом (наличные — за вычетом сдачи) минус прежние возвраты (КП 7).
 

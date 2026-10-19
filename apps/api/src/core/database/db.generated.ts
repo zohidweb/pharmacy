@@ -89,6 +89,7 @@ export interface CustomerReturnLines {
   discountShareDirams: bigint;
   id: string;
   qtyPieces: number;
+  receiptId: string;
   receiptLineId: string;
   tenantId: string;
 }

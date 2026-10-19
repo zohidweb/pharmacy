@@ -289,8 +289,10 @@ create trigger audit_log_append_only
   журнал `public.pgmigrations`): dev — `npx nx run api:migrate`; test/prod — сервис `migrate`
   в compose до старта API; офлайн-точка — тот же скрипт из образа API после `pg_dump`.
 - Миграция совместима с ещё не обновлёнными офлайн-точками (expand/contract, ADR-0014).
-- `FORCE ROW LEVEL SECURITY` действует и на `pharmacy_owner`: бэкфилл данных в миграции
-  выполняется по тенантам с `set_config('app.tenant_id', …, true)`, иначе видит 0 строк.
+- `FORCE ROW LEVEL SECURITY` действует и на `pharmacy_owner`, а политики — только `TO pharmacy_app`:
+  бэкфилл в миграции видит 0 строк даже с `set_config('app.tenant_id', …)`. Владелец снимает FORCE
+  (и триггер append-only по имени) в транзакции миграции и возвращает в ней же —
+  `postgres-best-practices`, `rules/schema-migrations.md`, п. 4.
 - Миграция содержит всё для изоляции и целостности: `tenant_id`, составные ключи, RLS,
   политики `TO <роль>`, гранты, триггеры, индексы. Каждую миграцию ревьюит агент
   `postgresql-database-reviewer`.

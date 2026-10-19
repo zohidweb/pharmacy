@@ -185,6 +185,7 @@ export class ReturnFacts implements FactApplier {
           tenantId,
           id: line.id,
           customerReturnId: ret.id,
+          receiptId: ret.receiptId,
           receiptLineId: line.receiptLineId,
           qtyPieces: line.qtyPieces,
           amountDirams: BigInt(line.amountDirams),

@@ -11,6 +11,16 @@ export {
   requireTerminal,
   sameStore,
 } from './checks';
+export {
+  type LockedConflict,
+  type OpenConflict,
+  type SyncConflictKind,
+  lockConflict,
+  openConflict,
+  resolveConflict,
+  resolveOpenConflict,
+  storeTime,
+} from './conflicts';
 export { canonicalJson, payloadHash } from './payload-hash';
 export {
   SYNC_BATCH_LIMITS,

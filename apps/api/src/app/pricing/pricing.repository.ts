@@ -15,6 +15,26 @@ export interface PriceCell {
   priceDirams: bigint | null;
 }
 
+/** The price of a product at a store as the cloud holds it (spec 2026-10-16-offline-sync, E25). */
+export interface StorePriceRow {
+  priceDirams: bigint | null;
+  piecePriceDirams: bigint | null;
+  priceVersion: number;
+  priceChangedBy: string | null;
+  priceChangedAt: Date | null;
+}
+
+/** A price an offline store set for itself, applied in the cloud. */
+export interface StorePriceFact {
+  tenantId: string;
+  storeId: string;
+  productId: string;
+  priceDirams: number;
+  piecePriceDirams: number | null;
+  changedBy: string;
+  changedAt: Date;
+}
+
 export interface RuleRow {
   id: string;
   name: unknown;
@@ -434,5 +454,62 @@ export class PricingRepository {
         )
         .execute();
     }
+  }
+
+  /** The price row of a product at a store, locked; null — the store has no row of the product. */
+  async lockStorePrice(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    productId: string,
+  ): Promise<StorePriceRow | null> {
+    const result = await sql<StorePriceRow>`
+      select retail_price_per_pack_dirams as price_dirams,
+             retail_price_per_piece_dirams as piece_price_dirams,
+             price_version, price_changed_by, price_changed_at
+      from pharmacy.store_products
+      where tenant_id = ${tenantId} and store_id = ${storeId} and product_id = ${productId}
+      for update`.execute(trx);
+    return result.rows[0] ?? null;
+  }
+
+  /**
+   * Inserts the price an offline store set (`price_source = store`). False — a writer of the cloud inserted the
+   * row meanwhile: the caller locks it and compares the versions again.
+   */
+  async insertStorePriceFromStore(
+    trx: TenantTransaction,
+    fact: StorePriceFact,
+  ): Promise<boolean> {
+    const result = await sql`
+      insert into pharmacy.store_products
+        (tenant_id, store_id, product_id, retail_price_per_pack_dirams,
+         retail_price_per_piece_dirams, price_changed_at, price_changed_by, price_source)
+      values (${fact.tenantId}, ${fact.storeId}, ${fact.productId}, ${BigInt(fact.priceDirams)},
+              ${fact.piecePriceDirams === null ? null : BigInt(fact.piecePriceDirams)},
+              ${fact.changedAt}, ${fact.changedBy}, 'store')
+      on conflict (tenant_id, store_id, product_id) do nothing
+      returning product_id`.execute(trx);
+    return result.rows.length > 0;
+  }
+
+  /** Replaces the price of a locked row with the store's: a new version, `price_source = store`. */
+  async updateStorePriceFromStore(
+    trx: TenantTransaction,
+    fact: StorePriceFact,
+  ): Promise<void> {
+    await sql`
+      update pharmacy.store_products set
+        retail_price_per_pack_dirams = ${BigInt(fact.priceDirams)},
+        retail_price_per_piece_dirams = ${
+          fact.piecePriceDirams === null ? null : BigInt(fact.piecePriceDirams)
+        },
+        price_version = price_version + 1,
+        price_changed_at = ${fact.changedAt},
+        price_changed_by = ${fact.changedBy},
+        price_source = 'store',
+        updated_at = now()
+      where tenant_id = ${fact.tenantId} and store_id = ${fact.storeId}
+        and product_id = ${fact.productId}`.execute(trx);
   }
 }

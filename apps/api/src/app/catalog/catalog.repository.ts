@@ -681,4 +681,147 @@ export class CatalogRepository {
         .execute();
     }
   }
+
+  /* ---------------- local products of offline stores (spec 2026-10-16-offline-sync, E26, E35) ---------------- */
+
+  async productExists(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<boolean> {
+    const row = await trx
+      .selectFrom('products')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async categoryExists(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<boolean> {
+    const row = await trx
+      .selectFrom('categories')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  /** A card created at an offline store: `origin = local`, its store and the store's time of creation. */
+  async insertLocalProduct(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    values: ProductValues,
+    storeId: string,
+    createdAt: Date,
+  ): Promise<void> {
+    await trx
+      .insertInto('products')
+      .values({
+        tenantId,
+        id,
+        ...this.columns(values),
+        origin: 'local',
+        createdAtStoreId: storeId,
+        createdAt,
+        updatedAt: createdAt,
+      })
+      .execute();
+  }
+
+  /** The products the barcodes already belong to: barcode → product id. */
+  async barcodeOwners(
+    trx: TenantTransaction,
+    tenantId: string,
+    codes: readonly string[],
+  ): Promise<Map<string, string>> {
+    if (codes.length === 0) return new Map();
+    const rows = await trx
+      .selectFrom('productBarcodes')
+      .select(['barcode', 'productId'])
+      .where('tenantId', '=', tenantId)
+      .where('barcode', 'in', [...codes])
+      .execute();
+    return new Map(rows.map((row) => [row.barcode, row.productId]));
+  }
+
+  /**
+   * An active card of the network with the same INN (ru), dosage form, dosage and manufacturer (spec E26),
+   * the oldest first; null — none, or one of the four is empty.
+   */
+  async findNameTwin(
+    trx: TenantTransaction,
+    tenantId: string,
+    productId: string,
+    values: ProductValues,
+  ): Promise<string | null> {
+    const inn = values.inn?.ru?.trim();
+    const form = values.dosageForm?.trim();
+    const dosage = values.dosage?.trim();
+    const manufacturer = values.manufacturer?.trim();
+    if (!inn || !form || !dosage || !manufacturer) return null;
+    const result = await sql<{ id: string }>`
+      select id from pharmacy.products
+      where tenant_id = ${tenantId} and id <> ${productId}
+        and status = 'active' and merged_into_product_id is null
+        and lower(inn ->> 'ru') = lower(${inn})
+        and lower(dosage_form) = lower(${form})
+        and lower(dosage) = lower(${dosage})
+        and lower(manufacturer) = lower(${manufacturer})
+      order by created_at, id
+      limit 1`.execute(trx);
+    return result.rows[0]?.id ?? null;
+  }
+
+  /** The status and alias of a card, locked; null — none. */
+  async lockMergeState(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<{ status: string; mergedIntoProductId: string | null } | null> {
+    const row = await trx
+      .selectFrom('products')
+      .select(['status', 'mergedIntoProductId'])
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .forUpdate()
+      .executeTakeFirst();
+    return row ?? null;
+  }
+
+  /**
+   * The store merged its card into a card of the network (spec E35): the card is archived with the alias, and
+   * its barcodes move to the card of the network so that a scan finds the same goods.
+   */
+  async mergeProduct(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    intoId: string,
+    at: Date,
+  ): Promise<void> {
+    await trx
+      .updateTable('products')
+      .set({
+        status: 'archived',
+        archivedAt: at,
+        mergedIntoProductId: intoId,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+    await trx
+      .updateTable('productBarcodes')
+      .set({ productId: intoId })
+      .where('tenantId', '=', tenantId)
+      .where('productId', '=', id)
+      .execute();
+  }
 }

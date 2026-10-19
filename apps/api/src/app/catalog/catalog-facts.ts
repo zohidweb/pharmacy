@@ -5,7 +5,7 @@ import type {
   SyncAuditRow,
   SyncOperationType,
 } from '@pharmacy/shared-dto';
-import type { TenantTransaction } from '../../core/database';
+import { isUuid, type TenantTransaction } from '../../core/database';
 import {
   type AppliedOperation,
   type FactApplier,
@@ -181,6 +181,8 @@ export class CatalogFacts implements FactApplier {
     }: AppliedOperation<ProductDuplicateResolvedPayload>,
   ): Promise<void> {
     const resolvedAt = storeTime(payload.resolvedAt);
+    if (!isUuid(payload.conflictId))
+      throw new SyncApplyError('unknown_conflict');
     const conflict = await lockConflict(trx, tenantId, payload.conflictId);
     if (
       conflict === null ||

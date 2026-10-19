@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
+import { SyncCoreModule } from '../../core/sync';
 import { AuditModule } from '../audit/audit.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { PurchasingModule } from '../purchasing/purchasing.module';
 import { CustomerReturnNumbers } from './customer-return-numbers';
 import { DeficitController } from './deficit.controller';
+import { DocumentFacts } from './document-facts';
 import { DocumentsRepository } from './documents.repository';
 import { GoodsReceiptsController } from './goods-receipts.controller';
 import { InventoryRepository } from './inventory.repository';
@@ -51,7 +53,13 @@ import { WriteOffsService } from './write-offs.service';
 // Cloud only for now: an offline store posts its own documents (ADR-0014). Products, store prices
 // and suppliers come through the exports of catalog, pricing and purchasing (ADR-0002).
 @Module({
-  imports: [AuditModule, CatalogModule, PricingModule, PurchasingModule],
+  imports: [
+    AuditModule,
+    CatalogModule,
+    PricingModule,
+    PurchasingModule,
+    SyncCoreModule,
+  ],
   controllers: [
     GoodsReceiptsController,
     OpeningBalancesController,
@@ -100,6 +108,7 @@ import { WriteOffsService } from './write-offs.service';
     StoreClosingTransfers,
     TransferAcceptance,
     StockFacts,
+    DocumentFacts,
   ],
   // the POS reads and moves the stock only through these (spec 2026-10-13-pos-shift-sale)
   // StockAlerts, StockFigures — the stock signals and figures of the notifications, the home and the

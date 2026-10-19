@@ -453,3 +453,90 @@ export interface PriceChangedLocallyPayload {
   changedAt: string;
   audit: SyncAuditRow[];
 }
+
+/* ---------------- payloads of PR 2b: stock documents ---------------- */
+
+/** The header of a posted stock document of the store, with the fields of a goods receipt. */
+export interface SyncStockDocumentRow extends SyncDocumentRow {
+  supplierId: string | null;
+  supplierInvoiceNumber: string | null;
+  supplierInvoiceDate: string | null;
+  paymentDueDate: string | null;
+  purchaseOrderId: string | null;
+  /**
+   * The total of a goods receipt or opening balances as the store computed it (packs of its card × the price of a
+   * pack) — the supplier invoice; null for a write-off (the cloud computes pieces × the cost of a piece).
+   */
+  totalDirams: number | null;
+}
+
+export interface SyncGoodsReceiptLineRow {
+  id: string;
+  documentId: string;
+  lineNo: number;
+  productId: string;
+  /** The batch the posting created for the line. */
+  batchId: string;
+  expiryDate: string;
+  lotNumber: string | null;
+  qtyPieces: number;
+  /** Pieces in a pack of the store's card at the posting (not stored: the total is checked with it). */
+  piecesPerPack: number;
+  purchasePricePerPackDirams: number;
+  orderPricePerPackDirams: number | null;
+  purchaseOrderLineId: string | null;
+  retailPriceDraftDirams: number;
+}
+
+export interface SyncOpeningBalanceLineRow {
+  id: string;
+  documentId: string;
+  lineNo: number;
+  productId: string;
+  /** The batch the posting created for the line. */
+  batchId: string;
+  expiryDate: string;
+  lotNumber: string | null;
+  qtyPieces: number;
+  /** Pieces in a pack of the store's card at the posting (not stored: the total is checked with it). */
+  piecesPerPack: number;
+  purchasePricePerPackDirams: number;
+  retailPriceDraftDirams: number | null;
+  supplierId: string | null;
+  isStarting: boolean;
+}
+
+/** A batch the posting of the store created. */
+export interface SyncBatchRow {
+  id: string;
+  storeId: string;
+  productId: string;
+  expiryDate: string;
+  lotNumber: string | null;
+  purchasePricePerPackDirams: number;
+  costPerPieceDirams: number;
+  supplierId: string | null;
+  origin: string;
+  sourceDocumentId: string;
+  isStarting: boolean;
+}
+
+/** A retail price a posting set at the store (spec E18): applied by the rule of `price.changed-locally`. */
+export type SyncLocalPrice = Omit<PriceChangedLocallyPayload, 'audit'>;
+
+/**
+ * A stock document the store posted (spec 4.2): its header, the rows of the line table of `document.type`
+ * (`SyncGoodsReceiptLineRow` — goods_receipt, `SyncOpeningBalanceLineRow` — opening_balance, `SyncWriteOffLineRow`
+ * — write_off), the batches it created, its movements and the retail prices it set.
+ */
+export interface DocumentPostedPayload {
+  document: SyncStockDocumentRow;
+  lines:
+    | SyncGoodsReceiptLineRow[]
+    | SyncOpeningBalanceLineRow[]
+    | SyncWriteOffLineRow[];
+  batches: SyncBatchRow[];
+  movements: SyncMovementRow[];
+  prices: SyncLocalPrice[];
+  audit: SyncAuditRow[];
+}

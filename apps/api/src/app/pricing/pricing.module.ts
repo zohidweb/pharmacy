@@ -4,6 +4,7 @@ import { AuditModule } from '../audit/audit.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { DiscountRulesController } from './discount-rules.controller';
 import { DiscountRulesService } from './discount-rules.service';
+import { LocalPriceRule } from './local-price-rule';
 import { PriceFacts } from './price-facts';
 import { PricesController } from './prices.controller';
 import { PriceProblems } from './price-problems';
@@ -31,6 +32,7 @@ import { StockedProducts } from './stocked-products';
     StoreDiscountDetachment,
     StockedProducts,
     PriceFacts,
+    LocalPriceRule,
     PriceProblems,
   ],
   // PurchasePrices — a port the inventory module fills (spec 2026-10-14-owner-cabinet, E15)
@@ -40,6 +42,7 @@ import { StockedProducts } from './stocked-products';
   // counter (spec 2026-10-15-nav-counters, E6)
   exports: [
     StorePriceWriter,
+    LocalPriceRule,
     StorePricesReader,
     PurchasePrices,
     StoreDiscountDetachment,

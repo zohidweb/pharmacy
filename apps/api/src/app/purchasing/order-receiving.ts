@@ -70,6 +70,30 @@ export class OrderReceiving {
     }
   }
 
+  /**
+   * A goods receipt of an offline store by an order (spec 2026-10-16-offline-sync, E37): the order, locked until
+   * the transaction ends, with its supplier, store and line ids; null — no such order. Its status is not checked:
+   * the store's posting is a fact.
+   */
+  async lockedOrder(
+    trx: TenantTransaction,
+    tenantId: string,
+    orderId: string,
+  ): Promise<{
+    supplierId: string;
+    storeId: string;
+    lineIds: Set<string>;
+  } | null> {
+    const order = await this.repository.find(trx, tenantId, orderId, true);
+    if (order === null) return null;
+    const lines = await this.repository.lines(trx, tenantId, [order.id]);
+    return {
+      supplierId: order.supplierId,
+      storeId: order.storeId,
+      lineIds: new Set(lines.map((l) => l.id)),
+    };
+  }
+
   /** Locks the order until the transaction ends (the unposting of a goods receipt by it). */
   async lock(
     trx: TenantTransaction,

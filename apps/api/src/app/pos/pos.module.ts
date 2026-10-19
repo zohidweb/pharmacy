@@ -13,6 +13,8 @@ import { HeldReceiptsService } from './held-receipts.service';
 import { PosIdempotency } from './idempotency';
 import { PosAlerts } from './pos-alerts';
 import { SalesFigures } from './sales-figures';
+import { StoreSalesExport } from './store-sales-export';
+import { StoreSalesExportRepository } from './store-sales-export.repository';
 import { PosContext } from './pos-context';
 import { PosShifts } from './pos-shifts';
 import { PosRepository } from './pos.repository';
@@ -70,9 +72,12 @@ import { SyncCoreModule } from '../../core/sync';
     SalesFigures,
     // applies the receipts and shifts of offline stores (spec 2026-10-16-offline-sync, PR 1)
     PosFacts,
+    StoreSalesExportRepository,
+    StoreSalesExport,
   ],
   // PosAlerts, SalesFigures — the POS events of the notifications, the sales of the home and the
-  // reports (spec 2026-10-14-owner-cabinet)
+  // reports (spec 2026-10-14-owner-cabinet); StoreSalesExport — the refresh of the statistics marts of
+  // the admin (spec 2026-10-19-admin-dashboard-stats, `pos` → `platform/stats`)
   exports: [
     PosContext,
     PosIdempotency,
@@ -81,6 +86,7 @@ import { SyncCoreModule } from '../../core/sync';
     PosShifts,
     PosAlerts,
     SalesFigures,
+    StoreSalesExport,
   ],
 })
 export class PosModule {}

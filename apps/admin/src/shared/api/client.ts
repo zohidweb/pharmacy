@@ -177,6 +177,10 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'tenants.ownerCode',
   'tenants.block',
   'tenants.unblock',
+  // the operator dashboard and the statistics (spec 2026-10-19-admin-dashboard-stats)
+  'dashboard.get',
+  'usage.stats',
+  'tenants.stats',
 ]);
 
 /** The API for the routes it serves, the given mocks for the rest. */

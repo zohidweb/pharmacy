@@ -790,6 +790,16 @@ export interface Stores {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface StoreSalesDaily {
+  businessDate: string;
+  computedAt: Generated<Timestamp>;
+  lastSoldAt: Timestamp;
+  receiptsCount: number;
+  salesDirams: bigint;
+  storeId: string;
+  tenantId: string;
+}
+
 export interface StoreSyncStatus {
   appVersion: string;
   checkpointMismatch: Generated<boolean>;
@@ -951,6 +961,13 @@ export interface SyncRuns {
   tenantId: string;
 }
 
+export interface TenantCashiersMonthly {
+  activeCashiers: number;
+  computedAt: Generated<Timestamp>;
+  month: string;
+  tenantId: string;
+}
+
 export interface TenantDiscounts {
   createdAt: Generated<Timestamp>;
   createdBy: string;
@@ -1051,6 +1068,11 @@ export interface TenantSettings {
   updatedAt: Generated<Timestamp>;
   updatedBy: string | null;
   warnBelowCost: Generated<boolean>;
+}
+
+export interface TenantStatsRefresh {
+  refreshedAt: Timestamp;
+  tenantId: string;
 }
 
 export interface Terminals {
@@ -1155,6 +1177,7 @@ export interface DB {
   stockMovements: StockMovements;
   storeProducts: StoreProducts;
   stores: Stores;
+  storeSalesDaily: StoreSalesDaily;
   storeSyncStatus: StoreSyncStatus;
   storeUsageMonthly: StoreUsageMonthly;
   supplierLedgerEntries: SupplierLedgerEntries;
@@ -1166,12 +1189,14 @@ export interface DB {
   syncConflicts: SyncConflicts;
   syncInbox: SyncInbox;
   syncRuns: SyncRuns;
+  tenantCashiersMonthly: TenantCashiersMonthly;
   tenantDiscounts: TenantDiscounts;
   tenantPaymentAllocations: TenantPaymentAllocations;
   tenantPayments: TenantPayments;
   tenants: Tenants;
   tenantServices: TenantServices;
   tenantSettings: TenantSettings;
+  tenantStatsRefresh: TenantStatsRefresh;
   terminals: Terminals;
   transferLines: TransferLines;
   transferRequestLines: TransferRequestLines;

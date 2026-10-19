@@ -97,7 +97,13 @@ export class PriceFacts implements FactApplier {
       if (current === null) throw new Error('The store price row vanished');
     }
 
-    if (current.priceDirams === null || current.priceVersion === base) {
+    // `price_source = store`: the last write of this row was this store's own change and no writer of the cloud
+    // came after it, so the store's next edit replaces it whatever version the store last received.
+    if (
+      current.priceDirams === null ||
+      current.priceVersion === base ||
+      current.priceSource === 'store'
+    ) {
       await this.repository.updateStorePriceFromStore(trx, fact);
       await this.closeConflict(trx, fact);
     } else {

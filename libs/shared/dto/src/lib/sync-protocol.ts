@@ -444,7 +444,10 @@ export interface PriceChangedLocallyPayload {
   storeId: string;
   retailPricePerPackDirams: number;
   retailPricePerPieceDirams: number | null;
-  /** The version of the cloud price the store saw; null — the store had no price of the product. */
+  /**
+   * The version of the price the store last received from the cloud (feed or snapshot); the store's own edits
+   * never change it. Null — the store had no price of the product.
+   */
   basePriceVersion: number | null;
   changedBy: string;
   changedAt: string;

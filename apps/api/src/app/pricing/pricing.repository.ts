@@ -20,6 +20,8 @@ export interface StorePriceRow {
   priceDirams: bigint | null;
   piecePriceDirams: bigint | null;
   priceVersion: number;
+  /** `store` — the last write was this store's own applied change; `cloud` — a writer of the cloud. */
+  priceSource: string;
   priceChangedBy: string | null;
   priceChangedAt: Date | null;
 }
@@ -466,7 +468,7 @@ export class PricingRepository {
     const result = await sql<StorePriceRow>`
       select retail_price_per_pack_dirams as price_dirams,
              retail_price_per_piece_dirams as piece_price_dirams,
-             price_version, price_changed_by, price_changed_at
+             price_version, price_source, price_changed_by, price_changed_at
       from pharmacy.store_products
       where tenant_id = ${tenantId} and store_id = ${storeId} and product_id = ${productId}
       for update`.execute(trx);

@@ -641,9 +641,12 @@ export class CatalogRepository {
     trx: TenantTransaction,
     tenantId: string,
     id: string,
-  ): Promise<{ status: string } | null> {
-    const row = await sql<{ status: string }>`
-      select status from pharmacy.products
+  ): Promise<{ status: string; mergedIntoProductId: string | null } | null> {
+    const row = await sql<{
+      status: string;
+      mergedIntoProductId: string | null;
+    }>`
+      select status, merged_into_product_id from pharmacy.products
       where tenant_id = ${tenantId} and id = ${id} for no key update`.execute(
       trx,
     );

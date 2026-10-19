@@ -25,10 +25,15 @@ export const eventTone: Record<EventKind, StatusTone> = {
   update_available: 'info',
 };
 
-/** Title and detail of an event in the interface language (the API sends kind + parameters). */
+/**
+ * Title and detail of an event in the interface language (the API sends kind + parameters). A key
+ * past its last day comes as `key_expiring` with negative days (spec 2026-10-19-admin-dashboard-stats,
+ * D13) and reads «Ключ истёк … назад».
+ */
 export function useEventText() {
   const t = useTranslations('event');
   return (kind: EventKind, params: EventParams) => {
+    const expired = kind === 'key_expiring' && (params.days ?? 0) < 0;
     const values = {
       tenant: params.tenantName ?? '—',
       store: params.storeName ?? '—',
@@ -38,9 +43,15 @@ export function useEventText() {
         params.amountMinor !== undefined
           ? formatMoney(params.amountMinor)
           : '—',
-      days: params.days ?? 0,
+      days: Math.abs(params.days ?? 0),
       version: params.version ?? '—',
     };
+    if (expired) {
+      return {
+        title: t('key_expiring.expired.title', values),
+        detail: t('key_expiring.expired.detail', values),
+      };
+    }
     return {
       title: t(`${kind}.title`, values),
       detail: t(`${kind}.detail`, values),

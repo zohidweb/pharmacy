@@ -20,10 +20,14 @@ export interface AttentionCounts {
 export interface DashboardSummary {
   tenants: number;
   activeTenants: number;
+  /** Open pharmacies (status active or closing) of the cloud and offline modes; warehouses are not counted. */
   cloudStores: number;
   offlineStores: number;
-  /** Current month, without VAT. */
+  /** The invoices of the last invoiced period, with VAT (spec 2026-10-19-admin-dashboard-stats, D12). */
   accruedMinor: number;
+  /** YYYY-MM of `accruedMinor`; null — no invoices yet. */
+  accruedPeriod: string | null;
+  /** The number of items of each kind of the operator queue (D13), all of them — the queue shows 20. */
   attention: {
     overdueInvoices: number;
     expiringKeys: number;
@@ -68,20 +72,32 @@ export interface OperatorQueueItem {
   at: string;
 }
 
-/** GET /operator/dashboard */
+/**
+ * GET /operator/dashboard (`platform:view`). The figures of the receipts come from the statistics
+ * marts the networks refresh in their own context (spec 2026-10-19-admin-dashboard-stats).
+ */
 export interface DashboardResponse {
   summary: DashboardSummary;
-  /** Daily sales of all tenants for the last 14 days. */
+  /**
+   * The sum of the receipts of all networks by business date for the 14 days to today (Dushanbe),
+   * returns not subtracted (D8); a day without sales is 0.
+   */
   sales: Array<{ date: string; salesMinor: number }>;
+  /** Overdue invoices, expiring keys, stale offline stores, pending requests — at most 20 (D13). */
   queue: OperatorQueueItem[];
+  /** The oldest refresh of the marts of the networks shown (D7); null — none refreshed yet. */
+  asOf: string | null;
 }
 
 // ── Usage statistics ──────────────────────────────────────────────────────────────────────
 
 export interface UsageKpi {
   receipts: number;
+  /** The sum of the receipts, returns of customers not subtracted (D8). */
   salesMinor: number;
+  /** salesMinor / receipts rounded to a diram; 0 without receipts. */
   averageReceiptMinor: number;
+  /** Different cashiers with a receipt in the month, summed over the networks (D9). */
   activeCashiers: number;
 }
 
@@ -92,7 +108,10 @@ export interface UsageStoreRow {
   receipts: number;
   salesMinor: number;
   averageReceiptMinor: number;
-  /** Last receipt (cloud) or last successful sync (offline). */
+  /**
+   * The last receipt ever (cloud) or the last successful sync (offline); of a network — the latest of
+   * its stores; null — neither (D10).
+   */
   lastActivityAt: string | null;
 }
 
@@ -105,11 +124,22 @@ export interface UsageTenantRow extends Omit<
   stores: UsageStoreRow[];
 }
 
-/** GET /operator/usage-stats?period&tenantId */
+/**
+ * GET /operator/usage-stats?period&tenantId (`platform:view`). `period` — YYYY-MM from 2026-01 to the
+ * current month, otherwise 400 `validation_failed`; an unknown `tenantId` — 404.
+ */
+export interface UsageStatsQuery {
+  period: string;
+  tenantId?: string;
+}
+
+/** The pharmacies of the networks by name (open ones and closed ones with receipts in the period, D11). */
 export interface UsageStatsResponse {
   period: string;
   kpi: UsageKpi;
   rows: UsageTenantRow[];
+  /** The oldest refresh of the marts of the networks shown (D7). */
+  asOf: string | null;
 }
 
 // ── Notifications and announcements ───────────────────────────────────────────────────────

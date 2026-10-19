@@ -205,12 +205,20 @@ export interface TenantDailySales {
   salesMinor: number;
 }
 
+/**
+ * GET /operator/tenants/{id}/stats (`tenants:view`): the current month and the 14 days to today of one
+ * network (spec 2026-10-19-admin-dashboard-stats, 6); an unknown network — 404.
+ */
 export interface TenantStats {
   receipts: number;
+  /** The sum of the receipts, returns not subtracted. */
   salesMinor: number;
   averageReceiptMinor: number;
+  /** Different cashiers with a receipt in the month. */
   activeCashiers: number;
   daily: TenantDailySales[];
+  /** The time of the last refresh of the marts of the network; null — never refreshed. */
+  asOf: string | null;
 }
 
 export interface AuditEntry {

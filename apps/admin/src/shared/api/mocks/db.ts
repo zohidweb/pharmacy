@@ -329,5 +329,6 @@ export function mockStats(tenantId: string): TenantStats {
       date: `2026-09-${String(17 + i - 3).padStart(2, '0')}`,
       salesMinor: Math.round((salesMinor / 30) * (value / 90)),
     })),
+    asOf: new Date().toISOString(),
   };
 }

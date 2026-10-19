@@ -22,7 +22,7 @@ import {
 import { TenantStatusPill, useTenantList } from '@/entities/tenant';
 import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
-import { QueryState } from '@/shared/ui';
+import { AsOfNote, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 const toneSurface: Record<StatusTone, string> = {
@@ -65,14 +65,21 @@ export function DashboardPage() {
       />
       <div className="flex flex-col gap-4 p-6">
         <QueryState query={dashboard}>
-          {({ summary, sales, queue }) => {
+          {({ summary, sales, queue, asOf }) => {
             const attention =
               summary.attention.overdueInvoices +
               summary.attention.expiringKeys +
               summary.attention.serviceRequests +
               summary.attention.staleSync;
+            const accruedMonth = summary.accruedPeriod
+              ? format.dateTime(
+                  new Date(`${summary.accruedPeriod}-15T00:00:00Z`),
+                  { month: 'long', year: 'numeric' },
+                )
+              : null;
             return (
               <>
+                <AsOfNote at={asOf} />
                 <div className="grid grid-cols-4 gap-4">
                   <KpiTile
                     label={t('kpi.tenants')}
@@ -94,7 +101,11 @@ export function DashboardPage() {
                   <KpiTile
                     label={t('kpi.accrued')}
                     value={formatMoney(summary.accruedMinor)}
-                    hint={t('kpi.accruedHint')}
+                    hint={
+                      accruedMonth
+                        ? t('kpi.accruedHint', { month: accruedMonth })
+                        : t('kpi.accruedNone')
+                    }
                     icon="receipt"
                   />
                   <KpiTile

@@ -98,7 +98,7 @@ erDiagram
 | `fiscal_data` | jsonb null | Реквизиты ККМ — после выбора вендора (stack.md № 9) |
 | `language` | text | Язык напечатанного чека |
 
-Индексы: `(tenant_id, store_id, business_date)`, `(tenant_id, shift_id)`. QR на чеке кодирует `id` чека — для поиска при возврате.
+Индексы: `(tenant_id, store_id, business_date)`, `(tenant_id, shift_id)`, `(tenant_id, created_at)` — чеки, записанные в облако после прошлого пересчёта витрин статистики (миграция `admin-stats`, спецификация `2026-10-19-admin-dashboard-stats-design.md`, D4). QR на чеке кодирует `id` чека — для поиска при возврате.
 
 ## `receipt_lines` (класс `tenant`)
 

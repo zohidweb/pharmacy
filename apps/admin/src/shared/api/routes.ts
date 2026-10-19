@@ -27,6 +27,7 @@ import type {
   PlatformOperator,
   PlatformSettings,
   UpdateMeRequest,
+  UsageStatsQuery,
   UsageStatsResponse,
   BillingSummary,
   CancelPaymentRequest,
@@ -387,7 +388,7 @@ export const apiRoutes = {
     UsageStatsResponse,
     undefined,
     undefined,
-    { period: string; tenantId?: string }
+    UsageStatsQuery
   >('GET', () => '/operator/usage-stats'),
 
   'notifications.list': route<

@@ -27,6 +27,10 @@
       "serviceRequests": "{count, plural, one {# запрос} few {# запроса} other {# запросов}} ждут решения",
       "expiringLicenses": "{count, plural, one {# ключ истекает} few {# ключа истекают} other {# ключей истекают}}",
       "unreadNotifications": "{count, plural, one {# новое уведомление} few {# новых уведомления} other {# новых уведомлений}}"
+    },
+    "asOf": {
+      "today": "Данные на {time}",
+      "earlier": "Данные на {at}"
     }
   },
   "locales": {
@@ -60,12 +64,13 @@
       "stores": "Активных точек",
       "storesHint": "{cloud} облачных · {offline} офлайн",
       "accrued": "Выставлено за период",
-      "accruedHint": "последний выставленный месяц, с НДС",
+      "accruedHint": "{month}, с НДС",
+      "accruedNone": "счетов ещё нет",
       "attention": "Требует внимания",
       "attentionHint": "просрочек {overdueInvoices} · ключей {expiringKeys} · запросов {serviceRequests} · без синхронизации {staleSync}"
     },
     "salesTitle": "Продажи компаний за 14 дней",
-    "salesHint": "Сумма чеков всех точек по дням",
+    "salesHint": "Сумма чеков всех аптек по дням; возвраты не вычитаются",
     "day": "День",
     "sales": "Продажи",
     "queueTitle": "Очередь оператора",
@@ -906,7 +911,11 @@
     },
     "key_expiring": {
       "title": "Ключ истекает: {store}",
-      "detail": "{days, plural, =0 {сегодня} one {через # день} few {через # дня} other {через # дней}}"
+      "detail": "{days, plural, =0 {сегодня} one {через # день} few {через # дня} other {через # дней}}",
+      "expired": {
+        "title": "Ключ истёк: {store}",
+        "detail": "{days, plural, one {# день} few {# дня} other {# дней}} назад"
+      }
     },
     "key_revoked": {
       "title": "Ключ отозван: {store}",
@@ -949,7 +958,7 @@
     "title": "Статистика",
     "subtitle": "Использование платформы по компаниям и точкам",
     "export": "Выгрузить в Excel",
-    "exportMock": "Файл формирует API — в режиме моков выгрузка недоступна",
+    "exportPending": "Выгрузка появится позже",
     "scopeLabel": "Компания",
     "allTenants": "Все компании",
     "period": "Период",
@@ -968,7 +977,7 @@
       "cashiers": "Кассиров"
     },
     "tableCaption": "Статистика за {period}",
-    "note": "У офлайн-точек последняя активность — время последней успешной синхронизации."
+    "note": "У офлайн-точек последняя активность — время последней успешной синхронизации. Продажи — сумма чеков, возвраты покупателей не вычитаются."
   },
   "notifications": {
     "title": "Уведомления",

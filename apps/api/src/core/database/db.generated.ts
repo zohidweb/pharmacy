@@ -543,6 +543,7 @@ export interface Products {
   categoryId: string;
   country: string | null;
   createdAt: Generated<Timestamp>;
+  createdAtStoreId: string | null;
   defaultMinStockPieces: number | null;
   dosage: string | null;
   dosageForm: string | null;
@@ -554,7 +555,9 @@ export interface Products {
   manufacturer: string | null;
   markupBp: number | null;
   maxRetailPricePerPackDirams: bigint | null;
+  mergedIntoProductId: string | null;
   name: Json;
+  origin: Generated<string>;
   piecesPerPack: Generated<number>;
   soldByPiece: Generated<boolean>;
   status: Generated<string>;

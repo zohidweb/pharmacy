@@ -382,3 +382,74 @@ export interface StockCheckpointPayload {
   totalPieces: number;
   hash: string;
 }
+
+/* ---------------- payloads of PR 2a: local prices and products ---------------- */
+
+/** A name by language as the catalog stores it (`ru`, `tj`). */
+export type SyncNameMap = Partial<Record<'ru' | 'tj', string>>;
+
+/** A product created at the store (spec E26, E36): the card as the store wrote it, with its id. */
+export interface SyncProductRow {
+  id: string;
+  name: SyncNameMap;
+  inn: SyncNameMap | null;
+  dosageForm: string | null;
+  dosage: string | null;
+  manufacturer: string | null;
+  country: string | null;
+  unit: string;
+  piecesPerPack: number;
+  soldByPiece: boolean;
+  isPrescription: boolean;
+  isControlled: boolean;
+  isPriceRegulated: boolean;
+  maxRetailPricePerPackDirams: number | null;
+  categoryId: string;
+  markupBp: number | null;
+  defaultMinStockPieces: number | null;
+  createdAtStoreId: string;
+  /** The clock of the store. */
+  createdAt: string;
+}
+
+export interface ProductCreatedLocallyPayload {
+  product: SyncProductRow;
+  barcodes: string[];
+  /** The employee of the store who created the card. */
+  createdBy: string;
+  audit: SyncAuditRow[];
+}
+
+/**
+ * The store's decision on a duplicate conflict (spec E26, E35): `merge` aliases its product to the card the
+ * conflict found, `keep` leaves both cards (a taken barcode stays only at the store).
+ */
+export interface ProductDuplicateResolvedPayload {
+  conflictId: string;
+  productId: string;
+  decision: 'merge' | 'keep';
+  /** The card of the network for `merge`; null for `keep`. */
+  mergedIntoProductId: string | null;
+  resolvedBy: string;
+  resolvedAt: string;
+  audit: SyncAuditRow[];
+}
+
+/**
+ * A retail price changed at the store (spec E25): applied when the cloud price is still the version the store
+ * saw, otherwise the cloud price stays and a price conflict opens for the owner.
+ */
+export interface PriceChangedLocallyPayload {
+  productId: string;
+  storeId: string;
+  retailPricePerPackDirams: number;
+  retailPricePerPieceDirams: number | null;
+  /**
+   * The version of the price the store last received from the cloud (feed or snapshot); the store's own edits
+   * never change it. Null — the store had no price of the product.
+   */
+  basePriceVersion: number | null;
+  changedBy: string;
+  changedAt: string;
+  audit: SyncAuditRow[];
+}

@@ -10,7 +10,6 @@ import {
   DataTable,
   KpiTile,
   Select,
-  useToast,
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -18,8 +17,8 @@ import { useState } from 'react';
 import { useFormatter, useTranslations } from 'use-intl';
 import { StoreModePill } from '@/entities/store';
 import { useTenantList } from '@/entities/tenant';
-import { apiMocksEnabled, apiRequest } from '@/shared/api';
-import { QueryState } from '@/shared/ui';
+import { apiRequest } from '@/shared/api';
+import { AsOfNote, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 type Row =
@@ -37,7 +36,6 @@ function recentPeriods(count: number): string[] {
 export function StatisticsPage() {
   const t = useTranslations('statistics');
   const format = useFormatter();
-  const toast = useToast();
   const periods = recentPeriods(6);
   const [period, setPeriod] = useState(periods[0]);
   const [tenantId, setTenantId] = useState<string | undefined>(undefined);
@@ -53,7 +51,6 @@ export function StatisticsPage() {
       month: 'long',
       year: 'numeric',
     });
-  const exportHref = `/api/v1/operator/usage-stats/export?period=${period}${tenantId ? `&tenantId=${encodeURIComponent(tenantId)}` : ''}`;
 
   const activity = (row: Row) => {
     if (!row.lastActivityAt) return '—';
@@ -119,26 +116,21 @@ export function StatisticsPage() {
         title={t('title')}
         subtitle={t('subtitle')}
         actions={
-          apiMocksEnabled ? (
-            <Button
-              variant="tertiary"
-              iconStart="download"
-              onClick={() => toast.show(t('exportMock'))}
-            >
-              {t('export')}
-            </Button>
-          ) : (
-            <a
-              href={exportHref}
-              download
-              className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary-hover"
-            >
-              {t('export')}
-            </a>
-          )
+          // the export comes later, as in the reports of the owner (spec 2026-10-19-admin-dashboard-stats, D15)
+          <Button
+            variant="tertiary"
+            iconStart="download"
+            disabled
+            aria-describedby="export-pending"
+          >
+            {t('export')}
+          </Button>
         }
       />
       <div className="flex flex-col gap-4 p-6">
+        <p id="export-pending" className="text-xs text-fg-subtle">
+          {t('exportPending')}
+        </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <ChipGroup label={t('scopeLabel')}>
             <Chip
@@ -180,6 +172,7 @@ export function StatisticsPage() {
             ]);
             return (
               <>
+                <AsOfNote at={data.asOf} />
                 <div className="grid grid-cols-4 gap-4">
                   <KpiTile
                     label={t('kpi.receipts')}

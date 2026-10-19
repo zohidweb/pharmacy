@@ -44,7 +44,7 @@ import {
 } from '@/features/tenant-service-actions';
 import { isApiRouteAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
-import { QueryState } from '@/shared/ui';
+import { AsOfNote, QueryState } from '@/shared/ui';
 
 const storeCardAvailable = isApiRouteAvailable('stores.get');
 
@@ -346,6 +346,7 @@ export function StatsTab({ tenantId }: { tenantId: string }) {
     <QueryState query={useTenantStats(tenantId)}>
       {(stats) => (
         <div className="flex flex-col gap-4">
+          <AsOfNote at={stats.asOf} />
           <div className="grid grid-cols-4 gap-4">
             <KpiTile
               label={t('receipts')}

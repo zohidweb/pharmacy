@@ -28,22 +28,31 @@ function mockCodeExpiresAt(): string {
   return new Date(Date.now() + 72 * 3600_000).toISOString();
 }
 
+// As the API (spec 2026-10-19-admin-dashboard-stats, D13): an expired key stays in the queue (negative
+// days) until it is replaced; the soonest end first.
 function expiringLicenses() {
-  return mockDb().billing.licenses.filter((license) => {
-    if (license.state === 'revoked') return false;
-    const left = daysBetween(today(), license.validUntil);
-    return left >= 0 && left <= license.notifyDaysBefore;
-  });
+  return mockDb()
+    .billing.licenses.filter(
+      (license) =>
+        license.state !== 'revoked' &&
+        daysBetween(today(), license.validUntil) <= license.notifyDaysBefore,
+    )
+    .sort((a, b) => a.validUntil.localeCompare(b.validUntil));
 }
 
+// No successful sync for more than 7 days (D13, E30 of the offline sync); the oldest first.
+const STALE_SYNC_MS = 7 * 86_400_000;
+
 function staleStores() {
-  return mockDb().stores.filter(
-    (store) =>
-      store.mode === 'offline' &&
-      store.status === 'active' &&
-      (!store.lastSyncAt ||
-        daysBetween(toAppDate(new Date(store.lastSyncAt)), today()) >= 3),
-  );
+  return mockDb()
+    .stores.filter(
+      (store) =>
+        store.mode === 'offline' &&
+        store.status === 'active' &&
+        (!store.lastSyncAt ||
+          Date.now() - Date.parse(store.lastSyncAt) > STALE_SYNC_MS),
+    )
+    .sort((a, b) => (a.lastSyncAt ?? '').localeCompare(b.lastSyncAt ?? ''));
 }
 
 function storeRow(storeId: string): UsageStoreRow | null {
@@ -109,7 +118,8 @@ export const systemHandlers: Pick<
     const active = db.stores.filter((store) => store.status === 'active');
     const overdue = db.billing.invoices
       .map(invoiceView)
-      .filter((invoice) => invoice.overdue);
+      .filter((invoice) => invoice.overdue)
+      .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
     const sales = new Map<string, number>();
     for (const tenant of db.tenants) {
       for (const day of mockStats(tenant.id).daily) {
@@ -118,7 +128,7 @@ export const systemHandlers: Pick<
     }
     const queue: OperatorQueueItem[] = [
       ...overdue.map((invoice) => ({
-        id: `q-${invoice.id}`,
+        id: `invoice:${invoice.id}`,
         kind: 'invoice_overdue' as const,
         params: {
           tenantName: invoice.tenantName,
@@ -126,40 +136,45 @@ export const systemHandlers: Pick<
           amountMinor: invoice.remainingMinor,
         },
         target: { screen: 'tenant' as const, id: invoice.tenantId },
-        at: `${invoice.dueOn}T00:00:00Z`,
+        at: new Date(`${invoice.dueOn}T00:00:00+05:00`).toISOString(),
       })),
+      // keys and sync lead to the network: the store card is not on the API yet (D14)
       ...expiringLicenses().map((license) => ({
-        id: `q-${license.id}`,
+        id: `key:${license.id}`,
         kind: 'key_expiring' as const,
         params: {
+          tenantName: license.tenantName,
           storeName: license.storeName,
           days: daysBetween(today(), license.validUntil),
         },
-        target: { screen: 'store' as const, id: license.storeId },
-        at: new Date().toISOString(),
-      })),
-      ...db.billing.serviceRequests.map((request) => ({
-        id: `q-${request.id}`,
-        kind: 'service_requested' as const,
-        params: {
-          tenantName: request.tenantName,
-          serviceName: request.serviceName,
-        },
-        target: { screen: 'services' as const },
-        at: request.requestedAt,
+        target: { screen: 'tenant' as const, id: license.tenantId },
+        at: new Date(`${license.validUntil}T00:00:00+05:00`).toISOString(),
       })),
       ...staleStores().map((store) => ({
-        id: `q-${store.id}`,
+        id: `sync:${store.id}`,
         kind: 'sync_stale' as const,
         params: {
+          tenantName: store.tenantName,
           storeName: store.name,
           days: store.lastSyncAt
             ? daysBetween(toAppDate(new Date(store.lastSyncAt)), today())
             : 0,
         },
-        target: { screen: 'store' as const, id: store.id },
+        target: { screen: 'tenant' as const, id: store.tenantId },
         at: store.lastSyncAt ?? new Date().toISOString(),
       })),
+      ...[...db.billing.serviceRequests]
+        .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
+        .map((request) => ({
+          id: `request:${request.id}`,
+          kind: 'service_requested' as const,
+          params: {
+            tenantName: request.tenantName,
+            serviceName: request.serviceName,
+          },
+          target: { screen: 'services' as const },
+          at: request.requestedAt,
+        })),
     ];
     return {
       summary: {
@@ -185,7 +200,8 @@ export const systemHandlers: Pick<
       sales: [...sales.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, salesMinor]) => ({ date, salesMinor })),
-      queue,
+      // invoices, keys, sync, requests; at most 20, the tile counts all (D13)
+      queue: queue.slice(0, 20),
       asOf: new Date().toISOString(),
     };
   },

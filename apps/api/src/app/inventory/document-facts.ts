@@ -5,6 +5,7 @@ import type {
   SyncGoodsReceiptLineRow,
   SyncOpeningBalanceLineRow,
   SyncOperationType,
+  SyncWriteOffLineRow,
 } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
 import {
@@ -26,6 +27,9 @@ import { packsTotal } from './posting';
 import { StockFacts } from './stock-facts';
 
 type ReceivingLine = SyncGoodsReceiptLineRow | SyncOpeningBalanceLineRow;
+
+/** The reasons of a write-off the store posts by hand (spec 2026-10-12-write-offs). */
+const WRITE_OFF_REASONS = new Set(['expired', 'broken', 'defect', 'misgrade']);
 
 // The stock documents an offline store posted, applied in the cloud (ADR-0014 §4; spec 2026-10-16-offline-sync,
 // 4.2, E17, E18, E37): the document, its lines, the batches it created and its movements go in with the ids of the
@@ -80,6 +84,8 @@ export class DocumentFacts implements FactApplier {
       document.type === 'opening_balance'
     ) {
       await this.receiving(trx, tenantId, storeId, payload);
+    } else if (document.type === 'write_off') {
+      await this.writeOff(trx, tenantId, storeId, payload);
     } else {
       throw new SyncApplyError('unsupported_document_type');
     }
@@ -329,6 +335,44 @@ export class DocumentFacts implements FactApplier {
     if (orderId !== null) {
       await this.orders.refreshStatus(trx, tenantId, orderId);
     }
+  }
+
+  /**
+   * A write-off: the document, its lines and their negative movements by StockFacts (PR 1), the total as the store
+   * computes it. The write-off of a transfer discrepancy comes with the transfers (PR 2d); the write-off of a
+   * customer return only inside `return.completed`.
+   */
+  private async writeOff(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    payload: DocumentPostedPayload,
+  ): Promise<void> {
+    const { document, batches, movements, prices } = payload;
+    const reason = document.writeOffReason;
+    if (reason === 'transfer_discrepancy') {
+      throw new SyncApplyError('unsupported_write_off_reason');
+    }
+    if (
+      reason === null ||
+      !WRITE_OFF_REASONS.has(reason) ||
+      document.sourceCustomerReturnId !== null ||
+      batches.length > 0 ||
+      prices.length > 0
+    ) {
+      throw new SyncApplyError('write_off_mismatch');
+    }
+    await this.stock.applyWriteOff(
+      trx,
+      tenantId,
+      storeId,
+      {
+        document,
+        lines: payload.lines as SyncWriteOffLineRow[],
+        movements,
+      },
+      null,
+    );
   }
 
   private async piecesPerPack(

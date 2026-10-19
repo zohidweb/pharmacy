@@ -108,7 +108,7 @@ pharmacy/
   `billing` ← `notifications` (`ServiceDecisions` — решения оператора по услугам сети, `OverdueInvoices` —
   просроченные счета сети); платформенная часть биллинга — `app/platform/billing`, ей `billing` отдаёт
   `StoreUsage` (активность точек за месяц для счетов, в контексте сети).
-  Синхронизация офлайн-точек (ADR-0014): `pos`, `returns`, `terminals`, `audit` регистрируют применители фактов
+  Синхронизация офлайн-точек (ADR-0014): `pos`, `returns`, `terminals`, `audit`, `catalog`, `pricing` регистрируют применители фактов
   точки в реестре ядра `SyncAppliers` (`core/sync`, глобальный); облачный модуль `sync` (контур `/api/v1/sync/*` по
   лицензионному ключу точки) применяет операции через реестр и читает остатки точки через `StockFacts`
   (`inventory` ← `sync`).

@@ -108,6 +108,9 @@ pharmacy/
   `billing` ← `notifications` (`ServiceDecisions` — решения оператора по услугам сети, `OverdueInvoices` —
   просроченные счета сети); платформенная часть биллинга — `app/platform/billing`, ей `billing` отдаёт
   `StoreUsage` (активность точек за месяц для счетов, в контексте сети).
+  Дашборд и статистика админки — `app/platform/stats`: `pos` отдаёт ему `StoreSalesExport` (пересчёт витрин
+  статистики сети в её контексте), `platform/billing` — `BillingOverview` (просроченные счета, последний
+  выставленный месяц, заявки без решения).
   Синхронизация офлайн-точек (ADR-0014): `pos`, `returns`, `terminals`, `audit` регистрируют применители фактов
   точки в реестре ядра `SyncAppliers` (`core/sync`, глобальный); облачный модуль `sync` (контур `/api/v1/sync/*` по
   лицензионному ключу точки) применяет операции через реестр и читает остатки точки через `StockFacts`
@@ -131,7 +134,7 @@ npx nx run web:dev-api               # то же, но готовые маршр
 npx nx dev admin                     # http://localhost:4300 (все запросы — в моки)
 npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети, журнал операторов,
                                      #   команда и профиль, настройки платформы, услуги, счета, платежи,
-                                     #   скидки, печать счёта) — в apps/api
+                                     #   скидки, печать счёта, дашборд, статистика) — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
 npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)

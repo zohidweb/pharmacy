@@ -125,7 +125,8 @@ export const PROVISIONING_FUNCTIONS: readonly string[] = Object.freeze([
   'provision_tenant',
 ]);
 
-// Columns of stores visible to pharmacy_platform (the store registry without the address).
+// Columns of stores visible to pharmacy_platform (the store registry without the address); `kind` —
+// ADR-0013, amendment 2026-10-19, item 3 (the statistics count pharmacies only).
 export const STORE_PLATFORM_COLUMNS: readonly string[] = Object.freeze([
   'id',
   'tenant_id',
@@ -134,4 +135,5 @@ export const STORE_PLATFORM_COLUMNS: readonly string[] = Object.freeze([
   'status',
   'created_at',
   'closed_at',
+  'kind',
 ]);

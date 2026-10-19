@@ -19,36 +19,50 @@ export class StoreSalesExportRepository {
   }
 
   /**
-   * Counts again the store-days of the receipts written since the last refresh less 10 minutes (a
-   * transaction begun before it may commit after it; all receipts on the first refresh) by
-   * `receipts_created_idx`, each store-day whole by `receipts_store_date_idx`. Returns the months of
-   * those days (YYYY-MM-01), once each.
+   * The mark of this refresh: the last refresh less 10 minutes (a transaction begun before it may
+   * commit after it); null — never refreshed, all receipts count. Read on its own and passed as a
+   * value, so the plan of `refreshDays` sees how few receipts are new.
+   */
+  async since(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<string | null> {
+    const { rows } = await sql<{ since: string }>`
+      select (refreshed_at - interval '10 minutes')::text as since
+      from pharmacy.tenant_stats_refresh where tenant_id = ${tenantId}`.execute(
+      trx,
+    );
+    return rows[0]?.since ?? null;
+  }
+
+  /**
+   * Counts again the store-days of the receipts written since `since` (`receipts_created_idx`), each
+   * store-day whole and on its own (`lateral` by `receipts_store_date_idx`: a join over the receipts
+   * of the network would read all of them). Returns the months of those days (YYYY-MM-01), once each.
    */
   async refreshDays(
     trx: TenantTransaction,
     tenantId: string,
+    since: string | null,
   ): Promise<string[]> {
     const { rows } = await sql<{ month: string }>`
       with touched as (
         select distinct r.store_id, r.business_date
         from pharmacy.receipts r
         where r.tenant_id = ${tenantId}
-          and r.created_at >= coalesce(
-            (select f.refreshed_at - interval '10 minutes'
-             from pharmacy.tenant_stats_refresh f where f.tenant_id = ${tenantId}),
-            '-infinity'::timestamptz)
-      ), sums as (
-        select r.store_id, r.business_date, count(*)::integer as receipts,
-               sum(r.total_dirams) as sales, max(r.sold_at) as last_sold_at
-        from touched t
-        join pharmacy.receipts r
-          on r.tenant_id = ${tenantId} and r.store_id = t.store_id
-         and r.business_date = t.business_date
-        group by r.store_id, r.business_date
+          ${since === null ? sql`` : sql`and r.created_at >= ${since}::timestamptz`}
       )
       insert into pharmacy.store_sales_daily
         (tenant_id, store_id, business_date, receipts_count, sales_dirams, last_sold_at, computed_at)
-      select ${tenantId}, store_id, business_date, receipts, sales, last_sold_at, now() from sums
+      select ${tenantId}, t.store_id, t.business_date, s.receipts, s.sales, s.last_sold_at, now()
+      from touched t
+      cross join lateral (
+        select count(*)::integer as receipts, sum(r.total_dirams) as sales,
+               max(r.sold_at) as last_sold_at
+        from pharmacy.receipts r
+        where r.tenant_id = ${tenantId} and r.store_id = t.store_id
+          and r.business_date = t.business_date
+      ) s
       on conflict (tenant_id, store_id, business_date) do update
         set receipts_count = excluded.receipts_count, sales_dirams = excluded.sales_dirams,
             last_sold_at = excluded.last_sold_at, computed_at = excluded.computed_at
@@ -59,8 +73,9 @@ export class StoreSalesExportRepository {
   }
 
   /**
-   * The different cashiers with a receipt of the network in each month given (D9), the receipts of
-   * its stores by `receipts_store_date_idx`.
+   * The different cashiers with a receipt of the network in each month given (D9): the receipts of the
+   * month store by store (`lateral` by `receipts_store_date_idx`) — not the whole history of the network
+   * through `receipts_cashier_idx`.
    */
   async refreshCashiers(
     trx: TenantTransaction,
@@ -72,11 +87,14 @@ export class StoreSalesExportRepository {
       insert into pharmacy.tenant_cashiers_monthly (tenant_id, month, active_cashiers, computed_at)
       select ${tenantId}, m.month,
              (select count(distinct r.cashier_id)::integer
-              from pharmacy.receipts r
-              where r.tenant_id = ${tenantId}
-                and r.store_id in (select s.id from pharmacy.stores s where s.tenant_id = ${tenantId})
-                and r.business_date >= m.month
-                and r.business_date < (m.month + interval '1 month')::date),
+              from pharmacy.stores s
+              cross join lateral (
+                select x.cashier_id from pharmacy.receipts x
+                where x.tenant_id = ${tenantId} and x.store_id = s.id
+                  and x.business_date >= m.month
+                  and x.business_date < (m.month + interval '1 month')::date
+              ) r
+              where s.tenant_id = ${tenantId}),
              now()
       from unnest(${sql.val([...months])}::date[]) as m(month)
       on conflict (tenant_id, month) do update

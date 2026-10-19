@@ -15,8 +15,11 @@ const among = (
     ? sql<SqlBool>`true`
     : sql<SqlBool>`${column} = any(${sql.val([...ids])}::uuid[])`;
 
-// An open pharmacy of the registry (spec 2026-10-19-admin-dashboard-stats, D11): `s` is pharmacy.stores.
-const OPEN_PHARMACY = sql<SqlBool>`s.kind = 'pharmacy' and s.status in ('active', 'closing')`;
+// An open store of the registry, and an open pharmacy (spec 2026-10-19-admin-dashboard-stats, D11): `s`
+// is pharmacy.stores. The tiles and the statistics count pharmacies; the keys and the sync of the queue
+// take every offline store — a warehouse can be offline too.
+const OPEN_STORE = sql<SqlBool>`s.status in ('active', 'closing')`;
+const OPEN_PHARMACY = sql<SqlBool>`s.kind = 'pharmacy' and ${OPEN_STORE}`;
 
 export interface UsageStoreFigures {
   tenantId: string;
@@ -228,8 +231,8 @@ export class StatsRepository {
   }
 
   /**
-   * The active keys of open offline pharmacies that end within their warning days or have ended
-   * (D13), the soonest first.
+   * The active keys of open offline stores (pharmacies and warehouses) that end within their warning
+   * days or have ended (D13), the soonest first.
    */
   async expiringKeys(
     trx: Transaction<DB>,
@@ -248,7 +251,7 @@ export class StatsRepository {
       from pharmacy.license_keys k
       join pharmacy.stores s on s.tenant_id = k.tenant_id and s.id = k.store_id
       join pharmacy.tenants t on t.id = k.tenant_id
-      where k.status = 'active' and ${OPEN_PHARMACY} and s.mode <> 'online'
+      where k.status = 'active' and ${OPEN_STORE} and s.mode <> 'online'
         and (k.valid_until at time zone 'Asia/Dushanbe')::date - ${today}::date
             <= k.notify_before_days
       order by k.valid_until, k.id`.execute(trx);
@@ -260,8 +263,9 @@ export class StatsRepository {
   }
 
   /**
-   * Open offline pharmacies without a successful sync for more than 7 days (D13, E30 of the offline
-   * sync); one that never synced counts from the issue of its active key. The oldest first.
+   * Open offline stores (pharmacies and warehouses) without a successful sync for more than 7 days
+   * (D13, E30 of the offline sync); one that never synced counts from the issue of its active key. The
+   * oldest first.
    */
   async staleStores(
     trx: Transaction<DB>,
@@ -287,7 +291,7 @@ export class StatsRepository {
            where k.tenant_id = s.tenant_id and k.store_id = s.id and k.status = 'active')
         ) as since
       ) x
-      where ${OPEN_PHARMACY} and s.mode <> 'online'
+      where ${OPEN_STORE} and s.mode <> 'online'
         and x.since < now() - interval '7 days'
       order by x.since, s.id`.execute(trx);
     return rows.map((row) => ({

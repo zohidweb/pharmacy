@@ -27,7 +27,8 @@ export class StoreSalesExport {
     await runWithContext({ correlationId, tenantId, principal: null }, () =>
       this.db.tenantTransaction(async (trx) => {
         if (!(await this.repository.tryLock(trx, tenantId))) return;
-        const months = await this.repository.refreshDays(trx, tenantId);
+        const since = await this.repository.since(trx, tenantId);
+        const months = await this.repository.refreshDays(trx, tenantId, since);
         await this.repository.refreshCashiers(trx, tenantId, months);
         await this.repository.markRefreshed(trx, tenantId);
       }),

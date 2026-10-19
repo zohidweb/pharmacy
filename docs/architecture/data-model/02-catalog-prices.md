@@ -64,10 +64,10 @@ erDiagram
 | `default_min_stock_pieces` | integer null | Минимальный остаток по умолчанию для всех точек (решение 2026-10-01) |
 | `article` | text null | Для сопоставления с 1С; уникален в тенанте, если задан |
 | `drug_reference_id` | uuid null | → `drug_reference` |
-| `origin` | text | `cloud` / `local` |
-| `created_at_store_id` | uuid null | Точка, где товар заведён локально |
-| `merged_into_product_id` | uuid null | После решения по дублю (ADR-0014 §4): алиас на облачную карточку; факты не переписываются |
-| `status`, `archived_at` | | `active` / `archived` / `merged` |
+| `origin` | text | `cloud` / `local` (миграция `sync-local-catalog`, 2026-10-19) |
+| `created_at_store_id` | uuid null | Точка, где товар заведён локально; задана ровно при `origin = local` |
+| `merged_into_product_id` | uuid null | После решения по дублю (ADR-0014 §4): алиас на облачную карточку; факты не переписываются. Слитая карточка архивируется (спецификация `2026-10-16-offline-sync`, E35), её штрихкоды переходят на карточку сети |
+| `status`, `archived_at` | | `active` / `archived` (слитая карточка — `archived` с `merged_into_product_id`; отдельного значения `merged` нет) |
 | `updated_at` | | |
 
 ## `product_barcodes` (класс `tenant`)

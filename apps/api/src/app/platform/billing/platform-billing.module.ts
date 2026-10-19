@@ -4,6 +4,7 @@ import { BillingModule } from '../../billing/billing.module';
 import { PlatformAuditModule } from '../audit/platform-audit.module';
 import { TenantAllocation } from './allocation';
 import { AttentionController } from './attention.controller';
+import { BillingOverview } from './billing-overview';
 import { BillingRepository } from './billing.repository';
 import { DiscountsController } from './discounts.controller';
 import { DiscountsService } from './discounts.service';
@@ -49,6 +50,9 @@ import { ServicesCatalogService } from './services-catalog.service';
     PaymentsRepository,
     PaymentsService,
     DiscountsService,
+    BillingOverview,
   ],
+  // the overview of the billing for the operator dashboard (spec 2026-10-19-admin-dashboard-stats)
+  exports: [BillingOverview],
 })
 export class PlatformBillingModule {}

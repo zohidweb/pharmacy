@@ -526,6 +526,56 @@ export class InvoicesRepository {
     return rows;
   }
 
+  /**
+   * The last period with invoices and the sum of its invoices, VAT included (the dashboard, spec
+   * 2026-10-19-admin-dashboard-stats, D12 — as `issued` of `summary`); null — no invoices yet.
+   */
+  async lastInvoicedPeriod(
+    trx: Transaction<DB>,
+  ): Promise<{ period: string; totalMinor: number } | null> {
+    const { rows } = await sql<{ period: string; total: Money }>`
+      select to_char(i.period_month, 'YYYY-MM') as period, sum(i.total_dirams) as total
+      from pharmacy.invoices i
+      where i.period_month = (select max(period_month) from pharmacy.invoices)
+      group by i.period_month`.execute(trx);
+    return rows[0]
+      ? { period: rows[0].period, totalMinor: Number(rows[0].total) }
+      : null;
+  }
+
+  /** The overdue invoices of all networks (the filter «Просрочены»), the oldest due date first. */
+  async overdue(
+    trx: Transaction<DB>,
+    today: string,
+  ): Promise<
+    Array<{
+      id: string;
+      tenantId: string;
+      tenantName: string;
+      number: string;
+      remainingMinor: number;
+      dueOn: string;
+    }>
+  > {
+    const { rows } = await sql<{
+      id: string;
+      tenantId: string;
+      tenantName: string;
+      number: string;
+      remaining: Money;
+      dueOn: string;
+    }>`
+      select i.id, i.tenant_id, i.tenant_name, i.number,
+             i.total_dirams - i.paid_dirams as remaining, i.due_on::text as due_on
+      from pharmacy.invoices i
+      where ${this.filterSql('overdue', today)}
+      order by i.due_on, i.number, i.id`.execute(trx);
+    return rows.map(({ remaining, ...row }) => ({
+      ...row,
+      remainingMinor: Number(remaining),
+    }));
+  }
+
   async summary(
     trx: Transaction<DB>,
     month: string,

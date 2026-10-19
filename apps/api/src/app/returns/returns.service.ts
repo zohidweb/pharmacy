@@ -107,7 +107,12 @@ export class ReturnsService {
           tenantId,
           terminalId,
         );
-        if (!shift || shift.id !== body.shiftId.toLowerCase()) {
+        // the shift of a return is a shift of its store (composite key, cr-M9)
+        if (
+          !shift ||
+          shift.id !== body.shiftId.toLowerCase() ||
+          shift.storeId !== storeId
+        ) {
           throw new ProblemException(409, 'no_open_shift');
         }
         const receiptId = body.receiptId.toLowerCase();
@@ -275,6 +280,7 @@ export class ReturnsService {
           trx,
           tenantId,
           id,
+          receipt.id,
           picked.map((p, i) => ({
             receiptLineId: p.line.id,
             qtyPieces: p.quantity * unitPieces(p.line),

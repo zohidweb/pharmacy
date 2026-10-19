@@ -171,11 +171,15 @@ export class ReturnsRepository {
               ${values.refundDirams}, ${values.correlationId})`.execute(trx);
   }
 
-  /** The lines of a return; their ids, in the order given. */
+  /**
+   * The lines of a return; their ids, in the order given. `receiptId` — the receipt of the return:
+   * each line is a line of it (composite key, cr-M9).
+   */
   async insertLines(
     trx: TenantTransaction,
     tenantId: string,
     customerReturnId: string,
+    receiptId: string,
     lines: readonly CustomerReturnLineValues[],
   ): Promise<string[]> {
     const ids = lines.map(() => newId());
@@ -186,6 +190,7 @@ export class ReturnsRepository {
           tenantId,
           id: ids[i],
           customerReturnId,
+          receiptId,
           receiptLineId: line.receiptLineId,
           qtyPieces: line.qtyPieces,
           amountDirams: BigInt(line.amountDirams),

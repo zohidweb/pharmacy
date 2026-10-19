@@ -26,10 +26,17 @@ tags: migrations, node-pg-migrate, rls, grants, backfill, offline-store
    `TO <роль>` в fail-closed форме, **явные гранты по классу таблицы** (default privileges для
    `pharmacy_app` нет) и запись в `apps/api/src/core/database/table-classes.ts` в том же PR. Тест
    каталога (`catalog.int-spec.ts`) падает, если что-то из этого забыто.
-4. **FORCE RLS действует и на владельца.** `pharmacy_owner` не обходит RLS: бэкфилл данных в
-   тенантной таблице без контекста видит 0 строк и ничего не меняет. Бэкфилл выполняется по
-   тенантам: `select set_config('app.tenant_id', <tenant>, true)` и затем `UPDATE` в той же
-   транзакции — или отдельной разовой задачей «по тенанту в цикле» (ADR-0013 §4).
+4. **FORCE RLS действует и на владельца.** `pharmacy_owner` не обходит RLS, а политики тенантных
+   таблиц — только `TO pharmacy_app`: под FORCE владелец не видит ни одной строки, и
+   `set_config('app.tenant_id', …)` этого не меняет — бэкфилл меняет 0 строк. Разовый бэкфилл в
+   миграции: владелец в её транзакции снимает FORCE с таблиц, которые читает и пишет
+   (`alter table … no force row level security`), выполняет запрос и возвращает FORCE в той же
+   транзакции; триггер append-only — так же, по имени (`disable trigger <имя>` / `enable trigger
+   <имя>`, не `all`). Так сделаны миграции `owner-cabinet` и `audit-entity-index-return-keys`.
+   Безопасно потому, что `migrate.mjs` выполняет файл одной транзакцией (ошибка — откат, снятый
+   FORCE не коммитится, `ALTER TABLE` держит `ACCESS EXCLUSIVE`); через psql в autocommit такой
+   файл не запускать. Большой бэкфилл — отдельной задачей «по тенанту в цикле» под `pharmacy_app`
+   (ADR-0013 §4).
 5. **Совместимость с офлайн-точками** (ADR-0014): точки обновляются не одновременно —
    expand/contract: сначала добавить (nullable-колонка, новая таблица), потом переключить код,
    потом удалить старое отдельной миграцией.

@@ -42,8 +42,9 @@ last-reviewed: "2026-09-29"
      Migration`; откат — новой миграцией или из бэкапа); `CREATE INDEX CONCURRENTLY` и прочее вне
      транзакции — отдельной `.mjs` с `pgm.noTransaction()` (и тогда в том же PR — `*.{sql,mjs}` в
      assets `apps/api/webpack.config.js`, иначе образ её не содержит); блокировки на больших таблицах (HIGH);
-   - бэкфилл тенантных данных — с `set_config('app.tenant_id', …, true)` по тенантам (FORCE RLS
-     действует и на `pharmacy_owner`) (HIGH);
+   - бэкфилл тенантных данных — FORCE RLS действует и на `pharmacy_owner`, а политики только
+     `TO pharmacy_app` (`set_config` не помогает): `no force` … `force` и `disable`/`enable` триггера
+     по имени в транзакции миграции, большой — задачей «по тенанту в цикле» (HIGH);
    - совместимость с ещё не обновлёнными офлайн-точками — expand/contract (HIGH);
    - никакого schema-sync (HIGH). Правило — `rules/schema-migrations.md`.
 4. **Report** — находки по серьёзности (CRITICAL > HIGH > MEDIUM > LOW): `file:line`, правило, суть,

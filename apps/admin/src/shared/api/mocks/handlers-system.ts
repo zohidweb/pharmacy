@@ -174,6 +174,7 @@ export const systemHandlers: Pick<
           (sum, invoice) => sum + invoice.totalMinor,
           0,
         ),
+        accruedPeriod: lastPeriodInvoices(db)[0]?.period ?? null,
         attention: {
           overdueInvoices: overdue.length,
           expiringKeys: expiringLicenses().length,
@@ -185,6 +186,7 @@ export const systemHandlers: Pick<
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, salesMinor]) => ({ date, salesMinor })),
       queue,
+      asOf: new Date().toISOString(),
     };
   },
   'usage.stats': ({ query }) => {
@@ -234,6 +236,7 @@ export const systemHandlers: Pick<
         activeCashiers: cashiers,
       },
       rows,
+      asOf: new Date().toISOString(),
     };
   },
 

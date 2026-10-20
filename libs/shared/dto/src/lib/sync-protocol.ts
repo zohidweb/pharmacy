@@ -26,8 +26,8 @@ export interface SyncHandshakeRequest {
   appVersion: string;
   /** The last applied migration of the store database (telemetry only). */
   schemaVersion: string;
-  /** The feed cursor of the store; null before the first pull. */
-  feedCursor: string | null;
+  /** The feed cursor of the store (the `cursor` of its last feed page); null before the first pull. */
+  feedCursor: number | null;
   /** Operations of the outbox not yet sent. */
   outboxDepth: number;
   /** When the oldest unsent operation happened; null — the outbox is empty. */

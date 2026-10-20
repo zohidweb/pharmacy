@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type {
   SyncChange,
   SyncChangesResponse,
@@ -22,7 +22,7 @@ const SCAN_MAX = 20_000;
 
 interface FeedPosition {
   horizon: number;
-  /** The highest number of the network after this read's numbering. */
+  /** The last number of the network after this read's numbering. */
   maxSeq: number;
   /** Unnumbered changes left for the next reads. */
   backlog: boolean;
@@ -50,8 +50,6 @@ interface Entry {
 // their state now, as the sources of their modules read it.
 @Injectable()
 export class SyncFeedService {
-  private readonly logger = new Logger(SyncFeedService.name);
-
   constructor(
     private readonly db: TenantDatabase,
     private readonly sources: SyncFeedSources,
@@ -71,7 +69,9 @@ export class SyncFeedService {
     const position = await this.db.withTenant(store.tenantId, (trx) =>
       this.advance(trx, store.tenantId, store.settings.feedWindowDays),
     );
-    if (cursor < position.horizon) {
+    // below the horizon the store missed changes; above the last number it holds a cursor this feed never gave
+    // (e.g. the cloud was restored from a backup) — both start again from the snapshots (review M6)
+    if (cursor < position.horizon || cursor > position.maxSeq) {
       throw new ProblemException(410, 'resync_required');
     }
     return this.db.withTenant(store.tenantId, (trx) =>
@@ -88,59 +88,55 @@ export class SyncFeedService {
     await sql`select pg_advisory_xact_lock(hashtext('sync-feed'), hashtext(${tenantId}))`.execute(
       trx,
     );
+    await sql`
+      insert into pharmacy.sync_feed_state (tenant_id) values (${tenantId})
+      on conflict (tenant_id) do nothing`.execute(trx);
+    const state = await sql<{ horizon: string; last: string }>`
+      select horizon_seq::text as horizon, last_seq::text as last
+      from pharmacy.sync_feed_state where tenant_id = ${tenantId}`.execute(trx);
+    const before = {
+      horizon: Number(state.rows[0]?.horizon ?? 0),
+      last: Number(state.rows[0]?.last ?? 0),
+    };
+    let { horizon, last } = before;
     // Changes never numbered and already out of the window: no store read the network meanwhile. They are dropped
-    // before numbering, and every cursor up to the highest number so far must resync — it would have seen them.
+    // before numbering, and every cursor up to the last number so far must resync — it would have seen them.
     const lost = await this.dropOlder(trx, tenantId, windowDays, false);
-    let floor = 0;
-    if (lost.count > 0) {
-      const top = await sql<{ seq: string | null }>`
-        select max(change_seq)::text as seq from pharmacy.sync_changes
-        where tenant_id = ${tenantId} and change_seq is not null`.execute(trx);
-      floor = Number(top.rows[0]?.seq ?? 0) + 1;
-    }
-    // The next chunk in the order of the ids, numbered in that order; the rows are updated by their keys (a join
-    // with the subquery would scan the network's whole feed — review I1/I2).
-    const pending = await sql<{ id: string; seq: string }>`
-      select id, nextval('pharmacy.sync_change_seq')::text as seq
-      from (select id from pharmacy.sync_changes
-            where tenant_id = ${tenantId} and change_seq is null
-            order by id
-            limit ${SEQUENCE_CHUNK}) o
-      order by id`.execute(trx);
+    if (lost.count > 0) horizon = Math.max(horizon, last + 1);
+    // The next chunk in the order of the ids gets the next numbers of the network, in that order; the rows are
+    // updated by their keys (a join with a subquery would scan the network's whole feed — review I1/I2).
+    const pending = await sql<{ id: string }>`
+      select id from pharmacy.sync_changes
+      where tenant_id = ${tenantId} and change_seq is null
+      order by id
+      limit ${SEQUENCE_CHUNK}`.execute(trx);
     if (pending.rows.length > 0) {
+      const ids = pending.rows.map((r) => r.id);
+      const seqs = ids.map((_, i) => String(last + i + 1));
       await sql`
         update pharmacy.sync_changes c set change_seq = v.seq
-        from unnest(${sql.val(pending.rows.map((r) => r.id))}::uuid[],
-                    ${sql.val(pending.rows.map((r) => r.seq))}::bigint[]) as v(id, seq)
+        from unnest(${sql.val(ids)}::uuid[], ${sql.val(seqs)}::bigint[]) as v(id, seq)
         where c.tenant_id = ${tenantId} and c.id = v.id`.execute(trx);
+      last += ids.length;
     }
     const dropped = await this.dropOlder(trx, tenantId, windowDays, true);
-    const result = await sql<{
-      horizon: string;
-      maxSeq: string | null;
-      backlog: boolean;
-    }>`
-      with state as (
-        insert into pharmacy.sync_feed_state (tenant_id, horizon_seq)
-        values (${tenantId}, ${Math.max(floor, dropped.maxSeq)}::bigint)
-        on conflict (tenant_id) do update set
-          horizon_seq = greatest(pharmacy.sync_feed_state.horizon_seq, excluded.horizon_seq),
-          updated_at = case when excluded.horizon_seq > pharmacy.sync_feed_state.horizon_seq
-                            then now() else pharmacy.sync_feed_state.updated_at end
-        returning horizon_seq
-      )
-      select (select horizon_seq from state)::text as horizon,
-             (select max(change_seq) from pharmacy.sync_changes
-              where tenant_id = ${tenantId} and change_seq is not null)::text as max_seq,
-             exists (select 1 from pharmacy.sync_changes
+    horizon = Math.max(horizon, dropped.maxSeq);
+    // written only when it changed: a read of a quiet network leaves no dead row behind (review M5)
+    if (horizon !== before.horizon || last !== before.last) {
+      await sql`
+        update pharmacy.sync_feed_state
+        set horizon_seq = ${horizon}, last_seq = ${last}, updated_at = now()
+        where tenant_id = ${tenantId}`.execute(trx);
+    }
+    const left = await sql<{ backlog: boolean }>`
+      select exists (select 1 from pharmacy.sync_changes
                      where tenant_id = ${tenantId} and change_seq is null) as backlog`.execute(
       trx,
     );
-    const row = result.rows[0];
     return {
-      horizon: Number(row?.horizon ?? 0),
-      maxSeq: Number(row?.maxSeq ?? 0),
-      backlog: row?.backlog ?? false,
+      horizon,
+      maxSeq: last,
+      backlog: left.rows[0]?.backlog ?? false,
     };
   }
 
@@ -241,19 +237,16 @@ export class SyncFeedService {
   ): Promise<SyncChange[]> {
     const byType = new Map<SyncEntityType, string[]>();
     for (const entry of page) {
-      byType.set(entry.entityType, [
-        ...(byType.get(entry.entityType) ?? []),
-        entry.entityId,
-      ]);
+      const ids = byType.get(entry.entityType);
+      if (ids) ids.push(entry.entityId);
+      else byType.set(entry.entityType, [entry.entityId]);
     }
     const data = new Map<string, Map<string, unknown>>();
     for (const [type, ids] of byType) {
       const source = this.sources.sourceOf(type);
-      if (!source) {
-        // a writer records a type no module reads — a configuration error, not a silent gap in the feed
-        this.logger.error(`No feed source for ${type}`);
-        throw new Error(`No feed source for ${type}`);
-      }
+      // a writer records a type no module reads — a configuration error (logged by the error filter), not a
+      // silent gap in the feed
+      if (!source) throw new Error(`No feed source for ${type}`);
       data.set(
         type,
         await source.read(trx, store.tenantId, store.storeId, type, [

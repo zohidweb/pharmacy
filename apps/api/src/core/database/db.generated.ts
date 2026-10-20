@@ -985,6 +985,7 @@ export interface SyncConflicts {
 
 export interface SyncFeedState {
   horizonSeq: Generated<bigint>;
+  lastSeq: Generated<bigint>;
   tenantId: string;
   updatedAt: Generated<Timestamp>;
 }

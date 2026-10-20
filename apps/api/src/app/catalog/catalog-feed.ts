@@ -72,6 +72,9 @@ export class CatalogFeed implements FeedSource {
       for (const row of rows) out.set(row.id, { categories: [feedRow(row)] });
       return out;
     }
+    if (entityType !== 'product') {
+      throw new Error(`CatalogFeed does not read ${entityType}`);
+    }
     const products = await trx
       .selectFrom('products')
       .select(PRODUCT_COLUMNS)

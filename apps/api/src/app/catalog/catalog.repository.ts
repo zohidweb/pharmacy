@@ -484,19 +484,19 @@ export class CatalogRepository {
     productId: string,
     codes: readonly string[],
   ): Promise<void> {
-    await this.feed.record(trx, {
-      tenantId,
-      entityType: 'product',
-      entityId: productId,
-    });
     let removal = trx
       .deleteFrom('productBarcodes')
       .where('tenantId', '=', tenantId)
       .where('productId', '=', productId);
     if (codes.length > 0)
       removal = removal.where('barcode', 'not in', [...codes]);
-    await removal.execute();
-    if (codes.length === 0) return;
+    const removed = await removal.executeTakeFirst();
+    // the barcodes of a product are part of it in the change feed (E4): recorded when they changed
+    const changed = Number(removed.numDeletedRows ?? 0) > 0;
+    if (codes.length === 0) {
+      if (changed) await this.recordProduct(trx, tenantId, productId);
+      return;
+    }
     const kept = new Set(
       (
         await trx
@@ -510,11 +510,27 @@ export class CatalogRepository {
     // Inserted in one order everywhere: two products adding the same free codes at once wait for
     // each other on the primary key instead of deadlocking (the loser gets barcode_taken).
     const added = codes.filter((code) => !kept.has(code)).sort();
-    if (added.length === 0) return;
+    if (added.length === 0) {
+      if (changed) await this.recordProduct(trx, tenantId, productId);
+      return;
+    }
     await trx
       .insertInto('productBarcodes')
       .values(added.map((barcode) => ({ tenantId, barcode, productId })))
       .execute();
+    await this.recordProduct(trx, tenantId, productId);
+  }
+
+  private recordProduct(
+    trx: TenantTransaction,
+    tenantId: string,
+    productId: string,
+  ): Promise<void> {
+    return this.feed.record(trx, {
+      tenantId,
+      entityType: 'product',
+      entityId: productId,
+    });
   }
 
   /** Active dosage forms of the network. */

@@ -46,9 +46,10 @@ export class SyncHandshakeDto implements SyncHandshakeRequest {
   schemaVersion!: string;
 
   @ValidateIf((_, value) => value !== null)
-  @IsString()
-  @Matches(/^\d{1,30}$/)
-  feedCursor!: string | null;
+  @IsInt()
+  @Min(0)
+  @Max(Number.MAX_SAFE_INTEGER)
+  feedCursor!: number | null;
 
   @IsInt()
   @Min(0)

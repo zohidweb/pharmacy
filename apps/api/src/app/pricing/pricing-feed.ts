@@ -51,6 +51,9 @@ export class PricingFeed implements FeedSource {
       }
       return out;
     }
+    if (entityType !== 'discount_rule') {
+      throw new Error(`PricingFeed does not read ${entityType}`);
+    }
     const rules = await trx
       .selectFrom('discountRules')
       .select([

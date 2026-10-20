@@ -12,6 +12,7 @@ import {
   IsInt,
   IsISO8601,
   IsObject,
+  IsOptional,
   IsString,
   IsUUID,
   Matches,
@@ -147,4 +148,20 @@ export class SyncRunCompleteDto implements SyncRunCompleteRequest {
   @IsString({ each: true })
   @MaxLength(100, { each: true })
   clientErrors!: string[];
+}
+
+/** GET /api/v1/sync/changes — the feed after `cursor` (absent — the store must load the snapshots first). */
+export class SyncChangesQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  cursor?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  limit?: number;
 }

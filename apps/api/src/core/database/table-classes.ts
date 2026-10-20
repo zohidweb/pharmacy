@@ -88,8 +88,12 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     tenant_payment_allocations: 'platform',
     tenant_discounts: 'platform',
     license_keys: 'platform',
+    platform_notifications: 'platform',
+    platform_notification_reads: 'platform',
+    platform_notification_refresh: 'platform',
     platform_settings: 'shared',
     services: 'shared',
+    announcements: 'shared',
   });
 
 // Tenant tables that are append-only (insert and select only; a trigger rejects update, delete

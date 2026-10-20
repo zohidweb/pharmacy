@@ -27,7 +27,9 @@ import { LocalPriceRule } from '../pricing/local-price-rule';
 import { OrderReceiving } from '../purchasing/order-receiving';
 import { SupplierLedger } from '../purchasing/supplier-ledger';
 import { packsTotal } from './posting';
+import { DocumentsRepository } from './documents.repository';
 import { StockFacts } from './stock-facts';
+import { TransfersRepository } from './transfers.repository';
 import {
   returnAmount,
   SupplierReturnsRepository,
@@ -71,6 +73,8 @@ export class DocumentFacts implements FactApplier {
     private readonly ledger: SupplierLedger,
     private readonly orders: OrderReceiving,
     private readonly returns: SupplierReturnsRepository,
+    private readonly documents: DocumentsRepository,
+    private readonly transfers: TransfersRepository,
     private readonly audit: AuditService,
   ) {
     appliers.register(this);
@@ -362,7 +366,7 @@ export class DocumentFacts implements FactApplier {
 
   /**
    * A write-off: the document, its lines and their negative movements by StockFacts (PR 1), the total as the store
-   * computes it. The write-off of a transfer discrepancy comes with the transfers (PR 2d); the write-off of a
+   * computes it. The write-off of a transfer discrepancy reverses the dispatch first (transferDiscrepancy); the write-off of a
    * customer return only inside `return.completed`.
    */
   private async writeOff(
@@ -374,7 +378,7 @@ export class DocumentFacts implements FactApplier {
     const { document, batches, movements, prices } = payload;
     const reason = document.writeOffReason;
     if (reason === 'transfer_discrepancy') {
-      throw new SyncApplyError('unsupported_write_off_reason');
+      return this.transferDiscrepancy(trx, tenantId, storeId, payload);
     }
     if (
       reason === null ||
@@ -396,6 +400,137 @@ export class DocumentFacts implements FactApplier {
       },
       null,
     );
+  }
+
+  /**
+   * The write-off of a transfer shortage by an offline sender (spec E34): when the store learns what its receiver
+   * accepted, it reverses the dispatch of the missing pieces (`reversal` +N on the transfer line) and writes them
+   * off (`write_off` −N) — as the cloud does for a cloud sender. The transfer must be its own and received; before
+   * the acceptance has arrived the write-off waits.
+   */
+  private async transferDiscrepancy(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    payload: DocumentPostedPayload,
+  ): Promise<void> {
+    const { document, batches, movements, prices } = payload;
+    const lines = payload.lines as SyncWriteOffLineRow[];
+    if (
+      document.sourceDocumentId === null ||
+      document.sourceCustomerReturnId !== null ||
+      batches.length > 0 ||
+      prices.length > 0
+    ) {
+      throw new SyncApplyError('write_off_mismatch');
+    }
+    const transfer = await this.documents.findDocument(
+      trx,
+      tenantId,
+      'transfer',
+      document.sourceDocumentId,
+      true,
+    );
+    if (transfer === null) {
+      const other = await trx
+        .selectFrom('documents')
+        .select('id')
+        .where('tenantId', '=', tenantId)
+        .where('id', '=', document.sourceDocumentId)
+        .executeTakeFirst();
+      if (other) throw new SyncApplyError('write_off_mismatch');
+      throw new SyncApplyError('transfer', 'dependency');
+    }
+    if (transfer.storeId !== storeId) {
+      throw new SyncApplyError('store_mismatch');
+    }
+    if (transfer.status === 'in_transit') {
+      throw new SyncApplyError('transfer_result', 'dependency');
+    }
+    if (transfer.status !== 'received') {
+      throw new SyncApplyError('write_off_mismatch');
+    }
+    const existing = await trx
+      .selectFrom('documents')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('type', '=', 'write_off')
+      .where('writeOffReason', '=', 'transfer_discrepancy')
+      .where('sourceDocumentId', '=', transfer.id)
+      .executeTakeFirst();
+    if (existing) throw new SyncApplyError('discrepancy_exists');
+
+    // one write-off line per short line of the transfer: its batch, sent − received pieces
+    const short = (
+      await this.transfers.transferLines(trx, tenantId, transfer.id)
+    )
+      .map((line) => ({
+        line,
+        missing: line.qtySentPieces - (line.qtyReceivedPieces ?? 0),
+      }))
+      .filter((s) => s.missing > 0);
+    const byBatch = new Map(short.map((s) => [s.line.sourceBatchId, s]));
+    if (
+      lines.length !== short.length ||
+      new Set(lines.map((l) => l.batchId)).size !== lines.length ||
+      lines.some((l) => {
+        const s = byBatch.get(l.batchId);
+        return (
+          !s || s.line.productId !== l.productId || l.qtyPieces !== s.missing
+        );
+      })
+    ) {
+      throw new SyncApplyError('write_off_mismatch');
+    }
+
+    // the reversals of the live dispatches, then the write-off movements
+    const dispatches = await this.documents.documentMovements(
+      trx,
+      tenantId,
+      transfer.id,
+    );
+    const reversedIds = new Set(
+      dispatches.flatMap((m) =>
+        m.reversesMovementId ? [m.reversesMovementId] : [],
+      ),
+    );
+    const liveOut = new Map(
+      dispatches
+        .filter((m) => m.kind === 'transfer_out' && !reversedIds.has(m.id))
+        .map((m) => [m.sourceLineId, m.id]),
+    );
+    const reversals = movements.filter((m) => m.kind === 'reversal');
+    const writeOffMovements = movements.filter((m) => m.kind !== 'reversal');
+    const byLine = new Map(short.map((s) => [s.line.id, s]));
+    if (
+      reversals.length !== short.length ||
+      new Set(reversals.map((m) => m.sourceLineId)).size !== short.length ||
+      reversals.some((m) => {
+        const s = m.sourceLineId ? byLine.get(m.sourceLineId) : undefined;
+        return (
+          !s ||
+          m.sourceType !== 'document' ||
+          m.sourceId !== transfer.id ||
+          m.batchId !== s.line.sourceBatchId ||
+          m.qtyDeltaPieces !== s.missing ||
+          m.reversesMovementId === null ||
+          m.reversesMovementId !== liveOut.get(s.line.id) ||
+          m.businessDate !== document.documentDate
+        );
+      }) ||
+      writeOffMovements.some((m) => m.businessDate !== document.documentDate)
+    ) {
+      throw new SyncApplyError('movement_mismatch');
+    }
+    await this.stock.applyWriteOff(
+      trx,
+      tenantId,
+      storeId,
+      { document, lines, movements: writeOffMovements },
+      null,
+      transfer.id,
+    );
+    await this.stock.insertMovements(trx, tenantId, storeId, reversals);
   }
 
   /**

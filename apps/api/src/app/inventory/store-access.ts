@@ -53,14 +53,17 @@ export class StoreAccess {
 
   /**
    * The other store of a transfer or a request (spec 2026-10-12-supplier-returns-transfers, 5.1):
-   * an active store of the network — the scope does not limit it — and a cloud one (409
-   * `offline_store_read_only`: transfers with offline stores wait for the sync, T9).
+   * an active store of the network — the scope does not limit it. An offline store is a counterpart
+   * of a transfer (`allowOffline`, spec 2026-10-16-offline-sync, E34): it sends and accepts by the
+   * sync, the cloud never writes its stock (`writableStore`). A request still needs a cloud store
+   * (409 `offline_store_read_only`) until the feed brings requests to offline stores (PR 3).
    */
   async counterpartStore(
     trx: TenantTransaction,
     tenantId: string,
     storeId: string,
     field: string,
+    allowOffline = false,
   ): Promise<StoreForWrite> {
     const store = await this.inventory.store(trx, tenantId, storeId);
     if (store === null || store.status !== 'active') {
@@ -68,7 +71,7 @@ export class StoreAccess {
         { field, code: 'unknown_store' },
       ]);
     }
-    if (store.mode !== 'online') {
+    if (!allowOffline && store.mode !== 'online') {
       throw new ProblemException(409, 'offline_store_read_only');
     }
     return store;

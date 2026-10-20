@@ -476,7 +476,10 @@ export interface SyncStockDocumentRow extends SyncDocumentRow {
   inventoryStartedAt: string | null;
   /** A product merge (spec E35): the product of the store and the card of the network it was merged into. */
   mergeFromProductId: string | null;
-  mergeIntoProductId: string | null;
+  mergeIntoProductId:
+    | string
+    | null; /** A write-off `transfer_discrepancy` of an offline sender (spec E34): the transfer whose shortage it writes off. */
+  sourceDocumentId: string | null;
 }
 
 export interface SyncGoodsReceiptLineRow {
@@ -590,6 +593,64 @@ export interface DocumentPostedPayload {
     | SyncInventoryLineRow[]
     | SyncSupplierReturnLineRow[]
     | SyncProductMergeLineRow[];
+  batches: SyncBatchRow[];
+  movements: SyncMovementRow[];
+  prices: SyncLocalPrice[];
+  audit: SyncAuditRow[];
+}
+
+/* ---------------- payloads of PR 2d: transfers ---------------- */
+
+/** A transfer the store dispatched (spec E34): the header of `documents` (type `transfer`, status `in_transit`). */
+export interface SyncTransferRow {
+  id: string;
+  /** The sender — the store of the key. */
+  storeId: string;
+  destinationStoreId: string;
+  number: string;
+  /** The day of the dispatch at the store. */
+  documentDate: string;
+  comment: string | null;
+  createdBy: string;
+  dispatchedAt: string;
+  dispatchedBy: string;
+  requestDocumentId: string | null;
+}
+
+export interface SyncTransferLineRow {
+  id: string;
+  documentId: string;
+  lineNo: number;
+  productId: string;
+  sourceBatchId: string;
+  qtySentPieces: number;
+  unit: 'pack' | 'piece';
+}
+
+export interface TransferDispatchedPayload {
+  transfer: SyncTransferRow;
+  lines: SyncTransferLineRow[];
+  movements: SyncMovementRow[];
+  audit: SyncAuditRow[];
+}
+
+/**
+ * A transfer the store accepted (spec E34): every line of the transfer once with the pieces received, the batches of
+ * the receiver (the values of the sender's batch), their movements and the sender's price copied as a local price
+ * of the receiver (E18).
+ */
+export interface TransferAcceptedPayload {
+  transferId: string;
+  receivedAt: string;
+  receivedBy: string;
+  /** The day of the acceptance at the store: the date of the movements. */
+  receivedDate: string;
+  comment: string | null;
+  lines: Array<{
+    lineId: string;
+    qtyReceivedPieces: number;
+    targetBatchId: string | null;
+  }>;
   batches: SyncBatchRow[];
   movements: SyncMovementRow[];
   prices: SyncLocalPrice[];

@@ -34,6 +34,7 @@ import { SupplierReturnPosting } from './supplier-return-posting';
 import { SupplierReturnsController } from './supplier-returns.controller';
 import { SupplierReturnsRepository } from './supplier-returns.repository';
 import { SupplierReturnsService } from './supplier-returns.service';
+import { TransferFacts } from './transfer-facts';
 import { TransferMapper } from './transfer-mapper';
 import { TransferPosting } from './transfer-posting';
 import { TransferRequestsController } from './transfer-requests.controller';
@@ -109,6 +110,7 @@ import { WriteOffsService } from './write-offs.service';
     TransferAcceptance,
     StockFacts,
     DocumentFacts,
+    TransferFacts,
   ],
   // the POS reads and moves the stock only through these (spec 2026-10-13-pos-shift-sale)
   // StockAlerts, StockFigures — the stock signals and figures of the notifications, the home and the

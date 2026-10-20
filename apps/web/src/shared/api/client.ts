@@ -287,6 +287,8 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'shifts.close',
   'shifts.zReport',
   'deployment.get',
+  // the announcements of the platform (spec 2026-10-19-operator-notifications)
+  'announcements.list',
   'health.get',
 ]);
 

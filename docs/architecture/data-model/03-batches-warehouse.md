@@ -129,7 +129,7 @@ erDiagram
 | `purchase_price_per_pack_dirams` | bigint ≥ 0 | |
 | `cost_per_piece_dirams` | bigint ≥ 0 | `ceil(purchase / pieces_per_pack)` на момент создания |
 | `supplier_id` | uuid null | |
-| `origin` | text | `goods_receipt` / `opening_balance` / `transfer` / `inventory_surplus` |
+| `origin` | text | `goods_receipt` / `opening_balance` / `transfer` / `inventory_surplus` / `product_merge` (партия карточки сети, в которую слит товар офлайн-точки; `source_batch_id` — партия товара точки, миграция `sync-product-merge`, 2026-10-20) |
 | `source_document_id` | uuid | Создавший документ |
 | `source_batch_id` | uuid null | Исходная партия отправителя (`origin = 'transfer'`) |
 | `is_starting` | boolean | «Стартовая партия» без разбивки (КП 3.4) |
@@ -146,7 +146,7 @@ erDiagram
 | Колонка | Тип | Правило |
 |---|---|---|
 | `store_id` | uuid | Точка документа (для перемещения — отправитель) |
-| `type` | text | `goods_receipt`, `opening_balance`, `transfer`, `transfer_request`, `write_off`, `inventory`, `supplier_return` |
+| `type` | text | `goods_receipt`, `opening_balance`, `transfer`, `transfer_request`, `write_off`, `inventory`, `supplier_return`, `product_merge` (только офлайн-точка, E35: остаток партий слитого товара точки переходит в новые партии карточки сети; `merge_from_product_id` / `merge_into_product_id` заданы ровно у этого типа) |
 | `number` | text | Уникален в `(tenant_id, store_id, type, number)`; из `document_counters` |
 | `document_date` | date | Дата документа; можно задним числом (КП 3.5), но не раньше чем `tenant_settings.backdating_max_days` дней от бизнес-даты и не в закрытом периоде `legal_entities.closed_until`. Проверяет приложение при проведении. Факты офлайн-точки, пришедшие с датой в закрытом периоде, облако принимает (продажа — факт) и показывает бухгалтеру как «после закрытия периода» |
 | `status` | text | См. «Статусы» ниже |
@@ -198,6 +198,7 @@ erDiagram
 | `inventory_lines` | `product_id`, `batch_id null` (пусто — найден товар без учётной партии, `is_found`), `book_qty_pieces` (на момент начала), `counted_qty_pieces` (сумма записей, при проведении), `sold_since_start_pieces` (при проведении), `surplus_lot_number null`, `surplus_expiry_date null`, `surplus_purchase_price_per_pack_dirams null`, `surplus_batch_id null`. Расхождение по строке с партией — движение `inventory_gain` / `inventory_loss` по этой партии. Строка без партии — новая партия `inventory_surplus`; срок и закупочную цену **вводит сотрудник** при проведении, без них документ не проводится (решение 2026-09-30) |
 | `inventory_count_entries` | `line_id`, `qty_pieces` (может быть 0 и отрицательным), `entered_by`, `entered_at`; `id` — ключ идемпотентности планшета. Факт строки — сумма записей (поправка 2026-10-12) |
 | `supplier_return_lines` | `batch_id`, `qty_pieces > 0`, `amount_dirams` |
+| `product_merge_lines` | `from_batch_id` (партия товара точки, не повторяется), `to_batch_id` (новая партия карточки сети), `qty_pieces > 0`; движения `merge_out` / `merge_in` (миграция `sync-product-merge`) |
 
 ## `stock_movements` — движение остатка (класс `tenant`, только добавление)
 
@@ -207,7 +208,7 @@ erDiagram
 |---|---|---|
 | `store_id`, `batch_id` | uuid | Точка партии |
 | `qty_delta_pieces` | integer ≠ 0 | + приход, − расход |
-| `kind` | text | `goods_receipt`, `opening_balance`, `transfer_out`, `transfer_in`, `write_off`, `inventory_gain`, `inventory_loss`, `supplier_return`, `sale`, `customer_return`, `reversal` |
+| `kind` | text | `goods_receipt`, `opening_balance`, `transfer_out`, `transfer_in`, `write_off`, `inventory_gain`, `inventory_loss`, `supplier_return`, `sale`, `customer_return`, `reversal`, `merge_out` / `merge_in` (документ `product_merge` офлайн-точки) |
 | `source_type` | text | `document` / `receipt` / `customer_return` |
 | `source_id`, `source_line_id` | uuid | Документ, чек или возврат и строка |
 | `business_date` | date | Дата документа или продажи (для отчётов «на дату» и ПКУ) |

@@ -187,6 +187,8 @@ export interface Documents {
   inventoryCategoryId: string | null;
   inventoryScope: string | null;
   inventoryStartedAt: Timestamp | null;
+  mergeFromProductId: string | null;
+  mergeIntoProductId: string | null;
   number: string;
   paymentDueDate: string | null;
   postedAt: Timestamp | null;
@@ -535,6 +537,17 @@ export interface ProductBarcodes {
   createdAt: Generated<Timestamp>;
   productId: string;
   tenantId: string;
+}
+
+export interface ProductMergeLines {
+  createdAt: Generated<Timestamp>;
+  documentId: string;
+  fromBatchId: string;
+  id: string;
+  lineNo: number;
+  qtyPieces: number;
+  tenantId: string;
+  toBatchId: string;
 }
 
 export interface Products {
@@ -1162,6 +1175,7 @@ export interface DB {
   platformAuditLog: PlatformAuditLog;
   platformSettings: PlatformSettings;
   productBarcodes: ProductBarcodes;
+  productMergeLines: ProductMergeLines;
   products: Products;
   purchaseOrderLines: PurchaseOrderLines;
   purchaseOrders: PurchaseOrders;

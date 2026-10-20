@@ -6,6 +6,7 @@ import type {
   SyncInventoryLineRow,
   SyncOpeningBalanceLineRow,
   SyncOperationType,
+  SyncSupplierReturnLineRow,
   SyncWriteOffLineRow,
 } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
@@ -26,6 +27,10 @@ import { OrderReceiving } from '../purchasing/order-receiving';
 import { SupplierLedger } from '../purchasing/supplier-ledger';
 import { packsTotal } from './posting';
 import { StockFacts } from './stock-facts';
+import {
+  returnAmount,
+  SupplierReturnsRepository,
+} from './supplier-returns.repository';
 
 type ReceivingLine = SyncGoodsReceiptLineRow | SyncOpeningBalanceLineRow;
 
@@ -64,6 +69,7 @@ export class DocumentFacts implements FactApplier {
     private readonly prices: LocalPriceRule,
     private readonly ledger: SupplierLedger,
     private readonly orders: OrderReceiving,
+    private readonly returns: SupplierReturnsRepository,
     private readonly audit: AuditService,
   ) {
     appliers.register(this);
@@ -104,6 +110,8 @@ export class DocumentFacts implements FactApplier {
       await this.writeOff(trx, tenantId, storeId, payload);
     } else if (document.type === 'inventory') {
       await this.stockCount(trx, tenantId, storeId, payload);
+    } else if (document.type === 'supplier_return') {
+      await this.supplierReturn(trx, tenantId, storeId, payload);
     } else {
       throw new SyncApplyError('unsupported_document_type');
     }
@@ -610,6 +618,142 @@ export class DocumentFacts implements FactApplier {
     if (movements.length > 0) {
       await this.stock.insertMovements(trx, tenantId, storeId, movements);
     }
+  }
+
+  /**
+   * A supplier return: its lines leave their batches, the supplier gets a credit by the code of the cloud
+   * (`SupplierLedger.returnPosted`). A batch must have come from the supplier of the return, or the credit would go
+   * to another supplier. The amount of a line is checked with the store's pack size (spec 13, PR 2b I1) and the
+   * total against the store's.
+   */
+  private async supplierReturn(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    payload: DocumentPostedPayload,
+  ): Promise<void> {
+    const { document, batches, movements, prices } = payload;
+    const lines = payload.lines as SyncSupplierReturnLineRow[];
+    if (batches.length > 0 || prices.length > 0) {
+      throw new SyncApplyError('document_mismatch');
+    }
+    if (document.supplierId === null || !document.supplierReturnReason) {
+      throw new SyncApplyError('document_mismatch');
+    }
+    await this.requireSuppliers(trx, tenantId, [document.supplierId]);
+    if (
+      lines.length === 0 ||
+      lines.some(
+        (line) =>
+          line.documentId !== document.id ||
+          !(Number.isSafeInteger(line.qtyPieces) && line.qtyPieces > 0) ||
+          (line.unit !== 'pack' && line.unit !== 'piece') ||
+          !(
+            Number.isSafeInteger(line.piecesPerPack) && line.piecesPerPack >= 1
+          ) ||
+          !isMoney(line.amountDirams),
+      )
+    ) {
+      throw new SyncApplyError('line_mismatch');
+    }
+    const batchIds = lines.map((line) => line.batchId);
+    if (new Set(batchIds).size !== batchIds.length) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    const own = await this.stock.batchesOf(trx, tenantId, storeId, batchIds);
+    if (
+      lines.some((line) => {
+        const batch = own.get(line.batchId);
+        return (
+          !batch ||
+          batch.productId !== line.productId ||
+          batch.supplierId !== document.supplierId
+        );
+      })
+    ) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    const amounts = lines.map((line) => {
+      const batch = own.get(line.batchId) as NonNullable<
+        ReturnType<typeof own.get>
+      >;
+      return returnAmount({
+        qtyPieces: line.qtyPieces,
+        unit: line.unit,
+        purchasePricePerPackDirams: batch.purchasePricePerPackDirams,
+        costPerPieceDirams: batch.costPerPieceDirams,
+        piecesPerPack: line.piecesPerPack,
+      });
+    });
+    const total = amounts.reduce((sum, a) => sum + a, 0);
+    if (
+      lines.some((line, i) => line.amountDirams !== amounts[i]) ||
+      !Number.isSafeInteger(total) ||
+      document.totalDirams !== total
+    ) {
+      throw new SyncApplyError('total_mismatch');
+    }
+    // one movement per line: −pieces of its batch
+    const byLine = new Map(lines.map((line) => [line.id, line]));
+    if (
+      movements.length !== lines.length ||
+      new Set(movements.map((m) => m.sourceLineId)).size !== lines.length ||
+      movements.some((m) => {
+        const line = m.sourceLineId ? byLine.get(m.sourceLineId) : undefined;
+        return (
+          !line ||
+          m.kind !== 'supplier_return' ||
+          m.sourceType !== 'document' ||
+          m.sourceId !== document.id ||
+          m.batchId !== line.batchId ||
+          m.qtyDeltaPieces !== -line.qtyPieces ||
+          m.businessDate !== document.documentDate ||
+          m.reversesMovementId !== null
+        );
+      })
+    ) {
+      throw new SyncApplyError('movement_mismatch');
+    }
+
+    await this.insertHeader(trx, tenantId, storeId, document, total, {
+      supplierId: document.supplierId,
+      supplierReturnReason: document.supplierReturnReason,
+    });
+    await trx
+      .insertInto('supplierReturnLines')
+      .values(
+        lines.map((line) => ({
+          tenantId,
+          id: line.id,
+          documentId: document.id,
+          lineNo: line.lineNo,
+          productId: line.productId,
+          batchId: line.batchId,
+          qtyPieces: line.qtyPieces,
+          unit: line.unit,
+          amountDirams: BigInt(line.amountDirams),
+          note: line.note,
+        })),
+      )
+      .execute();
+    await this.stock.insertMovements(trx, tenantId, storeId, movements);
+    const receipts = await this.returns.receiptsOfBatches(
+      trx,
+      tenantId,
+      batchIds,
+    );
+    await this.ledger.returnPosted(trx, {
+      tenantId,
+      supplierId: document.supplierId,
+      storeLegalEntityId: await this.legalEntityOf(trx, tenantId, storeId),
+      documentId: document.id,
+      businessDate: document.documentDate,
+      employeeId: document.postedBy as string,
+      lines: lines.map((line, i) => ({
+        receiptId: receipts.get(line.batchId) ?? null,
+        amountDirams: amounts[i],
+      })),
+    });
   }
 
   /**

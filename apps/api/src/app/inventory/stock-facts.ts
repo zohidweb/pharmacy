@@ -11,6 +11,8 @@ import { SyncApplyError } from '../../core/sync';
 export interface StoreBatch {
   productId: string;
   costPerPieceDirams: bigint;
+  purchasePricePerPackDirams: bigint;
+  supplierId: string | null;
 }
 
 export interface StockSummary {
@@ -35,7 +37,13 @@ export class StockFacts {
     if (unique.length === 0) return new Map();
     const rows = await trx
       .selectFrom('batches')
-      .select(['id', 'productId', 'costPerPieceDirams'])
+      .select([
+        'id',
+        'productId',
+        'costPerPieceDirams',
+        'purchasePricePerPackDirams',
+        'supplierId',
+      ])
       .where('tenantId', '=', tenantId)
       .where('storeId', '=', storeId)
       .where('id', 'in', unique)
@@ -50,6 +58,8 @@ export class StockFacts {
         {
           productId: row.productId,
           costPerPieceDirams: BigInt(row.costPerPieceDirams),
+          purchasePricePerPackDirams: BigInt(row.purchasePricePerPackDirams),
+          supplierId: row.supplierId,
         },
       ]),
     );

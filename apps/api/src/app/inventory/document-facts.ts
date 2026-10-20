@@ -425,23 +425,28 @@ export class DocumentFacts implements FactApplier {
     if (document.inventoryStartedAt !== null) {
       storeTime(document.inventoryStartedAt);
     }
-    const count = (v: unknown): boolean =>
-      Number.isSafeInteger(v) && (v as number) >= 0;
+    // The counted quantity is never negative; the book stock and the sales during the count may be — a batch in
+    // the minus is counted on purpose, a customer return during the count makes the sales negative (as in the
+    // cloud's own count).
+    const whole = (v: unknown): v is number => Number.isSafeInteger(v);
     if (
       lines.length === 0 ||
       lines.some(
         (line) =>
           line.documentId !== document.id ||
-          !count(line.countedQtyPieces) ||
-          !count(line.bookQtyPieces) ||
-          (line.soldSinceStartPieces !== null &&
-            !count(line.soldSinceStartPieces)) ||
+          !(whole(line.countedQtyPieces) && line.countedQtyPieces >= 0) ||
+          !whole(line.bookQtyPieces) ||
           (line.soldAfterCountPieces !== null &&
-            !count(line.soldAfterCountPieces)) ||
+            !whole(line.soldAfterCountPieces)) ||
           (line.isFound
             ? line.batchId !== null ||
+              (line.soldSinceStartPieces !== null &&
+                line.soldSinceStartPieces !== 0) ||
               line.countedQtyPieces > 0 !== (line.surplusBatchId !== null)
-            : line.batchId === null || line.surplusBatchId !== null),
+            : line.batchId === null ||
+              line.surplusBatchId !== null ||
+              !whole(line.soldSinceStartPieces) ||
+              !whole(line.soldAfterCountPieces)),
       )
     ) {
       throw new SyncApplyError('line_mismatch');
@@ -484,6 +489,7 @@ export class DocumentFacts implements FactApplier {
     if (
       surplus.size !== batches.length ||
       batches.length !== found.length ||
+      new Set(found.map((line) => line.surplusBatchId)).size !== found.length ||
       found.some((line) => {
         const batch = surplus.get(line.surplusBatchId as string);
         return (
@@ -516,14 +522,22 @@ export class DocumentFacts implements FactApplier {
       throw new SyncApplyError('id_reused');
     }
 
-    // at most one movement per line; a found line moves its surplus batch by what was counted
+    // At most one movement per line, and the line says how much: a line of a batch moves it by
+    // counted − (book − sold since the start), as the cloud's own posting (none when that is 0); a found line moves
+    // its surplus batch by what was counted.
     const byLine = new Map(lines.map((line) => [line.id, line]));
     const lineOf = (m: { sourceLineId: string | null }) =>
       m.sourceLineId ? byLine.get(m.sourceLineId) : undefined;
+    const diffOf = (line: SyncInventoryLineRow): number =>
+      line.isFound
+        ? line.countedQtyPieces
+        : line.countedQtyPieces -
+          line.bookQtyPieces +
+          (line.soldSinceStartPieces ?? 0);
+    const moved = new Set(movements.map((m) => m.sourceLineId));
     if (
-      new Set(movements.map((m) => m.sourceLineId)).size !== movements.length ||
-      movements.filter((m) => lineOf(m)?.isFound === true).length !==
-        found.length ||
+      moved.size !== movements.length ||
+      lines.some((line) => (diffOf(line) !== 0) !== moved.has(line.id)) ||
       movements.some((m) => {
         const line = lineOf(m);
         if (
@@ -540,6 +554,7 @@ export class DocumentFacts implements FactApplier {
               m.kind !== 'inventory_gain' ||
               m.qtyDeltaPieces !== line.countedQtyPieces
           : m.batchId !== line.batchId ||
+              m.qtyDeltaPieces !== diffOf(line) ||
               !(
                 (m.kind === 'inventory_gain' && m.qtyDeltaPieces > 0) ||
                 (m.kind === 'inventory_loss' && m.qtyDeltaPieces < 0)

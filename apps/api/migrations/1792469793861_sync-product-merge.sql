@@ -5,24 +5,26 @@
 --   documents            - type `product_merge` with the two products (merge_from_product_id, merge_into_product_id);
 --   batches              - origin `product_merge` (source_batch_id = the batch of L);
 --   stock_movements      - kinds `merge_out` (−pieces on the batch of L) and `merge_in` (+pieces on the batch of X);
---                          the check of the big partitioned table is added NOT VALID and validated by the next
---                          migration file (rule cr-N3);
+--                          the checks and keys of the big tables (documents, batches, stock_movements) are added
+--                          NOT VALID and validated by the next migration file (rule cr-N3);
 --   product_merge_lines  - class `tenant`: one line per moved batch.
 set local lock_timeout = '5s';
 
 alter table pharmacy.documents drop constraint documents_type_check;
 alter table pharmacy.documents add constraint documents_type_check
   check (type in ('goods_receipt', 'opening_balance', 'write_off', 'inventory', 'supplier_return',
-                  'transfer', 'transfer_request', 'product_merge'));
+                  'transfer', 'transfer_request', 'product_merge')) not valid;
 alter table pharmacy.documents
   add column merge_from_product_id uuid,
   add column merge_into_product_id uuid,
-  add foreign key (tenant_id, merge_from_product_id) references pharmacy.products (tenant_id, id),
-  add foreign key (tenant_id, merge_into_product_id) references pharmacy.products (tenant_id, id),
+  add constraint documents_tenant_id_merge_from_product_id_fkey foreign key (tenant_id, merge_from_product_id)
+    references pharmacy.products (tenant_id, id) not valid,
+  add constraint documents_tenant_id_merge_into_product_id_fkey foreign key (tenant_id, merge_into_product_id)
+    references pharmacy.products (tenant_id, id) not valid,
   add constraint documents_merge_type_check check (
     (type = 'product_merge') = (merge_from_product_id is not null)
     and (type = 'product_merge') = (merge_into_product_id is not null)
-  );
+  ) not valid;
 create index documents_merge_from_idx on pharmacy.documents (tenant_id, merge_from_product_id)
   where merge_from_product_id is not null;
 create index documents_merge_into_idx on pharmacy.documents (tenant_id, merge_into_product_id)
@@ -30,7 +32,7 @@ create index documents_merge_into_idx on pharmacy.documents (tenant_id, merge_in
 
 alter table pharmacy.batches drop constraint batches_origin_check;
 alter table pharmacy.batches add constraint batches_origin_check
-  check (origin in ('goods_receipt', 'opening_balance', 'inventory_surplus', 'transfer', 'product_merge'));
+  check (origin in ('goods_receipt', 'opening_balance', 'inventory_surplus', 'transfer', 'product_merge')) not valid;
 
 alter table pharmacy.stock_movements drop constraint stock_movements_kind_check;
 alter table pharmacy.stock_movements add constraint stock_movements_kind_check

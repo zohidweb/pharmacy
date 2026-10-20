@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { NotificationKind } from '@pharmacy/shared-dto';
+import type {
+  NotificationKind,
+  TenantAnnouncement,
+} from '@pharmacy/shared-dto';
 import { type RawBuilder, sql, type SqlBool } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
 
@@ -161,6 +164,39 @@ export class NotificationsRepository {
       total: counts.rows[0].total,
       unread: counts.rows[0].unread,
     };
+  }
+
+  /**
+   * The announcements of the platform on now (table announcements — shared): `all` for every network,
+   * `cloud` / `offline` when the network has an open store of that mode (N13).
+   */
+  async announcements(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<TenantAnnouncement[]> {
+    const { rows } = await sql<{
+      id: string;
+      title: string;
+      text: string;
+      startsAt: Date;
+      endsAt: Date;
+    }>`
+      select a.id, a.title, a.text, a.starts_at, a.ends_at
+      from pharmacy.announcements a
+      where a.cancelled_at is null and a.starts_at <= now() and a.ends_at > now()
+        and (a.scope = 'all'
+          or exists (
+            select 1 from pharmacy.stores s
+            where s.tenant_id = ${tenantId} and s.status in ('active', 'closing')
+              and (case when a.scope = 'cloud' then s.mode = 'online' else s.mode <> 'online' end)))
+      order by a.ends_at, a.id`.execute(trx);
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      text: row.text,
+      startsAt: new Date(row.startsAt).toISOString(),
+      endsAt: new Date(row.endsAt).toISOString(),
+    }));
   }
 
   async markAllRead(

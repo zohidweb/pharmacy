@@ -5,6 +5,7 @@ import { BillingModule } from '../billing/billing.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { PosModule } from '../pos/pos.module';
 import { PurchasingModule } from '../purchasing/purchasing.module';
+import { AnnouncementsController } from './announcements.controller';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsRefresh } from './notifications-refresh';
 import { NotificationsRepository } from './notifications.repository';
@@ -24,7 +25,8 @@ import { Reminders } from './reminders';
     PurchasingModule,
     PosModule,
   ],
-  controllers: [NotificationsController],
+  // AnnouncementsController — the announcements of the platform (spec 2026-10-19-operator-notifications)
+  controllers: [NotificationsController, AnnouncementsController],
   providers: [
     NotificationsRepository,
     NotificationsRefresh,

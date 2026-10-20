@@ -3,6 +3,7 @@ import { hasPermissions } from '@pharmacy/shared-domain';
 import type {
   Reminder,
   ReminderParams,
+  TenantAnnouncement,
   TenantNotification,
   TenantNotificationListResponse,
 } from '@pharmacy/shared-dto';
@@ -69,6 +70,17 @@ export class NotificationsService {
     private readonly repository: NotificationsRepository,
     private readonly refresh: NotificationsRefresh,
   ) {}
+
+  /**
+   * The announcements of the platform on now for the network: the scope by the modes of its open
+   * stores (spec 2026-10-19-operator-notifications, N13), the nearest end first.
+   */
+  announcements(): Promise<TenantAnnouncement[]> {
+    const { tenantId } = requirePrincipal();
+    return this.db.tenantTransaction((trx) =>
+      this.repository.announcements(trx, tenantId),
+    );
+  }
 
   list(query: {
     limit?: number;

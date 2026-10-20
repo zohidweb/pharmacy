@@ -465,9 +465,18 @@ export interface SyncStockDocumentRow extends SyncDocumentRow {
   purchaseOrderId: string | null;
   /**
    * The total of a goods receipt or opening balances as the store computed it (packs of its card × the price of a
-   * pack) — the supplier invoice; null for a write-off (the cloud computes pieces × the cost of a piece).
+   * pack) — the supplier invoice; of a stock count — Σ |pieces of its movements| × the cost of a piece of the batch;
+   * of a supplier return — Σ of its line amounts. Null for a write-off (the cloud computes pieces × the cost of a
+   * piece) and a product merge (no money).
    */
   totalDirams: number | null;
+  supplierReturnReason: string | null;
+  inventoryScope: string | null;
+  inventoryCategoryId: string | null;
+  inventoryStartedAt: string | null;
+  /** A product merge (spec E35): the product of the store and the card of the network it was merged into. */
+  mergeFromProductId: string | null;
+  mergeIntoProductId: string | null;
 }
 
 export interface SyncGoodsReceiptLineRow {
@@ -521,20 +530,66 @@ export interface SyncBatchRow {
   isStarting: boolean;
 }
 
+/** A line of a stock count: a batch of the store, or a found product (`isFound`) with its surplus batch. */
+export interface SyncInventoryLineRow {
+  id: string;
+  documentId: string;
+  lineNo: number;
+  productId: string;
+  batchId: string | null;
+  isFound: boolean;
+  bookQtyPieces: number;
+  countedQtyPieces: number;
+  soldSinceStartPieces: number | null;
+  soldAfterCountPieces: number | null;
+  surplusBatchId: string | null;
+  surplusExpiryDate: string | null;
+  surplusLotNumber: string | null;
+  surplusPurchasePricePerPackDirams: number | null;
+}
+
+export interface SyncSupplierReturnLineRow {
+  id: string;
+  documentId: string;
+  lineNo: number;
+  productId: string;
+  batchId: string;
+  qtyPieces: number;
+  unit: 'pack' | 'piece';
+  /** Pieces in a pack of the store's card at the posting (not stored: the amount is checked with it). */
+  piecesPerPack: number;
+  amountDirams: number;
+  note: string | null;
+}
+
+/** A line of a product merge (spec E35): the stock of a batch of the store's product moves to a new batch of the card. */
+export interface SyncProductMergeLineRow {
+  id: string;
+  documentId: string;
+  lineNo: number;
+  fromBatchId: string;
+  toBatchId: string;
+  qtyPieces: number;
+}
+
 /** A retail price a posting set at the store (spec E18): applied by the rule of `price.changed-locally`. */
 export type SyncLocalPrice = Omit<PriceChangedLocallyPayload, 'audit'>;
 
 /**
  * A stock document the store posted (spec 4.2): its header, the rows of the line table of `document.type`
  * (`SyncGoodsReceiptLineRow` — goods_receipt, `SyncOpeningBalanceLineRow` — opening_balance, `SyncWriteOffLineRow`
- * — write_off), the batches it created, its movements and the retail prices it set.
+ * — write_off, `SyncInventoryLineRow` — inventory, `SyncSupplierReturnLineRow` — supplier_return,
+ * `SyncProductMergeLineRow` — product_merge), the batches it created, its movements and the retail prices it set.
  */
 export interface DocumentPostedPayload {
   document: SyncStockDocumentRow;
   lines:
     | SyncGoodsReceiptLineRow[]
     | SyncOpeningBalanceLineRow[]
-    | SyncWriteOffLineRow[];
+    | SyncWriteOffLineRow[]
+    | SyncInventoryLineRow[]
+    | SyncSupplierReturnLineRow[]
+    | SyncProductMergeLineRow[];
   batches: SyncBatchRow[];
   movements: SyncMovementRow[];
   prices: SyncLocalPrice[];

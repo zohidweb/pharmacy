@@ -182,7 +182,7 @@ export class StockFigures {
         coalesce(sum(qty) filter (where business_date >= ${from}::date
           and kind in ('goods_receipt', 'opening_balance')), 0)::integer as receipt,
         coalesce(sum(qty) filter (where business_date >= ${from}::date
-          and kind in ('transfer_in', 'transfer_out')), 0)::integer as transfers,
+          and kind in ('transfer_in', 'transfer_out', 'merge_in', 'merge_out')), 0)::integer as transfers,
         coalesce(sum(qty) filter (where business_date >= ${from}::date
           and kind in ('sale', 'customer_return')), 0)::integer as sales,
         coalesce(sum(qty) filter (where business_date >= ${from}::date
@@ -333,10 +333,10 @@ export class StockFigures {
         coalesce(sum(qty) filter (where business_date < ${from}::date), 0)::integer as opening,
         coalesce(sum(qty) filter (where business_date >= ${from}::date
           and kind in ('goods_receipt', 'opening_balance', 'transfer_in', 'customer_return',
-                       'inventory_gain')), 0)::integer as received,
+                       'inventory_gain', 'merge_in')), 0)::integer as received,
         coalesce(-sum(qty) filter (where business_date >= ${from}::date
           and kind in ('sale', 'write_off', 'transfer_out', 'supplier_return',
-                       'inventory_loss')), 0)::integer as issued,
+                       'inventory_loss', 'merge_out')), 0)::integer as issued,
         coalesce(sum(qty), 0)::integer as closing
       from mv
       join pharmacy.products p on p.tenant_id = ${tenantId} and p.id = mv.product_id

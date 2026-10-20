@@ -3,8 +3,11 @@ import type {
   DocumentPostedPayload,
   SyncAuditRow,
   SyncGoodsReceiptLineRow,
+  SyncInventoryLineRow,
   SyncOpeningBalanceLineRow,
   SyncOperationType,
+  SyncProductMergeLineRow,
+  SyncSupplierReturnLineRow,
   SyncWriteOffLineRow,
 } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
@@ -25,11 +28,30 @@ import { OrderReceiving } from '../purchasing/order-receiving';
 import { SupplierLedger } from '../purchasing/supplier-ledger';
 import { packsTotal } from './posting';
 import { StockFacts } from './stock-facts';
+import {
+  returnAmount,
+  SupplierReturnsRepository,
+} from './supplier-returns.repository';
 
 type ReceivingLine = SyncGoodsReceiptLineRow | SyncOpeningBalanceLineRow;
 
 /** The reasons of a write-off the store posts by hand (spec 2026-10-12-write-offs). */
 const WRITE_OFF_REASONS = new Set(['expired', 'broken', 'defect', 'misgrade']);
+
+/** The columns of a document header that depend on its type. */
+interface HeaderColumns {
+  supplierId?: string | null;
+  supplierInvoiceNumber?: string | null;
+  supplierInvoiceDate?: string | null;
+  paymentDueDate?: string | null;
+  purchaseOrderId?: string | null;
+  supplierReturnReason?: string | null;
+  inventoryScope?: string | null;
+  inventoryCategoryId?: string | null;
+  inventoryStartedAt?: Date | null;
+  mergeFromProductId?: string | null;
+  mergeIntoProductId?: string | null;
+}
 
 // The stock documents an offline store posted, applied in the cloud (ADR-0014 §4; spec 2026-10-16-offline-sync,
 // 4.2, E17, E18, E37): the document, its lines, the batches it created and its movements go in with the ids of the
@@ -48,6 +70,7 @@ export class DocumentFacts implements FactApplier {
     private readonly prices: LocalPriceRule,
     private readonly ledger: SupplierLedger,
     private readonly orders: OrderReceiving,
+    private readonly returns: SupplierReturnsRepository,
     private readonly audit: AuditService,
   ) {
     appliers.register(this);
@@ -86,6 +109,12 @@ export class DocumentFacts implements FactApplier {
       await this.receiving(trx, tenantId, storeId, payload);
     } else if (document.type === 'write_off') {
       await this.writeOff(trx, tenantId, storeId, payload);
+    } else if (document.type === 'inventory') {
+      await this.stockCount(trx, tenantId, storeId, payload);
+    } else if (document.type === 'supplier_return') {
+      await this.supplierReturn(trx, tenantId, storeId, payload);
+    } else if (document.type === 'product_merge') {
+      await this.productMerge(trx, tenantId, storeId, payload);
     } else {
       throw new SyncApplyError('unsupported_document_type');
     }
@@ -231,28 +260,13 @@ export class DocumentFacts implements FactApplier {
       }
     }
 
-    await trx
-      .insertInto('documents')
-      .values({
-        tenantId,
-        id: document.id,
-        storeId,
-        type: document.type,
-        number: document.number,
-        documentDate: document.documentDate,
-        status: 'posted',
-        comment: document.comment,
-        createdBy: document.createdBy,
-        postedAt: document.postedAt,
-        postedBy: document.postedBy,
-        supplierId: receipt ? document.supplierId : null,
-        supplierInvoiceNumber: receipt ? document.supplierInvoiceNumber : null,
-        supplierInvoiceDate: receipt ? document.supplierInvoiceDate : null,
-        paymentDueDate: receipt ? document.paymentDueDate : null,
-        purchaseOrderId: orderId,
-        totalDirams: BigInt(total),
-      })
-      .execute();
+    await this.insertHeader(trx, tenantId, storeId, document, total, {
+      supplierId: receipt ? document.supplierId : null,
+      supplierInvoiceNumber: receipt ? document.supplierInvoiceNumber : null,
+      supplierInvoiceDate: receipt ? document.supplierInvoiceDate : null,
+      paymentDueDate: receipt ? document.paymentDueDate : null,
+      purchaseOrderId: orderId,
+    });
     await trx
       .insertInto('batches')
       .values(
@@ -382,6 +396,614 @@ export class DocumentFacts implements FactApplier {
       },
       null,
     );
+  }
+
+  /**
+   * A stock count: a line of a batch of the store moves it by the difference the store counted (`inventory_gain` /
+   * `inventory_loss`); a found product with a counted quantity gets a new surplus batch. The cloud does not
+   * recompute the difference — the stock of the store at the count is the store's (ADR-0014 §4): its movements
+   * are checked for kind, sign and batch, and the total (Σ |pieces| × the cost of a piece of the batch) against the
+   * store's.
+   */
+  private async stockCount(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    payload: DocumentPostedPayload,
+  ): Promise<void> {
+    const { document, batches, movements, prices } = payload;
+    const lines = payload.lines as SyncInventoryLineRow[];
+    if (prices.length > 0) throw new SyncApplyError('price_mismatch');
+    if (
+      (document.inventoryScope !== 'all' &&
+        document.inventoryScope !== 'category') ||
+      (document.inventoryScope === 'category') !==
+        (document.inventoryCategoryId !== null)
+    ) {
+      throw new SyncApplyError('document_mismatch');
+    }
+    if (document.inventoryStartedAt !== null) {
+      storeTime(document.inventoryStartedAt);
+    }
+    // The counted quantity is never negative; the book stock and the sales during the count may be — a batch in
+    // the minus is counted on purpose, a customer return during the count makes the sales negative (as in the
+    // cloud's own count).
+    const whole = (v: unknown): v is number => Number.isSafeInteger(v);
+    if (
+      lines.length === 0 ||
+      lines.some(
+        (line) =>
+          line.documentId !== document.id ||
+          !(whole(line.countedQtyPieces) && line.countedQtyPieces >= 0) ||
+          !whole(line.bookQtyPieces) ||
+          (line.soldAfterCountPieces !== null &&
+            !whole(line.soldAfterCountPieces)) ||
+          (line.isFound
+            ? line.batchId !== null ||
+              (line.soldSinceStartPieces !== null &&
+                line.soldSinceStartPieces !== 0) ||
+              line.countedQtyPieces > 0 !== (line.surplusBatchId !== null)
+            : line.batchId === null ||
+              line.surplusBatchId !== null ||
+              !whole(line.soldSinceStartPieces) ||
+              !whole(line.soldAfterCountPieces)),
+      )
+    ) {
+      throw new SyncApplyError('line_mismatch');
+    }
+    await requireProducts(trx, tenantId, [
+      ...new Set(lines.map((line) => line.productId)),
+    ]);
+    if (
+      document.inventoryCategoryId !== null &&
+      !(await this.categoryExists(trx, tenantId, document.inventoryCategoryId))
+    ) {
+      throw new SyncApplyError('unknown_category');
+    }
+
+    // the batches of the counted lines: of the store, of the line's product, one line each
+    const counted = lines.flatMap((line) =>
+      line.batchId === null ? [] : [line.batchId],
+    );
+    if (new Set(counted).size !== counted.length) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    const existing = await this.stock.batchesOf(
+      trx,
+      tenantId,
+      storeId,
+      counted,
+    );
+    if (
+      lines.some(
+        (line) =>
+          line.batchId !== null &&
+          existing.get(line.batchId)?.productId !== line.productId,
+      )
+    ) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    // the surplus batches of the found lines, as the lines describe them
+    const surplus = new Map(batches.map((batch) => [batch.id, batch]));
+    const found = lines.filter((line) => line.surplusBatchId !== null);
+    if (
+      surplus.size !== batches.length ||
+      batches.length !== found.length ||
+      new Set(found.map((line) => line.surplusBatchId)).size !== found.length ||
+      found.some((line) => {
+        const batch = surplus.get(line.surplusBatchId as string);
+        return (
+          !batch ||
+          batch.storeId !== storeId ||
+          batch.productId !== line.productId ||
+          batch.origin !== 'inventory_surplus' ||
+          batch.sourceDocumentId !== document.id ||
+          batch.expiryDate !== line.surplusExpiryDate ||
+          batch.lotNumber !== line.surplusLotNumber ||
+          batch.purchasePricePerPackDirams !==
+            line.surplusPurchasePricePerPackDirams ||
+          !isMoney(batch.purchasePricePerPackDirams) ||
+          !isMoney(batch.costPerPieceDirams) ||
+          batch.supplierId !== null ||
+          batch.isStarting
+        );
+      })
+    ) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    if (
+      await this.taken(
+        trx,
+        tenantId,
+        'batches',
+        batches.map((b) => b.id),
+      )
+    ) {
+      throw new SyncApplyError('id_reused');
+    }
+
+    // At most one movement per line, and the line says how much: a line of a batch moves it by
+    // counted − (book − sold since the start), as the cloud's own posting (none when that is 0); a found line moves
+    // its surplus batch by what was counted.
+    const byLine = new Map(lines.map((line) => [line.id, line]));
+    const lineOf = (m: { sourceLineId: string | null }) =>
+      m.sourceLineId ? byLine.get(m.sourceLineId) : undefined;
+    const diffOf = (line: SyncInventoryLineRow): number =>
+      line.isFound
+        ? line.countedQtyPieces
+        : line.countedQtyPieces -
+          line.bookQtyPieces +
+          (line.soldSinceStartPieces ?? 0);
+    const moved = new Set(movements.map((m) => m.sourceLineId));
+    if (
+      moved.size !== movements.length ||
+      lines.some((line) => (diffOf(line) !== 0) !== moved.has(line.id)) ||
+      movements.some((m) => {
+        const line = lineOf(m);
+        if (
+          !line ||
+          m.sourceType !== 'document' ||
+          m.sourceId !== document.id ||
+          m.businessDate !== document.documentDate ||
+          m.reversesMovementId !== null
+        ) {
+          return true;
+        }
+        return line.isFound
+          ? m.batchId !== line.surplusBatchId ||
+              m.kind !== 'inventory_gain' ||
+              m.qtyDeltaPieces !== line.countedQtyPieces
+          : m.batchId !== line.batchId ||
+              m.qtyDeltaPieces !== diffOf(line) ||
+              !(
+                (m.kind === 'inventory_gain' && m.qtyDeltaPieces > 0) ||
+                (m.kind === 'inventory_loss' && m.qtyDeltaPieces < 0)
+              );
+      })
+    ) {
+      throw new SyncApplyError('movement_mismatch');
+    }
+    const costOf = (batchId: string): bigint =>
+      existing.get(batchId)?.costPerPieceDirams ??
+      BigInt(surplus.get(batchId)?.costPerPieceDirams ?? 0);
+    const total = movements.reduce(
+      (sum, m) => sum + BigInt(Math.abs(m.qtyDeltaPieces)) * costOf(m.batchId),
+      0n,
+    );
+    if (
+      total > BigInt(Number.MAX_SAFE_INTEGER) ||
+      document.totalDirams !== Number(total)
+    ) {
+      throw new SyncApplyError('total_mismatch');
+    }
+
+    await this.insertHeader(trx, tenantId, storeId, document, Number(total), {
+      inventoryScope: document.inventoryScope,
+      inventoryCategoryId: document.inventoryCategoryId,
+      inventoryStartedAt:
+        document.inventoryStartedAt === null
+          ? null
+          : storeTime(document.inventoryStartedAt),
+    });
+    if (batches.length > 0) {
+      await trx
+        .insertInto('batches')
+        .values(
+          batches.map((batch) => ({
+            tenantId,
+            id: batch.id,
+            storeId,
+            productId: batch.productId,
+            expiryDate: batch.expiryDate,
+            lotNumber: batch.lotNumber,
+            purchasePricePerPackDirams: BigInt(
+              batch.purchasePricePerPackDirams,
+            ),
+            costPerPieceDirams: BigInt(batch.costPerPieceDirams),
+            supplierId: null,
+            origin: 'inventory_surplus',
+            sourceDocumentId: document.id,
+            isStarting: false,
+          })),
+        )
+        .execute();
+    }
+    await trx
+      .insertInto('inventoryLines')
+      .values(
+        lines.map((line) => ({
+          tenantId,
+          id: line.id,
+          documentId: document.id,
+          lineNo: line.lineNo,
+          productId: line.productId,
+          batchId: line.batchId,
+          isFound: line.isFound,
+          bookQtyPieces: line.bookQtyPieces,
+          countedQtyPieces: line.countedQtyPieces,
+          soldSinceStartPieces: line.soldSinceStartPieces,
+          soldAfterCountPieces: line.soldAfterCountPieces,
+          surplusBatchId: line.surplusBatchId,
+          surplusExpiryDate: line.surplusExpiryDate,
+          surplusLotNumber: line.surplusLotNumber,
+          surplusPurchasePricePerPackDirams:
+            line.surplusPurchasePricePerPackDirams === null
+              ? null
+              : BigInt(line.surplusPurchasePricePerPackDirams),
+        })),
+      )
+      .execute();
+    if (movements.length > 0) {
+      await this.stock.insertMovements(trx, tenantId, storeId, movements);
+    }
+  }
+
+  /**
+   * A supplier return: its lines leave their batches, the supplier gets a credit by the code of the cloud
+   * (`SupplierLedger.returnPosted`). A batch must have come from the supplier of the return, or the credit would go
+   * to another supplier. The amount of a line is checked with the store's pack size (spec 13, PR 2b I1) and the
+   * total against the store's.
+   */
+  private async supplierReturn(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    payload: DocumentPostedPayload,
+  ): Promise<void> {
+    const { document, batches, movements, prices } = payload;
+    const lines = payload.lines as SyncSupplierReturnLineRow[];
+    if (batches.length > 0 || prices.length > 0) {
+      throw new SyncApplyError('document_mismatch');
+    }
+    if (document.supplierId === null || !document.supplierReturnReason) {
+      throw new SyncApplyError('document_mismatch');
+    }
+    await this.requireSuppliers(trx, tenantId, [document.supplierId]);
+    if (
+      lines.length === 0 ||
+      lines.some(
+        (line) =>
+          line.documentId !== document.id ||
+          !(Number.isSafeInteger(line.qtyPieces) && line.qtyPieces > 0) ||
+          (line.unit !== 'pack' && line.unit !== 'piece') ||
+          !(
+            Number.isSafeInteger(line.piecesPerPack) && line.piecesPerPack >= 1
+          ) ||
+          !isMoney(line.amountDirams),
+      )
+    ) {
+      throw new SyncApplyError('line_mismatch');
+    }
+    const batchIds = lines.map((line) => line.batchId);
+    if (new Set(batchIds).size !== batchIds.length) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    const own = await this.stock.batchesOf(trx, tenantId, storeId, batchIds);
+    if (
+      lines.some((line) => {
+        const batch = own.get(line.batchId);
+        return (
+          !batch ||
+          batch.productId !== line.productId ||
+          batch.supplierId !== document.supplierId
+        );
+      })
+    ) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    const amounts = lines.map((line) => {
+      const batch = own.get(line.batchId) as NonNullable<
+        ReturnType<typeof own.get>
+      >;
+      return returnAmount({
+        qtyPieces: line.qtyPieces,
+        unit: line.unit,
+        purchasePricePerPackDirams: batch.purchasePricePerPackDirams,
+        costPerPieceDirams: batch.costPerPieceDirams,
+        piecesPerPack: line.piecesPerPack,
+      });
+    });
+    const total = amounts.reduce((sum, a) => sum + a, 0);
+    if (
+      lines.some((line, i) => line.amountDirams !== amounts[i]) ||
+      !Number.isSafeInteger(total) ||
+      document.totalDirams !== total
+    ) {
+      throw new SyncApplyError('total_mismatch');
+    }
+    // one movement per line: −pieces of its batch
+    const byLine = new Map(lines.map((line) => [line.id, line]));
+    if (
+      movements.length !== lines.length ||
+      new Set(movements.map((m) => m.sourceLineId)).size !== lines.length ||
+      movements.some((m) => {
+        const line = m.sourceLineId ? byLine.get(m.sourceLineId) : undefined;
+        return (
+          !line ||
+          m.kind !== 'supplier_return' ||
+          m.sourceType !== 'document' ||
+          m.sourceId !== document.id ||
+          m.batchId !== line.batchId ||
+          m.qtyDeltaPieces !== -line.qtyPieces ||
+          m.businessDate !== document.documentDate ||
+          m.reversesMovementId !== null
+        );
+      })
+    ) {
+      throw new SyncApplyError('movement_mismatch');
+    }
+
+    await this.insertHeader(trx, tenantId, storeId, document, total, {
+      supplierId: document.supplierId,
+      supplierReturnReason: document.supplierReturnReason,
+    });
+    await trx
+      .insertInto('supplierReturnLines')
+      .values(
+        lines.map((line) => ({
+          tenantId,
+          id: line.id,
+          documentId: document.id,
+          lineNo: line.lineNo,
+          productId: line.productId,
+          batchId: line.batchId,
+          qtyPieces: line.qtyPieces,
+          unit: line.unit,
+          amountDirams: BigInt(line.amountDirams),
+          note: line.note,
+        })),
+      )
+      .execute();
+    await this.stock.insertMovements(trx, tenantId, storeId, movements);
+    const receipts = await this.returns.receiptsOfBatches(
+      trx,
+      tenantId,
+      batchIds,
+    );
+    await this.ledger.returnPosted(trx, {
+      tenantId,
+      supplierId: document.supplierId,
+      storeLegalEntityId: await this.legalEntityOf(trx, tenantId, storeId),
+      documentId: document.id,
+      businessDate: document.documentDate,
+      employeeId: document.postedBy as string,
+      lines: lines.map((line, i) => ({
+        receiptId: receipts.get(line.batchId) ?? null,
+        amountDirams: amounts[i],
+      })),
+    });
+  }
+
+  /**
+   * A product merge of the store (spec E35): after its decision `merge` on a duplicate, the store moves the stock of
+   * every batch of its product L to a new batch of the card X with the same lot, expiry and prices (`merge_out` /
+   * `merge_in`). The decision comes as its own operation: until it is applied the document waits; a merge into
+   * another card than the decision named is a quarantine.
+   */
+  private async productMerge(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    payload: DocumentPostedPayload,
+  ): Promise<void> {
+    const { document, batches, movements, prices } = payload;
+    const lines = payload.lines as SyncProductMergeLineRow[];
+    const from = document.mergeFromProductId;
+    const into = document.mergeIntoProductId;
+    if (
+      prices.length > 0 ||
+      document.totalDirams !== null ||
+      from === null ||
+      into === null ||
+      from === into
+    ) {
+      throw new SyncApplyError('document_mismatch');
+    }
+    const local = await trx
+      .selectFrom('products')
+      .select(['origin', 'createdAtStoreId', 'mergedIntoProductId'])
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', from)
+      .executeTakeFirst();
+    if (
+      !local ||
+      local.origin !== 'local' ||
+      local.createdAtStoreId !== storeId
+    ) {
+      throw new SyncApplyError('merge_mismatch');
+    }
+    if (local.mergedIntoProductId === null) {
+      throw new SyncApplyError('merge_decision', 'dependency');
+    }
+    if (local.mergedIntoProductId !== into) {
+      throw new SyncApplyError('merge_target_mismatch');
+    }
+    await requireProducts(trx, tenantId, [into]);
+
+    if (
+      lines.length === 0 ||
+      lines.some(
+        (line) =>
+          line.documentId !== document.id ||
+          !(Number.isSafeInteger(line.qtyPieces) && line.qtyPieces > 0) ||
+          line.fromBatchId === line.toBatchId,
+      )
+    ) {
+      throw new SyncApplyError('line_mismatch');
+    }
+    const fromIds = lines.map((line) => line.fromBatchId);
+    const toIds = lines.map((line) => line.toBatchId);
+    if (
+      new Set(fromIds).size !== fromIds.length ||
+      new Set(toIds).size !== toIds.length
+    ) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    // the batches of L at the store (a fact of the store: missing — wait for it)
+    const sources = await trx
+      .selectFrom('batches')
+      .select([
+        'id',
+        'productId',
+        'expiryDate',
+        'lotNumber',
+        'purchasePricePerPackDirams',
+        'costPerPieceDirams',
+        'supplierId',
+      ])
+      .where('tenantId', '=', tenantId)
+      .where('storeId', '=', storeId)
+      .where('id', 'in', fromIds)
+      .execute();
+    if (sources.length !== fromIds.length) {
+      throw new SyncApplyError('batch', 'dependency');
+    }
+    const source = new Map(sources.map((row) => [row.id, row]));
+    const created = new Map(batches.map((batch) => [batch.id, batch]));
+    if (
+      created.size !== batches.length ||
+      batches.length !== lines.length ||
+      lines.some((line) => {
+        const old = source.get(line.fromBatchId);
+        const batch = created.get(line.toBatchId);
+        return (
+          !old ||
+          !batch ||
+          old.productId !== from ||
+          batch.storeId !== storeId ||
+          batch.productId !== into ||
+          batch.origin !== 'product_merge' ||
+          batch.sourceDocumentId !== document.id ||
+          batch.expiryDate !== old.expiryDate ||
+          batch.lotNumber !== old.lotNumber ||
+          BigInt(batch.purchasePricePerPackDirams) !==
+            BigInt(old.purchasePricePerPackDirams) ||
+          BigInt(batch.costPerPieceDirams) !== BigInt(old.costPerPieceDirams) ||
+          batch.supplierId !== old.supplierId ||
+          batch.isStarting
+        );
+      })
+    ) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    if (await this.taken(trx, tenantId, 'batches', toIds)) {
+      throw new SyncApplyError('id_reused');
+    }
+    // two movements per line: out of the batch of L, into the new batch of X
+    const expected = new Set(
+      lines.flatMap((line) => [
+        `${line.id}|merge_out|${line.fromBatchId}|${-line.qtyPieces}`,
+        `${line.id}|merge_in|${line.toBatchId}|${line.qtyPieces}`,
+      ]),
+    );
+    const got = new Set(
+      movements.map(
+        (m) => `${m.sourceLineId}|${m.kind}|${m.batchId}|${m.qtyDeltaPieces}`,
+      ),
+    );
+    if (
+      movements.length !== expected.size ||
+      got.size !== expected.size ||
+      [...got].some((key) => !expected.has(key)) ||
+      movements.some(
+        (m) =>
+          m.sourceType !== 'document' ||
+          m.sourceId !== document.id ||
+          m.businessDate !== document.documentDate ||
+          m.reversesMovementId !== null,
+      )
+    ) {
+      throw new SyncApplyError('movement_mismatch');
+    }
+
+    await this.insertHeader(trx, tenantId, storeId, document, null, {
+      mergeFromProductId: from,
+      mergeIntoProductId: into,
+    });
+    const fromOf = new Map(
+      lines.map((line) => [line.toBatchId, line.fromBatchId]),
+    );
+    await trx
+      .insertInto('batches')
+      .values(
+        batches.map((batch) => ({
+          tenantId,
+          id: batch.id,
+          storeId,
+          productId: into,
+          expiryDate: batch.expiryDate,
+          lotNumber: batch.lotNumber,
+          purchasePricePerPackDirams: BigInt(batch.purchasePricePerPackDirams),
+          costPerPieceDirams: BigInt(batch.costPerPieceDirams),
+          supplierId: batch.supplierId,
+          origin: 'product_merge',
+          sourceDocumentId: document.id,
+          sourceBatchId: fromOf.get(batch.id) ?? null,
+          isStarting: false,
+        })),
+      )
+      .execute();
+    await trx
+      .insertInto('productMergeLines')
+      .values(
+        lines.map((line) => ({
+          tenantId,
+          id: line.id,
+          documentId: document.id,
+          lineNo: line.lineNo,
+          fromBatchId: line.fromBatchId,
+          toBatchId: line.toBatchId,
+          qtyPieces: line.qtyPieces,
+        })),
+      )
+      .execute();
+    await this.stock.insertMovements(trx, tenantId, storeId, movements);
+  }
+
+  /**
+   * The header of a posted document of the store, common to every type: the store's id, number and dates, its
+   * time of posting parsed (spec 13, PR 2b M5), the total the cloud checked, and the columns of the type.
+   */
+  private async insertHeader(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    document: DocumentPostedPayload['document'],
+    total: number | null,
+    extra: HeaderColumns,
+  ): Promise<void> {
+    await trx
+      .insertInto('documents')
+      .values({
+        tenantId,
+        id: document.id,
+        storeId,
+        type: document.type,
+        number: document.number,
+        documentDate: document.documentDate,
+        status: 'posted',
+        comment: document.comment,
+        createdBy: document.createdBy,
+        postedAt: storeTime(document.postedAt),
+        postedBy: document.postedBy,
+        totalDirams: total === null ? null : BigInt(total),
+        ...extra,
+      })
+      .execute();
+  }
+
+  private async categoryExists(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<boolean> {
+    const row = await trx
+      .selectFrom('categories')
+      .select('id')
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row !== undefined;
   }
 
   /** Suppliers of the network (cloud-owned, any status): a missing one is a quarantine. */

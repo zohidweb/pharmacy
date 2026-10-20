@@ -15,6 +15,7 @@ import { RequireOperatorPermission } from '../auth/decorators';
 import {
   NotificationListQueryDto,
   NotificationPreferencesDto,
+  ReadAllNotificationsDto,
 } from './dto/notifications.dto';
 import { PlatformNotificationsService } from './notifications.service';
 
@@ -32,12 +33,12 @@ export class PlatformNotificationsController {
     return this.notifications.list(query);
   }
 
-  /** 204: every visible notification is read by this operator (N8). */
+  /** 204: the visible notifications up to `upTo` (the newest one the operator saw) are read (N8). */
   @RequireOperatorPermission('platform:view')
   @Post('notifications/read-all')
   @HttpCode(204)
-  readAll(): Promise<void> {
-    return this.notifications.readAll();
+  readAll(@Body() body: ReadAllNotificationsDto): Promise<void> {
+    return this.notifications.readAll(body.upTo ?? null);
   }
 
   @RequireOperatorPermission('platform:view')

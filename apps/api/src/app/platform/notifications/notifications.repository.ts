@@ -172,7 +172,10 @@ export class PlatformNotificationsRepository {
     return rows;
   }
 
-  /** Keys revoked after the mark (`key_revoked`), soft or hard. */
+  /**
+   * Keys revoked after the mark (`key_revoked`), soft or hard; a key replaced by a new one (a reissue,
+   * `replaces_key_id`) is no alarm (final review M4).
+   */
   async revokedKeys(
     trx: Transaction<DB>,
     after: Date,
@@ -202,6 +205,8 @@ export class PlatformNotificationsRepository {
       join pharmacy.tenants t on t.id = k.tenant_id
       join pharmacy.stores s on s.tenant_id = k.tenant_id and s.id = k.store_id
       where k.revoked_at > ${after}
+        and not exists (
+          select 1 from pharmacy.license_keys n where n.replaces_key_id = k.id)
       order by k.revoked_at, k.id`.execute(trx);
     return rows;
   }
@@ -244,12 +249,19 @@ export class PlatformNotificationsRepository {
     return { rows, total: counts.rows[0].total, unread: counts.rows[0].unread };
   }
 
-  /** Every visible notification is read by the operator (N8). */
-  async markAllRead(trx: Transaction<DB>, operatorId: string): Promise<void> {
+  /**
+   * The visible notifications up to `upTo` are read by the operator (N8): ids are UUIDv7, so `n.id <=
+   * upTo` is what was inserted before the newest one the operator saw; null — every visible one.
+   */
+  async markAllRead(
+    trx: Transaction<DB>,
+    operatorId: string,
+    upTo: string | null,
+  ): Promise<void> {
     await sql`
       insert into pharmacy.platform_notification_reads (notification_id, operator_id)
       select n.id, ${operatorId} from pharmacy.platform_notifications n
-      where ${VISIBLE}
+      where ${VISIBLE} and (${upTo}::uuid is null or n.id <= ${upTo}::uuid)
       on conflict do nothing`.execute(trx);
   }
 

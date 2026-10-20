@@ -21,6 +21,7 @@ import type {
   NotificationListResponse,
   NotificationPreferences,
   OperatorAuditEntry,
+  ReadAllNotificationsRequest,
   OperatorAuditQuery,
   OperatorMe,
   OperatorSessionInfo,
@@ -397,7 +398,7 @@ export const apiRoutes = {
     undefined,
     NotificationListQuery
   >('GET', () => '/operator/notifications'),
-  'notifications.readAll': route<void>(
+  'notifications.readAll': route<void, ReadAllNotificationsRequest>(
     'POST',
     () => '/operator/notifications/read-all',
   ),

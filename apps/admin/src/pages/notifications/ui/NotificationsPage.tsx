@@ -234,7 +234,16 @@ export function NotificationsPage() {
       apiRequest('me.notificationPreferences', { signal }),
   });
   const readAll = useMutation({
-    mutationFn: () => apiRequest('notifications.readAll'),
+    // what the operator saw: a notification that appears meanwhile stays unread
+    mutationFn: () =>
+      apiRequest('notifications.readAll', {
+        body: {
+          upTo: (list.data?.items ?? [])
+            .map((item) => item.id)
+            .sort()
+            .at(-1),
+        },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: attentionKeys.notifications,

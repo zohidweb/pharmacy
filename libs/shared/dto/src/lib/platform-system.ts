@@ -177,6 +177,15 @@ export interface NotificationListQuery {
   offset?: number;
 }
 
+/**
+ * POST /operator/notifications/read-all → 204: the visible notifications up to `upTo` — the newest id
+ * the operator saw (ids are UUIDv7, in the order of insertion) — are read; one that appeared after the
+ * list was loaded stays unread. Without `upTo` — every visible one.
+ */
+export interface ReadAllNotificationsRequest {
+  upTo?: string;
+}
+
 /** Newest first; `counts` and `unread` — of the visible notifications (N7). */
 export interface NotificationListResponse extends Page<PlatformNotification> {
   counts: Record<'all' | NotificationTopic, number>;

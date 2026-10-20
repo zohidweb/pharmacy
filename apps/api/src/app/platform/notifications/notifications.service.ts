@@ -92,11 +92,14 @@ export class PlatformNotificationsService {
     });
   }
 
-  async readAll(): Promise<void> {
-    await this.refreshIfStale();
+  /**
+   * Marks read what the operator saw: no refresh first, and nothing newer than `upTo` — a notification
+   * that appeared after the list was loaded stays unread (final review I2).
+   */
+  async readAll(upTo: string | null): Promise<void> {
     const operatorId = this.operatorId();
     await this.db.platformTransaction(this.actor(), (trx) =>
-      this.repository.markAllRead(trx, operatorId),
+      this.repository.markAllRead(trx, operatorId, upTo?.toLowerCase() ?? null),
     );
   }
 

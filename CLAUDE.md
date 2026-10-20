@@ -113,10 +113,11 @@ pharmacy/
   выставленный месяц, заявки без решения).
   Уведомления оператора и счётчики меню админки — `app/platform/notifications`: состояния берёт у `platform/stats`
   (`OperatorQueue` — общий источник с очередью дашборда), число заявок — у `platform/billing` (`BillingOverview`).
-  Синхронизация офлайн-точек (ADR-0014): `pos`, `returns`, `terminals`, `audit`, `catalog`, `pricing` регистрируют применители фактов
-  точки в реестре ядра `SyncAppliers` (`core/sync`, глобальный); облачный модуль `sync` (контур `/api/v1/sync/*` по
-  лицензионному ключу точки) применяет операции через реестр и читает остатки точки через `StockFacts`
-  (`inventory` ← `sync`).
+  Синхронизация офлайн-точек (ADR-0014): `pos`, `returns`, `terminals`, `audit`, `catalog`, `pricing`, `inventory`
+  регистрируют применители фактов точки в реестре ядра `SyncAppliers` (`core/sync`, глобальный); облачный модуль `sync`
+  (контур `/api/v1/sync/*` по лицензионному ключу точки) применяет операции через реестр и читает остатки точки через
+  `StockFacts` (`inventory` ← `sync`). Розницу из документов точки `inventory` применяет по правилу локальной цены
+  `LocalPriceRule` (экспорт `pricing`), долг поставщику и статус заказа — через `SupplierLedger` и `OrderReceiving`.
 
 ## Build / test / lint
 

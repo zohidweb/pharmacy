@@ -52,12 +52,15 @@ export class PaymentAllocation {
     if (credits.length === 0) return;
     const receipts = [
       ...(first === null ? [] : [first]),
-      ...(await this.repository.openReceipts(
-        trx,
-        tenantId,
-        supplierId,
-        legalEntityId,
-      )),
+      // a receipt of an offline store is applied as already `posted`: it is `first`, never a second time
+      ...(
+        await this.repository.openReceipts(
+          trx,
+          tenantId,
+          supplierId,
+          legalEntityId,
+        )
+      ).filter((r) => r.documentId !== first?.documentId),
     ].map((r) => ({ ...r, remainingDirams: BigInt(r.remainingDirams) }));
     let c = 0;
     for (const receipt of receipts) {

@@ -129,7 +129,7 @@ erDiagram
 | `purchase_price_per_pack_dirams` | bigint ≥ 0 | |
 | `cost_per_piece_dirams` | bigint ≥ 0 | `ceil(purchase / pieces_per_pack)` на момент создания |
 | `supplier_id` | uuid null | |
-| `origin` | text | `goods_receipt` / `opening_balance` / `transfer` / `inventory_surplus` / `product_merge` (партия карточки сети, в которую слит товар офлайн-точки; `source_batch_id` — партия товара точки, миграция `sync-product-merge`, 2026-10-20) |
+| `origin` | text | `goods_receipt` / `opening_balance` / `transfer` / `inventory_surplus` / `product_merge` (партия карточки сети, в которую слит товар офлайн-точки; `source_batch_id` — партия товара точки, миграции `sync-product-merge`, 2026-10-20; `source_batch_id` задан ровно у `transfer` и `product_merge`) |
 | `source_document_id` | uuid | Создавший документ |
 | `source_batch_id` | uuid null | Исходная партия отправителя (`origin = 'transfer'`) |
 | `is_starting` | boolean | «Стартовая партия» без разбивки (КП 3.4) |

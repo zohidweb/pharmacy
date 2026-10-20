@@ -656,3 +656,52 @@ export interface TransferAcceptedPayload {
   prices: SyncLocalPrice[];
   audit: SyncAuditRow[];
 }
+
+/* ---------------- the change feed, cloud → store (PR 3) ---------------- */
+
+/** An entity of the feed (spec 5.1); the scope is the network unless the entity is of one store. */
+export type SyncEntityType =
+  | 'product'
+  | 'category'
+  | 'store_price'
+  | 'discount_rule'
+  | 'role'
+  | 'employee'
+  | 'supplier'
+  | 'tenant_settings'
+  | 'return_policy'
+  | 'legal_entity'
+  | 'store'
+  | 'transfer_in_transit'
+  | 'transfer_result'
+  | 'purchase_order'
+  | 'transfer_request'
+  | 'price_conflict'
+  | 'duplicate_conflict';
+
+/**
+ * The state of an entity when the feed was read: the rows of its tables by the table name in camelCase (e.g.
+ * `products`, `productBarcodes`), columns in camelCase as the cloud stores them — the store upserts them by id
+ * (spec E27). Money in integer dirams, times in ISO 8601.
+ */
+export type SyncEntityData = Record<string, Array<Record<string, unknown>>>;
+
+/** One entry of the feed: an entity changed; `delete` — it is gone, the store archives it. */
+export interface SyncChange {
+  seq: number;
+  entityType: SyncEntityType;
+  entityId: string;
+  scopeStoreId: string | null;
+  op: 'upsert' | 'delete';
+  data: SyncEntityData | null;
+}
+
+/**
+ * GET /api/v1/sync/changes?cursor&limit — the changes after `cursor`, one entry per entity with its current state,
+ * in the order of their last change. `cursor` of the answer is where the next page starts.
+ */
+export interface SyncChangesResponse {
+  changes: SyncChange[];
+  cursor: number;
+  hasMore: boolean;
+}

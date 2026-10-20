@@ -21,6 +21,13 @@ export {
   resolveOpenConflict,
   storeTime,
 } from './conflicts';
+export {
+  type FeedChange,
+  type FeedSource,
+  feedRow,
+  SyncChanges,
+  SyncFeedSources,
+} from './feed';
 export { canonicalJson, payloadHash } from './payload-hash';
 export {
   SYNC_BATCH_LIMITS,

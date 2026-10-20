@@ -196,6 +196,7 @@ export class TransfersService {
         tenantId,
         doc.destinationStoreId as string,
         'toStoreId',
+        true,
       );
       await this.posting.send(trx, { tenantId, employeeId }, doc, sender);
       return this.mapper.transfer(
@@ -224,12 +225,14 @@ export class TransfersService {
           tenantId,
           doc.storeId,
           'fromStoreId',
+          true,
         ),
         await this.stores.counterpartStore(
           trx,
           tenantId,
           doc.destinationStoreId as string,
           'toStoreId',
+          true,
         ),
       ];
       if (from.mode !== 'online' || to.mode !== 'online') {
@@ -455,7 +458,13 @@ export class TransfersService {
     }
     const sender = await this.stores.writableStore(trx, tenantId, fromStoreId);
     if (toStoreId === fromStoreId) throw badField('toStoreId', 'same_store');
-    await this.stores.counterpartStore(trx, tenantId, toStoreId, 'toStoreId');
+    await this.stores.counterpartStore(
+      trx,
+      tenantId,
+      toStoreId,
+      'toStoreId',
+      true,
+    );
     if (
       request !== null &&
       (request.destinationStoreId !== fromStoreId ||

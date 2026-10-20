@@ -181,6 +181,14 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'dashboard.get',
   'usage.stats',
   'tenants.stats',
+  // the operator notifications and the announcements (spec 2026-10-19-operator-notifications)
+  'notifications.list',
+  'notifications.readAll',
+  'announcements.list',
+  'announcements.create',
+  'announcements.cancel',
+  'me.notificationPreferences',
+  'me.updateNotificationPreferences',
 ]);
 
 /** The API for the routes it serves, the given mocks for the rest. */

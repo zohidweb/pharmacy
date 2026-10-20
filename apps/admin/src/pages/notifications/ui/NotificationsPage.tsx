@@ -5,7 +5,7 @@ import type {
   NotificationPreferences,
   NotificationTopic,
 } from '@pharmacy/shared-dto';
-import { formatDateTime, toAppDate } from '@pharmacy/shared-util';
+import { addDays, formatDateTime, toAppDate } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -34,7 +34,7 @@ import {
   eventTone,
   useEventText,
 } from '@/entities/event';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
@@ -69,11 +69,13 @@ function AnnouncementDialog({
   const toast = useToast();
   const queryClient = useQueryClient();
   const today = toAppDate();
+  // night works of the coming night: an end already past is refused by the server (N12)
+  const tomorrow = addDays(today, 1);
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
-  const [startDate, setStartDate] = useState(today);
+  const [startDate, setStartDate] = useState(tomorrow);
   const [startTime, setStartTime] = useState('01:00');
-  const [endDate, setEndDate] = useState(today);
+  const [endDate, setEndDate] = useState(tomorrow);
   const [endTime, setEndTime] = useState('03:00');
   const [scope, setScope] = useState<AnnouncementScope>('all');
   const [touched, setTouched] = useState(false);
@@ -105,6 +107,19 @@ function AnnouncementDialog({
     },
   });
   const error = useApiErrorMessage(create.error);
+  // the server checks the end too: before the start or already past (N12)
+  const serverEnd =
+    create.error instanceof ApiError
+      ? create.error.errors.find((item) => item.field === 'endsAt')?.code
+      : undefined;
+  const endError =
+    touched && errors.range
+      ? t('rangeError')
+      : serverEnd === 'past'
+        ? t('pastError')
+        : serverEnd === 'before_start'
+          ? t('rangeError')
+          : undefined;
   return (
     <Dialog
       open={open}
@@ -170,7 +185,7 @@ function AnnouncementDialog({
           type="date"
           min={startDate}
           value={endDate}
-          error={touched && errors.range ? t('rangeError') : undefined}
+          error={endError}
           onChange={(event) => setEndDate(event.target.value)}
         />
         <TextField
@@ -235,14 +250,24 @@ export function NotificationsPage() {
       void queryClient.invalidateQueries({ queryKey: ['announcements'] });
       toast.show(t('announcements.cancelled'));
     },
+    // cancelled meanwhile or ended: the list is read again (409 `not_active`)
+    onError: () =>
+      void queryClient.invalidateQueries({ queryKey: ['announcements'] }),
   });
   const savePreferences = useMutation({
     mutationFn: (next: NotificationPreferences) =>
       apiRequest('me.updateNotificationPreferences', { body: next }),
-    onSuccess: (saved) =>
-      queryClient.setQueryData(['notification-preferences'], saved),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['notification-preferences'], saved);
+      // the bell and the menu counter show the topics kept on (N9)
+      void queryClient.invalidateQueries({
+        queryKey: attentionKeys.notifications,
+      });
+      void queryClient.invalidateQueries({ queryKey: attentionKeys.counts });
+    },
   });
   const preferencesError = useApiErrorMessage(savePreferences.error);
+  const cancelError = useApiErrorMessage(cancel.error);
 
   return (
     <>
@@ -366,6 +391,11 @@ export function NotificationsPage() {
               titleId="announcements-title"
               description={t('announcements.hint')}
             />
+            {cancelError && (
+              <Alert tone="danger" live="assertive" className="mb-4">
+                {cancelError}
+              </Alert>
+            )}
             <QueryState query={announcements}>
               {(rows) =>
                 rows.length === 0 ? (

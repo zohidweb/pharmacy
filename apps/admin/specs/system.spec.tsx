@@ -73,7 +73,8 @@ describe('AppShell counters', () => {
 
     expect(await screen.findByText('2 запроса ждут решения')).toBeTruthy();
     expect(screen.getByText('1 ключ истекает')).toBeTruthy();
-    expect(screen.getByText('4 новых уведомления')).toBeTruthy();
+    // the bell counts the topics kept on: sync is off in the demo preferences (N9)
+    expect(screen.getByText('3 новых уведомления')).toBeTruthy();
   });
 });
 

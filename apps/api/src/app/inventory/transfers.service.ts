@@ -206,13 +206,34 @@ export class TransfersService {
     });
   }
 
-  /** 409 `transfer_not_in_transit`. */
+  /**
+   * 409 `transfer_not_in_transit`; 409 `offline_transfer_no_recall` when either store is an offline one
+   * (spec 2026-10-16-offline-sync, E34: its side may already have accepted it — a wrong transfer is
+   * corrected by a transfer back).
+   */
   async recall(id: string): Promise<Transfer> {
     const { tenantId, employeeId } = requirePrincipal();
     return this.db.tenantTransaction(async (trx) => {
       const { doc } = await this.lockedWithRequest(trx, tenantId, id);
       if (doc.status !== 'in_transit') {
         throw new ProblemException(409, 'transfer_not_in_transit');
+      }
+      const [from, to] = [
+        await this.stores.counterpartStore(
+          trx,
+          tenantId,
+          doc.storeId,
+          'fromStoreId',
+        ),
+        await this.stores.counterpartStore(
+          trx,
+          tenantId,
+          doc.destinationStoreId as string,
+          'toStoreId',
+        ),
+      ];
+      if (from.mode !== 'online' || to.mode !== 'online') {
+        throw new ProblemException(409, 'offline_transfer_no_recall');
       }
       const sender = await this.stores.writableStore(
         trx,

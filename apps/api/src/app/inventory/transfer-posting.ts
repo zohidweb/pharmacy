@@ -313,7 +313,9 @@ export class TransferPosting {
       documentId: doc.id,
     });
 
-    if (short.length > 0) {
+    // the shortage of an offline sender is its own write-off, posted when it learns the result (E34)
+    const sender = await this.inventory.store(trx, tenantId, doc.storeId);
+    if (short.length > 0 && sender?.mode === 'online') {
       await this.writeOffShortageAtCloudSender(
         trx,
         ctx,

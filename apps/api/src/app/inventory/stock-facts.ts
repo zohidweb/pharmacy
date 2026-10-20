@@ -116,6 +116,7 @@ export class StockFacts {
     storeId: string,
     writeOff: SyncWriteOffDocument,
     sourceCustomerReturnId: string | null,
+    sourceDocumentId: string | null = null,
   ): Promise<void> {
     const { document, lines, movements } = writeOff;
     if (document.storeId !== storeId)
@@ -185,6 +186,7 @@ export class StockFacts {
         postedBy: document.postedBy,
         writeOffReason: document.writeOffReason,
         sourceCustomerReturnId,
+        sourceDocumentId,
         totalDirams: total,
       })
       .execute();

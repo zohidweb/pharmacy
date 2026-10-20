@@ -53,8 +53,9 @@ export class StoreAccess {
 
   /**
    * The other store of a transfer or a request (spec 2026-10-12-supplier-returns-transfers, 5.1):
-   * an active store of the network — the scope does not limit it — and a cloud one (409
-   * `offline_store_read_only`: transfers with offline stores wait for the sync, T9).
+   * an active store of the network — the scope does not limit it. An offline store is a counterpart
+   * too (spec 2026-10-16-offline-sync, E34, E37): it accepts, sends and answers by the sync; the
+   * cloud still never writes its stock (`writableStore`).
    */
   async counterpartStore(
     trx: TenantTransaction,
@@ -67,9 +68,6 @@ export class StoreAccess {
       throw new FieldProblemException(400, 'validation_failed', [
         { field, code: 'unknown_store' },
       ]);
-    }
-    if (store.mode !== 'online') {
-      throw new ProblemException(409, 'offline_store_read_only');
     }
     return store;
   }

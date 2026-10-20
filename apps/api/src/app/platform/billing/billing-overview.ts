@@ -26,6 +26,11 @@ export class BillingOverview {
     return this.invoices.overdue(trx, today);
   }
 
+  /** The requests without a decision (the counter of the menu «Услуги»). */
+  pendingCount(trx: Transaction<DB>): Promise<number> {
+    return this.orders.countPending(trx);
+  }
+
   /** The oldest request first. */
   pendingRequests(trx: Transaction<DB>): Promise<ServiceRequestItem[]> {
     return this.orders.pendingRequests(trx);

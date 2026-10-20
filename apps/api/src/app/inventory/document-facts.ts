@@ -6,6 +6,7 @@ import type {
   SyncInventoryLineRow,
   SyncOpeningBalanceLineRow,
   SyncOperationType,
+  SyncProductMergeLineRow,
   SyncSupplierReturnLineRow,
   SyncWriteOffLineRow,
 } from '@pharmacy/shared-dto';
@@ -112,6 +113,8 @@ export class DocumentFacts implements FactApplier {
       await this.stockCount(trx, tenantId, storeId, payload);
     } else if (document.type === 'supplier_return') {
       await this.supplierReturn(trx, tenantId, storeId, payload);
+    } else if (document.type === 'product_merge') {
+      await this.productMerge(trx, tenantId, storeId, payload);
     } else {
       throw new SyncApplyError('unsupported_document_type');
     }
@@ -754,6 +757,192 @@ export class DocumentFacts implements FactApplier {
         amountDirams: amounts[i],
       })),
     });
+  }
+
+  /**
+   * A product merge of the store (spec E35): after its decision `merge` on a duplicate, the store moves the stock of
+   * every batch of its product L to a new batch of the card X with the same lot, expiry and prices (`merge_out` /
+   * `merge_in`). The decision comes as its own operation: until it is applied the document waits; a merge into
+   * another card than the decision named is a quarantine.
+   */
+  private async productMerge(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    payload: DocumentPostedPayload,
+  ): Promise<void> {
+    const { document, batches, movements, prices } = payload;
+    const lines = payload.lines as SyncProductMergeLineRow[];
+    const from = document.mergeFromProductId;
+    const into = document.mergeIntoProductId;
+    if (
+      prices.length > 0 ||
+      document.totalDirams !== null ||
+      from === null ||
+      into === null ||
+      from === into
+    ) {
+      throw new SyncApplyError('document_mismatch');
+    }
+    const local = await trx
+      .selectFrom('products')
+      .select(['origin', 'createdAtStoreId', 'mergedIntoProductId'])
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', from)
+      .executeTakeFirst();
+    if (
+      !local ||
+      local.origin !== 'local' ||
+      local.createdAtStoreId !== storeId
+    ) {
+      throw new SyncApplyError('merge_mismatch');
+    }
+    if (local.mergedIntoProductId === null) {
+      throw new SyncApplyError('merge_decision', 'dependency');
+    }
+    if (local.mergedIntoProductId !== into) {
+      throw new SyncApplyError('merge_target_mismatch');
+    }
+    await requireProducts(trx, tenantId, [into]);
+
+    if (
+      lines.length === 0 ||
+      lines.some(
+        (line) =>
+          line.documentId !== document.id ||
+          !(Number.isSafeInteger(line.qtyPieces) && line.qtyPieces > 0) ||
+          line.fromBatchId === line.toBatchId,
+      )
+    ) {
+      throw new SyncApplyError('line_mismatch');
+    }
+    const fromIds = lines.map((line) => line.fromBatchId);
+    const toIds = lines.map((line) => line.toBatchId);
+    if (
+      new Set(fromIds).size !== fromIds.length ||
+      new Set(toIds).size !== toIds.length
+    ) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    // the batches of L at the store (a fact of the store: missing — wait for it)
+    const sources = await trx
+      .selectFrom('batches')
+      .select([
+        'id',
+        'productId',
+        'expiryDate',
+        'lotNumber',
+        'purchasePricePerPackDirams',
+        'costPerPieceDirams',
+        'supplierId',
+      ])
+      .where('tenantId', '=', tenantId)
+      .where('storeId', '=', storeId)
+      .where('id', 'in', fromIds)
+      .execute();
+    if (sources.length !== fromIds.length) {
+      throw new SyncApplyError('batch', 'dependency');
+    }
+    const source = new Map(sources.map((row) => [row.id, row]));
+    const created = new Map(batches.map((batch) => [batch.id, batch]));
+    if (
+      created.size !== batches.length ||
+      batches.length !== lines.length ||
+      lines.some((line) => {
+        const old = source.get(line.fromBatchId);
+        const batch = created.get(line.toBatchId);
+        return (
+          !old ||
+          !batch ||
+          old.productId !== from ||
+          batch.storeId !== storeId ||
+          batch.productId !== into ||
+          batch.origin !== 'product_merge' ||
+          batch.sourceDocumentId !== document.id ||
+          batch.expiryDate !== old.expiryDate ||
+          batch.lotNumber !== old.lotNumber ||
+          BigInt(batch.purchasePricePerPackDirams) !==
+            BigInt(old.purchasePricePerPackDirams) ||
+          BigInt(batch.costPerPieceDirams) !== BigInt(old.costPerPieceDirams) ||
+          batch.supplierId !== old.supplierId ||
+          batch.isStarting
+        );
+      })
+    ) {
+      throw new SyncApplyError('batch_mismatch');
+    }
+    if (await this.taken(trx, tenantId, 'batches', toIds)) {
+      throw new SyncApplyError('id_reused');
+    }
+    // two movements per line: out of the batch of L, into the new batch of X
+    const expected = new Set(
+      lines.flatMap((line) => [
+        `${line.id}|merge_out|${line.fromBatchId}|${-line.qtyPieces}`,
+        `${line.id}|merge_in|${line.toBatchId}|${line.qtyPieces}`,
+      ]),
+    );
+    const got = new Set(
+      movements.map(
+        (m) => `${m.sourceLineId}|${m.kind}|${m.batchId}|${m.qtyDeltaPieces}`,
+      ),
+    );
+    if (
+      movements.length !== expected.size ||
+      got.size !== expected.size ||
+      [...got].some((key) => !expected.has(key)) ||
+      movements.some(
+        (m) =>
+          m.sourceType !== 'document' ||
+          m.sourceId !== document.id ||
+          m.businessDate !== document.documentDate ||
+          m.reversesMovementId !== null,
+      )
+    ) {
+      throw new SyncApplyError('movement_mismatch');
+    }
+
+    await this.insertHeader(trx, tenantId, storeId, document, null, {
+      mergeFromProductId: from,
+      mergeIntoProductId: into,
+    });
+    const fromOf = new Map(
+      lines.map((line) => [line.toBatchId, line.fromBatchId]),
+    );
+    await trx
+      .insertInto('batches')
+      .values(
+        batches.map((batch) => ({
+          tenantId,
+          id: batch.id,
+          storeId,
+          productId: into,
+          expiryDate: batch.expiryDate,
+          lotNumber: batch.lotNumber,
+          purchasePricePerPackDirams: BigInt(batch.purchasePricePerPackDirams),
+          costPerPieceDirams: BigInt(batch.costPerPieceDirams),
+          supplierId: batch.supplierId,
+          origin: 'product_merge',
+          sourceDocumentId: document.id,
+          sourceBatchId: fromOf.get(batch.id) ?? null,
+          isStarting: false,
+        })),
+      )
+      .execute();
+    await trx
+      .insertInto('productMergeLines')
+      .values(
+        lines.map((line) => ({
+          tenantId,
+          id: line.id,
+          documentId: document.id,
+          lineNo: line.lineNo,
+          fromBatchId: line.fromBatchId,
+          toBatchId: line.toBatchId,
+          qtyPieces: line.qtyPieces,
+        })),
+      )
+      .execute();
+    await this.stock.insertMovements(trx, tenantId, storeId, movements);
   }
 
   /**

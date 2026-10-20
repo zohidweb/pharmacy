@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
+import { SyncChanges } from '../../core/sync';
 
 export interface StoreRef {
   id: string;
@@ -60,6 +61,10 @@ export interface RuleValues {
 // are read through the catalog's ProductsReader, never here.
 @Injectable()
 export class PricingRepository {
+  // every write of store prices and discount rules records its entity in the change feed (spec
+  // 2026-10-16-offline-sync, E4) — in the repository, so that no path of writing misses it
+  constructor(private readonly feed: SyncChanges) {}
+
   async settings(
     trx: TenantTransaction,
     tenantId: string,
@@ -258,6 +263,12 @@ export class PricingRepository {
         price_changed_by = excluded.price_changed_by,
         price_source = 'cloud',
         updated_at = now()`.execute(trx);
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'store_price',
+      entityId: productId,
+      scopeStoreId: storeId,
+    });
   }
 
   /**
@@ -294,7 +305,14 @@ export class PricingRepository {
       where pharmacy.store_products.retail_price_per_pack_dirams is null
       returning retail_price_per_pack_dirams as price`.execute(trx);
     const row = result.rows[0];
-    return row ? Number(row.price) : null;
+    if (!row) return null;
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'store_price',
+      entityId: productId,
+      scopeStoreId: toStoreId,
+    });
+    return Number(row.price);
   }
 
   /** Rules of the network, or of one id; with their store ids, tiers and author. */
@@ -383,6 +401,11 @@ export class PricingRepository {
       })
       .execute();
     await this.replaceParts(trx, tenantId, id, values);
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'discount_rule',
+      entityId: id,
+    });
   }
 
   async updateRule(
@@ -405,6 +428,11 @@ export class PricingRepository {
       .where('id', '=', id)
       .execute();
     await this.replaceParts(trx, tenantId, id, values);
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'discount_rule',
+      entityId: id,
+    });
   }
 
   /** Locks the rule row so that two edits of one rule apply one after the other. */
@@ -492,7 +520,14 @@ export class PricingRepository {
               ${fact.changedAt}, ${fact.changedBy}, 'store')
       on conflict (tenant_id, store_id, product_id) do nothing
       returning product_id`.execute(trx);
-    return result.rows.length > 0;
+    if (result.rows.length === 0) return false;
+    await this.feed.record(trx, {
+      tenantId: fact.tenantId,
+      entityType: 'store_price',
+      entityId: fact.productId,
+      scopeStoreId: fact.storeId,
+    });
+    return true;
   }
 
   /** Replaces the price of a locked row with the store's: a new version, `price_source = store`. */
@@ -513,5 +548,11 @@ export class PricingRepository {
         updated_at = now()
       where tenant_id = ${fact.tenantId} and store_id = ${fact.storeId}
         and product_id = ${fact.productId}`.execute(trx);
+    await this.feed.record(trx, {
+      tenantId: fact.tenantId,
+      entityType: 'store_price',
+      entityId: fact.productId,
+      scopeStoreId: fact.storeId,
+    });
   }
 }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { CatalogFlag, CatalogStatus } from '@pharmacy/shared-dto';
 import { type Expression, type SqlBool, sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
+import { SyncChanges } from '../../core/sync';
 
 /** Language keys of a name map (data model D6); the UI locale `tg` is the key `tj`. */
 export type NameLanguage = 'ru' | 'tj';
@@ -128,6 +129,10 @@ const BARCODE = /^[0-9]{8,14}$/;
 // tenant_id conditions keep the plans on the tenant-leading indexes.
 @Injectable()
 export class CatalogRepository {
+  // every write of products, barcodes and categories records its entity in the change feed (spec
+  // 2026-10-16-offline-sync, E4) — in the repository, so that no path of writing misses it
+  constructor(private readonly feed: SyncChanges) {}
+
   async networkLanguage(
     trx: TenantTransaction,
     tenantId: string,
@@ -393,6 +398,11 @@ export class CatalogRepository {
       .insertInto('products')
       .values({ tenantId, id, ...this.columns(values) })
       .execute();
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'product',
+      entityId: id,
+    });
   }
 
   async updateProduct(
@@ -407,6 +417,11 @@ export class CatalogRepository {
       .where('tenantId', '=', tenantId)
       .where('id', '=', id)
       .execute();
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'product',
+      entityId: id,
+    });
   }
 
   private columns(values: ProductValues) {
@@ -437,6 +452,11 @@ export class CatalogRepository {
       .where('tenantId', '=', tenantId)
       .where('id', '=', id)
       .execute();
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'product',
+      entityId: id,
+    });
   }
 
   /** Barcodes of the list that belong to another product of the network (archived ones too). */
@@ -464,6 +484,11 @@ export class CatalogRepository {
     productId: string,
     codes: readonly string[],
   ): Promise<void> {
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'product',
+      entityId: productId,
+    });
     let removal = trx
       .deleteFrom('productBarcodes')
       .where('tenantId', '=', tenantId)
@@ -579,6 +604,11 @@ export class CatalogRepository {
       select ${tenantId}, ${id}, ${JSON.stringify(name)}::jsonb,
              coalesce(max(pos_sort_order), 0) + 1
       from pharmacy.categories where tenant_id = ${tenantId}`.execute(trx);
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'category',
+      entityId: id,
+    });
   }
 
   async renameCategory(
@@ -593,6 +623,11 @@ export class CatalogRepository {
       .where('tenantId', '=', tenantId)
       .where('id', '=', id)
       .execute();
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'category',
+      entityId: id,
+    });
   }
 
   async setCategoryStatus(
@@ -611,6 +646,11 @@ export class CatalogRepository {
       .where('tenantId', '=', tenantId)
       .where('id', '=', id)
       .execute();
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'category',
+      entityId: id,
+    });
   }
 
   /**
@@ -683,6 +723,14 @@ export class CatalogRepository {
         .where('id', '=', markup.categoryId)
         .execute();
     }
+    await this.feed.recordMany(
+      trx,
+      markups.map((m) => ({
+        tenantId,
+        entityType: 'category',
+        entityId: m.categoryId,
+      })),
+    );
   }
 
   /* ---------------- local products of offline stores (spec 2026-10-16-offline-sync, E26, E35) ---------------- */
@@ -736,6 +784,11 @@ export class CatalogRepository {
         updatedAt: createdAt,
       })
       .execute();
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'product',
+      entityId: id,
+    });
   }
 
   /** The products the barcodes already belong to: barcode → product id. */
@@ -826,5 +879,15 @@ export class CatalogRepository {
       .where('tenantId', '=', tenantId)
       .where('productId', '=', id)
       .execute();
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'product',
+      entityId: id,
+    });
+    await this.feed.record(trx, {
+      tenantId,
+      entityType: 'product',
+      entityId: intoId,
+    });
   }
 }

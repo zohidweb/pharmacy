@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PricingFeed } from './pricing-feed';
 import { SyncCoreModule } from '../../core/sync';
 import { AuditModule } from '../audit/audit.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -33,6 +34,7 @@ import { StockedProducts } from './stocked-products';
     StockedProducts,
     PriceFacts,
     LocalPriceRule,
+    PricingFeed,
     PriceProblems,
   ],
   // PurchasePrices — a port the inventory module fills (spec 2026-10-14-owner-cabinet, E15)

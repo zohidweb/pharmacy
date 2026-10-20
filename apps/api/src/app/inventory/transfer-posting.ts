@@ -314,7 +314,14 @@ export class TransferPosting {
     });
 
     if (short.length > 0) {
-      await this.writeOffShortage(trx, ctx, doc, short, body.comment, today);
+      await this.writeOffShortageAtCloudSender(
+        trx,
+        ctx,
+        doc,
+        short,
+        body.comment,
+        today,
+      );
     }
     await this.documents.markReceived(
       trx,
@@ -340,9 +347,10 @@ export class TransferPosting {
    * The shortage, written off at the sender (T6): the dispatch of the missing pieces is reversed
    * (+N) and a posted write-off `transfer_discrepancy` takes them (−N) — the sender's stock does
    * not change, the loss is a write-off as any other. The batches of the shortage are locked by
-   * `accept`.
+   * `accept`. Also called when an offline store accepts a transfer of a cloud sender (spec
+   * 2026-10-16-offline-sync, E34); the shortage of an offline sender is its own write-off.
    */
-  private async writeOffShortage(
+  async writeOffShortageAtCloudSender(
     trx: TenantTransaction,
     ctx: { tenantId: string; employeeId: string },
     doc: DocumentRow,

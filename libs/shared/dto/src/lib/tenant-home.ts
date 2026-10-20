@@ -145,3 +145,16 @@ export interface TenantNotification extends Reminder {
 export interface TenantNotificationListResponse extends Page<TenantNotification> {
   unread: number;
 }
+
+/**
+ * GET /announcements (any signed-in employee, cloud only): the announcements of the platform on now for
+ * the network — its scope by the modes of its open stores (spec 2026-10-19-operator-notifications,
+ * N13, N14), the nearest end first. Title and text as the operator wrote them.
+ */
+export interface TenantAnnouncement {
+  id: string;
+  title: string;
+  text: string;
+  startsAt: string;
+  endsAt: string;
+}

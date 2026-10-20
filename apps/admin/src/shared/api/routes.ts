@@ -17,9 +17,9 @@ import type {
   CreateOperatorResponse,
   DashboardResponse,
   IssueOperatorCodeResponse,
+  NotificationListQuery,
   NotificationListResponse,
   NotificationPreferences,
-  NotificationTopic,
   OperatorAuditEntry,
   OperatorAuditQuery,
   OperatorMe,
@@ -395,7 +395,7 @@ export const apiRoutes = {
     NotificationListResponse,
     undefined,
     undefined,
-    { topic?: NotificationTopic; limit?: number; offset?: number }
+    NotificationListQuery
   >('GET', () => '/operator/notifications'),
   'notifications.readAll': route<void>(
     'POST',

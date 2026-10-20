@@ -144,8 +144,18 @@ export interface UsageStatsResponse {
 
 // ── Notifications and announcements ───────────────────────────────────────────────────────
 
+/**
+ * Topics of the operator notifications (spec 2026-10-19-operator-notifications, N5): `billing` —
+ * invoice_overdue, payment_recorded; `keys` — key_expiring, key_revoked; `services` —
+ * service_requested; `sync` — sync_stale, update_available.
+ */
 export type NotificationTopic = 'billing' | 'keys' | 'services' | 'sync';
 
+/**
+ * One operator notification (N1, N3, N4): a state (overdue invoice, expiring key, stale sync, pending
+ * request) is shown while it lasts and gets new params; an event (payment, revoked key) is shown 30
+ * days. `read` — read by this operator; the author of an event has it read at once.
+ */
 export interface PlatformNotification {
   id: string;
   topic: NotificationTopic;
@@ -156,7 +166,18 @@ export interface PlatformNotification {
   read: boolean;
 }
 
-/** GET /operator/notifications?topic&limit&offset */
+/**
+ * GET /operator/notifications?topic&bell&limit&offset (`platform:view`): `bell` — only the topics the
+ * operator keeps on for the bell (N9); `limit` 1–50, 20 by default (N7).
+ */
+export interface NotificationListQuery {
+  topic?: NotificationTopic;
+  bell?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+/** Newest first; `counts` and `unread` — of the visible notifications (N7). */
 export interface NotificationListResponse extends Page<PlatformNotification> {
   counts: Record<'all' | NotificationTopic, number>;
   unread: number;
@@ -165,6 +186,11 @@ export interface NotificationListResponse extends Page<PlatformNotification> {
 export type AnnouncementScope = 'all' | 'cloud' | 'offline';
 export type AnnouncementStatus = 'scheduled' | 'published' | 'cancelled';
 
+/**
+ * GET /operator/announcements (`platform:view`) — not cancelled and not ended, by the start (N11):
+ * `scheduled` — the display has not begun, `published` — it is on; `cancelled` — the answer of the
+ * cancellation. The title and the text are as the operator wrote them.
+ */
 export interface Announcement {
   id: string;
   title: string;
@@ -175,7 +201,12 @@ export interface Announcement {
   status: AnnouncementStatus;
 }
 
-/** POST /operator/announcements — shown to tenants in the client product. */
+/**
+ * POST /operator/announcements (`platform:manage`) → 201 `Announcement`: shown in the cloud client
+ * product to the networks of the scope from `startsAt` to `endsAt` (N13, N14). 400 `validation_failed`
+ * — `title` 3–120, `text` 10–1000 characters, `endsAt` (`before_start`, `past`). POST
+ * /operator/announcements/{id}/cancellation → 200; 404; 409 `not_active` — cancelled or ended (N12).
+ */
 export interface CreateAnnouncementRequest {
   title: string;
   text: string;
@@ -184,7 +215,10 @@ export interface CreateAnnouncementRequest {
   scope: AnnouncementScope;
 }
 
-/** GET/PUT /operator/me/notification-preferences — what the bell shows. */
+/**
+ * GET/PUT /operator/me/notification-preferences (`platform:view`) — the topics the bell and the menu
+ * counter show, of this operator only; all on by default; not the «Уведомления» page (N9).
+ */
 export type NotificationPreferences = Record<NotificationTopic, boolean>;
 
 // ── Operators' audit log ──────────────────────────────────────────────────────────────────

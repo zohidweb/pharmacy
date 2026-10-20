@@ -156,6 +156,7 @@ import type {
   ConfirmSessionRequest,
   SelectStoreRequest,
   SyncStatus,
+  TenantAnnouncement,
   TenantDashboard,
   TenantNotificationListResponse,
   UpdateEmployeeMeRequest,
@@ -232,6 +233,10 @@ export const apiRoutes = {
     { limit?: number; offset?: number }
   >('GET', () => '/notifications'),
   'notifications.readAll': route<void>('POST', () => '/notifications/read-all'),
+  'announcements.list': route<TenantAnnouncement[]>(
+    'GET',
+    () => '/announcements',
+  ),
 
   'navCounters.get': route<NavCounters, undefined, undefined, NavCountersQuery>(
     'GET',

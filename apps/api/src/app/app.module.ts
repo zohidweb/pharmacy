@@ -35,6 +35,7 @@ import { OperatorAuditModule } from './platform/audit/operator-audit.module';
 import { OperatorsModule } from './platform/operators/operators.module';
 import { PlatformBillingModule } from './platform/billing/platform-billing.module';
 import { PlatformStatsModule } from './platform/stats/platform-stats.module';
+import { PlatformNotificationsModule } from './platform/notifications/platform-notifications.module';
 import { TenantsModule } from './platform/tenants/tenants.module';
 import { OperatorPermissionsGuard } from './platform/auth/operator-permissions.guard';
 import { PermissionsGuard } from './auth/permissions.guard';
@@ -105,6 +106,11 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     // The operator dashboard and statistics (spec 2026-10-19-admin-dashboard-stats).
     ConditionalModule.registerWhen(
       PlatformStatsModule,
+      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
+    ),
+    // The notifications of the operators and the menu counters (spec 2026-10-19-operator-notifications).
+    ConditionalModule.registerWhen(
+      PlatformNotificationsModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
     // Stores and legal entities are kept in the cloud only (spec 2026-10-06-owner-stores).

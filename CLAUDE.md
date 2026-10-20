@@ -111,6 +111,8 @@ pharmacy/
   Дашборд и статистика админки — `app/platform/stats`: `pos` отдаёт ему `StoreSalesExport` (пересчёт витрин
   статистики сети в её контексте), `platform/billing` — `BillingOverview` (просроченные счета, последний
   выставленный месяц, заявки без решения).
+  Уведомления оператора и счётчики меню админки — `app/platform/notifications`: состояния берёт у `platform/stats`
+  (`OperatorQueue` — общий источник с очередью дашборда), число заявок — у `platform/billing` (`BillingOverview`).
   Синхронизация офлайн-точек (ADR-0014): `pos`, `returns`, `terminals`, `audit`, `catalog`, `pricing` регистрируют применители фактов
   точки в реестре ядра `SyncAppliers` (`core/sync`, глобальный); облачный модуль `sync` (контур `/api/v1/sync/*` по
   лицензионному ключу точки) применяет операции через реестр и читает остатки точки через `StockFacts`

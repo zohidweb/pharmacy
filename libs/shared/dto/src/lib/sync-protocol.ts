@@ -690,6 +690,8 @@ export type SyncEntityData = Record<string, Array<Record<string, unknown>>>;
 export interface SyncChange {
   seq: number;
   entityType: SyncEntityType;
+  /** The version of the entity's format (spec E7: 1 now; a store of an older version gets it downcast later). */
+  typeVersion: number;
   entityId: string;
   scopeStoreId: string | null;
   op: 'upsert' | 'delete';

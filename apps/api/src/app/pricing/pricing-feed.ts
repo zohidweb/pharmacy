@@ -3,6 +3,7 @@ import type { SyncEntityData, SyncEntityType } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
 import { type FeedSource, feedRow, SyncFeedSources } from '../../core/sync';
 
+// The columns are named (version 1, spec E7): a column added to a table never reaches the stores unnoticed.
 // The prices of a store and the discount rules of the network in the change feed (spec 2026-10-16-offline-sync,
 // E21, section 5.1). A price is an entity of its store (`entityId` = the product): the feed reader filters the scope,
 // so the row read here is the one of the store reading the feed. A rule goes with its thresholds and stores.
@@ -29,7 +30,18 @@ export class PricingFeed implements FeedSource {
     if (entityType === 'store_price') {
       const rows = await trx
         .selectFrom('storeProducts')
-        .selectAll()
+        .select([
+          'storeId',
+          'productId',
+          'retailPricePerPackDirams',
+          'retailPricePerPieceDirams',
+          'priceVersion',
+          'priceChangedAt',
+          'priceChangedBy',
+          'priceSource',
+          'createdAt',
+          'updatedAt',
+        ])
         .where('tenantId', '=', tenantId)
         .where('storeId', '=', storeId)
         .where('productId', 'in', [...ids])
@@ -41,20 +53,32 @@ export class PricingFeed implements FeedSource {
     }
     const rules = await trx
       .selectFrom('discountRules')
-      .selectAll()
+      .select([
+        'id',
+        'name',
+        'level',
+        'storeScope',
+        'validFrom',
+        'validTo',
+        'status',
+        'archivedAt',
+        'createdBy',
+        'createdAt',
+        'updatedAt',
+      ])
       .where('tenantId', '=', tenantId)
       .where('id', 'in', [...ids])
       .execute();
     const tiers = await trx
       .selectFrom('discountRuleTiers')
-      .selectAll()
+      .select(['ruleId', 'minTotalDirams', 'percentBp', 'createdAt'])
       .where('tenantId', '=', tenantId)
       .where('ruleId', 'in', [...ids])
       .orderBy('minTotalDirams')
       .execute();
     const stores = await trx
       .selectFrom('discountRuleStores')
-      .selectAll()
+      .select(['ruleId', 'storeId', 'createdAt'])
       .where('tenantId', '=', tenantId)
       .where('ruleId', 'in', [...ids])
       .execute();

@@ -3,6 +3,46 @@ import type { SyncEntityData, SyncEntityType } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
 import { type FeedSource, feedRow, SyncFeedSources } from '../../core/sync';
 
+// The columns of the feed, version 1 (spec E7): named, so that a column added to a table never reaches the stores
+// unnoticed — a new column is a new version of the entity. The tenant is the store's own.
+const PRODUCT_COLUMNS = [
+  'id',
+  'name',
+  'inn',
+  'dosageForm',
+  'dosage',
+  'manufacturer',
+  'country',
+  'unit',
+  'piecesPerPack',
+  'soldByPiece',
+  'isPrescription',
+  'isControlled',
+  'isPriceRegulated',
+  'maxRetailPricePerPackDirams',
+  'categoryId',
+  'markupBp',
+  'defaultMinStockPieces',
+  'article',
+  'status',
+  'archivedAt',
+  'origin',
+  'createdAtStoreId',
+  'mergedIntoProductId',
+  'createdAt',
+  'updatedAt',
+] as const;
+const CATEGORY_COLUMNS = [
+  'id',
+  'name',
+  'markupBp',
+  'posSortOrder',
+  'status',
+  'archivedAt',
+  'createdAt',
+  'updatedAt',
+] as const;
+
 // The products and categories of the network in the change feed (spec 2026-10-16-offline-sync, E21, section 5.1):
 // their rows as the cloud stores them — a product with its barcodes — for the store to upsert by id.
 @Injectable()
@@ -25,7 +65,7 @@ export class CatalogFeed implements FeedSource {
     if (entityType === 'category') {
       const rows = await trx
         .selectFrom('categories')
-        .selectAll()
+        .select(CATEGORY_COLUMNS)
         .where('tenantId', '=', tenantId)
         .where('id', 'in', [...ids])
         .execute();
@@ -34,13 +74,13 @@ export class CatalogFeed implements FeedSource {
     }
     const products = await trx
       .selectFrom('products')
-      .selectAll()
+      .select(PRODUCT_COLUMNS)
       .where('tenantId', '=', tenantId)
       .where('id', 'in', [...ids])
       .execute();
     const barcodes = await trx
       .selectFrom('productBarcodes')
-      .selectAll()
+      .select(['barcode', 'productId', 'createdAt'])
       .where('tenantId', '=', tenantId)
       .where('productId', 'in', [...ids])
       .orderBy('barcode')

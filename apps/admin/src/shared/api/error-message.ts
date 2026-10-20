@@ -36,6 +36,7 @@ const knownCodes = [
   'invalid_code',
   'password_policy',
   'login_locked',
+  'not_active',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

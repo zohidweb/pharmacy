@@ -50,8 +50,13 @@
   --ph-receipt-preview-height: var(--ph-size-receipt-preview);
   --ph-sheet-preview-width: var(--ph-sheet-width);
 
-  /* POS: catalog | receipt panel; the screen height under the top bar minus the bottom padding of main */
-  --ph-pos-height: calc(var(--ph-shell-body-height) - var(--ph-space-6));
+  /* POS: catalog | receipt panel; the screen height under the top bar minus the bottom padding of main and
+     minus the announcements banner of the platform when it is shown (its measured height, set by the
+     banner; 0 otherwise) */
+  --ph-pos-height: calc(
+    var(--ph-shell-body-height) - var(--ph-space-6) -
+      var(--ph-announcements-height, 0px)
+  );
   --ph-pos-columns: minmax(0, 1fr) var(--ph-size-pos-side);
   /* Customer return: receipt lines | calculation */
   --ph-return-columns: minmax(0, 2fr) minmax(0, 1fr);

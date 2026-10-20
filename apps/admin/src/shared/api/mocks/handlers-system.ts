@@ -110,8 +110,10 @@ export const systemHandlers: Pick<
   'attention.counts': () => ({
     serviceRequests: mockDb().billing.serviceRequests.length,
     expiringLicenses: expiringLicenses().length,
-    unreadNotifications: system().notifications.filter((item) => !item.read)
-      .length,
+    // the topics kept on for the bell (spec 2026-10-19-operator-notifications, N9)
+    unreadNotifications: system().notifications.filter(
+      (item) => !item.read && system().preferences[item.topic],
+    ).length,
   }),
   'dashboard.get': () => {
     const db = mockDb();
@@ -260,9 +262,12 @@ export const systemHandlers: Pick<
     const all = [...system().notifications].sort((a, b) =>
       b.createdAt.localeCompare(a.createdAt),
     );
-    const items = query?.topic
-      ? all.filter((item) => item.topic === query.topic)
-      : all;
+    // `bell` — only the topics the operator keeps on (N9)
+    const items = all.filter(
+      (item) =>
+        (!query?.topic || item.topic === query.topic) &&
+        (!query?.bell || system().preferences[item.topic]),
+    );
     const limit = query?.limit ?? 20;
     const offset = query?.offset ?? 0;
     const count = (topic: string) =>
@@ -279,7 +284,7 @@ export const systemHandlers: Pick<
         services: count('services'),
         sync: count('sync'),
       },
-      unread: all.filter((item) => !item.read).length,
+      unread: items.filter((item) => !item.read).length,
     };
   },
   'notifications.readAll': () => {
@@ -290,9 +295,15 @@ export const systemHandlers: Pick<
   'announcements.list': () =>
     system().announcements.filter((item) => item.status !== 'cancelled'),
   'announcements.create': ({ body, correlationId }) => {
+    // as the API (N12): 400 with the field
     if (body.endsAt <= body.startsAt) {
-      throw new ApiError(422, 'validation_failed', correlationId, [
+      throw new ApiError(400, 'validation_failed', correlationId, [
         { field: 'endsAt', code: 'before_start' },
+      ]);
+    }
+    if (body.endsAt <= new Date().toISOString()) {
+      throw new ApiError(400, 'validation_failed', correlationId, [
+        { field: 'endsAt', code: 'past' },
       ]);
     }
     const announcement = {
@@ -312,6 +323,12 @@ export const systemHandlers: Pick<
       (item) => item.id === params.id,
     );
     if (!announcement) throw notFound(correlationId);
+    if (
+      announcement.status === 'cancelled' ||
+      announcement.endsAt <= new Date().toISOString()
+    ) {
+      throw new ApiError(409, 'not_active', correlationId);
+    }
     announcement.status = 'cancelled';
     logAction('announcement.cancelled');
     return announcement;

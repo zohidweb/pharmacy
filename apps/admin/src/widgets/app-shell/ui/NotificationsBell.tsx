@@ -33,7 +33,11 @@ export function NotificationsBell() {
   const preview = useQuery({
     queryKey: [...attentionKeys.notifications, 'preview'],
     queryFn: ({ signal }) =>
-      apiRequest('notifications.list', { query: { limit: 20 }, signal }),
+      // the topics the operator keeps on for the bell (spec 2026-10-19-operator-notifications, N9)
+      apiRequest('notifications.list', {
+        query: { limit: 20, bell: true },
+        signal,
+      }),
   });
   const items = (preview.data?.items ?? [])
     .filter((item) => !item.read)

@@ -191,9 +191,17 @@ E16). Владелец вносит их раз в месяц по точке и
 
 ## `operators`, `operator_credentials` (класс `platform`)
 
-- **`operators`:** `login` unique, `full_name`, `status` `active` / `blocked`, `language` `ru` / `tj` (по умолчанию `ru`; язык админки, применяется при входе — миграция `operator-language`, 2026-10-14). В MVP одна роль с полным доступом (АП 6), права оператора — в коде.
+- **`operators`:** `login` unique, `full_name`, `status` `active` / `blocked`, `language` `ru` / `tj` (по умолчанию `ru`; язык админки, применяется при входе — миграция `operator-language`, 2026-10-14), `muted_notification_topics text[]` — темы, выключенные в колокольчике и счётчике меню (`billing`, `keys`, `services`, `sync`; миграция `operator-notifications`, 2026-10-19). В MVP одна роль с полным доступом (АП 6), права оператора — в коде.
 - **`operator_credentials`:** хеш пароля и версия pepper, как у сотрудника; одноразовый код первого входа — только SHA-256 и срок.
 - **Команда и профиль** (2026-10-14). Оператора добавляет другой оператор в админке, `POST /operator/operators`, или скрипт `create-operator.mjs`; код показывается один раз. Новый код — `POST /operator/operators/{id}/activation-codes`: прежний код перестаёт действовать, пароль остаётся до ввода нового кода; себе код не выдаётся. Отключение — `POST /operator/operators/{id}/deactivation`: `status = 'blocked'`, сеансы завершаются; себя отключить нельзя. Строки действующего оператора и цели блокируются вместе (по порядку id), поэтому два оператора не отключат друг друга одновременно и активный оператор всегда остаётся. Включения нет: отключение необратимо, логин остаётся занят. Эти три действия требуют повторного входа (step-up). **Принятый риск:** код действует и при заданном пароле, поэтому оператор может выдать код другому и войти под ним. В MVP у всех операторов одна роль с полным доступом, так что новых прав это не даёт, а выдача кода видна в журнале. Профиль `/operator/me`: имя, язык, смена пароля по текущему паролю (без step-up, другие сеансы завершаются, неиспользованный код сбрасывается), список сеансов и завершение остальных, последние действия из `platform_audit_log`. Вход сверяет `password_changed_at` под блокировкой строки `operator_credentials`: сеанс, открытый паролем, который сменили во время входа, не создаётся. В журнал пишутся `operator.code-issued` (`created` true/false), `operator.disabled`, `operator.renamed`, `auth.operator-password-changed`, `auth.operator-password-change-failed`.
+
+## `announcements` — объявления сетям (класс `shared`, 2026-10-19)
+
+Технические работы и другие объявления платформы (спецификация `2026-10-19-operator-notifications-design.md`, N11–N14;
+миграция `operator-notifications`). `title` (3–120), `text` (10–1000) — как написал оператор, без перевода; `starts_at`,
+`ends_at` (`ends_at > starts_at`) — показ; `scope` `all` / `cloud` / `offline` — сети с открытой точкой нужного режима;
+`created_by`, `created_at`; снятие — `cancelled_at`, `cancelled_by`, строки не удаляются. Пишет `pharmacy_platform`,
+читают все сети (`SELECT` у `pharmacy_app`): маршрут `GET /announcements` отдаёт идущие объявления круга сети.
 
 ## `impersonations` — вход «от имени» (класс `platform`, ADR-0008 E2)
 

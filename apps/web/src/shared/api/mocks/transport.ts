@@ -415,6 +415,9 @@ const handlers: MockHandlers = {
     };
   },
 
+  // the announcements of the platform on now (spec 2026-10-19-operator-notifications, N14)
+  'announcements.list': () => [],
+
   'notifications.readAll': ({ correlationId }) => {
     const { session } = authorize(correlationId, 'notifications:view');
     const visible = new Set(notificationsOf(session).map((n) => n.id));

@@ -17,6 +17,7 @@ import { FieldProblemException } from '../../../common/errors/validation-failed.
 import { PlatformDatabase } from '../../../core/database/platform';
 import { StoreSalesExport } from '../../pos/store-sales-export';
 import { BillingOverview } from '../billing/billing-overview';
+import { OperatorQueue } from './operator-queue';
 import { StatsRepository, type UsageStoreFigures } from './stats.repository';
 
 /** The first period of the statistics (spec 2026-10-19-admin-dashboard-stats, 6). */
@@ -64,6 +65,7 @@ export class StatsService {
     private readonly repository: StatsRepository,
     private readonly billing: BillingOverview,
     private readonly sales: StoreSalesExport,
+    private readonly queue: OperatorQueue,
   ) {}
 
   private actor() {
@@ -103,10 +105,10 @@ export class StatsService {
       const today = await this.repository.today(trx);
       const counts = await this.repository.counts(trx);
       const last = await this.billing.lastInvoicedPeriod(trx);
-      const overdue = await this.billing.overdueInvoices(trx, today);
-      const keys = await this.repository.expiringKeys(trx, today);
-      const stale = await this.repository.staleStores(trx, today);
-      const requests = await this.billing.pendingRequests(trx);
+      const overdue = await this.queue.overdueInvoices(trx, today);
+      const keys = await this.queue.expiringKeys(trx, today);
+      const stale = await this.queue.staleStores(trx, today);
+      const requests = await this.queue.pendingRequests(trx);
       const sales = await this.repository.salesByDay(
         trx,
         daysBefore(today, CHART_DAYS - 1),

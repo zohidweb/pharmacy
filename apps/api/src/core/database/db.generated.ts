@@ -23,6 +23,19 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface Announcements {
+  cancelledAt: Timestamp | null;
+  cancelledBy: string | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  endsAt: Timestamp;
+  id: string;
+  scope: string;
+  startsAt: Timestamp;
+  text: string;
+  title: string;
+}
+
 export interface AuditLog {
   actingOperatorId: string | null;
   action: string;
@@ -484,6 +497,7 @@ export interface Operators {
   language: Generated<string>;
   lastLoginAt: Timestamp | null;
   login: string;
+  mutedNotificationTopics: Generated<string[]>;
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
 }
@@ -508,6 +522,31 @@ export interface PlatformAuditLog {
   job: string | null;
   operatorId: string | null;
   recordedAt: Generated<Timestamp>;
+  tenantId: string | null;
+}
+
+export interface PlatformNotificationReads {
+  notificationId: string;
+  operatorId: string;
+  readAt: Generated<Timestamp>;
+}
+
+export interface PlatformNotificationRefresh {
+  eventsAfter: Timestamp;
+  id: number;
+  refreshedAt: Timestamp;
+}
+
+export interface PlatformNotifications {
+  createdAt: Generated<Timestamp>;
+  dedupeKey: string;
+  entityId: string | null;
+  entityType: string | null;
+  id: string;
+  kind: string;
+  params: Generated<Json>;
+  resolvedAt: Timestamp | null;
+  storeId: string | null;
   tenantId: string | null;
 }
 
@@ -1126,6 +1165,7 @@ export interface WriteOffLines {
 }
 
 export interface DB {
+  announcements: Announcements;
   auditLog: AuditLog;
   batches: Batches;
   categories: Categories;
@@ -1160,6 +1200,9 @@ export interface DB {
   operators: Operators;
   payments: Payments;
   platformAuditLog: PlatformAuditLog;
+  platformNotificationReads: PlatformNotificationReads;
+  platformNotificationRefresh: PlatformNotificationRefresh;
+  platformNotifications: PlatformNotifications;
   platformSettings: PlatformSettings;
   productBarcodes: ProductBarcodes;
   products: Products;

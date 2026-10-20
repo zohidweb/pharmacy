@@ -10,6 +10,7 @@ import { routes } from '@/shared/config';
 import { useShellChrome } from '@/shared/lib/shell-chrome';
 import { landingRoute } from '../config/navigation';
 import { ConnectionStatus } from './ConnectionStatus';
+import { AnnouncementsBanner } from './AnnouncementsBanner';
 import { ImpersonationBanner } from './ImpersonationBanner';
 import { NotificationsBell } from './NotificationsBell';
 import { Sidebar } from './Sidebar';
@@ -116,6 +117,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {data.impersonation && (
             <ImpersonationBanner info={data.impersonation} />
           )}
+          <AnnouncementsBanner />
           {children}
         </main>
       </div>

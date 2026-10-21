@@ -32,3 +32,11 @@ create policy tenant_isolation on pharmacy.import_jobs for all to pharmacy_app
   using (tenant_id = (select current_setting('app.tenant_id')::uuid))
   with check (tenant_id = (select current_setting('app.tenant_id')::uuid));
 grant select, insert on pharmacy.import_jobs to pharmacy_app;
+
+-- Append-only as the other journals (table-classes.ts, APPEND_ONLY_TABLES): even the owner cannot change a row.
+create trigger import_jobs_no_update_delete
+  before update or delete on pharmacy.import_jobs
+  for each row execute function pharmacy.forbid_mutation();
+create trigger import_jobs_no_truncate
+  before truncate on pharmacy.import_jobs
+  for each statement execute function pharmacy.forbid_mutation();

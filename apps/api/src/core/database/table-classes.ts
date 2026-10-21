@@ -115,6 +115,7 @@ export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
   'customer_returns',
   'customer_return_lines',
   'customer_return_refunds',
+  'import_jobs',
 ]);
 
 // SECURITY DEFINER resolver functions owned by pharmacy_resolver (ADR-0013 p. 3 and its

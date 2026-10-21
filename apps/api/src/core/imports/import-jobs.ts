@@ -43,13 +43,19 @@ export function idempotencyKeyOf(header: string | undefined): string {
 @Injectable()
 export class ImportJobs {
   /**
-   * The loads of one network wait for each other until the end of the transaction. An advisory lock, not the row
-   * of the tenant: billing locks that row, a load of 20 000 rows must not hold it.
+   * One load of a network at a time, until the end of the transaction. An advisory lock, not the row of the tenant:
+   * billing locks that row, a load of 20 000 rows must not hold it. Taken without waiting (final review I1): a load
+   * runs for seconds, past the `lock_timeout` of a request, and a waiting request would hold a connection of the pool
+   * the POS shares — the second load gets 409 `import_in_progress` and is repeated later.
    */
   async lock(trx: TenantTransaction, tenantId: string): Promise<void> {
-    await sql`select pg_advisory_xact_lock(hashtextextended(${`imports:${tenantId}`}, 0))`.execute(
+    const result = await sql<{ locked: boolean }>`
+      select pg_try_advisory_xact_lock(hashtextextended(${`imports:${tenantId}`}, 0)) as locked`.execute(
       trx,
     );
+    if (result.rows[0]?.locked !== true) {
+      throw new ProblemException(409, 'import_in_progress');
+    }
   }
 
   /**

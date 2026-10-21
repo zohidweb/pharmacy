@@ -878,7 +878,11 @@ export class CatalogRepository {
     return rows.map((row) => ({ ...row, status: row.status as CatalogStatus }));
   }
 
-  /** New products of a file load, 1 000 rows a statement. */
+  /**
+   * New products of a file load, 1 000 rows a statement; every one is recorded in the change feed of offline stores,
+   * as a product of the card (spec 2026-10-20-data-import, 10; E4). Its barcodes are a part of the product: the feed
+   * reads them with it.
+   */
   async insertProducts(
     trx: TenantTransaction,
     tenantId: string,
@@ -888,16 +892,22 @@ export class CatalogRepository {
       await trx
         .insertInto('products')
         .values(
-          rows
-            .slice(i, i + BULK_ROWS)
-            .map((row) => ({
-              tenantId,
-              id: row.id,
-              ...this.columns(row.values),
-            })),
+          rows.slice(i, i + BULK_ROWS).map((row) => ({
+            tenantId,
+            id: row.id,
+            ...this.columns(row.values),
+          })),
         )
         .execute();
     }
+    await this.feed.recordMany(
+      trx,
+      rows.map((row) => ({
+        tenantId,
+        entityType: 'product' as const,
+        entityId: row.id,
+      })),
+    );
   }
 
   /** Barcodes of new products of a file load, in the one order of `replaceBarcodes`. */
@@ -913,13 +923,11 @@ export class CatalogRepository {
       await trx
         .insertInto('productBarcodes')
         .values(
-          sorted
-            .slice(i, i + BULK_ROWS)
-            .map((row) => ({
-              tenantId,
-              barcode: row.barcode,
-              productId: row.productId,
-            })),
+          sorted.slice(i, i + BULK_ROWS).map((row) => ({
+            tenantId,
+            barcode: row.barcode,
+            productId: row.productId,
+          })),
         )
         .execute();
     }

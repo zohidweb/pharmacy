@@ -93,14 +93,28 @@ export class CatalogImportService {
           hash,
         );
         if (replayed) return replayed;
-        // the names of categories wait for each other with the card of a category (CategoriesService)
-        await this.repository.lockCategoryNames(trx, tenantId);
-        const plan = await this.evaluate(
+        const canCreateCategories = hasPermissions(
+          permissions,
+          'catalog:update',
+        );
+        let plan = await this.evaluate(
           trx,
           tenantId,
           request.rows,
-          hasPermissions(permissions, 'catalog:update'),
+          canCreateCategories,
         );
+        if (plan.newCategories.size > 0) {
+          // new names wait for the card of a category (CategoriesService) — only when the load creates categories, so a
+          // load of known categories does not hold the names of the network (final review I1); the plan is made again
+          // under the lock: a category of the same name may have appeared meanwhile
+          await this.repository.lockCategoryNames(trx, tenantId);
+          plan = await this.evaluate(
+            trx,
+            tenantId,
+            request.rows,
+            canCreateCategories,
+          );
+        }
         if (!plan.issues.empty) throw importInvalid();
 
         const categoryIds = new Map(plan.categoryIds);

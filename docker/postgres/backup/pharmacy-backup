@@ -153,6 +153,19 @@ restore_into() {
     pg_restore $1 -j 2 --exit-on-error -d "$2" "$3"
 }
 
+# dump_facts <dump> — d_tables, d_migration of the copy itself, from its table of contents and its pgmigrations
+# data: the snapshot of the copy. A query of the live database before or after pg_dump would race with DDL (a
+# migration committed in between) and fail a sound copy or pass a broken one.
+dump_facts() {
+  toc=$(pg_restore -l "$1") || return 1
+  d_tables=$(printf '%s\n' "$toc" | grep -c -E '^[0-9]+; [0-9]+ [0-9]+ TABLE (pharmacy|public) ')
+  d_migration=$(pg_restore -a -n public -t pgmigrations -f - "$1" | awk -F '\t' '
+    /^COPY public\.pgmigrations / { data = 1; next }
+    data && /^\\\.$/ { data = 0 }
+    data && $1 + 0 > max { max = $1 + 0; name = $2 }
+    END { print name }') || return 1
+}
+
 # check_restored <conn> <db> <tables> <migration> — c_tenants, or c_error.
 check_restored() {
   db_facts "$1" "$2" || { c_error="the restored database cannot be read"; return 1; }
@@ -234,12 +247,13 @@ cmd_run() {
     fail "the source database cannot be read"
   fi
   trap scratch_stop EXIT
-  m_tables=$f_tables m_migration=$f_migration
   m_server=$(q "" "$DB_NAME" "show server_version" 2>>"$part/log.txt") || fail "the source database cannot be read"
-  log "copy $m_name: started ($f_tenants networks, $f_tables tables)"
+  log "copy $m_name: started ($f_tenants networks)"
 
   pg_dumpall --globals-only --no-role-passwords -f "$part/globals.sql" 2>>"$part/log.txt" || fail "pg_dumpall failed"
   pg_dump -Fc --lock-wait-timeout=60s -f "$part/pharmacy.dump" 2>>"$part/log.txt" || fail "pg_dump failed"
+  dump_facts "$part/pharmacy.dump" 2>>"$part/log.txt" || fail "the copy cannot be read"
+  m_tables=$d_tables m_migration=$d_migration
   m_bytes=$(stat -c %s "$part/pharmacy.dump")
   m_dump_s=$(($(date +%s) - m_started))
 

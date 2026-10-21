@@ -36,6 +36,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # No copy runs beside the migrations of the same `up`: pg_dump holds its locks to the end (spec B12).
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       # Unhealthy without a verified copy for 26 h (after the first 2 h of the container) or when blocked.
       test: ['CMD', 'pharmacy-backup', 'health']

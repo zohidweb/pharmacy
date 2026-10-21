@@ -1,6 +1,6 @@
 # ADR-0012: Reverse proxy и раздача статики web/admin — Caddy, одна конфигурация для облака и офлайн-точки
 
-- **Статус:** proposed
+- **Статус:** accepted (2026-10-21, архитектор проекта — APPROVAL.md)
 - **Дата:** 2026-09-29
 - **Авторы:** Zohid Saidov (z.saidov@eskhata.com), команда проекта Pharmacy (черновик подготовлен с помощью AI)
 - **Принимает:** архитектор проекта (docs/architecture/APPROVAL.md)
@@ -350,3 +350,22 @@ import /etc/caddy/profiles/{$PROXY_PROFILE}.caddy
 5. Локальные test/prod: HTTPS на `*.localhost` с `tls internal` (проверяется `__Host-`) или
    `http://localhost` с офлайн-именами cookie (проще, но «боевой» путь cookie не проверяется до
    облака).
+
+## Принятие (2026-10-21)
+
+Принят архитектором проекта вместе с ADR-0020 (хостинг: один VPS Contabo, домен `nurmed.online`). Решения по спорным
+моментам:
+
+1. **Caddy**, не nginx: хостинг TLS-балансировщика не даёт, автоматический Let's Encrypt нужен.
+2. Web — на `app.nurmed.online`, admin — на `admin.nurmed.online`, apex — редирект на `app.` (ADR-0020). Отдельный
+   регистрируемый домен админки и allowlist IP операторов на MVP не вводятся. Вход «от имени» не реализуется
+   (ADR-0008), поэтому CSP админки — `form-action 'self'` без origin web. Proxy пропускает на `admin.` только
+   `/api/v1/operator/*`, на `app.` — всё, кроме него (эшелон; основная проверка — в API).
+3. Лимиты тела: `/api/*` — 1 MB, `/api/v1/sync/*` — 4 MB (батч ADR-0014 — 2 МБ JSON после распаковки, проверяет
+   body-parser API); таймауты — как в таблице «Параметры proxy».
+4. `script-src 'unsafe-inline'` на MVP допустим; хеши inline-скриптов — после MVP.
+5. Локальные test/prod — HTTPS на `*.localhost` с `tls internal` (проверяется «боевой» путь cookie `__Host-*`); профиль
+   `local` повторяет `cloud` без редиректа apex.
+
+Уточнения реализации к разделу «Решение»: `*.map` исключаются и из манифеста Service Worker (`build-sw.mjs`), иначе
+установка воркера падает на отсутствующем файле; `.dockerignore` уже исключает `docker/env` и `*.env`.

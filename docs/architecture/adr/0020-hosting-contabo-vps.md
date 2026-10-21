@@ -1,6 +1,6 @@
 # ADR-0020: Хостинг облачной части на пилоте — один VPS Contabo, домен nurmed.online, копии БД вне хоста
 
-- **Статус:** proposed
+- **Статус:** accepted (2026-10-21, архитектор проекта — APPROVAL.md)
 - **Дата:** 2026-10-21
 - **Авторы:** Zohid Saidov (z.saidov@eskhata.com), команда проекта Pharmacy (текст подготовлен с помощью AI)
 - **Принимает:** архитектор проекта (docs/architecture/APPROVAL.md)

@@ -13,6 +13,8 @@ import { SupplierLedger } from './supplier-ledger';
 import { SuppliersController } from './suppliers.controller';
 import { SuppliersReader } from './suppliers-reader';
 import { SuppliersService } from './suppliers.service';
+import { SupplierImportService } from './supplier-import.service';
+import { SupplierImportsController } from './supplier-imports.controller';
 
 // Purchasing (spec 2026-10-09-inventory-purchasing, section 5): suppliers, their ledger and
 // payments with their allocation to goods receipts, purchase orders.
@@ -21,10 +23,15 @@ import { SuppliersService } from './suppliers.service';
 // module and reads products through the catalog.
 @Module({
   imports: [AuditModule, CatalogModule],
-  controllers: [SuppliersController, PurchaseOrdersController],
+  controllers: [
+    SuppliersController,
+    PurchaseOrdersController,
+    SupplierImportsController,
+  ],
   providers: [
     PurchasingRepository,
     SuppliersService,
+    SupplierImportService,
     SuppliersReader,
     SupplierLedger,
     PaymentAllocation,

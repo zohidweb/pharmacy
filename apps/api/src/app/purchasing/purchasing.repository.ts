@@ -157,6 +157,37 @@ export class PurchasingRepository {
     );
   }
 
+  /** The names of every supplier of the network, any status: a load from a file skips the ones it has (F8). */
+  async supplierNames(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<string[]> {
+    const rows = await trx
+      .selectFrom('suppliers')
+      .select('name')
+      .where('tenantId', '=', tenantId)
+      .execute();
+    return rows.map((row) => row.name);
+  }
+
+  /** New suppliers of a load from a file, 1 000 rows a statement. */
+  async insertSuppliers(
+    trx: TenantTransaction,
+    tenantId: string,
+    rows: readonly { id: string; values: SupplierValues }[],
+  ): Promise<void> {
+    for (let i = 0; i < rows.length; i += 1_000) {
+      await trx
+        .insertInto('suppliers')
+        .values(
+          rows
+            .slice(i, i + 1_000)
+            .map((row) => ({ tenantId, id: row.id, ...row.values })),
+        )
+        .execute();
+    }
+  }
+
   async insertSupplier(
     trx: TenantTransaction,
     tenantId: string,

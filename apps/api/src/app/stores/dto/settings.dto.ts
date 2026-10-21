@@ -1,3 +1,7 @@
+import {
+  posBufferBounds,
+  prescriptionRetentionBounds,
+} from '@pharmacy/shared-domain';
 import type {
   NotificationKind,
   UpdateNetworkSettingsRequest,
@@ -73,4 +77,31 @@ export class UpdateNetworkSettingsDto implements UpdateNetworkSettingsRequest {
   @ValidateNested()
   @Type(() => NotificationSwitchesDto)
   notifications!: NotificationSwitchesDto;
+
+  // spec 2026-10-21-pos-offline-limits, P2, P6 (bounds — @pharmacy/shared-domain; the ПКУ limits are not above the
+  // general ones — the service)
+  @IsInt()
+  @Min(prescriptionRetentionBounds[0])
+  @Max(prescriptionRetentionBounds[1])
+  prescriptionRetentionDays!: number;
+
+  @IsInt()
+  @Min(posBufferBounds.maxHours[0])
+  @Max(posBufferBounds.maxHours[1])
+  posBufferMaxHours!: number;
+
+  @IsInt()
+  @Min(posBufferBounds.maxOperations[0])
+  @Max(posBufferBounds.maxOperations[1])
+  posBufferMaxOperations!: number;
+
+  @IsInt()
+  @Min(posBufferBounds.controlledMaxHours[0])
+  @Max(posBufferBounds.controlledMaxHours[1])
+  posControlledMaxHours!: number;
+
+  @IsInt()
+  @Min(posBufferBounds.controlledMaxOperations[0])
+  @Max(posBufferBounds.controlledMaxOperations[1])
+  posControlledMaxOperations!: number;
 }

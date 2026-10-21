@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+  type PosBufferLimits,
+  posBufferDefaults,
+} from '@pharmacy/shared-domain';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
 
@@ -24,6 +28,10 @@ export interface PosSettings {
   /** `{ ru, tj }` or null. */
   receiptFooter: unknown;
   pieceStepDirams: number;
+  /** Limits of the outage buffer (spec 2026-10-21-pos-offline-limits, P6). */
+  bufferLimits: PosBufferLimits;
+  /** Days the prescription data is kept (P2, P3). */
+  retentionDays: number;
 }
 
 // Organisation data the POS reads (stores, legal entities, the network and its settings) — the
@@ -58,9 +66,18 @@ export class PosRepository {
       returnPeriodDays: number | null;
       receiptFooter: unknown;
       pieceStepDirams: number | null;
+      maxHours: number | null;
+      maxOperations: number | null;
+      controlledMaxHours: number | null;
+      controlledMaxOperations: number | null;
+      retentionDays: number | null;
     }>`
       select t.name as network_name, ts.default_language, ts.return_period_days,
-             ts.receipt_footer, ts.piece_price_rounding_dirams as piece_step_dirams
+             ts.receipt_footer, ts.piece_price_rounding_dirams as piece_step_dirams,
+             ts.pos_buffer_max_hours as max_hours, ts.pos_buffer_max_operations as max_operations,
+             ts.pos_controlled_max_hours as controlled_max_hours,
+             ts.pos_controlled_max_operations as controlled_max_operations,
+             ts.prescription_retention_days as retention_days
       from pharmacy.tenants t
       left join pharmacy.tenant_settings ts on ts.tenant_id = t.id
       where t.id = ${tenantId}`.execute(trx);
@@ -71,6 +88,16 @@ export class PosRepository {
       returnPeriodDays: row?.returnPeriodDays ?? 14,
       receiptFooter: row?.receiptFooter ?? null,
       pieceStepDirams: Math.max(1, row?.pieceStepDirams ?? 1),
+      bufferLimits: {
+        maxHours: row?.maxHours ?? posBufferDefaults.maxHours,
+        maxOperations: row?.maxOperations ?? posBufferDefaults.maxOperations,
+        controlledMaxHours:
+          row?.controlledMaxHours ?? posBufferDefaults.controlledMaxHours,
+        controlledMaxOperations:
+          row?.controlledMaxOperations ??
+          posBufferDefaults.controlledMaxOperations,
+      },
+      retentionDays: row?.retentionDays ?? 90,
     };
   }
 

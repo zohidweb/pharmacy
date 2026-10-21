@@ -27,7 +27,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'use-intl';
 import { can, useSession } from '@/entities/session';
-import { apiRequest } from '@/shared/api';
+import { apiRequest, isApiRouteAvailable } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -130,16 +130,18 @@ function ReportsPageView() {
             >
               {t('excel')}
             </Button>
-            {can(session, 'export-1c:view') && (
-              <Button
-                variant="secondary"
-                iconStart="file-text"
-                disabled={!periodValid}
-                onClick={() => setExporting(true)}
-              >
-                {t('export1cAction')}
-              </Button>
-            )}
+            {/* the 1C export is not in the pilot: shown once its route is on the API (spec 2026-10-20-data-import, F22) */}
+            {can(session, 'export-1c:view') &&
+              isApiRouteAvailable('export1c.preview') && (
+                <Button
+                  variant="secondary"
+                  iconStart="file-text"
+                  disabled={!periodValid}
+                  onClick={() => setExporting(true)}
+                >
+                  {t('export1cAction')}
+                </Button>
+              )}
           </>
         }
       />

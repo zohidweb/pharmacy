@@ -15,13 +15,15 @@ import type {
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderListItem,
+  ImportIssue,
   Supplier,
   SupplierDebtState,
+  SupplierImportRow,
   SupplierInput,
   SupplierLedgerEntry,
   SupplierListItem,
 } from '@pharmacy/shared-dto';
-import { toAppDate } from '@pharmacy/shared-util';
+import { matchKey, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
@@ -42,6 +44,7 @@ type PurchasingRoute = Extract<
   ApiRouteKey,
   | `purchaseOrders.${'list' | 'get' | 'create' | 'update' | 'confirm' | 'deficit'}`
   | `suppliers.${'list' | 'get' | 'create' | 'update' | 'pay'}`
+  | `supplierImports.${'check' | 'apply'}`
 >;
 
 const db = () => mockDb().stock;
@@ -220,6 +223,26 @@ function supplierInput(body: SupplierInput, correlationId: string) {
     address: body.address.trim(),
     paymentDelayDays: body.paymentDelayDays,
   };
+}
+
+/** A load of suppliers from a file (spec 2026-10-20-data-import, F8), as the API: a name the network has is skipped. */
+function supplierImportPlan(rows: readonly SupplierImportRow[]) {
+  const issues: ImportIssue[] = [];
+  const creates: SupplierImportRow[] = [];
+  const known = new Set(db().suppliers.map((s) => matchKey(s.name)));
+  const seen = new Set<string>();
+  let existing = 0;
+  for (const row of rows) {
+    const key = matchKey(row.name);
+    if (seen.has(key)) {
+      issues.push({ line: row.line, field: 'name', code: 'duplicate_in_file' });
+      continue;
+    }
+    seen.add(key);
+    if (known.has(key)) existing += 1;
+    else creates.push(row);
+  }
+  return { issues, creates, existing };
 }
 
 const supplierOf = (id: string, correlationId: string) =>
@@ -415,6 +438,35 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
     };
     db().suppliers.push(supplier);
     return supplier;
+  },
+  'supplierImports.check': ({ body, correlationId }) => {
+    context(correlationId, 'purchasing:create');
+    const plan = supplierImportPlan(body.rows);
+    return {
+      total: body.rows.length,
+      create: plan.creates.length,
+      existing: plan.existing,
+      errors: plan.issues.slice(0, 1000),
+      errorsTotal: plan.issues.length,
+    };
+  },
+  'supplierImports.apply': ({ body, correlationId }) => {
+    context(correlationId, 'purchasing:create', { write: true });
+    const plan = supplierImportPlan(body.rows);
+    if (plan.issues.length > 0) {
+      throw new ApiError(422, 'import_invalid', correlationId);
+    }
+    plan.creates.forEach((row, index) =>
+      db().suppliers.push({
+        id: `sup-${Date.now()}-${index}`,
+        ...supplierInput(row, correlationId),
+      }),
+    );
+    return {
+      importId: `imp-${Date.now()}`,
+      created: plan.creates.length,
+      existing: plan.existing,
+    };
   },
   'suppliers.update': ({ params, body, correlationId }) => {
     context(correlationId, 'purchasing:update', { write: true });

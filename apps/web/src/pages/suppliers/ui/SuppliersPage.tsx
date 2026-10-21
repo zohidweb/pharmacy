@@ -14,11 +14,13 @@ import {
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DebtStatePill } from '@/entities/purchasing';
 import { can, canWrite, useSession } from '@/entities/session';
-import { apiRequest, sameTransport } from '@/shared/api';
+import { apiRequest, isApiRouteAvailable, sameTransport } from '@/shared/api';
+import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import {
@@ -44,6 +46,7 @@ function SuppliersPageView() {
     canSeeCost &&
     sameTransport('suppliers.pay', 'suppliers.get');
   const canCreate = canWrite(session, 'purchasing:create');
+  const router = useRouter();
   const canEdit = canWrite(session, 'purchasing:update');
   const [offset, setOffset] = useState(0);
   const [editing, setEditing] = useState<Supplier | 'new' | null>(null);
@@ -130,13 +133,25 @@ function SuppliersPageView() {
       <PageHeader
         title={t('title')}
         actions={
-          <Button
-            iconStart="plus"
-            disabled={!canCreate}
-            onClick={() => setEditing('new')}
-          >
-            {t('new')}
-          </Button>
+          <>
+            {/* loading the suppliers from a file (spec 2026-10-20-data-import, F20) */}
+            {canCreate && isApiRouteAvailable('supplierImports.apply') && (
+              <Button
+                variant="secondary"
+                iconStart="download"
+                onClick={() => router.push(routes.dataImport('suppliers'))}
+              >
+                {t('import')}
+              </Button>
+            )}
+            <Button
+              iconStart="plus"
+              disabled={!canCreate}
+              onClick={() => setEditing('new')}
+            >
+              {t('new')}
+            </Button>
+          </>
         }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">

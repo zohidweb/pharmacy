@@ -83,6 +83,7 @@ function CatalogPageView() {
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
   const canCreate = canWrite(session, 'catalog:create');
+  const router = useRouter();
   const [q, setQ] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [form, setForm] = useState('');
@@ -205,14 +206,16 @@ function CatalogPageView() {
         title={t('title')}
         actions={
           <>
-            <Button
-              variant="secondary"
-              iconStart="download"
-              disabled
-              title={t('importPending')}
-            >
-              {t('import')}
-            </Button>
+            {/* loading the catalog from a file (spec 2026-10-20-data-import, F20) */}
+            {canCreate && isApiRouteAvailable('catalogImports.apply') && (
+              <Button
+                variant="secondary"
+                iconStart="download"
+                onClick={() => router.push(routes.dataImport('catalog'))}
+              >
+                {t('import')}
+              </Button>
+            )}
             <Button
               iconStart="plus"
               disabled={!canCreate || !refs.data}

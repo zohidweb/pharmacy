@@ -14,6 +14,8 @@ import {
 import { productUnits } from '@pharmacy/shared-domain';
 import type {
   CatalogFlag,
+  CatalogImportRow,
+  ImportIssue,
   CatalogListItem,
   CatalogProduct,
   CatalogProductInput,
@@ -27,7 +29,7 @@ import type {
   PriceRow,
   StorePrice,
 } from '@pharmacy/shared-dto';
-import { toAppDate } from '@pharmacy/shared-util';
+import { matchKey, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
@@ -43,6 +45,7 @@ type CatalogRoute = Extract<
   ApiRouteKey,
   | `catalog.${'list' | 'get' | 'create' | 'update' | 'status' | 'references' | 'duplicates'}`
   | `catalog.${'categories' | 'createCategory' | 'updateCategory' | 'categoryStatus'}`
+  | `catalogImports.${'check' | 'apply'}`
   | `prices.${string}`
   | `priceConflicts.${string}`
   | `discountRules.${string}`
@@ -296,6 +299,102 @@ function categoryInput(
   return { nameRu, nameTj: body.nameTj.trim() };
 }
 
+/** A new product of the card or of a file load: the checks of the card, then the product. */
+function createProduct(body: CatalogProductInput, correlationId: string) {
+  const codes = productInput(body, correlationId);
+  const product: PosProduct = {
+    id: `p-new-${catalog().counters.product++}`,
+    name: '',
+    inn: '',
+    manufacturer: '',
+    country: '',
+    form: '',
+    categoryId: body.categoryId,
+    barcodes: [],
+    piecesPerPack: 1,
+    divisible: false,
+    prescription: 'none',
+    // the retail price comes from the first goods receipt by the markup
+    priceMinor: 0,
+    piecePriceMinor: null,
+    batches: [],
+  };
+  applyProduct(product, body, codes);
+  products().push(product);
+  return product;
+}
+
+/**
+ * A load of the catalog from a file (spec 2026-10-20-data-import, F6–F9), as the API: a row whose barcodes belong to
+ * one product is skipped, to several — refused; a new category is created only with `catalog:update`.
+ */
+function catalogImportPlan(
+  rows: readonly CatalogImportRow[],
+  canCreateCategories: boolean,
+) {
+  const issues: ImportIssue[] = [];
+  const creates: CatalogImportRow[] = [];
+  const newCategories = new Map<string, string>();
+  const categories = new Map(
+    categoryRecords()
+      .filter((record) => record.status === 'active')
+      .map((record) => [matchKey(record.nameRu), record.id]),
+  );
+  const seen = new Set<string>();
+  let existing = 0;
+  for (const row of rows) {
+    if (row.barcodes.some((code) => seen.has(code))) {
+      issues.push({
+        line: row.line,
+        field: 'barcodes',
+        code: 'duplicate_in_file',
+      });
+      continue;
+    }
+    row.barcodes.forEach((code) => seen.add(code));
+    const holders = row.barcodes.map(
+      (code) => products().find((p) => p.barcodes.includes(code)) ?? null,
+    );
+    const ids = new Set(holders.map((holder) => holder?.id ?? null));
+    if (holders.length > 0 && ids.size === 1 && !ids.has(null)) {
+      existing += 1;
+      continue;
+    }
+    const holder = holders.find((item) => item !== null);
+    if (holder) {
+      issues.push({
+        line: row.line,
+        field: 'barcodes',
+        code: 'barcode_conflict',
+        detail: holder.name,
+      });
+      continue;
+    }
+    if (!row.nameRu) {
+      issues.push({ line: row.line, field: 'nameRu', code: 'required' });
+      continue;
+    }
+    const key = matchKey(row.category);
+    if (!key) {
+      issues.push({ line: row.line, field: 'category', code: 'required' });
+      continue;
+    }
+    if (!categories.has(key)) {
+      if (!canCreateCategories) {
+        issues.push({
+          line: row.line,
+          field: 'category',
+          code: 'unknown_category',
+        });
+        continue;
+      }
+      newCategories.set(key, row.category.trim());
+    }
+    creates.push(row);
+  }
+  return { issues, creates, existing, newCategories, categories };
+}
+
 /* ---------------- discount rules ---------------- */
 
 function toRule(rule: DiscountRuleRecord): DiscountRuleDefinition {
@@ -414,27 +513,73 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
   },
   'catalog.create': ({ body, correlationId }) => {
     context(correlationId, 'catalog:create', { write: true });
-    const codes = productInput(body, correlationId);
-    const product: PosProduct = {
-      id: `p-new-${catalog().counters.product++}`,
-      name: '',
-      inn: '',
-      manufacturer: '',
-      country: '',
-      form: '',
-      categoryId: body.categoryId,
-      barcodes: [],
-      piecesPerPack: 1,
-      divisible: false,
-      prescription: 'none',
-      // the retail price comes from the first goods receipt by the markup
-      priceMinor: 0,
-      piecePriceMinor: null,
-      batches: [],
+    return toCatalogProduct(createProduct(body, correlationId));
+  },
+  'catalogImports.check': ({ body, correlationId }) => {
+    const { session } = context(correlationId, 'catalog:create');
+    const plan = catalogImportPlan(
+      body.rows,
+      hasPermissions(session.permissions, 'catalog:update'),
+    );
+    return {
+      total: body.rows.length,
+      create: plan.creates.length,
+      existing: plan.existing,
+      newCategories: [...plan.newCategories.values()],
+      errors: plan.issues.slice(0, 1000),
+      errorsTotal: plan.issues.length,
     };
-    applyProduct(product, body, codes);
-    products().push(product);
-    return toCatalogProduct(product);
+  },
+  'catalogImports.apply': ({ body, correlationId }) => {
+    const { session } = context(correlationId, 'catalog:create', {
+      write: true,
+    });
+    const plan = catalogImportPlan(
+      body.rows,
+      hasPermissions(session.permissions, 'catalog:update'),
+    );
+    if (plan.issues.length > 0) {
+      throw new ApiError(422, 'import_invalid', correlationId);
+    }
+    for (const [key, name] of plan.newCategories) {
+      const id = `cat-new-${catalog().counters.category++}`;
+      categoryRecords().push({
+        id,
+        nameRu: name,
+        nameTj: '',
+        status: 'active',
+      });
+      plan.categories.set(key, id);
+    }
+    for (const row of plan.creates) {
+      createProduct(
+        {
+          nameRu: row.nameRu,
+          nameTj: row.nameTj,
+          inn: row.inn,
+          categoryId: plan.categories.get(matchKey(row.category)) ?? '',
+          form: row.form,
+          dosage: row.dosage,
+          manufacturer: row.manufacturer,
+          countryCode: row.countryCode,
+          unit: row.unit,
+          piecesPerPack: row.piecesPerPack,
+          divisible: row.divisible,
+          barcodes: row.barcodes.map((code) => ({ code })),
+          prescription: row.prescription,
+          maxPriceMinor: row.maxPriceMinor,
+          markupPercent: row.markupPercent,
+          minStockPacks: row.minStockPacks,
+        },
+        correlationId,
+      );
+    }
+    return {
+      importId: `imp-${Date.now()}`,
+      created: plan.creates.length,
+      existing: plan.existing,
+      categoriesCreated: plan.newCategories.size,
+    };
   },
   'catalog.update': ({ params, body, correlationId }) => {
     context(correlationId, 'catalog:update', { write: true });

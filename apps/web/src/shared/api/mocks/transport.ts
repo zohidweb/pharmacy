@@ -34,7 +34,6 @@ import {
   writeSession,
 } from './session';
 import { catalogHandlers, priceProblems } from './handlers-catalog';
-import { importHandlers } from './handlers-imports';
 import { ownerHandlers } from './handlers-owner';
 import { posHandlers } from './handlers-pos';
 import { purchasingHandlers } from './handlers-purchasing';
@@ -226,7 +225,6 @@ const handlers: MockHandlers = {
   ...stockHandlers,
   ...purchasingHandlers,
   ...catalogHandlers,
-  ...importHandlers,
   ...staffHandlers,
   ...ownerHandlers,
   'sessions.create': ({ body, correlationId }) => {

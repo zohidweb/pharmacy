@@ -6,7 +6,11 @@ import { importLimits } from '@pharmacy/shared-domain';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app/app.module';
-import { isImportPath, isSyncPath } from './common/http/contour';
+import {
+  hasSessionCookie,
+  isImportPath,
+  isSyncPath,
+} from './common/http/contour';
 import { createValidationPipe } from './common/validation/validation-pipe';
 import { SYNC_BODY_LIMIT } from './core/sync/protocol';
 
@@ -38,6 +42,7 @@ async function bootstrap() {
       headers: Record<string, unknown>;
     }) =>
       isImportPath(req.originalUrl ?? req.url) &&
+      hasSessionCookie(req.headers.cookie) &&
       String(req.headers['content-type'] ?? '')
         .split(';')[0]
         .trim()

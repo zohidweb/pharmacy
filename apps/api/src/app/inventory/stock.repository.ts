@@ -28,7 +28,6 @@ export interface BatchFilter {
 // index (tenant_id, store_id, batch_id) include (qty_delta_pieces) answers it without the table.
 @Injectable()
 export class StockRepository {
-  /** Batches with a non-zero stock in the stores, optionally of some products only. */
   /** Whether the store has any stock movement — the warning of a load of opening balances (F13). */
   async hasMovements(
     trx: TenantTransaction,
@@ -44,6 +43,7 @@ export class StockRepository {
     return result.rows[0]?.found === true;
   }
 
+  /** Batches with a non-zero stock in the stores, optionally of some products only. */
   async batchStock(
     trx: TenantTransaction,
     tenantId: string,

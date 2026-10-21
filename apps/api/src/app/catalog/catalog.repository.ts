@@ -879,6 +879,24 @@ export class CatalogRepository {
   }
 
   /**
+   * The active categories among `ids`, locked `FOR SHARE` in the order of their ids as the card locks its category: an
+   * archiving waits for the load. False when one of them is archived (a file load, final review M1).
+   */
+  async lockActiveCategories(
+    trx: TenantTransaction,
+    tenantId: string,
+    ids: readonly string[],
+  ): Promise<boolean> {
+    if (ids.length === 0) return true;
+    const result = await sql<{ id: string }>`
+      select id from pharmacy.categories
+      where tenant_id = ${tenantId} and id = any(${[...ids]}::uuid[]) and status = 'active'
+      order by id
+      for share`.execute(trx);
+    return result.rows.length === ids.length;
+  }
+
+  /**
    * New products of a file load, 1 000 rows a statement; every one is recorded in the change feed of offline stores,
    * as a product of the card (spec 2026-10-20-data-import, 10; E4). Its barcodes are a part of the product: the feed
    * reads them with it.

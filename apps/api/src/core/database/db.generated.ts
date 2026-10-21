@@ -335,6 +335,7 @@ export interface ImportJobs {
   id: string;
   idempotencyKey: string;
   kind: string;
+  requestSha256: Buffer;
   result: Json;
   storeId: string | null;
   tenantId: string;

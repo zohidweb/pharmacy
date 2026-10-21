@@ -14,7 +14,7 @@ import {
   type TenantTransaction,
   uniqueConstraint,
 } from '../../core/database';
-import { importHash, ImportIssues, ImportJobs } from '../../core/imports';
+import { importHashes, ImportIssues, ImportJobs } from '../../core/imports';
 import { AuditService } from '../audit/audit.service';
 import { PurchasingRepository } from './purchasing.repository';
 import { valuesOf } from './suppliers.service';
@@ -57,15 +57,17 @@ export class SupplierImportService {
     key: string,
   ): Promise<SupplierImportResult> {
     const { tenantId, employeeId } = requirePrincipal();
-    const hash = importHash(request.rows);
+    const hashes = importHashes('suppliers', request);
+    const release = this.jobs.begin();
+    const startedAt = Date.now();
     try {
-      return await this.db.tenantTransaction(async (trx) => {
+      const done = await this.db.tenantTransaction(async (trx) => {
         await this.jobs.lock(trx, tenantId);
         const replayed = await this.jobs.replay<SupplierImportResult>(
           trx,
           tenantId,
           key,
-          hash,
+          hashes,
         );
         if (replayed) return replayed;
         const plan = await this.evaluate(trx, tenantId, request.rows);
@@ -87,7 +89,7 @@ export class SupplierImportService {
           kind: 'suppliers',
           storeId: null,
           fileName: request.fileName,
-          hash,
+          hashes,
           key,
           result,
           createdBy: employeeId,
@@ -104,11 +106,20 @@ export class SupplierImportService {
         });
         return result;
       });
+      this.jobs.logged(
+        'suppliers',
+        request.rows.length,
+        `created ${done.created}, existing ${done.existing}`,
+        startedAt,
+      );
+      return done;
     } catch (error) {
       // a supplier saved meanwhile took a name of the file: the network changed after the check (F7)
       if (uniqueConstraint(error) === 'suppliers_name_uq')
         throw importInvalid();
       throw error;
+    } finally {
+      release();
     }
   }
 

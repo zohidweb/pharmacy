@@ -16,7 +16,12 @@ import {
   TenantDatabase,
   type TenantTransaction,
 } from '../../core/database';
-import { importHash, ImportIssues, ImportJobs } from '../../core/imports';
+import {
+  type ImportHashes,
+  importHashes,
+  ImportIssues,
+  ImportJobs,
+} from '../../core/imports';
 import { AuditService } from '../audit/audit.service';
 import { type ImportProduct, ProductsReader } from '../catalog/products-reader';
 import { StockDocumentsService } from './stock-documents.service';
@@ -48,7 +53,7 @@ export class OpeningBalanceImportService {
   ): Promise<OpeningBalanceImportCheck> {
     const { tenantId } = this.requireCost();
     const storeId = request.storeId.toLowerCase();
-    const hash = importHash(request.rows);
+    const hashes = importHashes('opening_balance', request);
     return this.db.tenantTransaction(async (trx) => {
       await this.stores.writableStore(trx, tenantId, storeId);
       const plan = await this.evaluate(trx, tenantId, request.rows);
@@ -57,7 +62,7 @@ export class OpeningBalanceImportService {
         tenantId,
         'opening_balance',
         storeId,
-        hash,
+        hashes,
       );
       return {
         total: request.rows.length,
@@ -82,83 +87,117 @@ export class OpeningBalanceImportService {
   ): Promise<OpeningBalanceImportResult> {
     const { tenantId, employeeId } = this.requireCost();
     const storeId = request.storeId.toLowerCase();
-    const hash = importHash(request.rows);
-    return this.db.tenantTransaction(async (trx) => {
-      await this.jobs.lock(trx, tenantId);
-      const replayed = await this.jobs.replay<OpeningBalanceImportResult>(
-        trx,
-        tenantId,
-        key,
-        hash,
+    const hashes = importHashes('opening_balance', request);
+    const release = this.jobs.begin();
+    const startedAt = Date.now();
+    try {
+      const done = await this.db.tenantTransaction((trx) =>
+        this.write(trx, request, key, hashes, tenantId, employeeId, storeId),
       );
-      if (replayed) return replayed;
-      await this.stores.writableStore(trx, tenantId, storeId);
-      const plan = await this.evaluate(trx, tenantId, request.rows);
-      if (!plan.issues.empty) {
+      this.jobs.logged(
+        'opening_balance',
+        request.rows.length,
+        `${done.documents.length} drafts`,
+        startedAt,
+      );
+      return done;
+    } catch (error) {
+      // the save of a draft refused a line: a product archived after the check — the stock changed (F7)
+      if (
+        error instanceof ProblemException &&
+        ['product_archived', 'validation_failed'].includes(error.code)
+      ) {
         throw new ProblemException(422, 'import_invalid');
       }
+      throw error;
+    } finally {
+      release();
+    }
+  }
 
-      const size = importLimits.documentLines;
-      const count = Math.ceil(plan.lines.length / size);
-      const documents: OpeningBalanceImportResult['documents'] = [];
-      for (let part = 0; part < count; part += 1) {
-        const chunk = plan.lines.slice(part * size, (part + 1) * size);
-        const input: OpeningBalanceInput = {
-          date: request.date,
-          storeId,
-          // the comment comes in the language of the interface; the part is added (clarification У4)
-          comment:
-            count > 1
-              ? `${request.comment} (${part + 1}/${count})`.trim()
-              : request.comment,
-          lines: chunk.map(({ row, productId }) => ({
-            productId,
-            batchNumber: row.batchNumber,
-            expiresOn: row.expiresOn,
-            quantity: row.quantity,
-            costMinor: row.costMinor,
-            retailPriceMinor: row.retailPriceMinor,
-            // a row without a series is the «starting batch» (F11, КП 3.4)
-            starting: row.batchNumber === '',
-          })),
-        };
-        const saved = await this.documents.saveOpeningBalanceDraft(
-          trx,
-          tenantId,
-          input,
-        );
-        documents.push({ ...saved, lines: chunk.length });
-      }
+  private async write(
+    trx: TenantTransaction,
+    request: OpeningBalanceImportRequest,
+    key: string,
+    hashes: ImportHashes,
+    tenantId: string,
+    employeeId: string,
+    storeId: string,
+  ): Promise<OpeningBalanceImportResult> {
+    await this.jobs.lock(trx, tenantId);
+    const replayed = await this.jobs.replay<OpeningBalanceImportResult>(
+      trx,
+      tenantId,
+      key,
+      hashes,
+    );
+    if (replayed) return replayed;
+    await this.stores.writableStore(trx, tenantId, storeId);
+    const plan = await this.evaluate(trx, tenantId, request.rows);
+    if (!plan.issues.empty) {
+      throw new ProblemException(422, 'import_invalid');
+    }
 
-      const result: OpeningBalanceImportResult = {
-        importId: newId(),
-        documents,
+    const size = importLimits.documentLines;
+    const count = Math.ceil(plan.lines.length / size);
+    const documents: OpeningBalanceImportResult['documents'] = [];
+    for (let part = 0; part < count; part += 1) {
+      const chunk = plan.lines.slice(part * size, (part + 1) * size);
+      const input: OpeningBalanceInput = {
+        date: request.date,
+        storeId,
+        // the comment comes in the language of the interface; the part is added (clarification У4)
+        comment:
+          count > 1
+            ? `${request.comment} (${part + 1}/${count})`.trim()
+            : request.comment,
+        lines: chunk.map(({ row, productId }) => ({
+          productId,
+          batchNumber: row.batchNumber,
+          expiresOn: row.expiresOn,
+          quantity: row.quantity,
+          costMinor: row.costMinor,
+          retailPriceMinor: row.retailPriceMinor,
+          // a row without a series is the «starting batch» (F11, КП 3.4)
+          starting: row.batchNumber === '',
+        })),
       };
-      await this.jobs.record(trx, {
+      const saved = await this.documents.saveOpeningBalanceDraft(
+        trx,
         tenantId,
-        id: result.importId,
-        kind: 'opening_balance',
-        storeId,
-        fileName: request.fileName,
-        hash,
-        key,
-        result,
-        createdBy: employeeId,
-      });
-      await this.audit.append(trx, {
-        action: 'document.imported',
-        entityType: 'import',
-        entityId: result.importId,
-        storeId,
-        details: {
-          type: 'opening_balance',
-          fileName: request.fileName,
-          documents: documents.map((doc) => doc.number),
-          lines: plan.lines.length,
-        },
-      });
-      return result;
+        input,
+      );
+      documents.push({ ...saved, lines: chunk.length });
+    }
+
+    const result: OpeningBalanceImportResult = {
+      importId: newId(),
+      documents,
+    };
+    await this.jobs.record(trx, {
+      tenantId,
+      id: result.importId,
+      kind: 'opening_balance',
+      storeId,
+      fileName: request.fileName,
+      hashes,
+      key,
+      result,
+      createdBy: employeeId,
     });
+    await this.audit.append(trx, {
+      action: 'document.imported',
+      entityType: 'import',
+      entityId: result.importId,
+      storeId,
+      details: {
+        type: 'opening_balance',
+        fileName: request.fileName,
+        documents: documents.map((doc) => doc.number),
+        lines: plan.lines.length,
+      },
+    });
+    return result;
   }
 
   /** A stock document without its purchase prices makes no sense (ADR-0018, п. 6; clarification У3). */
@@ -231,7 +270,7 @@ export class OpeningBalanceImportService {
         }
         const form = matchKey(row.form);
         const dosage = matchKey(row.dosage);
-        const candidates = [
+        const found = [
           ...new Map(
             (await named(matchKey(row.name)))
               .filter((item) => form === '' || matchKey(item.form) === form)
@@ -241,11 +280,18 @@ export class OpeningBalanceImportService {
               .map((item) => [item.id, item]),
           ).values(),
         ];
+        // an archived twin of an active card is not a choice (final review M4)
+        const active = found.filter((item) => item.status === 'active');
+        const candidates = active.length > 0 ? active : found;
         if (candidates.length !== 1) {
           add(
             row,
             'name',
-            candidates.length === 0 ? 'product_not_found' : 'product_ambiguous',
+            candidates.length === 0
+              ? 'product_not_found'
+              : active.length > 1
+                ? 'product_ambiguous'
+                : 'product_archived',
           );
           continue;
         }

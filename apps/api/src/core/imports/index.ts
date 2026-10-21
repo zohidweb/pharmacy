@@ -1,7 +1,8 @@
 export { ImportIssues } from './import-issues';
 export {
   idempotencyKeyOf,
-  importHash,
+  type ImportHashes,
+  importHashes,
   type ImportJobKind,
   type ImportJobRecord,
   ImportJobs,

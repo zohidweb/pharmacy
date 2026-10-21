@@ -3,8 +3,10 @@
 -- 2026-10-20). Class `tenant`, rows are only inserted:
 --   import_jobs - one row per load that was written (a refused load leaves nothing: the check is synchronous). The
 --                 file itself is not stored: its name, the SHA-256 of the rows, the answer of the load. The answer is
---                 returned again to a repeat with the same Idempotency-Key; the same rows loaded again are allowed,
---                 the check warns about them (F13) — so the hash is not unique.
+--                 returned again to a repeat with the same Idempotency-Key and the same request (request_sha256: the
+--                 kind, the store, the date, the rows); the same rows loaded again are allowed, the check warns about
+--                 them (F13) — so the hash of the rows is not unique.
+set local lock_timeout = '5s';
 create table pharmacy.import_jobs (
   tenant_id uuid not null references pharmacy.tenants (id),
   id uuid not null,
@@ -12,6 +14,7 @@ create table pharmacy.import_jobs (
   store_id uuid,
   file_name text not null check (char_length(file_name) between 1 and 255),
   content_sha256 bytea not null check (octet_length(content_sha256) = 32),
+  request_sha256 bytea not null check (octet_length(request_sha256) = 32),
   idempotency_key uuid not null,
   result jsonb not null,
   created_by uuid not null,

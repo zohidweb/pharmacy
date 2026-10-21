@@ -16,7 +16,7 @@ import {
   type TenantTransaction,
   uniqueConstraint,
 } from '../../core/database';
-import { importHash, ImportIssues, ImportJobs } from '../../core/imports';
+import { importHashes, ImportIssues, ImportJobs } from '../../core/imports';
 import { AuditService } from '../audit/audit.service';
 import {
   CatalogRepository,
@@ -45,6 +45,10 @@ const displayName = (name: unknown, language: NameLanguage): string =>
   nameOf(name, language) || nameOf(name, language === 'ru' ? 'tj' : 'ru');
 
 const importInvalid = () => new ProblemException(422, 'import_invalid');
+
+/** The name of a row in the language of the network, else the other one. */
+const rowName = (row: CatalogImportRow, language: NameLanguage): string =>
+  (language === 'tj' ? row.nameTj : row.nameRu) || row.nameRu || row.nameTj;
 
 // Loading the catalog from a file (spec 2026-10-20-data-import, F6–F9, section 5): all or nothing; a row whose
 // barcodes (or name, form and dosage) are already in the catalog is skipped, the existing card is not changed.
@@ -82,15 +86,17 @@ export class CatalogImportService {
     key: string,
   ): Promise<CatalogImportResult> {
     const { tenantId, employeeId, permissions } = requirePrincipal();
-    const hash = importHash(request.rows);
+    const hashes = importHashes('catalog', request);
+    const release = this.jobs.begin();
+    const startedAt = Date.now();
     try {
-      return await this.db.tenantTransaction(async (trx) => {
+      const done = await this.db.tenantTransaction(async (trx) => {
         await this.jobs.lock(trx, tenantId);
         const replayed = await this.jobs.replay<CatalogImportResult>(
           trx,
           tenantId,
           key,
-          hash,
+          hashes,
         );
         if (replayed) return replayed;
         const canCreateCategories = hasPermissions(
@@ -116,6 +122,20 @@ export class CatalogImportService {
           );
         }
         if (!plan.issues.empty) throw importInvalid();
+        // the categories the rows take stay active to the end, as the card locks its category; one archived meanwhile —
+        // the catalog changed after the check (final review M1)
+        const used = [
+          ...new Set(
+            plan.creates
+              .map(({ categoryKey }) => plan.categoryIds.get(categoryKey))
+              .filter((id): id is string => id !== undefined),
+          ),
+        ];
+        if (
+          !(await this.repository.lockActiveCategories(trx, tenantId, used))
+        ) {
+          throw importInvalid();
+        }
 
         const categoryIds = new Map(plan.categoryIds);
         for (const [categoryKey, name] of plan.newCategories) {
@@ -160,7 +180,7 @@ export class CatalogImportService {
           kind: 'catalog',
           storeId: null,
           fileName: request.fileName,
-          hash,
+          hashes,
           key,
           result,
           createdBy: employeeId,
@@ -178,12 +198,21 @@ export class CatalogImportService {
         });
         return result;
       });
+      this.jobs.logged(
+        'catalog',
+        request.rows.length,
+        `created ${done.created}, existing ${done.existing}`,
+        startedAt,
+      );
+      return done;
     } catch (error) {
       // a card saved meanwhile took a barcode of the file: the catalog changed after the check (F7)
       if (uniqueConstraint(error) === 'product_barcodes_pkey') {
         throw importInvalid();
       }
       throw error;
+    } finally {
+      release();
     }
   }
 
@@ -257,6 +286,13 @@ export class CatalogImportService {
     const newCategories = new Map<string, string>();
     const codesInFile = new Set<string>();
     const keysInFile = new Set<string>();
+    // a card of the file with barcodes takes its name: a row without a barcode of the same name, form and dosage is the
+    // same card written twice (final review M3)
+    const keysWithBarcode = new Set(
+      rows
+        .filter((row) => row.barcodes.length > 0)
+        .map((row) => productKey(rowName(row, language), row.form, row.dosage)),
+    );
     let existing = 0;
     for (const row of rows) {
       const before = issues.total;
@@ -282,12 +318,8 @@ export class CatalogImportService {
           }
         }
       } else {
-        const name =
-          (language === 'tj' ? row.nameTj : row.nameRu) ||
-          row.nameRu ||
-          row.nameTj;
-        const rowKey = productKey(name, row.form, row.dosage);
-        if (keysInFile.has(rowKey)) {
+        const rowKey = productKey(rowName(row, language), row.form, row.dosage);
+        if (keysInFile.has(rowKey) || keysWithBarcode.has(rowKey)) {
           add(
             row,
             language === 'tj' ? 'nameTj' : 'nameRu',

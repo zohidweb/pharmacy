@@ -29,6 +29,21 @@ export interface BatchFilter {
 @Injectable()
 export class StockRepository {
   /** Batches with a non-zero stock in the stores, optionally of some products only. */
+  /** Whether the store has any stock movement — the warning of a load of opening balances (F13). */
+  async hasMovements(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+  ): Promise<boolean> {
+    const result = await sql<{ found: boolean }>`
+      select exists (
+        select 1 from pharmacy.stock_movements
+        where tenant_id = ${tenantId} and store_id = ${storeId}) as found`.execute(
+      trx,
+    );
+    return result.rows[0]?.found === true;
+  }
+
   async batchStock(
     trx: TenantTransaction,
     tenantId: string,

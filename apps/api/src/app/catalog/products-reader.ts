@@ -5,8 +5,12 @@ import type { TenantTransaction } from '../../core/database';
 import {
   CatalogRepository,
   localizedName,
+  nameOf,
   type ProductRow,
 } from './catalog.repository';
+
+const namesOf = (name: unknown): string[] =>
+  [nameOf(name, 'ru'), nameOf(name, 'tj')].filter((value) => value !== '');
 
 /** A product as the POS snapshot sees it (spec 2026-10-13-pos-shift-sale, 4.3). */
 export interface PosCatalogProduct {
@@ -55,6 +59,18 @@ export interface PricingProduct {
   categoryMarkupBp: number | null;
 }
 
+/**
+ * A product as a load of opening balances from a file finds it (spec 2026-10-20-data-import, F9): its names in both
+ * languages, form and dosage ('' when empty).
+ */
+export interface ImportProduct {
+  id: string;
+  names: string[];
+  form: string;
+  dosage: string;
+  status: 'active' | 'archived';
+}
+
 // The public interface of the catalog module (ADR-0002): other modules read products through it,
 // never the catalog tables. Runs inside the caller's tenant transaction.
 @Injectable()
@@ -80,6 +96,43 @@ export class ProductsReader {
     ids: readonly string[],
   ): Promise<Map<string, number | null>> {
     return this.repository.activeMaxPrices(trx, tenantId, ids);
+  }
+
+  /** The products that hold these barcodes, archived ones too (a file load, F9). */
+  async importProductsByBarcodes(
+    trx: TenantTransaction,
+    tenantId: string,
+    codes: readonly string[],
+  ): Promise<Map<string, ImportProduct>> {
+    const owners = await this.repository.barcodeOwnersOf(trx, tenantId, codes);
+    return new Map(
+      [...owners].map(([code, owner]) => [
+        code,
+        {
+          id: owner.productId,
+          names: namesOf(owner.name),
+          form: '',
+          dosage: '',
+          status: owner.status,
+        },
+      ]),
+    );
+  }
+
+  /** Every product of the network: rows of a file without a barcode match by name, form and dosage (F9). */
+  async importProductIndex(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<ImportProduct[]> {
+    return (await this.repository.productNameIndex(trx, tenantId)).map(
+      (row) => ({
+        id: row.id,
+        names: namesOf(row.name),
+        form: row.dosageForm ?? '',
+        dosage: row.dosage ?? '',
+        status: row.status,
+      }),
+    );
   }
 
   /** A page of active products in the order of the catalog list; `productIds` — only these. */

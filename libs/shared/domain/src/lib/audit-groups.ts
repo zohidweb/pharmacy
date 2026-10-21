@@ -48,6 +48,8 @@ const documentEvents = [
   'document.updated',
   'document.posted',
   'document.deleted',
+  // a load of opening balances from a file (spec 2026-10-20-data-import), `details.type` = 'opening_balance'
+  'document.imported',
 ] as const;
 
 export const AUDIT_GROUP_RULES: readonly AuditGroupRule[] = [

@@ -16,6 +16,7 @@ import { SalesFigures } from './sales-figures';
 import { StoreSalesExport } from './store-sales-export';
 import { StoreSalesExportRepository } from './store-sales-export.repository';
 import { PosContext } from './pos-context';
+import { PrescriptionRetention } from './prescription-retention';
 import { BufferReplayInterceptor } from './buffer-replay.interceptor';
 import { PosShifts } from './pos-shifts';
 import { PosRepository } from './pos.repository';
@@ -77,10 +78,12 @@ import { SyncCoreModule } from '../../core/sync';
     PosFacts,
     StoreSalesExportRepository,
     StoreSalesExport,
+    PrescriptionRetention,
   ],
   // PosAlerts, SalesFigures — the POS events of the notifications, the sales of the home and the
   // reports (spec 2026-10-14-owner-cabinet); StoreSalesExport — the refresh of the statistics marts of
-  // the admin (spec 2026-10-19-admin-dashboard-stats, `pos` → `platform/stats`)
+  // the admin (spec 2026-10-19-admin-dashboard-stats, `pos` → `platform/stats`); PrescriptionRetention — the hourly
+  // purge of the prescription data (spec 2026-10-21-pos-offline-limits, `pos` → `platform/retention`)
   exports: [
     PosContext,
     PosIdempotency,
@@ -90,6 +93,7 @@ import { SyncCoreModule } from '../../core/sync';
     PosAlerts,
     SalesFigures,
     StoreSalesExport,
+    PrescriptionRetention,
   ],
 })
 export class PosModule {}

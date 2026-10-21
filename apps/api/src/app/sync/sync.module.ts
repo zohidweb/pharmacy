@@ -4,6 +4,7 @@ import { AuditModule } from '../audit/audit.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { CheckpointFacts } from './checkpoint-facts';
 import { InboxRepository } from './inbox.repository';
+import { InboxRetention } from './inbox-retention';
 import { LicenseKeyGuard } from './license-key.guard';
 import { SyncApplyService } from './sync-apply.service';
 import { SyncFeedService } from './sync-feed.service';
@@ -14,7 +15,8 @@ import { SyncRunsService } from './sync-runs.service';
 // The cloud side of the offline-store sync (ADR-0014; spec 2026-10-16-offline-sync): the store calls it with its
 // license key. Registered in the cloud only; the store side of the protocol comes with PR 4. The facts are applied
 // by the appliers the owning modules register in SyncAppliers (core/sync); the stock checkpoint reads the stock
-// of the store through the export of inventory (StockFacts).
+// of the store through the export of inventory (StockFacts); the hourly purge clears the prescription data of old
+// envelopes (InboxRetention).
 @Module({
   imports: [AuditModule, InventoryModule, SyncCoreModule],
   controllers: [SyncReceiveController],
@@ -26,6 +28,10 @@ import { SyncRunsService } from './sync-runs.service';
     SyncApplyService,
     SyncFeedService,
     CheckpointFacts,
+    InboxRetention,
   ],
+  // InboxRetention — the purge of the prescription data in the envelopes (spec 2026-10-21-pos-offline-limits, P5;
+  // `sync` → `platform/retention`)
+  exports: [InboxRetention],
 })
 export class SyncModule {}

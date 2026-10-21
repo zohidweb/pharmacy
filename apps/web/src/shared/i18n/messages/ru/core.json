@@ -395,6 +395,9 @@
     "expense": "Расходы"
   },
   "auditEvents": {
+    "product_imported": "Каталог загружен из файла",
+    "supplier_imported": "Поставщики загружены из файла",
+    "document_imported": "Начальные остатки загружены из файла",
     "receipt_completed": "Продажа",
     "return_completed": "Возврат покупателя",
     "shift_opened": "Смена открыта",

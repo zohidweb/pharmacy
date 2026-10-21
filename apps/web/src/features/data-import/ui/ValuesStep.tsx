@@ -37,8 +37,8 @@ export function ValuesStep(props: ValuesStepProps) {
 
   return (
     <Card padding="none">
-      <CardHeader title={t('title')} description={t('hint')} />
-      <div className="flex flex-col gap-6 p-(--ph-card-padding)">
+      <CardHeader inset title={t('title')} description={t('hint')} />
+      <div className="flex flex-col gap-6 px-(--ph-card-padding) pb-(--ph-card-padding)">
         {choices.unknownCategories.length > 0 && (
           <section className="flex flex-col gap-3">
             <h3 className="font-semibold">{t('categories')}</h3>

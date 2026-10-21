@@ -37,9 +37,17 @@ export function FileStep(props: FileStepProps) {
   const t = useTranslations('dataImport');
   const tFields = useTranslations('dataImport.fields');
   const input = useRef<HTMLInputElement>(null);
-  const required = kindFields[props.kind]
-    .filter((field) => field.required !== 'no')
+  // the `one-of` fields are one requirement: «Штрихкод или Наименование»
+  const fields = kindFields[props.kind];
+  const oneOf = fields
+    .filter((field) => field.required === 'one-of')
     .map((field) => tFields(field.key as never));
+  const required = [
+    ...(oneOf.length > 0 ? [oneOf.join(t('columns.or'))] : []),
+    ...fields
+      .filter((field) => field.required === 'yes')
+      .map((field) => tFields(field.key as never)),
+  ];
   const balances = props.kind === 'opening-balances';
   const ready =
     props.workbook !== null &&
@@ -49,7 +57,8 @@ export function FileStep(props: FileStepProps) {
   return (
     <Card padding="none">
       <CardHeader
-        title={t(`kinds.${props.kind}.title`)}
+        inset
+        title={t('steps.file')}
         description={t(`kinds.${props.kind}.hint`)}
         actions={
           <Button
@@ -66,7 +75,7 @@ export function FileStep(props: FileStepProps) {
           </Button>
         }
       />
-      <div className="flex flex-col gap-4 p-(--ph-card-padding)">
+      <div className="flex flex-col gap-4 px-(--ph-card-padding) pb-(--ph-card-padding)">
         <p className="text-sm text-fg-muted">
           {t('file.formats')}{' '}
           {t('file.required', { fields: required.join(', ') })}

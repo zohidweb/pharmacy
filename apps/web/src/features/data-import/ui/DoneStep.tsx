@@ -16,8 +16,8 @@ export function DoneStep({ result, onAgain }: DoneStepProps) {
   const router = useRouter();
   return (
     <Card padding="none">
-      <CardHeader title={t('done.title')} />
-      <div className="flex flex-col gap-4 p-(--ph-card-padding)">
+      <CardHeader inset title={t('done.title')} />
+      <div className="flex flex-col gap-4 px-(--ph-card-padding) pb-(--ph-card-padding)">
         <Alert tone="success" live="polite">
           {result.kind === 'catalog'
             ? t('done.catalog', {

@@ -115,10 +115,11 @@ export function ColumnsStep(props: ColumnsStepProps) {
   return (
     <Card padding="none">
       <CardHeader
+        inset
         title={t('columns.title')}
         description={t('columns.hint', { line: props.headerRow + 1 })}
       />
-      <div className="flex flex-col gap-4 p-(--ph-card-padding)">
+      <div className="flex flex-col gap-4 px-(--ph-card-padding) pb-(--ph-card-padding)">
         <div className="max-h-(--ph-import-table-height) overflow-auto">
           <DataTable
             caption={t('columns.title')}

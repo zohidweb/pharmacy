@@ -104,11 +104,12 @@ export function CheckStep(props: CheckStepProps) {
   return (
     <Card padding="none">
       <CardHeader
+        inset
         title={t('check.title')}
         description={t('check.allOrNothing')}
       />
       <div
-        className="flex flex-col gap-4 p-(--ph-card-padding)"
+        className="flex flex-col gap-4 px-(--ph-card-padding) pb-(--ph-card-padding)"
         aria-busy={busy}
       >
         {clientIssues.length > 0 && (

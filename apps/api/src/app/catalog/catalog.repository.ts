@@ -122,6 +122,8 @@ export interface CategoryRow {
 }
 
 const BARCODE = /^[0-9]{8,14}$/;
+/** Rows of one multi-row insert of a file load: well below the parameters of a statement. */
+const BULK_ROWS = 1_000;
 
 // Data access of the catalog (spec 2026-10-07-catalog-pricing, section 5): products, barcodes,
 // categories and dosage forms of one network. RLS keeps every query inside the tenant; the
@@ -752,6 +754,106 @@ export class CatalogRepository {
       .where('barcode', 'in', [...codes])
       .execute();
     return new Map(rows.map((row) => [row.barcode, row.productId]));
+  }
+
+  /**
+   * The products that hold these barcodes, archived ones too (spec 2026-10-20-data-import, F8, F9). One array
+   * parameter: a file holds up to 20 000 rows of up to 20 codes, past the 65 535 parameters of a statement.
+   */
+  async barcodeOwnersOf(
+    trx: TenantTransaction,
+    tenantId: string,
+    codes: readonly string[],
+  ): Promise<
+    Map<string, { productId: string; name: unknown; status: CatalogStatus }>
+  > {
+    if (codes.length === 0) return new Map();
+    const result = await sql<{
+      barcode: string;
+      productId: string;
+      name: unknown;
+      status: CatalogStatus;
+    }>`
+      select b.barcode, b.product_id, p.name, p.status
+      from pharmacy.product_barcodes b
+      join pharmacy.products p on p.tenant_id = b.tenant_id and p.id = b.product_id
+      where b.tenant_id = ${tenantId} and b.barcode = any(${[...codes]}::text[])`.execute(
+      trx,
+    );
+    return new Map(
+      result.rows.map((row) => [
+        row.barcode,
+        { productId: row.productId, name: row.name, status: row.status },
+      ]),
+    );
+  }
+
+  /** Every product of the network with its name, form and dosage: rows of a file without a barcode match by them. */
+  async productNameIndex(
+    trx: TenantTransaction,
+    tenantId: string,
+  ): Promise<
+    {
+      id: string;
+      name: unknown;
+      dosageForm: string | null;
+      dosage: string | null;
+      status: CatalogStatus;
+    }[]
+  > {
+    const rows = await trx
+      .selectFrom('products')
+      .select(['id', 'name', 'dosageForm', 'dosage', 'status'])
+      .where('tenantId', '=', tenantId)
+      .execute();
+    return rows.map((row) => ({ ...row, status: row.status as CatalogStatus }));
+  }
+
+  /** New products of a file load, 1 000 rows a statement. */
+  async insertProducts(
+    trx: TenantTransaction,
+    tenantId: string,
+    rows: readonly { id: string; values: ProductValues }[],
+  ): Promise<void> {
+    for (let i = 0; i < rows.length; i += BULK_ROWS) {
+      await trx
+        .insertInto('products')
+        .values(
+          rows
+            .slice(i, i + BULK_ROWS)
+            .map((row) => ({
+              tenantId,
+              id: row.id,
+              ...this.columns(row.values),
+            })),
+        )
+        .execute();
+    }
+  }
+
+  /** Barcodes of new products of a file load, in the one order of `replaceBarcodes`. */
+  async insertBarcodes(
+    trx: TenantTransaction,
+    tenantId: string,
+    rows: readonly { productId: string; barcode: string }[],
+  ): Promise<void> {
+    const sorted = [...rows].sort((a, b) =>
+      a.barcode < b.barcode ? -1 : a.barcode > b.barcode ? 1 : 0,
+    );
+    for (let i = 0; i < sorted.length; i += BULK_ROWS) {
+      await trx
+        .insertInto('productBarcodes')
+        .values(
+          sorted
+            .slice(i, i + BULK_ROWS)
+            .map((row) => ({
+              tenantId,
+              barcode: row.barcode,
+              productId: row.productId,
+            })),
+        )
+        .execute();
+    }
   }
 
   /**

@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { SyncCoreModule } from '../../core/sync';
 import { AuditModule } from '../audit/audit.module';
 import { CatalogFacts } from './catalog-facts';
+import { CatalogImportService } from './catalog-import.service';
+import { CatalogImportsController } from './catalog-imports.controller';
 import { CatalogRepository } from './catalog.repository';
 import {
   CategoriesController,
@@ -17,13 +19,19 @@ import { ProductsService } from './products.service';
 // (ADR-0014). Other modules read products only through ProductsReader (ADR-0002).
 @Module({
   imports: [AuditModule, SyncCoreModule],
-  controllers: [ProductsController, CategoriesController, MarkupsController],
+  controllers: [
+    ProductsController,
+    CategoriesController,
+    MarkupsController,
+    CatalogImportsController,
+  ],
   providers: [
     CatalogRepository,
     ProductsService,
     CategoriesService,
     ProductsReader,
     CatalogFacts,
+    CatalogImportService,
   ],
   exports: [ProductsReader],
 })

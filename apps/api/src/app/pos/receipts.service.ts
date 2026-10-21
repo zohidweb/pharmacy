@@ -290,6 +290,7 @@ export class ReceiptsService {
               ? 'offline_buffer'
               : 'online',
           language: body.language,
+          localNumber: body.localNumber ?? null,
         });
         await this.receipts.insertLines(trx, tenantId, id, lines);
         // the cash line holds what was handed over: Σ payments = total + change (E10)
@@ -344,6 +345,7 @@ export class ReceiptsService {
           storeId,
           details: {
             number,
+            localNumber: body.localNumber ?? null,
             shiftId: shift.id,
             authorId: author.id,
             totalMinor: body.totalMinor,

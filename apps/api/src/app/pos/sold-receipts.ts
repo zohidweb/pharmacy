@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ReceiptPaymentMethod } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
+import { ProblemException } from '../../common/errors/problem.exception';
 import type { TenantTransaction } from '../../core/database';
 
 /** A line of a paid receipt as a return sees it. */
@@ -24,6 +25,8 @@ export interface SoldReceipt {
   id: string;
   storeId: string;
   number: string;
+  /** The number of the receipt of the terminal within its shift (spec 2026-10-21-pos-offline-limits, P12). */
+  localNumber: number | null;
   soldAt: Date;
   businessDate: string;
   cashierName: string;
@@ -51,19 +54,29 @@ export interface SoldProductLine {
 // caller's transaction.
 @Injectable()
 export class SoldReceipts {
-  /** A receipt of the store by its id (the QR of the receipt) or its number; null — none. */
+  /**
+   * A receipt of the store by its id (the QR of the receipt), its number, or the code printed on a receipt made
+   * without the connection — the last 8 hex digits of its id, among the receipts sold since `sinceDate` (spec
+   * 2026-10-21-pos-offline-limits, P14; 409 `receipt_code_ambiguous` when several fit); null — none.
+   */
   async find(
     trx: TenantTransaction,
     tenantId: string,
     storeId: string,
-    by: { id: string } | { number: string },
+    by: { id: string } | { number: string } | { code: string; sinceDate: string },
   ): Promise<SoldReceipt | null> {
     const match =
-      'id' in by ? sql`r.id = ${by.id}` : sql`r.number = ${by.number}`;
+      'id' in by
+        ? sql`r.id = ${by.id}`
+        : 'number' in by
+          ? sql`r.number = ${by.number}`
+          : sql`r.business_date >= ${by.sinceDate}::date
+                and replace(r.id::text, '-', '') like ${`%${by.code.toLowerCase()}`}`;
     const head = await sql<{
       id: string;
       storeId: string;
       number: string;
+      localNumber: number | null;
       soldAt: Date;
       businessDate: string;
       cashierName: string;
@@ -71,14 +84,17 @@ export class SoldReceipts {
       discount: string;
       change: string;
     }>`
-      select r.id, r.store_id, r.number, r.sold_at, r.business_date::text as business_date,
+      select r.id, r.store_id, r.number, r.local_number, r.sold_at, r.business_date::text as business_date,
              e.full_name as cashier_name, r.subtotal_dirams::text as subtotal,
              r.discount_dirams::text as discount, r.change_dirams::text as change
       from pharmacy.receipts r
       join pharmacy.employees e on e.tenant_id = r.tenant_id and e.id = r.cashier_id
-      where r.tenant_id = ${tenantId} and r.store_id = ${storeId} and ${match}`.execute(
-      trx,
-    );
+      where r.tenant_id = ${tenantId} and r.store_id = ${storeId} and ${match}
+      limit 2`.execute(trx);
+    if (head.rows.length > 1) {
+      // only a code can fit two receipts: the id and the number are unique in the store
+      throw new ProblemException(409, 'receipt_code_ambiguous');
+    }
     const receipt = head.rows[0];
     if (!receipt) return null;
     const lines = await sql<{
@@ -112,6 +128,7 @@ export class SoldReceipts {
       id: receipt.id,
       storeId: receipt.storeId,
       number: receipt.number,
+      localNumber: receipt.localNumber,
       soldAt: receipt.soldAt,
       businessDate: receipt.businessDate,
       cashierName: receipt.cashierName,

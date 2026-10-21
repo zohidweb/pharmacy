@@ -32,6 +32,8 @@ export interface ReceiptValues {
   correlationId: string;
   origin: 'online' | 'offline_buffer';
   language: 'ru' | 'tj';
+  /** The number of the receipt of the terminal within its shift (P12); null for an older buffer. */
+  localNumber: number | null;
 }
 
 export interface ReceiptLineValues {

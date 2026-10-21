@@ -446,6 +446,7 @@ export function controlled(
       : null;
     return {
       at: new Date(sale.soldAt).toISOString(),
+      received: new Date(sale.receivedAt).toISOString(),
       store: storeName(sale.storeId),
       product: productName(sale.productId),
       batch: sale.lotNumber ?? '',
@@ -460,6 +461,8 @@ export function controlled(
   return {
     columns: [
       col('at', 'datetime'),
+      // sold and received: the ПКУ journal by ADR-0015 (spec 2026-10-21-pos-offline-limits, P1)
+      col('received', 'datetime'),
       col('store', 'text'),
       col('product', 'text'),
       col('batch', 'text'),

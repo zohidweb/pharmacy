@@ -40,6 +40,8 @@ export interface SalesOfCashier {
 
 export interface ControlledSale {
   soldAt: Date;
+  /** When the server took the receipt: later than the sale for a buffered or an offline-store receipt (P1). */
+  receivedAt: Date;
   storeId: string;
   productId: string;
   lotNumber: string | null;
@@ -47,7 +49,11 @@ export interface ControlledSale {
   piecesPerPack: number;
   cashierId: string;
   receiptNumber: string;
-  prescription: ControlledSaleData | null;
+  /** The prescription only: the name and the document of the buyer never leave the database (P1). */
+  prescription: Pick<
+    ControlledSaleData,
+    'prescriptionNumber' | 'prescriptionDate' | 'clinic' | 'doctor'
+  > | null;
   /** The prescription data were purged by the retention term. */
   purged: boolean;
 }
@@ -198,7 +204,10 @@ export class SalesFigures {
     }));
   }
 
-  /** The sales of the ПКУ journal: the lines with a ПКУ record. */
+  /**
+   * The sales of the ПКУ journal: the lines with a ПКУ record, sold and received (spec 2026-10-21-pos-offline-limits,
+   * P1).
+   */
   async controlledSales(
     trx: TenantTransaction,
     tenantId: string,
@@ -210,9 +219,15 @@ export class SalesFigures {
     const result = await sql<
       Omit<ControlledSale, 'purged'> & { purgedAt: Date | null }
     >`
-      select r.sold_at, r.store_id, l.product_id, b.lot_number, l.qty_pieces,
+      select r.sold_at, r.received_at, r.store_id, l.product_id, b.lot_number, l.qty_pieces,
              l.pieces_per_pack, r.cashier_id, r.number as receipt_number,
-             c.prescription_note as prescription, c.prescription_purged_at as purged_at
+             case when c.prescription_note is null then null
+                  else jsonb_strip_nulls(jsonb_build_object(
+                    'prescriptionNumber', c.prescription_note -> 'prescriptionNumber',
+                    'prescriptionDate', c.prescription_note -> 'prescriptionDate',
+                    'clinic', c.prescription_note -> 'clinic',
+                    'doctor', c.prescription_note -> 'doctor')) end as prescription,
+             c.prescription_purged_at as purged_at
       from pharmacy.controlled_sale_records c
       join pharmacy.receipt_lines l on l.tenant_id = c.tenant_id and l.id = c.receipt_line_id
       join pharmacy.receipts r on r.tenant_id = l.tenant_id and r.id = l.receipt_id

@@ -42,7 +42,8 @@ export class SyncRunsRepository {
         schemaVersion: request.schemaVersion,
         outboxDepth: request.outboxDepth,
         oldestPendingAt: request.oldestPendingAt,
-        feedCursor: request.feedCursor,
+        feedCursor:
+          request.feedCursor === null ? null : String(request.feedCursor),
         correlationId: input.correlationId,
       })
       .execute();
@@ -71,7 +72,8 @@ export class SyncRunsRepository {
       schemaVersion: request.schemaVersion,
       outboxDepth: request.outboxDepth,
       oldestPendingAt: request.oldestPendingAt,
-      feedCursor: request.feedCursor,
+      feedCursor:
+        request.feedCursor === null ? null : String(request.feedCursor),
       // Clamped to the integer column; a wild clock is still visible as a huge skew.
       clockSkewSec: Math.max(-2_000_000_000, Math.min(2_000_000_000, skew)),
       licenseStatus: input.licenseStatus,

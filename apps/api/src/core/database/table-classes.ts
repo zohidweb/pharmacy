@@ -74,6 +74,8 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     sync_inbox: 'tenant',
     sync_runs: 'tenant',
     sync_conflicts: 'tenant',
+    sync_changes: 'tenant',
+    sync_feed_state: 'tenant',
     store_sync_status: 'tenant-export',
     service_requests: 'tenant-export',
     operators: 'platform',

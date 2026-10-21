@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
   countries,
-  isCountryCode,
   productUnits,
   type ProductUnit,
 } from '@pharmacy/shared-domain';
@@ -28,11 +27,11 @@ import {
   CatalogRepository,
   localizedName,
   type NameLanguage,
-  nameMap,
   nameOf,
   type ProductRow,
   type ProductValues,
 } from './catalog.repository';
+import { cardIssues, productValuesOf } from './product-rules';
 
 const notFound = () => new ProblemException(404, 'not_found');
 const archived = () => new ProblemException(409, 'product_archived');
@@ -42,9 +41,6 @@ const barcodeTaken = () =>
   new FieldProblemException(409, 'barcode_taken', [
     { field: 'barcodes', code: 'barcode_taken' },
   ]);
-
-// Columns of the stock threshold are integers: packs × pieces must fit.
-const MAX_MIN_STOCK_PIECES = 2_000_000_000;
 
 function prescriptionOf(
   row: Pick<ProductRow, 'isPrescription' | 'isControlled'>,
@@ -384,9 +380,20 @@ export class ProductsService {
     language: NameLanguage,
     productId: string | null,
   ): Promise<{ values: ProductValues; codes: string[] }> {
-    const name = nameMap(input.nameRu, input.nameTj);
-    if (!name[language])
-      throw invalid(language === 'tj' ? 'nameTj' : 'nameRu', 'required');
+    const codes = input.barcodes.map((barcode) => barcode.code);
+    const forms =
+      input.form === ''
+        ? new Set<string>()
+        : new Set(
+            (await this.repository.dosageForms(trx, tenantId)).map((form) =>
+              nameOf(form, language),
+            ),
+          );
+    // the rules of the card shared with the file load (spec 2026-10-20-data-import): the name first, then the
+    // category, then the rest in their order — the form stops at the first
+    const issues = cardIssues(input, codes, { language, forms });
+    const missingName = issues.find((issue) => issue.code === 'required');
+    if (missingName) throw invalid(missingName.field, missingName.code);
 
     const category = await this.repository.lockCategory(
       trx,
@@ -397,24 +404,7 @@ export class ProductsService {
     if (category === null || category.status !== 'active') {
       throw invalid('categoryId', 'unknown_category');
     }
-    if (input.form !== '') {
-      const forms = await this.repository.dosageForms(trx, tenantId);
-      if (!forms.some((form) => nameOf(form, language) === input.form)) {
-        throw invalid('form', 'unknown_form');
-      }
-    }
-    if (input.countryCode !== '' && !isCountryCode(input.countryCode)) {
-      throw invalid('countryCode', 'unknown_country');
-    }
-    if (input.divisible && input.piecesPerPack < 2)
-      throw invalid('divisible', 'not_divisible');
-    const minStockPieces = input.minStockPacks * input.piecesPerPack;
-    if (minStockPieces > MAX_MIN_STOCK_PIECES)
-      throw invalid('minStockPacks', 'max');
-
-    const codes = input.barcodes.map((barcode) => barcode.code);
-    if (new Set(codes).size !== codes.length)
-      throw invalid('barcodes', 'duplicate');
+    if (issues.length > 0) throw invalid(issues[0].field, issues[0].code);
     if (
       (await this.repository.takenBarcodes(trx, tenantId, codes, productId))
         .length > 0
@@ -422,27 +412,6 @@ export class ProductsService {
       throw barcodeTaken();
     }
 
-    return {
-      codes,
-      values: {
-        name,
-        inn: input.inn === '' ? null : { ru: input.inn },
-        dosageForm: input.form || null,
-        dosage: input.dosage || null,
-        manufacturer: input.manufacturer || null,
-        country: input.countryCode || null,
-        unit: input.unit,
-        piecesPerPack: input.piecesPerPack,
-        soldByPiece: input.divisible,
-        isPrescription: input.prescription !== 'none',
-        isControlled: input.prescription === 'controlled',
-        isPriceRegulated: input.maxPriceMinor !== null,
-        maxRetailPricePerPackDirams: input.maxPriceMinor,
-        categoryId: input.categoryId,
-        markupBp:
-          input.markupPercent === null ? null : input.markupPercent * 100,
-        defaultMinStockPieces: minStockPieces,
-      },
-    };
+    return { codes, values: productValuesOf(input, input.categoryId) };
   }
 }

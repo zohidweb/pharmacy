@@ -18,12 +18,18 @@ import {
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
 import { DocumentStatusPill } from '@/entities/stock-document';
 import { StockNotices, useStockAccess } from '@/features/stock-document';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiRequest,
+  isApiRouteAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
+import { routes } from '@/shared/config';
 import { WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -37,6 +43,7 @@ function OpeningBalancesPageView() {
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
   const access = useStockAccess();
+  const router = useRouter();
   const [storeId, setStoreId] = useState('');
   const [status, setStatus] = useState<DocumentStatus | ''>('');
   const [offset, setOffset] = useState(0);
@@ -118,13 +125,29 @@ function OpeningBalancesPageView() {
       <PageHeader
         title={t('title')}
         actions={
-          <Button
-            iconStart="plus"
-            disabled={!access.canCreate || !access.canSeeCost}
-            onClick={() => setEditing('new')}
-          >
-            {t('new')}
-          </Button>
+          <>
+            {/* loading the opening balances from a file (spec 2026-10-20-data-import, F20) */}
+            {access.canCreate &&
+              access.canSeeCost &&
+              isApiRouteAvailable('openingBalanceImports.apply') && (
+                <Button
+                  variant="secondary"
+                  iconStart="download"
+                  onClick={() =>
+                    router.push(routes.dataImport('opening-balances'))
+                  }
+                >
+                  {t('import')}
+                </Button>
+              )}
+            <Button
+              iconStart="plus"
+              disabled={!access.canCreate || !access.canSeeCost}
+              onClick={() => setEditing('new')}
+            >
+              {t('new')}
+            </Button>
+          </>
         }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">

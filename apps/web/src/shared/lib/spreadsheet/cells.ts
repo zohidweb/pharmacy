@@ -1,0 +1,77 @@
+/**
+ * A cell of a sheet (spec 2026-10-20-data-import, 3.2): its text, and for a number cell of an .xlsx the number too.
+ * The text of a number is the value as the file stores it (`4600000000017`, `12.5`), not as Excel formats it, so
+ * barcodes and money keep every digit.
+ */
+export type Cell = null | {
+  text: string;
+  number: number | null;
+  /** The number format of the cell is a date without a day («ММ.ГГГГ»): an expiry of the month means its last day. */
+  monthOnly?: boolean;
+  /** The number format of the cell is a percent: 1 is 100 %. */
+  percent?: boolean;
+};
+
+export interface Workbook {
+  /** The 1904 date system of the workbook (Excel for Mac); dates of the cells are serial numbers of it. */
+  date1904: boolean;
+  /**
+   * The visible sheets in their order; row i is line i + 1 of the sheet, as Excel shows it. `tooLarge` — more data
+   * rows than a load takes: the sheet is not kept, choosing it says so (final review W4).
+   */
+  sheets: {
+    name: string;
+    rows: Cell[][];
+    tooLarge?: boolean;
+    /** Rows hidden by a filter or by hand: they are not read (final review, web minor 7). */
+    hiddenRows?: number;
+  }[];
+  /** A CSV read as windows-1251 with «?» inside words: letters the encoding has not (ҳ ҷ ӣ қ ӯ ғ) were lost (W5). */
+  lostLetters?: boolean;
+}
+
+export type Sheet = Workbook['sheets'][number];
+
+export type SpreadsheetErrorCode =
+  | 'too_large'
+  | 'legacy_or_encrypted'
+  | 'unsupported'
+  | 'corrupt'
+  | 'empty'
+  | 'too_many_rows';
+
+/** Why a file is not read; the screen shows a message per code. */
+export class SpreadsheetError extends Error {
+  constructor(readonly code: SpreadsheetErrorCode) {
+    super(code);
+    this.name = 'SpreadsheetError';
+  }
+}
+
+/**
+ * The text of a cell as the rows read it (3.4): NFC, the no-break space and tabs become spaces, spaces repeat once,
+ * nothing at the ends. Line breaks stay: they separate the barcodes of one cell.
+ */
+export function cleanCellText(value: string): string {
+  return value
+    .normalize('NFC')
+    .replace(/[^\S\r\n]+/g, ' ')
+    .replace(/ *(\r\n|\r|\n) */g, '\n')
+    .trim();
+}
+
+/** A cell of text, or null for an empty one. */
+export function textCell(
+  value: string,
+  number: number | null = null,
+  format: { monthOnly?: boolean; percent?: boolean } = {},
+): Cell {
+  const text = cleanCellText(value);
+  if (text === '') return null;
+  return {
+    text,
+    number,
+    ...(format.monthOnly ? { monthOnly: true } : {}),
+    ...(format.percent ? { percent: true } : {}),
+  };
+}

@@ -395,6 +395,9 @@
     "expense": "Хароҷот"
   },
   "auditEvents": {
+    "product_imported": "Каталог аз файл бор карда шуд",
+    "supplier_imported": "Таъминкунандагон аз файл бор карда шуданд",
+    "document_imported": "Бақияҳои ибтидоӣ аз файл бор карда шуданд",
     "receipt_completed": "Фурӯш",
     "return_completed": "Бозгашти харидор",
     "shift_opened": "Баст кушода шуд",

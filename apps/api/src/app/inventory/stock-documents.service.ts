@@ -269,6 +269,22 @@ export class StockDocumentsService {
     });
   }
 
+  /**
+   * A draft of opening balances in the transaction of the caller (a load from a file, spec 2026-10-20-data-import,
+   * F10): the same checks, numbering and `document.created` as a draft saved by hand; the caller checks the cost
+   * permission.
+   */
+  async saveOpeningBalanceDraft(
+    trx: TenantTransaction,
+    tenantId: string,
+    input: OpeningBalanceInput,
+  ): Promise<{ id: string; number: string }> {
+    const id = newId();
+    await this.save(trx, tenantId, 'opening_balance', id, null, input);
+    const doc = await this.read(trx, tenantId, 'opening_balance', id);
+    return { id, number: doc.number };
+  }
+
   async updateOpeningBalance(
     id: string,
     input: OpeningBalanceInput,

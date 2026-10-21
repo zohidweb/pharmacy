@@ -39,11 +39,18 @@ import type {
   TransferRequestInput,
   UnpostCheck,
   WriteOff,
+  ImportIssue,
   OpeningBalance,
+  OpeningBalanceImportRow,
   OpeningBalanceInput,
   ProductBatchRow,
 } from '@pharmacy/shared-dto';
-import { addDays, daysBetween, toAppDate } from '@pharmacy/shared-util';
+import {
+  addDays,
+  daysBetween,
+  matchKey,
+  toAppDate,
+} from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
@@ -62,6 +69,7 @@ type StockRoute = Extract<
   | 'documents.unpostCheck'
   | `goodsReceipts.${string}`
   | `openingBalances.${string}`
+  | `openingBalanceImports.${'check' | 'apply'}`
   | `writeOffs.${string}`
   | `supplierReturns.${string}`
   | `stockCounts.${string}`
@@ -375,6 +383,42 @@ function requireDraft(status: string, correlationId: string) {
 
 function openingBatchId(line: OpeningBalance['lines'][number]) {
   return `b-${line.productId}-${line.batchNumber || 'start'}`;
+}
+
+/**
+ * A load of opening balances from a file (spec 2026-10-20-data-import, F9–F11), as the API: a product by a barcode,
+ * else by the name; the rows become drafts of 500 lines.
+ */
+function openingBalanceImportPlan(rows: readonly OpeningBalanceImportRow[]) {
+  const issues: ImportIssue[] = [];
+  const lines: OpeningBalanceInput['lines'] = [];
+  for (const row of rows) {
+    const byCode = row.barcodes
+      .map((code) => products().find((p) => p.barcodes.includes(code)))
+      .find((product) => product !== undefined);
+    const byName = products().filter(
+      (p) => matchKey(p.name) === matchKey(row.name),
+    );
+    const product = byCode ?? (byName.length === 1 ? byName[0] : undefined);
+    if (!product) {
+      issues.push({
+        line: row.line,
+        field: row.barcodes.length > 0 ? 'barcodes' : 'name',
+        code: byName.length > 1 ? 'product_ambiguous' : 'product_not_found',
+      });
+      continue;
+    }
+    lines.push({
+      productId: product.id,
+      batchNumber: row.batchNumber,
+      expiresOn: row.expiresOn,
+      quantity: row.quantity,
+      costMinor: row.costMinor,
+      retailPriceMinor: row.retailPriceMinor,
+      starting: row.batchNumber === '',
+    });
+  }
+  return { issues, lines };
 }
 
 function buildOpeningBalance(
@@ -1300,6 +1344,58 @@ export const stockHandlers: Pick<MockHandlers, StockRoute> = {
     );
     db().openingBalances.unshift(doc);
     return doc;
+  },
+  'openingBalanceImports.check': ({ body, correlationId }) => {
+    const { session } = context(correlationId, 'inventory:create');
+    authorize(correlationId, 'finance:view-cost');
+    writable(session, body.storeId, correlationId);
+    const plan = openingBalanceImportPlan(body.rows);
+    return {
+      total: body.rows.length,
+      documents: Math.ceil(body.rows.length / 500),
+      storeHasStock: db().openingBalances.some(
+        (doc) => doc.storeId === body.storeId && doc.status === 'posted',
+      ),
+      previousImports: [],
+      errors: plan.issues.slice(0, 1000),
+      errorsTotal: plan.issues.length,
+    };
+  },
+  'openingBalanceImports.apply': ({ body, correlationId }) => {
+    const { session, author } = context(correlationId, 'inventory:create', {
+      write: true,
+    });
+    authorize(correlationId, 'finance:view-cost');
+    writable(session, body.storeId, correlationId);
+    const plan = openingBalanceImportPlan(body.rows);
+    if (plan.issues.length > 0) {
+      throw new ApiError(422, 'import_invalid', correlationId);
+    }
+    const count = Math.ceil(plan.lines.length / 500);
+    const documents = [];
+    for (let part = 0; part < count; part += 1) {
+      const lines = plan.lines.slice(part * 500, (part + 1) * 500);
+      const doc = buildOpeningBalance(
+        {
+          date: body.date,
+          storeId: body.storeId,
+          comment:
+            count > 1 ? `${body.comment} (${part + 1}/${count})` : body.comment,
+          lines,
+        },
+        {
+          id: `no-${Date.now()}-${part}`,
+          number: number('НО', 'no'),
+          status: 'draft',
+          createdBy: author(),
+          postedBy: null,
+        },
+        correlationId,
+      );
+      db().openingBalances.unshift(doc);
+      documents.push({ id: doc.id, number: doc.number, lines: lines.length });
+    }
+    return { importId: `imp-${Date.now()}`, documents };
   },
   'openingBalances.update': ({ params, body, correlationId }) => {
     const { session } = context(correlationId, 'inventory:update', {

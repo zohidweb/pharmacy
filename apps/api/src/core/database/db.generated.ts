@@ -327,6 +327,20 @@ export interface IdempotencyKeys {
   tenantId: string;
 }
 
+export interface ImportJobs {
+  contentSha256: Buffer;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  fileName: string;
+  id: string;
+  idempotencyKey: string;
+  kind: string;
+  requestSha256: Buffer;
+  result: Json;
+  storeId: string | null;
+  tenantId: string;
+}
+
 export interface InventoryCountEntries {
   documentId: string;
   enteredAt: Generated<Timestamp>;
@@ -1216,6 +1230,7 @@ export interface DB {
   goodsReceiptLines: GoodsReceiptLines;
   heldReceipts: HeldReceipts;
   idempotencyKeys: IdempotencyKeys;
+  importJobs: ImportJobs;
   inventoryCountEntries: InventoryCountEntries;
   inventoryLines: InventoryLines;
   invoiceLines: InvoiceLines;

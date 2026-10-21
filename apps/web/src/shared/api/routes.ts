@@ -160,6 +160,15 @@ import type {
   TenantDashboard,
   TenantNotificationListResponse,
   UpdateEmployeeMeRequest,
+  CatalogImportCheck,
+  CatalogImportRequest,
+  CatalogImportResult,
+  OpeningBalanceImportCheck,
+  OpeningBalanceImportRequest,
+  OpeningBalanceImportResult,
+  SupplierImportCheck,
+  SupplierImportRequest,
+  SupplierImportResult,
 } from '@pharmacy/shared-dto';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -677,6 +686,31 @@ export const apiRoutes = {
   'openingBalances.unpost': route<OpeningBalance, undefined, { id: string }>(
     'POST',
     (p) => `/opening-balances/${id(p)}/unposting`,
+  ),
+  // loading data from a file (spec 2026-10-20-data-import): the check and the load of each kind
+  'catalogImports.check': route<CatalogImportCheck, CatalogImportRequest>(
+    'POST',
+    () => '/catalog-imports/checks',
+  ),
+  'catalogImports.apply': route<CatalogImportResult, CatalogImportRequest>(
+    'POST',
+    () => '/catalog-imports',
+  ),
+  'openingBalanceImports.check': route<
+    OpeningBalanceImportCheck,
+    OpeningBalanceImportRequest
+  >('POST', () => '/opening-balance-imports/checks'),
+  'openingBalanceImports.apply': route<
+    OpeningBalanceImportResult,
+    OpeningBalanceImportRequest
+  >('POST', () => '/opening-balance-imports'),
+  'supplierImports.check': route<SupplierImportCheck, SupplierImportRequest>(
+    'POST',
+    () => '/supplier-imports/checks',
+  ),
+  'supplierImports.apply': route<SupplierImportResult, SupplierImportRequest>(
+    'POST',
+    () => '/supplier-imports',
   ),
   'goodsReceipts.list': route<
     GoodsReceiptListResponse,

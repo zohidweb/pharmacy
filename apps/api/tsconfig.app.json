@@ -29,10 +29,13 @@
   ],
   "references": [
     {
-      "path": "../../libs/shared/dto/tsconfig.lib.json"
+      "path": "../../libs/shared/util/tsconfig.lib.json"
     },
     {
       "path": "../../libs/shared/domain/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/shared/dto/tsconfig.lib.json"
     }
   ]
 }

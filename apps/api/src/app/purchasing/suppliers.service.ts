@@ -31,7 +31,7 @@ const notFound = () => new ProblemException(404, 'not_found');
 const scopeIds = (storeScope: 'all' | readonly string[]) =>
   storeScope === 'all' ? null : storeScope;
 
-function valuesOf(input: SupplierInput): SupplierValues {
+export function valuesOf(input: SupplierInput): SupplierValues {
   return {
     name: input.name.trim(),
     taxId: input.taxId.trim() || null,

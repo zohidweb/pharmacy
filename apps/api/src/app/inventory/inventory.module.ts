@@ -30,6 +30,8 @@ import { StoreClosingTransfers } from './store-closing-transfers';
 import { TransferAcceptance } from './transfer-acceptance';
 import { StockFreeze } from './stock-freeze';
 import { StoreAccess } from './store-access';
+import { OpeningBalanceImportService } from './opening-balance-import.service';
+import { OpeningBalanceImportsController } from './opening-balance-imports.controller';
 import { SupplierReturnPosting } from './supplier-return-posting';
 import { SupplierReturnsController } from './supplier-returns.controller';
 import { SupplierReturnsRepository } from './supplier-returns.repository';
@@ -64,6 +66,7 @@ import { WriteOffsService } from './write-offs.service';
   controllers: [
     GoodsReceiptsController,
     OpeningBalancesController,
+    OpeningBalanceImportsController,
     UnpostingCheckController,
     StockController,
     DeficitController,
@@ -79,6 +82,7 @@ import { WriteOffsService } from './write-offs.service';
     Numbering,
     DocumentPosting,
     StockDocumentsService,
+    OpeningBalanceImportService,
     StockRepository,
     StockService,
     StockFreeze,

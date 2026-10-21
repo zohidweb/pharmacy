@@ -28,6 +28,21 @@ export interface BatchFilter {
 // index (tenant_id, store_id, batch_id) include (qty_delta_pieces) answers it without the table.
 @Injectable()
 export class StockRepository {
+  /** Whether the store has any stock movement — the warning of a load of opening balances (F13). */
+  async hasMovements(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+  ): Promise<boolean> {
+    const result = await sql<{ found: boolean }>`
+      select exists (
+        select 1 from pharmacy.stock_movements
+        where tenant_id = ${tenantId} and store_id = ${storeId}) as found`.execute(
+      trx,
+    );
+    return result.rows[0]?.found === true;
+  }
+
   /** Batches with a non-zero stock in the stores, optionally of some products only. */
   async batchStock(
     trx: TenantTransaction,

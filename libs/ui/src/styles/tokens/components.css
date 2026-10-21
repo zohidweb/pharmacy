@@ -48,6 +48,8 @@
   --ph-nav-counter-fg: var(--ph-color-danger);
 
   --ph-receipt-preview-height: var(--ph-size-receipt-preview);
+  /* Tables of a load from a file (columns, refused rows): they scroll inside, the page does not grow */
+  --ph-import-table-height: var(--ph-size-dialog-md);
   --ph-sheet-preview-width: var(--ph-sheet-width);
 
   /* POS: catalog | receipt panel; the screen height under the top bar minus the bottom padding of main and

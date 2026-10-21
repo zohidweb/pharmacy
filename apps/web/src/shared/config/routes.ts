@@ -22,6 +22,8 @@ export const routes = {
 
   orders: () => '/orders',
   suppliers: () => '/suppliers',
+  /** Loading data from a file (spec 2026-10-20-data-import): `catalog`, `opening-balances`, `suppliers`. */
+  dataImport: (kind: string) => `/imports?kind=${encodeURIComponent(kind)}`,
 
   catalog: () => '/catalog',
   product: (id: string) => `/catalog/view?id=${encodeURIComponent(id)}`,

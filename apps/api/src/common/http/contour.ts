@@ -27,6 +27,28 @@ export function isSyncPath(originalUrl: string | undefined): boolean {
   return path === SYNC_PREFIX || path.startsWith(`${SYNC_PREFIX}/`);
 }
 
+// The loads of data from a file (spec 2026-10-20-data-import, F19): their JSON body holds up to 20 000 rows, so these
+// routes — the load and its check — take a body of up to 10 MB. Origin-form paths only.
+const IMPORT_PATH =
+  /^\/api\/v1\/(catalog|opening-balance|supplier)-imports(\/checks)?\/?$/;
+
+/**
+ * A session cookie in the request: a large body of a load is parsed only for a request that may be signed in (final
+ * review M7); the session itself is checked later, as for every route.
+ */
+export function hasSessionCookie(cookieHeader: unknown): boolean {
+  return (
+    typeof cookieHeader === 'string' &&
+    /(?:^|;\s*)(?:__Host-sid|sid)=/.test(cookieHeader)
+  );
+}
+
+export function isImportPath(originalUrl: string | undefined): boolean {
+  if (typeof originalUrl !== 'string' || !originalUrl.startsWith('/'))
+    return false;
+  return IMPORT_PATH.test(originalUrl.split('?')[0].toLowerCase());
+}
+
 // `Authorization: Bearer phk_<keyId>_<secret>` — the open key id, or null for any other header.
 export function licenseKeyIdOf(
   authorization: string | undefined,

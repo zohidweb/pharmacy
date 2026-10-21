@@ -46,6 +46,8 @@ export interface ApiRequestOptions<K extends ApiRouteKey> {
   /** Extra headers of the request (not part of the idempotent body). */
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  /** Instead of the default 15 s — a long request, e.g. loading a file (2 min). */
+  timeoutMs?: number;
 }
 
 export type ApiTransport = <K extends ApiRouteKey>(
@@ -70,7 +72,7 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
     options.query as
       Record<string, string | number | boolean | undefined> | undefined,
   )}`;
-  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS);
   const signal = options.signal
     ? AbortSignal.any([options.signal, timeout])
     : timeout;
@@ -228,6 +230,13 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'openingBalances.update',
   'openingBalances.post',
   'openingBalances.unpost',
+  // loading data from a file (spec 2026-10-20-data-import)
+  'catalogImports.check',
+  'catalogImports.apply',
+  'openingBalanceImports.check',
+  'openingBalanceImports.apply',
+  'supplierImports.check',
+  'supplierImports.apply',
   'suppliers.pay',
   'purchaseOrders.list',
   'purchaseOrders.get',

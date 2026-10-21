@@ -334,26 +334,32 @@ export class DocumentsRepository {
       where tenant_id = ${tenantId} and document_id = ${documentId}`.execute(
       trx,
     );
-    for (const [index, line] of lines.entries()) {
+    if (lines.length === 0) return;
+    // the lines of a document in one statement (≤ 500 lines, 13 parameters a line): a load of opening balances from a
+    // file writes 20 000 lines in one transaction (final review I3)
+    const rows = lines.map((line, index) => {
       const common = sql`${tenantId}, ${newId()}, ${documentId}, ${index + 1}, ${line.productId},
         ${line.qtyPieces}, ${line.expiryDate}::date, ${line.lotNumber},
         ${BigInt(line.purchasePricePerPackDirams)},
         ${line.retailPriceDraftDirams === null ? null : BigInt(line.retailPriceDraftDirams)},
         ${line.batchId}`;
-      await (
-        type === 'opening_balance'
-          ? sql`insert into pharmacy.opening_balance_lines
-            (tenant_id, id, document_id, line_no, product_id, qty_pieces, expiry_date, lot_number,
-             purchase_price_per_pack_dirams, retail_price_draft_dirams, batch_id, is_starting)
-            values (${common}, ${line.isStarting})`
-          : sql`insert into pharmacy.goods_receipt_lines
-            (tenant_id, id, document_id, line_no, product_id, qty_pieces, expiry_date, lot_number,
-             purchase_price_per_pack_dirams, retail_price_draft_dirams, batch_id,
-             purchase_order_line_id, order_price_per_pack_dirams)
-            values (${common}, ${line.purchaseOrderLineId},
-              ${line.orderPricePerPackDirams === null ? null : BigInt(line.orderPricePerPackDirams)})`
-      ).execute(trx);
-    }
+      return type === 'opening_balance'
+        ? sql`(${common}, ${line.isStarting})`
+        : sql`(${common}, ${line.purchaseOrderLineId},
+            ${line.orderPricePerPackDirams === null ? null : BigInt(line.orderPricePerPackDirams)})`;
+    });
+    await (
+      type === 'opening_balance'
+        ? sql`insert into pharmacy.opening_balance_lines
+          (tenant_id, id, document_id, line_no, product_id, qty_pieces, expiry_date, lot_number,
+           purchase_price_per_pack_dirams, retail_price_draft_dirams, batch_id, is_starting)
+          values ${sql.join(rows)}`
+        : sql`insert into pharmacy.goods_receipt_lines
+          (tenant_id, id, document_id, line_no, product_id, qty_pieces, expiry_date, lot_number,
+           purchase_price_per_pack_dirams, retail_price_draft_dirams, batch_id,
+           purchase_order_line_id, order_price_per_pack_dirams)
+          values ${sql.join(rows)}`
+    ).execute(trx);
   }
 
   async setLineBatch(

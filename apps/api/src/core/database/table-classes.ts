@@ -68,6 +68,7 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     notification_reads: 'tenant',
     notification_refresh: 'tenant',
     expenses: 'tenant',
+    import_jobs: 'tenant',
     audit_log: 'tenant',
     sessions: 'tenant',
     sync_inbox: 'tenant',
@@ -114,6 +115,7 @@ export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
   'customer_returns',
   'customer_return_lines',
   'customer_return_refunds',
+  'import_jobs',
 ]);
 
 // SECURITY DEFINER resolver functions owned by pharmacy_resolver (ADR-0013 p. 3 and its

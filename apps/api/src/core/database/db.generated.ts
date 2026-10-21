@@ -696,6 +696,7 @@ export interface Receipts {
   fiscalStatus: Generated<string>;
   id: string;
   language: string;
+  localNumber: number | null;
   number: string;
   origin: string;
   receivedAt: Timestamp;
@@ -1141,6 +1142,10 @@ export interface TenantSettings {
   expiryReminderDays: Generated<number>;
   piecePriceRoundingDirams: Generated<number>;
   pinMinLength: Generated<number>;
+  posBufferMaxHours: Generated<number>;
+  posBufferMaxOperations: Generated<number>;
+  posControlledMaxHours: Generated<number>;
+  posControlledMaxOperations: Generated<number>;
   prescriptionRetentionDays: Generated<number>;
   receiptFooter: Json | null;
   returnPeriodDays: Generated<number>;

@@ -111,6 +111,8 @@ export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
   'receipts',
   'receipt_lines',
   'payments',
+  // rows are never deleted; only the prescription data is purged by the retention term (a trigger allows
+  // nothing else, spec 2026-10-21-pos-offline-limits, P4)
   'controlled_sale_records',
   'customer_returns',
   'customer_return_lines',

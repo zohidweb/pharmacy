@@ -16,6 +16,12 @@ const fail = <T>(code: ImportIssueCode): Parsed<T> => ({ ok: false, code });
 
 const words = (cell: Cell): string => (cell ? matchKey(cell.text) : '');
 
+/**
+ * A number cell as Excel shows it: 15 significant digits. A formula stores its result with 17 (`=1,56*1,25` is
+ * `1.9500000000000002`), the tail is not a value of the owner (final review W1).
+ */
+const shown = (value: number): number => Number(value.toPrecision(15));
+
 /** A text of one line: the line breaks of a cell become spaces. */
 export function parseText(cell: Cell, max: number): Parsed<string> {
   const text = cell ? cell.text.replace(/\s+/g, ' ').trim() : '';
@@ -48,7 +54,7 @@ export function parseInteger(
   if (cell === null) return fallback === null ? fail('required') : ok(fallback);
   let value: number;
   if (cell.number !== null) {
-    value = cell.number;
+    value = shown(cell.number);
   } else {
     const text = cell.text.replace(/\s+/g, '');
     if (!/^-?\d+$/.test(text)) return fail('invalid');
@@ -61,7 +67,9 @@ export function parseInteger(
 /** Somoni with two decimals at most → dirams (F12); more decimals are refused, not rounded. Null when empty. */
 export function parseMoney(cell: Cell): Parsed<number | null> {
   if (cell === null) return ok(null);
-  const minor = parseMoneyToMinor(cell.text);
+  const minor = parseMoneyToMinor(
+    cell.number === null ? cell.text : String(shown(cell.number)),
+  );
   return minor === null ? fail('invalid') : ok(minor);
 }
 
@@ -93,8 +101,8 @@ export function parseUnit(cell: Cell): Parsed<ProductUnit> {
 }
 
 const PRESCRIPTIONS: Record<PrescriptionKind, readonly string[]> = {
-  none: ['без рецепта', 'безрецептурный', 'otc', ...NO],
-  rx: ['по рецепту', 'рецептурный', 'рецепт', 'rx', ...YES],
+  none: ['без рецепта', 'безрецептурный', 'otc', 'бе дорухат', ...NO],
+  rx: ['по рецепту', 'рецептурный', 'рецепт', 'rx', 'бо дорухат', ...YES],
   controlled: [
     'пку',
     'контролируемый',
@@ -136,9 +144,8 @@ export function parseMarkup(cell: Cell): Parsed<number | null> {
   if (cell === null) return ok(null);
   let value: number;
   if (cell.number !== null) {
-    value =
-      cell.number > 0 && cell.number < 1 ? cell.number * 100 : cell.number;
-    value = Math.round(value * 1e6) / 1e6;
+    const number = shown(cell.number);
+    value = shown(number > 0 && number < 1 ? number * 100 : number);
   } else {
     const text = cell.text.replace(/[\s%]/g, '').replace(',', '.');
     if (!/^\d+(\.\d+)?$/.test(text)) return fail('invalid');

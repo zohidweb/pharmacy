@@ -2,8 +2,10 @@ import { importLimits } from '@pharmacy/shared-domain';
 import { type Cell, SpreadsheetError, type Workbook, textCell } from './cells';
 import { readZipDirectory, readZipEntry } from './zip';
 
-/** Rows a sheet may span — data rows plus title rows; a sheet past it is not read further. */
+/** Rows with data a sheet may hold — data rows plus title rows; a sheet past it is marked `tooLarge`. */
 const MAX_SHEET_ROWS = importLimits.rows + 100;
+/** A row with data this far down is not a list of a network: the sheet is marked `tooLarge`. */
+const MAX_ROW_INDEX = MAX_SHEET_ROWS * 10;
 
 const corrupt = () => new SpreadsheetError('corrupt');
 
@@ -144,14 +146,14 @@ export async function readXlsx(bytes: Uint8Array): Promise<Workbook> {
 
     const rows: Cell[][] = [];
     let rowIndex = -1;
+    let filled = 0;
+    let tooLarge = false;
     for (const row of byName(parseXml(sheetXml), 'row')) {
       const declared = Number(row.getAttribute('r'));
       rowIndex =
         Number.isInteger(declared) && declared > 0
           ? declared - 1
           : rowIndex + 1;
-      if (rowIndex >= MAX_SHEET_ROWS)
-        throw new SpreadsheetError('too_many_rows');
       const cells: Cell[] = [];
       let column = -1;
       for (const cell of childrenByName(row, 'c')) {
@@ -159,12 +161,20 @@ export async function readXlsx(bytes: Uint8Array): Promise<Workbook> {
         const value = readCell(cell, shared);
         if (value !== null) cells[column] = value;
       }
+      // a formatted row without values (a range formatted down to row 25 000) is not a row of data
+      if (!cells.some((value) => value != null)) continue;
+      filled += 1;
+      if (filled > MAX_SHEET_ROWS || rowIndex >= MAX_ROW_INDEX) {
+        tooLarge = true;
+        break;
+      }
       // holes of a sparse row are empty cells
       rows[rowIndex] = Array.from(cells, (value) => value ?? null);
     }
     sheets.push({
       name: sheet.getAttribute('name') ?? '',
-      rows: Array.from(rows, (row) => row ?? []),
+      rows: tooLarge ? [] : Array.from(rows, (row) => row ?? []),
+      ...(tooLarge ? { tooLarge } : {}),
     });
   }
   return { date1904, sheets };

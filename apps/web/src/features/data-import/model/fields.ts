@@ -24,6 +24,8 @@ export interface FieldDef {
   required: 'yes' | 'one-of' | 'no';
   /** May take several columns (the barcodes). */
   multiple?: boolean;
+  /** Matched only by a whole header: «Кол-во в упак.» is not the quantity (final review W2). */
+  exactOnly?: boolean;
   synonyms: readonly string[];
 }
 
@@ -50,10 +52,41 @@ const BARCODE = [
   'штрихкод 3',
 ];
 const FORM = ['форма', 'лекарственная форма', 'форма выпуска', 'шакл'];
-const DOSAGE = ['дозировка', 'доза', 'миқдор'];
+// «миқдор» is a quantity in Tajik, the dosage is «миқдори дору»
+const DOSAGE = ['дозировка', 'доза'];
+
+/**
+ * The headers of the template in Tajik (`dataImport.fields` of `tg/stock.json`, normalized): a template downloaded in
+ * the Tajik interface is recognized when it comes back (final review W3).
+ */
+const TJ: Readonly<Record<string, readonly string[]>> = {
+  nameRu: ['номгӯй ru'],
+  nameTj: ['номгӯй tj', 'номгӯй', 'номи мол'],
+  form: ['шакли дору'],
+  dosage: ['миқдори дору'],
+  inn: ['нбм'],
+  piecesPerPack: ['дона дар қуттӣ'],
+  divisible: ['донагӣ фурӯхта мешавад'],
+  prescription: ['додан'],
+  maxPriceMinor: ['нархи ниҳоӣ'],
+  markupPercent: ['иловапулӣ'],
+  minStockPacks: ['бақияи ҳадди ақал қуттӣ'],
+  name: ['номгӯй'],
+  expiresOn: ['мӯҳлати истифода'],
+  quantity: ['миқдор қуттӣ', 'миқдор'],
+  costMinor: ['нархи харид барои қуттӣ'],
+  retailPriceMinor: ['нархи чакана барои қуттӣ'],
+  paymentDelayDays: ['мӯҳлати пардохт рӯз'],
+};
+
+const withTajik = (fields: readonly FieldDef[]): readonly FieldDef[] =>
+  fields.map((field) => ({
+    ...field,
+    synonyms: [...field.synonyms, ...(TJ[field.key] ?? [])],
+  }));
 
 export const kindFields: Record<ImportKindKey, readonly FieldDef[]> = {
-  catalog: [
+  catalog: withTajik([
     {
       key: 'nameRu',
       required: 'one-of',
@@ -182,8 +215,8 @@ export const kindFields: Record<ImportKindKey, readonly FieldDef[]> = {
         'минимальный остаток уп',
       ],
     },
-  ],
-  'opening-balances': [
+  ]),
+  'opening-balances': withTajik([
     { key: 'barcodes', required: 'one-of', multiple: true, synonyms: BARCODE },
     { key: 'name', required: 'one-of', synonyms: NAME },
     { key: 'form', required: 'no', synonyms: FORM },
@@ -216,6 +249,7 @@ export const kindFields: Record<ImportKindKey, readonly FieldDef[]> = {
     {
       key: 'quantity',
       required: 'yes',
+      exactOnly: true,
       synonyms: [
         'количество',
         'кол-во',
@@ -248,8 +282,8 @@ export const kindFields: Record<ImportKindKey, readonly FieldDef[]> = {
         'розница',
       ],
     },
-  ],
-  suppliers: [
+  ]),
+  suppliers: withTajik([
     {
       key: 'name',
       required: 'yes',
@@ -287,5 +321,5 @@ export const kindFields: Record<ImportKindKey, readonly FieldDef[]> = {
         'дней отсрочки',
       ],
     },
-  ],
+  ]),
 };

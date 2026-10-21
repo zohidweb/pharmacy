@@ -52,6 +52,7 @@ export function FileStep(props: FileStepProps) {
   const ready =
     props.workbook !== null &&
     !props.reading &&
+    props.error === null &&
     (!balances || (props.storeId !== '' && props.date !== ''));
 
   return (
@@ -109,6 +110,9 @@ export function FileStep(props: FileStepProps) {
                 : t('file.none')}
           </span>
         </div>
+        {props.workbook?.lostLetters && (
+          <Alert tone="warning">{t('file.lostLetters')}</Alert>
+        )}
         {props.error && (
           <Alert tone="danger" live="assertive">
             {t(`fileErrors.${props.error}`)}

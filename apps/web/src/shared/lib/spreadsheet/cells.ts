@@ -8,8 +8,13 @@ export type Cell = null | { text: string; number: number | null };
 export interface Workbook {
   /** The 1904 date system of the workbook (Excel for Mac); dates of the cells are serial numbers of it. */
   date1904: boolean;
-  /** The visible sheets in their order; row i is line i + 1 of the sheet, as Excel shows it. */
-  sheets: { name: string; rows: Cell[][] }[];
+  /**
+   * The visible sheets in their order; row i is line i + 1 of the sheet, as Excel shows it. `tooLarge` — more data
+   * rows than a load takes: the sheet is not kept, choosing it says so (final review W4).
+   */
+  sheets: { name: string; rows: Cell[][]; tooLarge?: boolean }[];
+  /** A CSV read as windows-1251 with «?» inside words: letters the encoding has not (ҳ ҷ ӣ қ ӯ ғ) were lost (W5). */
+  lostLetters?: boolean;
 }
 
 export type Sheet = Workbook['sheets'][number];

@@ -18,12 +18,21 @@ export function matchField(
   header: string,
   fields: readonly FieldDef[],
 ): FieldDef | null {
+  return exactField(header, fields) ?? prefixField(header, fields);
+}
+
+function exactField(header: string, fields: readonly FieldDef[]) {
   const key = normalizeHeader(header);
   if (key === '') return null;
-  const exact = fields.find((field) => field.synonyms.includes(key));
-  if (exact) return exact;
+  return fields.find((field) => field.synonyms.includes(key)) ?? null;
+}
+
+function prefixField(header: string, fields: readonly FieldDef[]) {
+  const key = normalizeHeader(header);
+  if (key === '') return null;
   let best: { field: FieldDef; length: number } | null = null;
   for (const field of fields) {
+    if (field.exactOnly) continue;
     for (const synonym of field.synonyms) {
       if (
         key.startsWith(`${synonym} `) &&
@@ -73,12 +82,19 @@ export function suggestMapping(
 ): (string | null)[] {
   const fields = kindFields[kind];
   const taken = new Set<string>();
-  return headers.map((header) => {
-    const field = matchField(header, fields);
-    if (!field || (taken.has(field.key) && !field.multiple)) return null;
-    taken.add(field.key);
-    return field.key;
-  });
+  const mapping: (string | null)[] = headers.map(() => null);
+  // whole headers first, then the prefixes: «Наименование производителя» to the left of «Товар» does not take the
+  // name (final review W2)
+  for (const match of [exactField, prefixField]) {
+    headers.forEach((header, index) => {
+      if (mapping[index] !== null) return;
+      const field = match(header, fields);
+      if (!field || (taken.has(field.key) && !field.multiple)) return;
+      taken.add(field.key);
+      mapping[index] = field.key;
+    });
+  }
+  return mapping;
 }
 
 /**

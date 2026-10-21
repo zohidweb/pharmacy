@@ -49,8 +49,10 @@ export async function readSpreadsheet(file: File): Promise<Workbook> {
     workbook = readCsv(bytes);
   }
 
-  const sheets = workbook.sheets.filter((sheet) =>
-    sheet.rows.some((row) => row.some((cell) => cell !== null)),
+  const sheets = workbook.sheets.filter(
+    (sheet) =>
+      sheet.tooLarge === true ||
+      sheet.rows.some((row) => row.some((cell) => cell !== null)),
   );
   if (sheets.length === 0) throw new SpreadsheetError('empty');
   return { ...workbook, sheets };

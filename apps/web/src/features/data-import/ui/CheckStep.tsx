@@ -76,7 +76,9 @@ export function CheckStep(props: CheckStepProps) {
         ? t('errors.timeout')
         : failure instanceof ApiError && failure.code === 'import_invalid'
           ? null
-          : apiMessage;
+          : failure instanceof ApiError && failure.code === 'import_in_progress'
+            ? t('errors.inProgress')
+            : apiMessage;
 
   const columnOf = (issue: ImportIssue): string => {
     if (!issue.field) return '';

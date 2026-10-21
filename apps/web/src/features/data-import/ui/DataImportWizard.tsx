@@ -85,6 +85,8 @@ export function DataImportWizard({
     setSheetIndex(index);
     setHeaderRow(header);
     setMapping(suggestMapping(headersOf(rows[header]), kind));
+    // the limit is of a sheet, not of the book: another sheet of the same file may be loaded (final review W4)
+    setReadError(workbook.sheets[index].tooLarge ? 'too_many_rows' : null);
   };
 
   const readFile = async (file: File) => {

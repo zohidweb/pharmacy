@@ -4,7 +4,10 @@ import type {
   Shift,
   ZReport,
 } from '@pharmacy/shared-dto';
-import { requirePrincipal } from '../../common/context/request-context';
+import {
+  requirePrincipal,
+  requireTenantId,
+} from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
@@ -14,7 +17,12 @@ import { TerminalRevocationChecks } from '../terminals/terminal-revocation-check
 import { TerminalsService } from '../terminals/terminals.service';
 import type { CashMovementDto, CloseShiftDto, OpenShiftDto } from './dto/pos.dto';
 import { PosIdempotency } from './idempotency';
-import { PosContext, type PosOperation } from './pos-context';
+import {
+  PosContext,
+  type PosOperation,
+  terminalAuthor,
+  terminalVia,
+} from './pos-context';
 import { PosRepository } from './pos.repository';
 import { ShiftMapper } from './shift-mapper';
 import {
@@ -117,7 +125,7 @@ export class ShiftsService implements OnModuleInit {
     this.idempotency.checkHeader(key, body.id);
     const id = body.id.toLowerCase();
     const replay = await this.idempotency.replay<Shift>(
-      requirePrincipal().tenantId,
+      requireTenantId(),
       'shift.open',
       id,
       body,
@@ -164,11 +172,13 @@ export class ShiftsService implements OnModuleInit {
           entityType: 'shift',
           entityId: id,
           storeId: op.storeId,
+          ...terminalAuthor(op),
           details: {
             number,
             authorId: op.author.id,
             openingCashMinor: body.openingCashMinor,
             authorFlagged: op.author.flagged,
+            ...terminalVia(op),
           },
         });
         return this.viewOf(trx, op.tenantId, id);
@@ -185,7 +195,7 @@ export class ShiftsService implements OnModuleInit {
     this.idempotency.checkHeader(key, body.id);
     this.sameShift(shiftId, body.shiftId);
     const replay = await this.idempotency.replay<Shift>(
-      requirePrincipal().tenantId,
+      requireTenantId(),
       'shift.cash',
       body.id.toLowerCase(),
       body,
@@ -226,12 +236,14 @@ export class ShiftsService implements OnModuleInit {
           entityType: 'shift',
           entityId: shift.id,
           storeId: op.storeId,
+          ...terminalAuthor(op),
           details: {
             operationId: id,
             authorId: op.author.id,
             amountMinor: body.amountMinor,
             reason: body.reason,
             authorFlagged: op.author.flagged,
+            ...terminalVia(op),
           },
         });
         return this.viewOf(trx, op.tenantId, shift.id);
@@ -248,7 +260,7 @@ export class ShiftsService implements OnModuleInit {
     this.idempotency.checkHeader(key, body.id);
     this.sameShift(shiftId, body.shiftId);
     const replay = await this.idempotency.replay<ZReport>(
-      requirePrincipal().tenantId,
+      requireTenantId(),
       'shift.close',
       body.id.toLowerCase(),
       body,
@@ -318,6 +330,7 @@ export class ShiftsService implements OnModuleInit {
           entityType: 'shift',
           entityId: shift.id,
           storeId: op.storeId,
+          ...terminalAuthor(op),
           details: {
             number: shift.number,
             authorId: op.author.id,
@@ -326,6 +339,7 @@ export class ShiftsService implements OnModuleInit {
             discrepancyMinor: discrepancy,
             reasonMissing: report.discrepancyReasonMissing,
             authorFlagged: op.author.flagged,
+            ...terminalVia(op),
           },
         });
         return report;

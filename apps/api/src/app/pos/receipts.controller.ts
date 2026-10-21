@@ -1,6 +1,7 @@
 import { Body, Controller, Headers, Post } from '@nestjs/common';
 import type { CreatedReceipt } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
+import { BufferedOperation } from './buffer-replay.interceptor';
 import { CreateReceiptDto } from './dto/pos.dto';
 import { ReceiptsService } from './receipts.service';
 
@@ -11,6 +12,7 @@ export class ReceiptsController {
   constructor(private readonly receipts: ReceiptsService) {}
 
   @RequirePermission('pos:create')
+  @BufferedOperation()
   @Post()
   create(
     @Body() body: CreateReceiptDto,

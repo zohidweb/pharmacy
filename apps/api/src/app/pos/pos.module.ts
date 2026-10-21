@@ -16,6 +16,7 @@ import { SalesFigures } from './sales-figures';
 import { StoreSalesExport } from './store-sales-export';
 import { StoreSalesExportRepository } from './store-sales-export.repository';
 import { PosContext } from './pos-context';
+import { BufferReplayInterceptor } from './buffer-replay.interceptor';
 import { PosShifts } from './pos-shifts';
 import { PosRepository } from './pos.repository';
 import { ReceiptsController } from './receipts.controller';
@@ -58,6 +59,8 @@ import { SyncCoreModule } from '../../core/sync';
     PosRepository,
     PosIdempotency,
     PosContext,
+    // the buffered routes sent under the bound terminal (spec 2026-10-21-pos-offline-limits, P9)
+    BufferReplayInterceptor,
     CatalogSnapshotService,
     ShiftsRepository,
     ShiftMapper,

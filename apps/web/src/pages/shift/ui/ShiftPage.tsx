@@ -32,7 +32,11 @@ import { useTranslations } from 'use-intl';
 import { useCatalog } from '@/entities/catalog';
 import { canWrite, currentStoreOf, useSession } from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
-import { useOutboxCounts, useTerminalRuntime } from '@/entities/terminal';
+import {
+  useBufferState,
+  useOutboxCounts,
+  useTerminalRuntime,
+} from '@/entities/terminal';
 import { apiRequest, useApiCodeMessage } from '@/shared/api';
 import type {
   PosOutboxRecord,
@@ -309,6 +313,7 @@ function Quarantine({
 /** Shift of the working store (UI mockup «Смена / Z-отчёт»). */
 function ShiftPageView() {
   const t = useTranslations('shift');
+  const tPos = useTranslations('pos');
   const toast = useToast();
   const queryClient = useQueryClient();
   const zLabels = useZLabels();
@@ -354,7 +359,12 @@ function ShiftPageView() {
     enabled: Boolean(storeId) && onTerminal,
   });
   // an operation goes to the buffer first (ADR-0015): no action before the IndexedDB of the terminal opens
-  const writable = canWrite(session, 'shifts:update') && runtime !== null;
+  // a sign-in of the cashier older than the limit of the buffer stops the operations of the shift too: the server
+  // would not take them (spec 2026-10-21-pos-offline-limits, P17)
+  const buffer = useBufferState(runtime);
+  const signInStale = buffer?.signIn === 'blocked';
+  const writable =
+    canWrite(session, 'shifts:update') && runtime !== null && !signInStale;
   const context = () => ({
     id: uuidv7(),
     storeId: storeId ?? '',
@@ -522,6 +532,11 @@ function ShiftPageView() {
 
   return (
     <>
+      {signInStale && buffer && (
+        <Alert tone="danger" live="assertive">
+          {tPos('bufferSignIn', { hours: buffer.limits.maxHours })}
+        </Alert>
+      )}
       <QueryState query={shift}>
         {(current) => (
           <>
@@ -569,7 +584,9 @@ function ShiftPageView() {
                 ) : (
                   <Button
                     disabled={
-                      !canWrite(session, 'shifts:create') || runtime === null
+                      !canWrite(session, 'shifts:create') ||
+                      runtime === null ||
+                      signInStale
                     }
                     onClick={() => setDialog('open')}
                   >

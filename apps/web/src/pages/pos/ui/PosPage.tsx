@@ -26,7 +26,7 @@ import {
 } from '@/entities/catalog';
 import { can, canWrite, currentStoreOf, useSession } from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
-import { useTerminalRuntime } from '@/entities/terminal';
+import { useBufferState, useTerminalRuntime } from '@/entities/terminal';
 import {
   addProduct,
   applySaleToSnapshot,
@@ -133,6 +133,26 @@ function PosPageView() {
       void raiseReceiptSeq(runtime.db, shiftId, shiftReceipts);
     }
   }, [runtime, shiftId, shiftReceipts]);
+  // the limits of the outage buffer (spec 2026-10-21-pos-offline-limits, P6–P8, P17): a stale sign-in stops every
+  // operation, a full buffer stops new receipts, the ПКУ limit stops ПКУ — whatever the connection indicator says
+  const buffer = useBufferState(runtime);
+  const bufferStop =
+    buffer?.signIn === 'blocked'
+      ? t('bufferSignIn', { hours: buffer.limits.maxHours })
+      : buffer?.general === 'blocked'
+        ? t('bufferFull', {
+            count: buffer.pending,
+            max: buffer.limits.maxOperations,
+            hours: buffer.limits.maxHours,
+          })
+        : null;
+  const controlledStop =
+    buffer?.controlled === 'blocked'
+      ? {
+          max: buffer.limits.controlledMaxOperations,
+          hours: buffer.limits.controlledMaxHours,
+        }
+      : null;
   const locked = !canWrite(session, 'pos:create')
     ? t('readOnly')
     : !openShift
@@ -180,9 +200,11 @@ function PosPageView() {
         setNotice(t('controlledForbidden', { name: product.name }));
         return;
       }
-      // a ПКУ sale needs the connection until the limits of the buffer come (spec 2026-10-13, E17)
-      if (!online) {
-        setNotice(t('controlledOffline', { name: product.name }));
+      // ПКУ is sold without the connection too, within the ПКУ limit of the buffer (P6–P8)
+      if (controlledStop) {
+        setNotice(
+          t('controlledLimit', { name: product.name, ...controlledStop }),
+        );
         return;
       }
       setControlled({ pending, line: null });
@@ -277,13 +299,17 @@ function PosPageView() {
 
   const pay = async () => {
     if (!session || !openShift || !snapshot || !runtime || paying) return;
+    if (bufferStop) {
+      setNotice(bufferStop);
+      return;
+    }
     if (
-      !online &&
+      controlledStop &&
       usePosStore
         .getState()
         .draft.lines.some((line) => line.prescription === 'controlled')
     ) {
-      setNotice(t('controlledOfflinePay'));
+      setNotice(t('controlledLimitPay', controlledStop));
       return;
     }
     // the expired batch is a hard ban (ТЗ): a cart kept past midnight is checked again
@@ -306,7 +332,8 @@ function PosPageView() {
         language: locale === 'tg' ? 'tj' : 'ru',
       });
       const delivery = awaitDelivery(runtime, request.id);
-      await enqueueSale(runtime, request);
+      // the sale as buffered: with its local number within the shift (P12)
+      const sold = await enqueueSale(runtime, request);
       const updated = applySaleToSnapshot(snapshot, request);
       queryClient.setQueryData<CatalogData>(['catalog', storeId], (data) =>
         data ? { ...data, snapshot: updated } : data,
@@ -315,7 +342,7 @@ function PosPageView() {
       usePosStore.getState().replace(emptyDraft());
       if (current.heldId && online) deleteHeld.mutate(current.heldId);
       const data: ReceiptPrintData = {
-        request,
+        request: sold,
         number: null,
         productNames: Object.fromEntries(
           current.lines.map((l) => [l.productId, l.name]),
@@ -428,6 +455,11 @@ function PosPageView() {
         )}
         {catalog.data?.stale && (
           <Alert tone="warning">{t('staleCatalog')}</Alert>
+        )}
+        {bufferStop && (
+          <Alert tone="danger" live="assertive">
+            {bufferStop}
+          </Alert>
         )}
         {notice && (
           <Alert tone="info" live="polite">

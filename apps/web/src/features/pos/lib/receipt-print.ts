@@ -9,6 +9,7 @@ import type {
   PosStoreSettings,
   ReceiptPaymentMethod,
 } from '@pharmacy/shared-dto';
+import { receiptCode } from '@pharmacy/shared-domain';
 import {
   CURRENCY_SIGN,
   formatDateTime,
@@ -25,6 +26,9 @@ const amount = (minor: number) =>
 export interface ReceiptLabels {
   receipt: (number: string) => string;
   pendingNumber: string;
+  /** A receipt without its server number: the local number and the code (spec 2026-10-21-pos-offline-limits, P13). */
+  localNumber: (number: number, code: string) => string;
+  serverNumberLater: string;
   cashier: string;
   subtotal: string;
   discount: (percent: number) => string;
@@ -57,13 +61,19 @@ export function saleReceiptLines(
   );
   out.push(...receiptCenter(`${labels.taxId} ${settings.taxId}`, cols));
   out.push(receiptRule(cols));
+  const local = number ? null : (request.localNumber ?? null);
   out.push(
     ...receiptRow(
-      number ? labels.receipt(number) : labels.pendingNumber,
+      number
+        ? labels.receipt(number)
+        : local !== null
+          ? labels.localNumber(local, receiptCode(request.id))
+          : labels.pendingNumber,
       formatDateTime(request.occurredAt),
       cols,
     ),
   );
+  if (local !== null) out.push(...receiptWrap(labels.serverNumberLater, cols));
   out.push(...receiptRow(labels.cashier, cashierName, cols));
   out.push(receiptRule(cols));
   for (const line of request.lines) {

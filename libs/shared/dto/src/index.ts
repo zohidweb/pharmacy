@@ -12,3 +12,4 @@ export type * from './lib/tenant-catalog.js';
 export type * from './lib/tenant-staff.js';
 export type * from './lib/tenant-owner.js';
 export type * from './lib/sync-protocol.js';
+export type * from './lib/tenant-imports.js';

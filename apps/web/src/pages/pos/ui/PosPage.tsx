@@ -64,6 +64,7 @@ import {
 } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
+import { raiseReceiptSeq } from '@/shared/lib/offline-queue';
 import { useShellChrome } from '@/shared/lib/shell-chrome';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -123,6 +124,15 @@ function PosPageView() {
   const canChooseBatch = can(session, 'pos:choose-batch');
   const canSeeCost = can(session, 'finance:view-cost');
   const openShift = shift.data ?? null;
+  // the local numbers of the shift go on after the receipts the server has: a browser whose data was cleared does
+  // not start again at 1 (spec 2026-10-21-pos-offline-limits, P12)
+  const shiftId = openShift?.id ?? null;
+  const shiftReceipts = openShift?.receipts ?? 0;
+  useEffect(() => {
+    if (runtime && shiftId) {
+      void raiseReceiptSeq(runtime.db, shiftId, shiftReceipts);
+    }
+  }, [runtime, shiftId, shiftReceipts]);
   const locked = !canWrite(session, 'pos:create')
     ? t('readOnly')
     : !openShift

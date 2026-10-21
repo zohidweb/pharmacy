@@ -14,6 +14,7 @@ interface TerminalCacheSchema extends DBSchema {
 
 const DB_NAME = 'pharmacy-terminal';
 const SESSION_KEY = 'session';
+const BINDING_KEY = 'binding';
 const shiftKey = (storeId: string) => `shift:${storeId}`;
 
 let opening: Promise<IDBPDatabase<TerminalCacheSchema>> | null = null;
@@ -63,10 +64,35 @@ export const rememberShift = (storeId: string, shift: Shift | null) =>
 export const rememberedShift = (storeId: string) =>
   read<Shift | null>(shiftKey(storeId));
 
-/** Sign-out and an expired session: nothing of the employee stays on the terminal. */
+/** The network and store of the bound terminal: no employee data (spec 2026-10-21-pos-offline-limits, P18). */
+export interface TerminalBinding {
+  tenantId: string;
+  storeId: string;
+}
+
+export const rememberBinding = (binding: TerminalBinding) =>
+  write(BINDING_KEY, binding);
+
+export const rememberedBinding = () => read<TerminalBinding>(BINDING_KEY);
+
+/** The browser is not bound any more (404 `not_bound`). */
+export const forgetBinding = () => write(BINDING_KEY, undefined);
+
+/**
+ * Sign-out and an expired session: nothing of the employee stays on the terminal. The binding stays — the buffer
+ * of the terminal is still sent without a session (P18).
+ */
 export async function forgetTerminal() {
   try {
-    await (await db()).clear('cache');
+    const database = await db();
+    const tx = database.transaction('cache', 'readwrite');
+    const keys = await tx.store.getAllKeys();
+    await Promise.all(
+      keys
+        .filter((key) => key !== BINDING_KEY)
+        .map((key) => tx.store.delete(key)),
+    );
+    await tx.done;
   } catch {
     // nothing to forget
   }

@@ -2,16 +2,18 @@ import { Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { importLimits } from '@pharmacy/shared-domain';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app/app.module';
-import { isSyncPath } from './common/http/contour';
+import { isImportPath, isSyncPath } from './common/http/contour';
 import { createValidationPipe } from './common/validation/validation-pipe';
 import { SYNC_BODY_LIMIT } from './core/sync/protocol';
 
 async function bootstrap() {
   // The body parsers are registered by hand: the sync contour of offline stores takes a batch of up to 2 MB of
-  // JSON after gzip is inflated (ADR-0014 §6), every other route keeps the default 100 KB.
+  // JSON after gzip is inflated (ADR-0014 §6), the loads of data from a file — up to 10 MB of rows (spec
+  // 2026-10-20-data-import, F19), every other route keeps the default 100 KB.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
@@ -23,6 +25,19 @@ async function bootstrap() {
       headers: Record<string, unknown>;
     }) =>
       isSyncPath(req.originalUrl ?? req.url) &&
+      String(req.headers['content-type'] ?? '')
+        .split(';')[0]
+        .trim()
+        .toLowerCase() === 'application/json',
+  });
+  app.useBodyParser('json', {
+    limit: importLimits.bodyBytes,
+    type: (req: {
+      originalUrl?: string;
+      url?: string;
+      headers: Record<string, unknown>;
+    }) =>
+      isImportPath(req.originalUrl ?? req.url) &&
       String(req.headers['content-type'] ?? '')
         .split(';')[0]
         .trim()

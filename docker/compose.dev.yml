@@ -8,3 +8,6 @@ services:
   redis:
     ports:
       - '127.0.0.1:6379:6379'
+  # dev serves web/admin with `next dev` and its /api rewrite; the proxy runs on test/prod only (ADR-0012)
+  proxy:
+    profiles: ['proxy']

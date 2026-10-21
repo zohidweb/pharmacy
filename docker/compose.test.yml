@@ -1,5 +1,6 @@
 # test: acceptance environment (customer test database, backlog W2-05). Same topology as prod,
-# smaller resources (C4 deployment). PostgreSQL is published on localhost only, for diagnostics: over TCP only
+# smaller resources (C4 deployment). The proxy serves HTTPS on *.localhost with Caddy's local CA
+# (ADR-0012 «Принятие», 5). PostgreSQL and the API are published on localhost only, for diagnostics: over TCP only
 # pharmacy_app and pharmacy_platform sign in; the superuser — `docker compose exec postgres psql`.
 services:
   postgres:
@@ -18,6 +19,8 @@ services:
         limits: { cpus: '0.5', memory: 384m }
   api:
     restart: unless-stopped
+    ports:
+      - '127.0.0.1:${API_PORT:?set in the env file}:3000'
     deploy:
       resources:
         limits: { cpus: '1', memory: 512m }
@@ -26,3 +29,18 @@ services:
     deploy:
       resources:
         limits: { cpus: '0.5', memory: 512m }
+  proxy:
+    restart: unless-stopped
+    environment:
+      PROXY_PROFILE: ${PROXY_PROFILE:?set in the env file}
+      TLS_MODE: ${TLS_MODE:?set in the env file}
+      WEB_ADDR: ${WEB_ADDR:?set in the env file}
+      ADMIN_ADDR: ${ADMIN_ADDR:?set in the env file}
+      PROXY_HTTP_PORT: ${PROXY_HTTP_PORT:?set in the env file}
+      PROXY_HTTPS_PORT: ${PROXY_HTTPS_PORT:?set in the env file}
+    ports:
+      - '127.0.0.1:${PROXY_HTTP_PORT}:${PROXY_HTTP_PORT}'
+      - '127.0.0.1:${PROXY_HTTPS_PORT}:${PROXY_HTTPS_PORT}'
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 128m }

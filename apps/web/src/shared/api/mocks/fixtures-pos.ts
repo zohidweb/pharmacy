@@ -3,6 +3,7 @@
  * an open shift, receipts to return. Expiry dates are relative to today so batch states stay
  * meaningful; barcodes and the taxpayer number are invented.
  */
+import { posBufferDefaults } from '@pharmacy/shared-domain';
 import type {
   PosBatch,
   PosCategory,
@@ -37,6 +38,7 @@ export const storeSettings = (
   receiptFooter:
     'Спасибо за покупку! Обмен и возврат — 14 дней при наличии чека.',
   returnWindowDays: 14,
+  bufferLimits: posBufferDefaults,
 });
 
 const batch = (

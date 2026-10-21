@@ -401,6 +401,7 @@
   },
   "auditEvents": {
     "product_imported": "Каталог загружен из файла",
+    "controlled_prescriptions_purged": "Данные рецептов удалены по сроку хранения",
     "supplier_imported": "Поставщики загружены из файла",
     "document_imported": "Начальные остатки загружены из файла",
     "receipt_completed": "Продажа",

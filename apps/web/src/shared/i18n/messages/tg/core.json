@@ -401,6 +401,7 @@
   },
   "auditEvents": {
     "product_imported": "Каталог аз файл бор карда шуд",
+    "controlled_prescriptions_purged": "Маълумоти дорухатҳо аз рӯи мӯҳлати нигоҳдорӣ нест карда шуд",
     "supplier_imported": "Таъминкунандагон аз файл бор карда шуданд",
     "document_imported": "Бақияҳои ибтидоӣ аз файл бор карда шуданд",
     "receipt_completed": "Фурӯш",

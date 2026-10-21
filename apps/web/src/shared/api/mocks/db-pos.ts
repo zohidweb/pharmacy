@@ -35,6 +35,10 @@ export interface MockReceipt {
   payments: ReceiptPayment[];
   /** Refunded by kind by the returns of the receipt (E7). */
   refunded: Partial<Record<ReceiptPaymentMethod, number>>;
+  /** The number of the receipt of the terminal within its shift (spec 2026-10-21-pos-offline-limits, P12). */
+  localNumber?: number | null;
+  /** When «the server» took it: the ПКУ journal shows it beside the sale (P1); the seed — at the sale. */
+  receivedAt?: string;
 }
 
 /** A shift of the mock: one open per terminal (spec 2026-10-13-pos-shift-sale, K5). */

@@ -17,3 +17,8 @@ services:
     deploy:
       resources:
         limits: { cpus: '2', memory: 1g }
+  # Defined in compose.backup.yml (ADR-0019); the stack script always adds it for prod.
+  backup:
+    deploy:
+      resources:
+        limits: { cpus: '1', memory: 1g }

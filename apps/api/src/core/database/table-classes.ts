@@ -68,6 +68,7 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     notification_reads: 'tenant',
     notification_refresh: 'tenant',
     expenses: 'tenant',
+    import_jobs: 'tenant',
     audit_log: 'tenant',
     sessions: 'tenant',
     sync_inbox: 'tenant',

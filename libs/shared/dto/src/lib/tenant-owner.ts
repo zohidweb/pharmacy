@@ -473,6 +473,16 @@ export interface NetworkSettings {
   expiryNoticeDays: number;
   warnBelowCost: boolean;
   notifications: Record<NotificationKind, boolean>;
+  /** Days the prescription data of ПКУ sales is kept, 1–3650 (spec 2026-10-21-pos-offline-limits, P2). */
+  prescriptionRetentionDays: number;
+  /**
+   * Limits of the outage buffer of the POS (P6): 1–72 hours, 50–2000 operations; ПКУ 1–24 hours, 1–200 receipts and
+   * not above the general ones (400 `validation_failed`).
+   */
+  posBufferMaxHours: number;
+  posBufferMaxOperations: number;
+  posControlledMaxHours: number;
+  posControlledMaxOperations: number;
 }
 
 /** PUT /api/v1/settings — needs a fresh sign-in (`fresh_auth_required`). */

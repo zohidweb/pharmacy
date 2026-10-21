@@ -362,7 +362,8 @@ import /etc/caddy/profiles/{$PROXY_PROFILE}.caddy
    (ADR-0008), поэтому CSP админки — `form-action 'self'` без origin web. Proxy пропускает на `admin.` только
    `/api/v1/operator/*`, на `app.` — всё, кроме него (эшелон; основная проверка — в API).
 3. Лимиты тела: `/api/*` — 1 MB, `/api/v1/sync/*` — 4 MB (батч ADR-0014 — 2 МБ JSON после распаковки, проверяет
-   body-parser API); таймауты — как в таблице «Параметры proxy».
+   body-parser API), загрузки данных из файла `/api/v1/*-imports*` — 10 MB; таймауты — как в таблице «Параметры proxy»
+   (ответ upstream для синхронизации и загрузок — 120 s).
 4. `script-src 'unsafe-inline'` на MVP допустим; хеши inline-скриптов — после MVP.
 5. Локальные test/prod — HTTPS на `*.localhost` с `tls internal` (проверяется «боевой» путь cookie `__Host-*`); профиль
    `local` повторяет `cloud` без редиректа apex.

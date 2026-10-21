@@ -18,7 +18,7 @@ app.use(
     },
     crossOriginResourcePolicy: { policy: 'same-site' },
     referrerPolicy: { policy: 'no-referrer' },
-    hsts: { maxAge: 31_536_000, includeSubDomains: true }, // HTTPS on every connection (CLAUDE.md)
+    strictTransportSecurity: false, // HSTS is sent by the reverse proxy where it terminates TLS (ADR-0012)
   }),
 );
 app.getHttpAdapter().getInstance().disable('x-powered-by');
@@ -26,7 +26,8 @@ app.getHttpAdapter().getInstance().disable('x-powered-by');
 
 - Если Swagger UI включён локально — ему нужна более мягкая CSP; включайте её только для
   `api/docs` и только вне production.
-- `hsts` имеет смысл только за HTTPS; на офлайн-точке с `127.0.0.1` он игнорируется браузером.
+- HSTS ставит только proxy Caddy в профилях `acme`/`files` (ADR-0012); в helmet API он выключен, чтобы не
+  дублировать заголовок и не слать его офлайн-точке по `http://localhost`.
 
 ## Swagger / OpenAPI (опционально)
 

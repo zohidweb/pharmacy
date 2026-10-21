@@ -13,6 +13,7 @@ import { TenantDatabase, type TenantTransaction } from '../../core/database';
 import { PinSignIns } from '../audit/pin-sign-ins';
 import { PrincipalLoader } from '../auth/principal-loader';
 import { PosRepository, type PosStore } from './pos.repository';
+import { ShiftsRepository } from './shifts.repository';
 import { AUTHOR_SIGN_IN_TOLERANCE_MS, heldBy } from './terminal-holder';
 
 const HOUR_MS = 3_600_000;
@@ -57,10 +58,33 @@ export interface PosOperation extends BufferSession {
  * The audit of an operation sent under the terminal (spec 2026-10-21-pos-offline-limits, P11): its author is the
  * employee of the row (there is no principal), and the details say `via: 'terminal'`.
  */
-export const terminalAuthor = (op: PosOperation): { employeeId?: string } =>
-  op.via === 'terminal' ? { employeeId: op.author.id } : {};
+export const terminalAuthor = (
+  op: PosOperation,
+): { employeeId?: string; terminalId?: string } =>
+  op.via === 'terminal'
+    ? { employeeId: op.author.id, terminalId: op.terminalId }
+    : {};
 export const terminalVia = (op: PosOperation): { via?: 'terminal' } =>
   op.via === 'terminal' ? { via: 'terminal' } : {};
+
+/** The oldest moment of an operation (E4). */
+const HORIZON_MS = 30 * 24 * HOUR_MS;
+
+/**
+ * The moment of an operation (E4): the corrected PC clock, but not after the server got it, not before `floor` and not
+ * more than 30 days back.
+ */
+export function boundedMoment(
+  occurredAt: Date,
+  receivedAt: Date,
+  floor: Date | null,
+): Date {
+  const at = Math.max(
+    Math.min(occurredAt.getTime(), receivedAt.getTime()),
+    receivedAt.getTime() - HORIZON_MS,
+  );
+  return new Date(floor === null ? at : Math.max(at, floor.getTime()));
+}
 
 /** An operation delivered within this of its moment was made online (`origin`, M10). */
 export const ONLINE_WITHIN_MS = 60_000;
@@ -74,6 +98,7 @@ export class PosContext {
     private readonly principals: PrincipalLoader,
     private readonly db: TenantDatabase,
     private readonly signIns: PinSignIns,
+    private readonly shifts: ShiftsRepository,
   ) {}
 
   /** The PIN session of a bound terminal, else 403 `terminal_required`. */
@@ -118,6 +143,8 @@ export class PosContext {
     body: PosOperationContext,
     right: Permission,
     sentAt?: string,
+    /** The shift of a receipt or a cash operation: the P10 moment is not before its opening (E4). */
+    shiftId?: string,
   ): Promise<PosOperation> {
     const session = this.bufferSession();
     if (
@@ -148,11 +175,17 @@ export class PosContext {
     );
     // under the terminal the author must have held it at the moment of the operation (P10)
     if (session.via === 'terminal') {
-      await this.requireHolder(session, author.id, occurredAt);
+      await this.requireHolder(
+        session,
+        author.id,
+        occurredAt,
+        receivedAt,
+        shiftId,
+      );
     }
-    // an online operation of another employee than the one signed in is marked too (M10)
+    // an online operation of another employee than the one signed in is marked too (M10); under the terminal with no
+    // session nobody signed in, so a live operation is always marked
     if (
-      session.employeeId !== null &&
       author.id !== session.employeeId &&
       receivedAt.getTime() - occurredAt.getTime() < ONLINE_WITHIN_MS
     ) {
@@ -203,17 +236,31 @@ export class PosContext {
 
   /**
    * The PIN sign-ins of the terminal no older than the buffer limit of the network before the moment: the author
-   * held the terminal at `moment ± 5 min`, else 422 `author_session_missing` — the buffer keeps it in quarantine.
+   * held the terminal at `moment ± 5 min`, else 422 `author_session_missing` — the buffer keeps it in quarantine. The
+   * moment is the one of E4 (not after the receipt, not older than 30 days, not before the opening of the shift of
+   * the operation): a moment the client states freely would let it pick any past holder of the terminal.
    */
   private async requireHolder(
     session: BufferSession,
     authorId: string,
-    moment: Date,
+    occurredAt: Date,
+    receivedAt: Date,
+    shiftId: string | undefined,
   ): Promise<void> {
     const held = await this.db.tenantTransaction(async (trx) => {
       const { bufferLimits } = await this.repository.settings(
         trx,
         session.tenantId,
+      );
+      const shift = shiftId
+        ? await this.shifts.findShift(trx, session.tenantId, shiftId)
+        : null;
+      const moment = boundedMoment(
+        occurredAt,
+        receivedAt,
+        shift && shift.terminalId === session.terminalId
+          ? shift.openedAt
+          : null,
       );
       const signIns = await this.signIns.between(
         trx,

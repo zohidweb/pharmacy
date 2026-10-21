@@ -321,7 +321,7 @@
     "open": "Кушодани чек",
     "receiptTitle": "Чеки №{number} · {at}",
     "receiptMeta": "{store} · {cashier}",
-    "offlineNumber": "бе пайваст № {number}",
+    "localNumber": "дар хазина № {number}",
     "daysLeft": "{days} рӯз монд",
     "lines": "Сатрҳои чек",
     "pick": "Баргардондан",

@@ -321,7 +321,7 @@
     "open": "Открыть чек",
     "receiptTitle": "Чек №{number} · {at}",
     "receiptMeta": "{store} · {cashier}",
-    "offlineNumber": "без связи № {number}",
+    "localNumber": "на кассе № {number}",
     "daysLeft": "{days, plural, one {остался # день} few {осталось # дня} other {осталось # дней}}",
     "lines": "Строки чека",
     "pick": "Вернуть",

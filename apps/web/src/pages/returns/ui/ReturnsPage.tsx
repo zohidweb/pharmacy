@@ -618,9 +618,10 @@ function ReturnsPageView() {
                     store: receipt.storeName,
                     cashier: receipt.cashierName,
                   }),
-                  // sold without the connection: its number on the terminal (spec 2026-10-21-pos-offline-limits, P14)
+                  // the number of the receipt on its terminal, the one a receipt printed without the connection carries
+                  // (spec 2026-10-21-pos-offline-limits, P14)
                   receipt.localNumber !== null
-                    ? t('offlineNumber', { number: receipt.localNumber })
+                    ? t('localNumber', { number: receipt.localNumber })
                     : null,
                 ]
                   .filter(Boolean)

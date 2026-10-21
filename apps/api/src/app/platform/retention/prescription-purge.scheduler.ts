@@ -72,19 +72,13 @@ export class PrescriptionPurgeScheduler
           try {
             const purged = await this.prescriptions.purgeExpired(tenantId);
             if (purged === null) continue;
-            const cleared = await this.inbox.purgeExpired(
+            // each step writes its own event in its transaction: a failed envelope step keeps the trace of the
+            // records already purged
+            records += purged.purged;
+            envelopes += await this.inbox.purgeExpired(
               tenantId,
               purged.retentionDays,
             );
-            if (purged.purged + cleared > 0) {
-              await this.prescriptions.recordPurge(
-                tenantId,
-                purged.purged,
-                cleared,
-              );
-            }
-            records += purged.purged;
-            envelopes += cleared;
           } catch (error) {
             this.logger.warn(
               `Prescription data of a network not purged (${errorCode(error)}) [tenantId=${tenantId}] [correlationId=${correlationId}]`,

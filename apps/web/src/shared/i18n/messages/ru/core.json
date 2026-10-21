@@ -132,7 +132,9 @@
       "quarantine": "Требует разбора: {count}",
       "paused": "Отправка ждёт входа в систему",
       "bufferWarn": "Буфер почти заполнен: {count} из {max} · старейшая {hours} ч",
-      "bufferBlocked": "Продажи остановлены: буфер заполнен"
+      "bufferBlocked": "Продажи остановлены: буфер заполнен",
+      "controlledWarn": "ПКУ без связи: {count} из {max, plural, one {# чека} other {# чеков}}",
+      "controlledBlocked": "Продажа ПКУ без связи остановлена"
     },
     "impersonation": {
       "title": "Сеанс оператора платформы",

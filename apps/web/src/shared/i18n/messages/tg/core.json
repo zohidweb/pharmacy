@@ -132,7 +132,9 @@
       "quarantine": "Талаби баррасӣ: {count}",
       "paused": "Фиристодан вуруд ба системаро интизор аст",
       "bufferWarn": "Буфер қариб пур аст: {count} аз {max} · кӯҳнатарин {hours} соат",
-      "bufferBlocked": "Фурӯш қатъ шуд: буфер пур аст"
+      "bufferBlocked": "Фурӯш қатъ шуд: буфер пур аст",
+      "controlledWarn": "БМА бе пайваст: {count} аз {max} чек",
+      "controlledBlocked": "Фурӯши БМА бе пайваст қатъ шуд"
     },
     "impersonation": {
       "title": "Сеанси оператори платформа",

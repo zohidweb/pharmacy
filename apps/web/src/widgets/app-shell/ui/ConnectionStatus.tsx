@@ -89,6 +89,22 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
           </span>
         )
       )}
+      {buffer?.controlled === 'blocked' ? (
+        <span className="flex items-center gap-1 font-medium text-danger">
+          <Icon name="triangle-alert" size="xs" />
+          {t('controlledBlocked')}
+        </span>
+      ) : (
+        buffer?.controlled === 'warn' && (
+          <span className="flex items-center gap-1 text-warning">
+            <Icon name="triangle-alert" size="xs" />
+            {t('controlledWarn', {
+              count: buffer.controlledPending,
+              max: buffer.limits.controlledMaxOperations,
+            })}
+          </span>
+        )
+      )}
       {counts.paused && <span className="text-warning">{t('paused')}</span>}
     </p>
   );

@@ -15,7 +15,8 @@ const PURGE_BATCH = 5000;
 // The purge of the prescription data of ПКУ sales by the retention term of the network (spec
 // 2026-10-21-pos-offline-limits, P3, P4; data model 04): the note and the file of a record sold before the term are
 // cleared and `prescription_purged_at` is set; the record and the ПКУ journal stay. Called by the hourly pass of
-// `platform/retention` for each network, in its own context and transaction (`pos` → `platform/retention`).
+// `platform/retention` for each network, in its own context and transaction (`pos` → `platform/retention`), with the
+// event of the journal in the same transaction.
 @Injectable()
 export class PrescriptionRetention {
   constructor(
@@ -47,26 +48,18 @@ export class PrescriptionRetention {
               and r.recorded_at < now() - make_interval(days => ${retentionDays})
             order by r.recorded_at
             limit ${PURGE_BATCH})`.execute(trx);
-        return { purged: Number(result.numAffectedRows ?? 0n), retentionDays };
+        const purged = Number(result.numAffectedRows ?? 0n);
+        // the event goes with the purge in its transaction: the counts only, never the data (data model 06)
+        if (purged > 0) {
+          await this.audit.append(trx, {
+            action: 'controlled.prescriptions-purged',
+            entityType: 'tenant',
+            entityId: tenantId,
+            details: { records: purged },
+          });
+        }
+        return { purged, retentionDays };
       }),
-    );
-  }
-
-  /** One event of the journal per network and pass: the counts only, never the data (data model 06). */
-  recordPurge(
-    tenantId: string,
-    records: number,
-    envelopes: number,
-  ): Promise<void> {
-    return this.inTenant(tenantId, () =>
-      this.db.tenantTransaction((trx) =>
-        this.audit.append(trx, {
-          action: 'controlled.prescriptions-purged',
-          entityType: 'tenant',
-          entityId: tenantId,
-          details: { records, envelopes },
-        }),
-      ),
     );
   }
 

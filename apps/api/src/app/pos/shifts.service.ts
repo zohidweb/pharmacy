@@ -18,6 +18,7 @@ import { TerminalsService } from '../terminals/terminals.service';
 import type { CashMovementDto, CloseShiftDto, OpenShiftDto } from './dto/pos.dto';
 import { PosIdempotency } from './idempotency';
 import {
+  boundedMoment,
   PosContext,
   type PosOperation,
   terminalAuthor,
@@ -36,18 +37,9 @@ const OUT_REASONS = new Set(['collection', 'expense']);
 const BANK: Array<Exclude<ReceiptPaymentMethod, 'cash'>> = ['card', 'qr', 'nfc'];
 
 /** A buffered operation is never older than this (a broken clock of the PC, M8). */
-const HORIZON_MS = 30 * 24 * 3_600_000;
-
-/**
- * The moment of an operation (E4): the corrected PC clock, but not after the server got it, not
- * before `floor` and not more than 30 days back.
- */
+/** The moment of an operation (E4), see `boundedMoment`. */
 export function operationMoment(op: PosOperation, floor: Date | null): Date {
-  const at = Math.max(
-    Math.min(op.occurredAt.getTime(), op.receivedAt.getTime()),
-    op.receivedAt.getTime() - HORIZON_MS,
-  );
-  return new Date(floor === null ? at : Math.max(at, floor.getTime()));
+  return boundedMoment(op.occurredAt, op.receivedAt, floor);
 }
 
 // The shift of a terminal (spec 2026-10-13-pos-shift-sale, 4.4, K5, E24): one open per terminal,
@@ -207,7 +199,12 @@ export class ShiftsService implements OnModuleInit {
         { field: 'reason', code: 'invalid' },
       ]);
     }
-    const op = await this.context.operation(body, 'shifts:update', sentAt);
+    const op = await this.context.operation(
+      body,
+      'shifts:update',
+      sentAt,
+      shiftId.toLowerCase(),
+    );
     const id = body.id.toLowerCase();
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, op.tenantId, 'shift.cash', id, body, 201, async () => {
@@ -266,7 +263,12 @@ export class ShiftsService implements OnModuleInit {
       body,
     );
     if (replay) return replay.response;
-    const op = await this.context.operation(body, 'shifts:update', sentAt);
+    const op = await this.context.operation(
+      body,
+      'shifts:update',
+      sentAt,
+      shiftId.toLowerCase(),
+    );
     const id = body.id.toLowerCase();
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, op.tenantId, 'shift.close', id, body, 201, async () => {

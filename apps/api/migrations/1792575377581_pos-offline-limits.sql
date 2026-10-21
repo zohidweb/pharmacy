@@ -7,6 +7,7 @@
 --   controlled_sale_records  - the prescription data is purged by the retention term (P3, P4): an update may only
 --                              clear the note and the file and set prescription_purged_at, once; a row is never
 --                              deleted.
+--   sync_inbox               - a partial index of the envelopes that still hold prescription data (P5).
 set local lock_timeout = '5s';
 
 alter table pharmacy.tenant_settings
@@ -57,3 +58,9 @@ grant update (prescription_file_id, prescription_note, prescription_purged_at)
 -- The hourly purge pass reads the records not purged yet by the time of the sale.
 create index controlled_sale_records_purge_idx on pharmacy.controlled_sale_records (tenant_id, recorded_at)
   where prescription_purged_at is null;
+
+-- The envelopes of the sales of offline stores that still hold prescription data (P5): a purged envelope leaves the
+-- index, so the hourly pass does not read the history again. The predicate is the one of InboxRetention.
+create index sync_inbox_prescription_purge_idx on pharmacy.sync_inbox (tenant_id, received_at)
+  where type = 'receipt.completed'
+    and envelope @? '$.payload.controlledRecords[*] ? (@.prescriptionNote != null || @.prescriptionFileId != null)';

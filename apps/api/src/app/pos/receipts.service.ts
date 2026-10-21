@@ -99,7 +99,12 @@ export class ReceiptsService {
     if (replay) return replay.response;
     const arithmetic = checkArithmetic(body);
     if (arithmetic.length > 0) throw invalid(arithmetic);
-    const op = await this.context.operation(body, 'pos:create', sentAt);
+    const op = await this.context.operation(
+      body,
+      'pos:create',
+      sentAt,
+      body.shiftId.toLowerCase(),
+    );
     const { tenantId, storeId } = op;
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, tenantId, 'receipt', id, body, 201, async () => {

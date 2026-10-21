@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
+import { SyncChanges } from '../../core/sync';
 
 // A closed store leaves the discount rules (spec 2026-10-15-store-closing, E12): it is taken out of
 // the store lists of the rules, and a rule whose list is left empty is archived — an empty list
@@ -8,6 +9,8 @@ import type { TenantTransaction } from '../../core/database';
 // store stay as its history.
 @Injectable()
 export class StoreDiscountDetachment {
+  constructor(private readonly feed: SyncChanges) {}
+
   async detachStore(
     trx: TenantTransaction,
     tenantId: string,
@@ -19,6 +22,15 @@ export class StoreDiscountDetachment {
       returning rule_id`.execute(trx);
     const ruleIds = [...new Set(detached.rows.map((row) => row.ruleId))];
     if (ruleIds.length === 0) return { detached: 0, archived: 0 };
+    // the stores of these rules change, and some are archived: the feed sends them again (E4)
+    await this.feed.recordMany(
+      trx,
+      ruleIds.map((id) => ({
+        tenantId,
+        entityType: 'discount_rule',
+        entityId: id,
+      })),
+    );
     const archived = await sql`
       update pharmacy.discount_rules r
       set status = 'archived', archived_at = now(), updated_at = now()

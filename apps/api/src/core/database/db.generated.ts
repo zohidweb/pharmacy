@@ -958,6 +958,16 @@ export interface Suppliers {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface SyncChanges {
+  changedAt: Generated<Timestamp>;
+  changeSeq: bigint | null;
+  entityId: string;
+  entityType: string;
+  id: string;
+  scopeStoreId: string | null;
+  tenantId: string;
+}
+
 export interface SyncConflicts {
   cloudValue: Json;
   createdAt: Generated<Timestamp>;
@@ -971,6 +981,13 @@ export interface SyncConflicts {
   status: Generated<string>;
   storeId: string;
   tenantId: string;
+}
+
+export interface SyncFeedState {
+  horizonSeq: Generated<bigint>;
+  lastSeq: Generated<bigint>;
+  tenantId: string;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface SyncInbox {
@@ -1243,7 +1260,9 @@ export interface DB {
   supplierReturnAllocations: SupplierReturnAllocations;
   supplierReturnLines: SupplierReturnLines;
   suppliers: Suppliers;
+  syncChanges: SyncChanges;
   syncConflicts: SyncConflicts;
+  syncFeedState: SyncFeedState;
   syncInbox: SyncInbox;
   syncRuns: SyncRuns;
   tenantCashiersMonthly: TenantCashiersMonthly;

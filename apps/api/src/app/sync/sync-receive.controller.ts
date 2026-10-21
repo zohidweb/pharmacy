@@ -1,15 +1,18 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import type {
   SyncBatchResponse,
+  SyncChangesResponse,
   SyncHandshakeResponse,
 } from '@pharmacy/shared-dto';
 import { ProblemException } from '../../common/errors/problem.exception';
@@ -19,12 +22,14 @@ import {
 } from '../../common/context/request-context';
 import { Public } from '../../common/guards/decorators';
 import {
+  SyncChangesQueryDto,
   SyncEnvelopeDto,
   SyncHandshakeDto,
   SyncRunCompleteDto,
 } from './dto/sync.dto';
 import { LicenseKeyGuard } from './license-key.guard';
 import { SyncApplyService } from './sync-apply.service';
+import { SyncFeedService } from './sync-feed.service';
 import { SyncRunsService } from './sync-runs.service';
 import { type SyncStore, SyncStoreParam } from './sync-store.context';
 
@@ -38,6 +43,7 @@ export class SyncReceiveController {
   constructor(
     private readonly runs: SyncRunsService,
     private readonly apply: SyncApplyService,
+    private readonly feed: SyncFeedService,
   ) {}
 
   @Post('runs')
@@ -61,6 +67,17 @@ export class SyncReceiveController {
     }
     const bytes = Buffer.byteLength(JSON.stringify(body));
     return inStore(store, () => this.apply.applyBatch(store, body, bytes));
+  }
+
+  /** The change feed after `cursor` (ADR-0014 §3): 410 `resync_required`, 403 `feed_closed`. */
+  @Get('changes')
+  changes(
+    @SyncStoreParam() store: SyncStore,
+    @Query() query: SyncChangesQueryDto,
+  ): Promise<SyncChangesResponse> {
+    return inStore(store, () =>
+      this.feed.changes(store, query.cursor ?? null, query.limit ?? 500),
+    );
   }
 
   @Post('runs/:id/complete')

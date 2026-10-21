@@ -26,8 +26,8 @@ export interface SyncHandshakeRequest {
   appVersion: string;
   /** The last applied migration of the store database (telemetry only). */
   schemaVersion: string;
-  /** The feed cursor of the store; null before the first pull. */
-  feedCursor: string | null;
+  /** The feed cursor of the store (the `cursor` of its last feed page); null before the first pull. */
+  feedCursor: number | null;
   /** Operations of the outbox not yet sent. */
   outboxDepth: number;
   /** When the oldest unsent operation happened; null — the outbox is empty. */
@@ -655,4 +655,55 @@ export interface TransferAcceptedPayload {
   movements: SyncMovementRow[];
   prices: SyncLocalPrice[];
   audit: SyncAuditRow[];
+}
+
+/* ---------------- the change feed, cloud → store (PR 3) ---------------- */
+
+/** An entity of the feed (spec 5.1); the scope is the network unless the entity is of one store. */
+export type SyncEntityType =
+  | 'product'
+  | 'category'
+  | 'store_price'
+  | 'discount_rule'
+  | 'role'
+  | 'employee'
+  | 'supplier'
+  | 'tenant_settings'
+  | 'return_policy'
+  | 'legal_entity'
+  | 'store'
+  | 'transfer_in_transit'
+  | 'transfer_result'
+  | 'purchase_order'
+  | 'transfer_request'
+  | 'price_conflict'
+  | 'duplicate_conflict';
+
+/**
+ * The state of an entity when the feed was read: the rows of its tables by the table name in camelCase (e.g.
+ * `products`, `productBarcodes`), columns in camelCase as the cloud stores them — the store upserts them by id
+ * (spec E27). Money in integer dirams, times in ISO 8601.
+ */
+export type SyncEntityData = Record<string, Array<Record<string, unknown>>>;
+
+/** One entry of the feed: an entity changed; `delete` — it is gone, the store archives it. */
+export interface SyncChange {
+  seq: number;
+  entityType: SyncEntityType;
+  /** The version of the entity's format (spec E7: 1 now; a store of an older version gets it downcast later). */
+  typeVersion: number;
+  entityId: string;
+  scopeStoreId: string | null;
+  op: 'upsert' | 'delete';
+  data: SyncEntityData | null;
+}
+
+/**
+ * GET /api/v1/sync/changes?cursor&limit — the changes after `cursor`, one entry per entity with its current state,
+ * in the order of their last change. `cursor` of the answer is where the next page starts.
+ */
+export interface SyncChangesResponse {
+  changes: SyncChange[];
+  cursor: number;
+  hasMore: boolean;
 }

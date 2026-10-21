@@ -6,6 +6,7 @@ import { CheckpointFacts } from './checkpoint-facts';
 import { InboxRepository } from './inbox.repository';
 import { LicenseKeyGuard } from './license-key.guard';
 import { SyncApplyService } from './sync-apply.service';
+import { SyncFeedService } from './sync-feed.service';
 import { SyncReceiveController } from './sync-receive.controller';
 import { SyncRunsRepository } from './sync-runs.repository';
 import { SyncRunsService } from './sync-runs.service';
@@ -23,6 +24,7 @@ import { SyncRunsService } from './sync-runs.service';
     SyncRunsService,
     InboxRepository,
     SyncApplyService,
+    SyncFeedService,
     CheckpointFacts,
   ],
 })

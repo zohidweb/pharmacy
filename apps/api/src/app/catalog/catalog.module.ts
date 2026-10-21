@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CatalogFeed } from './catalog-feed';
 import { SyncCoreModule } from '../../core/sync';
 import { AuditModule } from '../audit/audit.module';
 import { CatalogFacts } from './catalog-facts';
@@ -24,6 +25,7 @@ import { ProductsService } from './products.service';
     CategoriesService,
     ProductsReader,
     CatalogFacts,
+    CatalogFeed,
   ],
   exports: [ProductsReader],
 })

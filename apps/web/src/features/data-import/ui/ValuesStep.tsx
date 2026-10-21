@@ -6,7 +6,8 @@ import type { CatalogValueChoices } from '../model/catalog-values';
 
 export interface ValuesStepProps {
   choices: CatalogValueChoices;
-  categories: readonly string[];
+  /** Active categories: the name the API matches and the label of the interface. */
+  categories: readonly { value: string; label: string }[];
   forms: readonly string[];
   canCreateCategories: boolean;
   onChoices: (choices: CatalogValueChoices) => void;
@@ -25,10 +26,7 @@ export function ValuesStep(props: ValuesStepProps) {
   const { choices } = props;
   const set = (patch: Partial<CatalogValueChoices>) =>
     props.onChoices({ ...choices, ...patch });
-  const categoryOptions = props.categories.map((name) => ({
-    value: name,
-    label: name,
-  }));
+  const categoryOptions = props.categories;
   const valid =
     choices.unknownCategories.every(
       (item) => (choices.categories[item.key] ?? '') !== '',

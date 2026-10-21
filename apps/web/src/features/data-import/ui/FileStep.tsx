@@ -1,5 +1,6 @@
 'use client';
 
+import { importLimits } from '@pharmacy/shared-domain';
 import {
   Alert,
   Button,
@@ -49,6 +50,10 @@ export function FileStep(props: FileStepProps) {
       .map((field) => tFields(field.key as never)),
   ];
   const balances = props.kind === 'opening-balances';
+  // the rows a load of the kind takes (F19): suppliers take fewer
+  const rowLimit = (
+    props.kind === 'suppliers' ? importLimits.supplierRows : importLimits.rows
+  ).toLocaleString('ru-RU');
   const ready =
     props.workbook !== null &&
     !props.reading &&
@@ -78,14 +83,14 @@ export function FileStep(props: FileStepProps) {
       />
       <div className="flex flex-col gap-4 px-(--ph-card-padding) pb-(--ph-card-padding)">
         <p className="text-sm text-fg-muted">
-          {t('file.formats')}{' '}
+          {t('file.formats', { rows: rowLimit })}{' '}
           {t('file.required', { fields: required.join(', ') })}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <input
             ref={input}
             type="file"
-            accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            accept=".xlsx,.csv,.txt,.tsv,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -115,7 +120,7 @@ export function FileStep(props: FileStepProps) {
         )}
         {props.error && (
           <Alert tone="danger" live="assertive">
-            {t(`fileErrors.${props.error}`)}
+            {t(`fileErrors.${props.error}`, { rows: rowLimit })}
           </Alert>
         )}
         {props.workbook && props.workbook.sheets.length > 1 && (

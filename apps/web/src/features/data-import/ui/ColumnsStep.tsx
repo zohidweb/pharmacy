@@ -7,6 +7,7 @@ import {
   CardHeader,
   DataTable,
   Select,
+  TextField,
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { useTranslations } from 'use-intl';
@@ -20,6 +21,10 @@ export interface ColumnsStepProps {
   headerRow: number;
   mapping: readonly (string | null)[];
   onMapping: (mapping: (string | null)[]) => void;
+  /** The row of the headers chosen by hand (zero-based). */
+  onHeaderRow: (index: number) => void;
+  /** The references of the catalog are still loading: «Далее» waits for them. */
+  waiting?: boolean;
   onBack: () => void;
   onNext: () => void;
 }
@@ -120,6 +125,26 @@ export function ColumnsStep(props: ColumnsStepProps) {
         description={t('columns.hint', { line: props.headerRow + 1 })}
       />
       <div className="flex flex-col gap-4 px-(--ph-card-padding) pb-(--ph-card-padding)">
+        <div className="grid grid-cols-4 gap-4">
+          <TextField
+            label={t('columns.headerRow')}
+            type="number"
+            min={1}
+            max={props.sheet.rows.length}
+            value={String(props.headerRow + 1)}
+            onChange={(event) => {
+              // the headers are not where the file was guessed: the owner points at them (web minor 9)
+              const line = Number(event.target.value);
+              if (
+                Number.isInteger(line) &&
+                line >= 1 &&
+                line <= props.sheet.rows.length
+              ) {
+                props.onHeaderRow(line - 1);
+              }
+            }}
+          />
+        </div>
         <div className="max-h-(--ph-import-table-height) overflow-auto">
           <DataTable
             caption={t('columns.title')}
@@ -128,6 +153,16 @@ export function ColumnsStep(props: ColumnsStepProps) {
             columns={columns}
           />
         </div>
+        {props.sheet.hiddenRows !== undefined && (
+          <Alert tone="info">
+            {t('columns.hiddenRows', { count: props.sheet.hiddenRows })}
+          </Alert>
+        )}
+        {props.waiting && (
+          <p className="text-sm text-fg-muted" aria-live="polite">
+            {t('columns.loadingReferences')}
+          </p>
+        )}
         {missing.length > 0 && (
           <Alert tone="warning">
             {t('columns.missing', { fields: missing.join(', ') })}
@@ -137,7 +172,10 @@ export function ColumnsStep(props: ColumnsStepProps) {
           <Button variant="secondary" onClick={props.onBack}>
             {t('back')}
           </Button>
-          <Button disabled={missing.length > 0} onClick={props.onNext}>
+          <Button
+            disabled={missing.length > 0 || props.waiting === true}
+            onClick={props.onNext}
+          >
             {t('next')}
           </Button>
         </div>

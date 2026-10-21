@@ -13,8 +13,9 @@ import type { PrescriptionKind } from './tenant-pos.js';
 
 /**
  * Why a row is refused. `barcode_scientific` and `invalid` are found only by the browser while
- * reading a cell (a barcode written as `4,6E+12`, a value that is not a number or a date); the API
- * never sends them.
+ * reading a cell (a barcode written as `4,6E+12`, a value that is not a number or a date), as is the
+ * warning `name_only` (a row with a name only — a group or a total of a list); the API never sends
+ * them.
  */
 export type ImportIssueCode =
   | 'required'
@@ -30,7 +31,8 @@ export type ImportIssueCode =
   | 'product_ambiguous'
   | 'product_archived'
   | 'barcode_scientific'
-  | 'invalid';
+  | 'invalid'
+  | 'name_only';
 
 /** A refused row: `line` — the row of the sheet as Excel shows it; `field` — a field of the row. */
 export interface ImportIssue {

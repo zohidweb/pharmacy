@@ -40,7 +40,10 @@ function decode(bytes: Uint8Array): { text: string; windows: boolean } {
   }
 }
 
-/** `;`, `,` or a tab — the one the first line has most of outside quotes; `;` on a tie, as Excel in Russian saves. */
+/**
+ * `;`, `,` or a tab — the one the first five lines have most of outside quotes (a narrow file with commas in its
+ * headers is still read by `;`, web minor 18); `;` on a tie, as Excel in Russian saves.
+ */
 function delimiterOf(text: string): string {
   const counts = new Map<string, number>([
     [';', 0],
@@ -48,10 +51,12 @@ function delimiterOf(text: string): string {
     ['\t', 0],
   ]);
   let quoted = false;
+  let lines = 0;
   for (const char of text) {
     if (char === '"') quoted = !quoted;
-    else if (!quoted && (char === '\n' || char === '\r')) {
-      if ([...counts.values()].some((count) => count > 0)) break;
+    else if (!quoted && char === '\n') {
+      lines += 1;
+      if (lines >= 5) break;
     } else if (!quoted && counts.has(char)) {
       counts.set(char, (counts.get(char) ?? 0) + 1);
     }

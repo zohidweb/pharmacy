@@ -4,7 +4,7 @@ import { toAppDate } from '@pharmacy/shared-util';
 import { Alert, Stepper } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'use-intl';
+import { useLocale, useTranslations } from 'use-intl';
 import { apiRequest } from '@/shared/api';
 import {
   readSpreadsheet,
@@ -66,12 +66,33 @@ export function DataImportWizard({
   const [choices, setChoices] = useState<CatalogValueChoices | null>(null);
   const [build, setBuild] = useState<BuildResult | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const locale = useLocale();
   const references = useQuery({
     queryKey: ['catalog', 'references'],
     queryFn: ({ signal }) => apiRequest('catalog.references', { signal }),
     staleTime: 5 * 60_000,
     enabled: kind === 'catalog',
   });
+  // the categories with both names: a file in Russian matches them in the Tajik interface too (web minor 16)
+  const categoryList = useQuery({
+    queryKey: ['catalog', 'categories'],
+    queryFn: ({ signal }) => apiRequest('catalog.categories', { signal }),
+    enabled: kind === 'catalog',
+  });
+  const activeCategories = useMemo(
+    () =>
+      (categoryList.data ?? [])
+        .filter((category) => category.status === 'active')
+        .map((category) => ({
+          names: [category.nameRu, category.nameTj].filter(Boolean),
+          value: category.nameRu || category.nameTj,
+          label:
+            (locale === 'tg' ? category.nameTj : category.nameRu) ||
+            category.nameRu ||
+            category.nameTj,
+        })),
+    [categoryList.data, locale],
+  );
 
   const sheet = source?.workbook.sheets[sheetIndex];
   const steps: Step[] =
@@ -79,12 +100,19 @@ export function DataImportWizard({
       ? ['file', 'columns', 'values', 'check', 'done']
       : ['file', 'columns', 'check', 'done'];
 
-  const selectSheet = (workbook: Workbook, index: number) => {
-    const rows = workbook.sheets[index].rows;
-    const header = detectHeaderRow(rows, kind);
-    setSheetIndex(index);
+  const chooseHeaderRow = (
+    rows: Workbook['sheets'][number]['rows'],
+    header: number,
+  ) => {
     setHeaderRow(header);
     setMapping(suggestMapping(headersOf(rows[header]), kind));
+  };
+
+  const selectSheet = (workbook: Workbook, index: number) => {
+    const rows = workbook.sheets[index].rows;
+    setSheetIndex(index);
+    chooseHeaderRow(rows, detectHeaderRow(rows, kind));
+    setChoices(null);
     // the limit is of a sheet, not of the book: another sheet of the same file may be loaded (final review W4)
     setReadError(workbook.sheets[index].tooLarge ? 'too_many_rows' : null);
   };
@@ -143,16 +171,14 @@ export function DataImportWizard({
       toCheck(null);
       return;
     }
-    if (!sheet || !references.data) return;
+    if (!sheet || !references.data || !categoryList.data) return;
     const initial = initialChoices(
       sheet,
       headerRow,
       mapping,
-      {
-        categories: references.data.categories.map((category) => category.name),
-        forms: references.data.forms,
-      },
+      { categories: activeCategories, forms: references.data.forms },
       canCreateCategories,
+      choices,
     );
     setChoices(initial);
     if (needsChoices(initial)) setStep('values');
@@ -180,7 +206,7 @@ export function DataImportWizard({
         current={steps.indexOf(step)}
         completedText={t('stepDone')}
       />
-      {kind === 'catalog' && references.isError && (
+      {kind === 'catalog' && (references.isError || categoryList.isError) && (
         <Alert tone="danger">{t('errors.references')}</Alert>
       )}
       {step === 'file' && (
@@ -209,6 +235,10 @@ export function DataImportWizard({
           headerRow={headerRow}
           mapping={mapping}
           onMapping={setMapping}
+          onHeaderRow={(index) => chooseHeaderRow(sheet.rows, index)}
+          waiting={
+            kind === 'catalog' && (!references.data || !categoryList.data)
+          }
           onBack={() => setStep('file')}
           onNext={afterColumns}
         />
@@ -216,9 +246,7 @@ export function DataImportWizard({
       {step === 'values' && choices && references.data && (
         <ValuesStep
           choices={choices}
-          categories={references.data.categories.map(
-            (category) => category.name,
-          )}
+          categories={activeCategories}
           forms={references.data.forms}
           canCreateCategories={canCreateCategories}
           onChoices={setChoices}

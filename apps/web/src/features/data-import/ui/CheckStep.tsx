@@ -12,7 +12,7 @@ import {
   Spinner,
   type DataTableColumn,
 } from '@pharmacy/ui';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { ApiError, useApiErrorMessage } from '@/shared/api';
@@ -26,6 +26,13 @@ import {
   type ImportResult,
 } from '../model/kinds';
 import { columnLetter } from '../model/mapping';
+
+/** The queries a load changes: the journal of its kind shows the new rows at once. */
+const INVALIDATED: Record<ImportKindKey, readonly (readonly string[])[]> = {
+  catalog: [['catalog']],
+  'opening-balances': [['opening-balances']],
+  suppliers: [['suppliers']],
+};
 
 export interface CheckStepProps {
   kind: ImportKindKey;
@@ -45,6 +52,8 @@ export function CheckStep(props: CheckStepProps) {
   const t = useTranslations('dataImport');
   const tFields = useTranslations('dataImport.fields');
   const tIssues = useTranslations('dataImport.issues');
+  const tHints = useTranslations('dataImport.hints');
+  const queryClient = useQueryClient();
   const [key] = useState(() => uuidv7());
   const [changed, setChanged] = useState(false);
   const { request, clientIssues, warnings } = props.build;
@@ -52,7 +61,13 @@ export function CheckStep(props: CheckStepProps) {
   const check = useMutation({ mutationFn: () => checkImport(request) });
   const apply = useMutation({
     mutationFn: () => applyImport(request, key),
-    onSuccess: props.onDone,
+    onSuccess: (result) => {
+      // the journals show what the load wrote (final review, web minor 15)
+      for (const queryKey of INVALIDATED[props.kind]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+      props.onDone(result);
+    },
     onError: (error) => {
       // the data changed after the check: nothing was written, the check runs again (F7)
       if (error instanceof ApiError && error.code === 'import_invalid') {
@@ -69,30 +84,45 @@ export function CheckStep(props: CheckStepProps) {
 
   const failure = apply.error ?? check.error;
   const apiMessage = useApiErrorMessage(failure);
-  const failureText =
-    failure instanceof ApiError && failure.status === 413
+  const failureText = !(failure instanceof ApiError)
+    ? apiMessage
+    : failure.status === 413
       ? t('errors.tooLarge')
-      : failure instanceof ApiError && failure.code === 'timeout' && apply.error
-        ? t('errors.timeout')
-        : failure instanceof ApiError && failure.code === 'import_invalid'
-          ? null
-          : failure instanceof ApiError && failure.code === 'import_in_progress'
-            ? t('errors.inProgress')
-            : apiMessage;
+      : failure.code === 'import_invalid'
+        ? null
+        : failure.code === 'import_in_progress'
+          ? t('errors.inProgress')
+          : failure.code === 'imports_busy'
+            ? t('errors.busy')
+            : failure.code === 'timeout' || [502, 504].includes(failure.status)
+              ? // a load without an answer may have been written: its repeat with the same key is safe (F15)
+                t(apply.error ? 'errors.timeout' : 'errors.checkTimeout')
+              : apiMessage;
 
+  // every column of the field: the barcodes may take several (final review, web minor 14)
   const columnOf = (issue: ImportIssue): string => {
     if (!issue.field) return '';
-    const index = props.mapping.indexOf(issue.field);
-    if (index < 0) return tFields(issue.field as never);
-    return props.headers[index] || columnLetter(index);
+    const columns = props.mapping.flatMap((key, index) =>
+      key === issue.field ? [props.headers[index] || columnLetter(index)] : [],
+    );
+    return columns.length > 0
+      ? columns.join(', ')
+      : tFields(issue.field as never);
   };
   // the code of an issue is a key of `dataImport.issues`; `detail` — the name `barcode_conflict` shows
   const issueText = tIssues as unknown as (
     code: string,
     values: { detail: string },
   ) => string;
-  const messageOf = (issue: ImportIssue): string =>
-    issueText(issue.code, { detail: issue.detail ?? '' });
+  // a value that cannot be read says what the field expects (final review, web minor 6)
+  const messageOf = (issue: ImportIssue): string => {
+    const text = issueText(issue.code, { detail: issue.detail ?? '' });
+    return issue.code === 'invalid' &&
+      issue.field &&
+      tHints.has(issue.field as never)
+      ? `${text}: ${tHints(issue.field as never)}`
+      : text;
+  };
 
   const result: ImportCheck | undefined = check.data;
   const errors =
@@ -133,20 +163,36 @@ export function CheckStep(props: CheckStepProps) {
             {failureText}
           </Alert>
         )}
+        {check.isError && !busy && readable && (
+          <div>
+            <Button variant="secondary" onClick={() => check.mutate()}>
+              {t('check.retry')}
+            </Button>
+          </div>
+        )}
         {result && !check.isPending && (
           <Summary result={result} skippedZero={props.build.skippedZero} />
         )}
-        {warnings.length > 0 && (
-          <Alert tone="warning">
-            {t('check.countryWarning', {
-              count: warnings.length,
-              lines: warnings
-                .slice(0, 10)
-                .map((issue) => issue.line)
-                .join(', '),
-            })}
-          </Alert>
-        )}
+        {(['unknown_country', 'name_only'] as const).map((code) => {
+          const lines = warnings.filter((issue) => issue.code === code);
+          if (lines.length === 0) return null;
+          return (
+            <Alert key={code} tone="warning">
+              {t(
+                code === 'unknown_country'
+                  ? 'check.countryWarning'
+                  : 'check.nameOnlyWarning',
+                {
+                  count: lines.length,
+                  lines: lines
+                    .slice(0, 10)
+                    .map((issue) => issue.line)
+                    .join(', '),
+                },
+              )}
+            </Alert>
+          );
+        })}
         {errorsTotal > 0 && (
           <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">

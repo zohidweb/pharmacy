@@ -187,6 +187,13 @@ export function buildRequest(input: BuildInput): BuildResult {
       const formText = text('form', 200);
       const form =
         formText === '' ? '' : (extras.forms[matchKey(formText)] ?? '');
+      // a row with only a name is a group or a total of a list of 1С more often than a product (web minor 8)
+      if (
+        row.filter((cell) => cell !== null).length === 1 &&
+        (cells.cell('nameRu') !== null || cells.cell('nameTj') !== null)
+      ) {
+        warnings.push({ line, field: 'nameRu', code: 'name_only' });
+      }
       const country = parseCountry(cells.cell('countryCode'));
       if (country.unknown) {
         warnings.push({ line, field: 'countryCode', code: 'unknown_country' });

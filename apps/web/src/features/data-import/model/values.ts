@@ -34,8 +34,16 @@ export function parseText(cell: Cell, max: number): Parsed<string> {
  */
 export function parseBarcodes(cell: Cell): Parsed<string[]> {
   if (cell === null) return ok([]);
-  if (/\d[eE][+-]?\d/.test(cell.text)) return fail('barcode_scientific');
-  const codes = cell.text
+  // a whole number of a number cell is the code, however the program that wrote the file spelled it
+  // (`4.600000000017E12`, `4600000000017.0`); the digits of a padded code (`0012…`) are kept by the reader
+  const text =
+    cell.number !== null &&
+    Number.isSafeInteger(cell.number) &&
+    !/^\d+$/.test(cell.text)
+      ? String(cell.number)
+      : cell.text;
+  if (/\d[eE][+-]?\d/.test(text)) return fail('barcode_scientific');
+  const codes = text
     .split(/[,;/\n]+/)
     .map((code) => code.replace(/\s+/g, ''))
     .filter((code) => code !== '');
@@ -56,7 +64,8 @@ export function parseInteger(
   if (cell.number !== null) {
     value = shown(cell.number);
   } else {
-    const text = cell.text.replace(/\s+/g, '');
+    // a whole number with zero decimals is whole: 1С writes a quantity as «12,000»
+    const text = cell.text.replace(/\s+/g, '').replace(/[.,]0+$/, '');
     if (!/^-?\d+$/.test(text)) return fail('invalid');
     value = Number(text);
   }
@@ -139,13 +148,18 @@ export function parseCountry(cell: Cell): { code: string; unknown: boolean } {
     : { code: '', unknown: true };
 }
 
-/** A markup in percent, 0–1000; a percent cell of Excel stores a fraction (0.25 for 25 %). Null when empty. */
+/**
+ * A markup in percent, 0–1000; a percent cell of Excel stores a fraction (0.25 for 25 %, 1 for 100 %), as does a plain
+ * number between 0 and 1. Null when empty.
+ */
 export function parseMarkup(cell: Cell): Parsed<number | null> {
   if (cell === null) return ok(null);
   let value: number;
   if (cell.number !== null) {
     const number = shown(cell.number);
-    value = shown(number > 0 && number < 1 ? number * 100 : number);
+    value = shown(
+      cell.percent || (number > 0 && number < 1) ? number * 100 : number,
+    );
   } else {
     const text = cell.text.replace(/[\s%]/g, '').replace(',', '.');
     if (!/^\d+(\.\d+)?$/.test(text)) return fail('invalid');
@@ -169,17 +183,35 @@ function isoDate(year: number, month: number, day: number): string | null {
   return date.toISOString().slice(0, 10);
 }
 
+/** The last day of the month of a date. */
+function lastDayOf(date: string): string {
+  const [year, month] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
+/** An expiry is of this century: a number that is not a date (`2027`, `122027`) is refused. */
+const inRange = (date: string | null): date is string =>
+  date !== null && date >= '2000-01-01' && date <= '2100-12-31';
+
 /**
- * The expiry date (F11): a date of Excel, `ДД.ММ.ГГГГ` (or `/`, `-`, a two-digit year is 20xx), `ГГГГ-ММ-ДД`, or
- * `ММ.ГГГГ` — the last day of the month, as an expiry «12.2027» means.
+ * The expiry date (F11): a date of Excel, `ДД.ММ.ГГГГ` (or `/`, `-`, a two-digit year is 20xx; a time of 1С after
+ * it is dropped), `ГГГГ-ММ-ДД`, or `ММ.ГГГГ` — the last day of the month, as an expiry «12.2027» means; a cell of
+ * Excel formatted as a month without a day is that month too. Years 2000–2100.
  */
 export function parseExpiry(cell: Cell, date1904: boolean): Parsed<string> {
+  const result = expiryOf(cell, date1904);
+  if (!result.ok) return result;
+  return inRange(result.value) ? result : fail('invalid');
+}
+
+function expiryOf(cell: Cell, date1904: boolean): Parsed<string> {
   if (cell === null) return fail('required');
   if (cell.number !== null) {
     const date = excelSerialToDate(cell.number, date1904);
-    return date ? ok(date) : fail('invalid');
+    if (!date) return fail('invalid');
+    return ok(cell.monthOnly ? lastDayOf(date) : date);
   }
-  const text = cell.text.trim();
+  const text = cell.text.trim().replace(/\s+\d{1,2}:\d{2}(:\d{2})?$/, '');
   let match = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4}|\d{2})$/.exec(text);
   if (match) {
     const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);

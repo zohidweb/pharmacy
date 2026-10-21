@@ -29,11 +29,19 @@ export function initialChoices(
   sheet: Sheet,
   headerRow: number,
   mapping: readonly (string | null)[],
-  references: { categories: readonly string[]; forms: readonly string[] },
+  references: {
+    /** Active categories: both names of each, and the name the API matches. */
+    categories: readonly { names: readonly string[]; value: string }[];
+    forms: readonly string[];
+  },
   canCreateCategories: boolean,
+  previous: CatalogValueChoices | null = null,
 ): CatalogValueChoices {
+  // a category of the file in either language is the same category (final review, web minor 16)
   const categoryByKey = new Map(
-    references.categories.map((name) => [matchKey(name), name]),
+    references.categories.flatMap((category) =>
+      category.names.map((name) => [matchKey(name), category.value] as const),
+    ),
   );
   const formByKey = new Map(
     references.forms.map((form) => [matchKey(form), form]),
@@ -48,7 +56,10 @@ export function initialChoices(
     if (known) categories[item.key] = known;
     else {
       unknownCategories.push(item);
-      categories[item.key] = canCreateCategories ? item.text : '';
+      // a choice made before going back to the columns stays (final review, web minor 11)
+      categories[item.key] =
+        previous?.categories[item.key] ??
+        (canCreateCategories ? item.text : '');
     }
   }
   const forms: Record<string, string> = {};
@@ -58,7 +69,7 @@ export function initialChoices(
     if (known) forms[item.key] = known;
     else {
       unknownForms.push(item);
-      forms[item.key] = '';
+      forms[item.key] = previous?.forms[item.key] ?? '';
     }
   }
   return {
@@ -67,7 +78,7 @@ export function initialChoices(
     emptyCategories: fileCategories.empty,
     categories,
     forms,
-    defaultCategory: '',
+    defaultCategory: previous?.defaultCategory ?? '',
   };
 }
 

@@ -3,7 +3,14 @@
  * The text of a number is the value as the file stores it (`4600000000017`, `12.5`), not as Excel formats it, so
  * barcodes and money keep every digit.
  */
-export type Cell = null | { text: string; number: number | null };
+export type Cell = null | {
+  text: string;
+  number: number | null;
+  /** The number format of the cell is a date without a day («ММ.ГГГГ»): an expiry of the month means its last day. */
+  monthOnly?: boolean;
+  /** The number format of the cell is a percent: 1 is 100 %. */
+  percent?: boolean;
+};
 
 export interface Workbook {
   /** The 1904 date system of the workbook (Excel for Mac); dates of the cells are serial numbers of it. */
@@ -12,7 +19,13 @@ export interface Workbook {
    * The visible sheets in their order; row i is line i + 1 of the sheet, as Excel shows it. `tooLarge` — more data
    * rows than a load takes: the sheet is not kept, choosing it says so (final review W4).
    */
-  sheets: { name: string; rows: Cell[][]; tooLarge?: boolean }[];
+  sheets: {
+    name: string;
+    rows: Cell[][];
+    tooLarge?: boolean;
+    /** Rows hidden by a filter or by hand: they are not read (final review, web minor 7). */
+    hiddenRows?: number;
+  }[];
   /** A CSV read as windows-1251 with «?» inside words: letters the encoding has not (ҳ ҷ ӣ қ ӯ ғ) were lost (W5). */
   lostLetters?: boolean;
 }
@@ -48,7 +61,17 @@ export function cleanCellText(value: string): string {
 }
 
 /** A cell of text, or null for an empty one. */
-export function textCell(value: string, number: number | null = null): Cell {
+export function textCell(
+  value: string,
+  number: number | null = null,
+  format: { monthOnly?: boolean; percent?: boolean } = {},
+): Cell {
   const text = cleanCellText(value);
-  return text === '' ? null : { text, number };
+  if (text === '') return null;
+  return {
+    text,
+    number,
+    ...(format.monthOnly ? { monthOnly: true } : {}),
+    ...(format.percent ? { percent: true } : {}),
+  };
 }

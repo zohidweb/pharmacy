@@ -214,7 +214,8 @@ export interface Announcement {
  * POST /operator/announcements (`platform:manage`) → 201 `Announcement`: shown in the cloud client
  * product to the networks of the scope from `startsAt` to `endsAt` (N13, N14). 400 `validation_failed`
  * — `title` 3–120, `text` 10–1000 characters, `endsAt` (`before_start`, `past`). POST
- * /operator/announcements/{id}/cancellation → 200; 404; 409 `not_active` — cancelled or ended (N12).
+ * /operator/announcements/{id}/cancellation → 200; 404; 409 `not_active` — cancelled or ended (N12). Both need a
+ * fresh sign-in: 403 `fresh_auth_required` (security review 2026-10-22, Z10).
  */
 export interface CreateAnnouncementRequest {
   title: string;

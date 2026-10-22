@@ -12,7 +12,7 @@
     "targets": {
       "dev": {
         "options": {
-          "command": "next dev -p 4200",
+          "command": "next dev -H 127.0.0.1 -p 4200",
           "env": {
             "NEXT_PUBLIC_API_MOCKS": "true"
           }
@@ -22,7 +22,7 @@
         "executor": "nx:run-commands",
         "continuous": true,
         "options": {
-          "command": "next dev -p 4200",
+          "command": "next dev -H 127.0.0.1 -p 4200",
           "cwd": "{projectRoot}",
           "env": {
             "NEXT_PUBLIC_API_MOCKS": "partial"
@@ -71,7 +71,7 @@
     }
   },
   "dependencies": {
-    "next": "~16.1.6",
+    "next": "~16.4.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   }

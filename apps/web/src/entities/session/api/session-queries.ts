@@ -9,14 +9,12 @@ import {
 
 export const sessionQueryKey = ['employee-session'] as const;
 
-/**
- * Current employee session; null when there is none (401). During an outage a POS terminal
- * reopens with the profile of its last session (ADR-0015, ось 3): the server still decides every
- * operation when the outbox sends it.
- */
-export async function fetchSession(): Promise<EmployeeSession | null> {
+/** The session as the server answers it: null when there is none (401); an outage throws. */
+export async function requestSession(
+  options: { timeoutMs?: number } = {},
+): Promise<EmployeeSession | null> {
   try {
-    const session = await apiRequest('sessions.current');
+    const session = await apiRequest('sessions.current', options);
     void rememberSession(session);
     return session;
   } catch (error) {
@@ -24,6 +22,19 @@ export async function fetchSession(): Promise<EmployeeSession | null> {
       void forgetTerminal();
       return null;
     }
+    throw error;
+  }
+}
+
+/**
+ * Current employee session; null when there is none (401). During an outage a POS terminal
+ * reopens with the profile of its last session (ADR-0015, ось 3): the server still decides every
+ * operation when the outbox sends it.
+ */
+export async function fetchSession(): Promise<EmployeeSession | null> {
+  try {
+    return await requestSession();
+  } catch (error) {
     if (isUnreachable(error)) {
       const remembered = await rememberedSession();
       if (remembered) return remembered;

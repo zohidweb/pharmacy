@@ -30,20 +30,25 @@ interface Binding {
   storeId: string;
 }
 
-/** The network and store whose buffer this page sends: the session's, else the bound terminal's. */
+/**
+ * The network and store whose buffer this page sends: a PIN session's (its terminal's store); else the bound terminal's —
+ * a password session on the till drains the buffer of the till too; offline the remembered binding; a browser that is
+ * not bound — the session's store. While the terminal is asked, nothing: a rebound browser must not send the buffer of
+ * its old store with the new device-cookie.
+ */
 function useBinding(): Binding | null {
   const { data: session, isPending } = useSession();
   const fromSession =
     session?.tenant.id && session.currentStoreId
       ? { tenantId: session.tenant.id, storeId: session.currentStoreId }
       : null;
-  const bound = useBoundTerminal({ enabled: !isPending && !session });
+  const onTerminal = Boolean(session?.terminalId);
+  const bound = useBoundTerminal({ enabled: !isPending && !onTerminal });
   const fromTerminal = bound.data
     ? { tenantId: bound.data.tenantId, storeId: bound.data.store.id }
     : null;
   const [remembered, setRemembered] = useState<Binding | null>(null);
-  const needRemembered =
-    !isPending && !session && !fromTerminal && bound.data !== null;
+  const needRemembered = !isPending && !onTerminal && bound.isError;
   useEffect(() => {
     if (!needRemembered) return;
     let cancelled = false;
@@ -54,8 +59,12 @@ function useBinding(): Binding | null {
       cancelled = true;
     };
   }, [needRemembered]);
-  if (session) return fromSession;
-  return fromTerminal ?? (needRemembered ? remembered : null);
+  if (isPending) return null;
+  if (onTerminal) return fromSession;
+  if (fromTerminal) return fromTerminal;
+  if (bound.data === null) return fromSession;
+  if (needRemembered) return remembered ?? fromSession;
+  return null;
 }
 
 export function useTerminalRuntime(): TerminalRuntime | null {

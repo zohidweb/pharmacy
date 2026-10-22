@@ -42,7 +42,8 @@ export class InboxRetention {
           trx,
         );
         if (!rows[0].locked) return 0;
-        const cleared = sql`jsonb_build_object('prescriptionNote', null, 'prescriptionFileId', null)`;
+        // the mark lets an envelope applied later (from quarantine) create its record purged, not «no data»
+        const cleared = sql`jsonb_build_object('prescriptionNote', null, 'prescriptionFileId', null, 'prescriptionPurged', true)`;
         const result = await sql`
           with picked as (
             select i.store_id, i.operation_id from pharmacy.sync_inbox i

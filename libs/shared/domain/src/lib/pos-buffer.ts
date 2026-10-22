@@ -13,25 +13,27 @@ export interface PosBufferLimits {
   controlledMaxOperations: number;
 }
 
-export const posBufferDefaults: PosBufferLimits = {
+export const posBufferDefaults: Readonly<PosBufferLimits> = Object.freeze({
   maxHours: 24,
   maxOperations: 500,
   controlledMaxHours: 8,
   controlledMaxOperations: 20,
-};
+});
 
 /** Inclusive bounds; the ПКУ limits are not above the general ones. */
 export const posBufferBounds: Readonly<
   Record<keyof PosBufferLimits, readonly [number, number]>
-> = {
+> = Object.freeze({
   maxHours: [1, 72],
   maxOperations: [50, 2000],
   controlledMaxHours: [1, 24],
   controlledMaxOperations: [1, 200],
-};
+});
 
-/** Retention of the prescription data, days (data model 04; default 90). */
-export const prescriptionRetentionBounds: readonly [number, number] = [1, 3650];
+/** Retention of the prescription data, days (data model 04). */
+export const prescriptionRetentionBounds: readonly [number, number] =
+  Object.freeze([1, 3650]) as readonly [number, number];
+export const PRESCRIPTION_RETENTION_DEFAULT_DAYS = 90;
 
 /** From this share of a limit the cashier sees a warning. */
 export const BUFFER_WARN_RATIO = 0.8;

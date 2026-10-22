@@ -355,6 +355,9 @@ export class PosFacts implements FactApplier {
                 : JSON.stringify(record.prescriptionNote),
             recordedBy: record.recordedBy,
             recordedAt: record.recordedAt,
+            // the envelope waited past the retention term and its data was purged (spec 2026-10-21, P5)
+            prescriptionPurgedAt:
+              record.prescriptionPurged === true ? new Date() : null,
           })),
         )
         .execute();

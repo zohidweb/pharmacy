@@ -71,7 +71,7 @@ export class SoldReceipts {
         : 'number' in by
           ? sql`r.number = ${by.number}`
           : sql`r.business_date >= ${by.sinceDate}::date
-                and replace(r.id::text, '-', '') like ${`%${by.code.toLowerCase()}`}`;
+                and right(r.id::text, 8) = ${by.code.toLowerCase()}`;
     const head = await sql<{
       id: string;
       storeId: string;

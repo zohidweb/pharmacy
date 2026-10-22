@@ -5,6 +5,7 @@ import {
   type ExecutionContext,
   Injectable,
   type NestInterceptor,
+  SetMetadata,
   UseInterceptors,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -17,7 +18,7 @@ import {
 } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { bufferReplayMode } from '../../common/guards/buffer-replay';
-import { BufferReplay } from '../../common/guards/decorators';
+import { BUFFER_REPLAY_KEY } from '../../common/guards/decorators';
 import { readDeviceSecret } from '../auth/device-cookie';
 import { cookieEnvFrom, type SessionCookieEnv } from '../auth/session-cookie';
 import { TerminalsService } from '../terminals/terminals.service';
@@ -82,6 +83,12 @@ export class BufferReplayInterceptor implements NestInterceptor {
   }
 }
 
-/** A buffered POS route: its own PIN session or the bound terminal (P9). */
+/**
+ * A buffered POS route: its own PIN session or the bound terminal (P9). The metadata the guards read and the interceptor
+ * that resolves the terminal go together: the guards never skip the session's right without the interceptor.
+ */
 export const BufferedOperation = () =>
-  applyDecorators(BufferReplay(), UseInterceptors(BufferReplayInterceptor));
+  applyDecorators(
+    SetMetadata(BUFFER_REPLAY_KEY, true),
+    UseInterceptors(BufferReplayInterceptor),
+  );

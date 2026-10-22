@@ -280,7 +280,13 @@ export class PosContext {
     employeeId: string,
     right: Permission,
   ): Promise<OperationAuthor> {
-    if (session.via === 'session' && employeeId === session.employeeId) {
+    if (session.via === 'session') {
+      // another author goes under the terminal (bufferReplayMode): reaching here is a wiring error, refused
+      if (employeeId !== session.employeeId) {
+        throw new Error(
+          'An operation of another author must be sent under the terminal',
+        );
+      }
       const principal = requirePrincipal();
       return {
         id: employeeId,

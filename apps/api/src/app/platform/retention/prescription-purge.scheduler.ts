@@ -3,7 +3,7 @@ import {
   Injectable,
   Logger,
   type OnApplicationBootstrap,
-  type OnApplicationShutdown,
+  type OnModuleDestroy,
 } from '@nestjs/common';
 import { runWithContext } from '../../../common/context/request-context';
 import { PlatformDatabase } from '../../../core/database/platform';
@@ -28,12 +28,13 @@ const errorCode = (error: unknown): string =>
 // failure of one network is logged with its code and the loop goes on; no prescription data is ever logged.
 @Injectable()
 export class PrescriptionPurgeScheduler
-  implements OnApplicationBootstrap, OnApplicationShutdown
+  implements OnApplicationBootstrap, OnModuleDestroy
 {
   private readonly logger = new Logger(PrescriptionPurgeScheduler.name);
   private first?: NodeJS.Timeout;
   private every?: NodeJS.Timeout;
-  private running = false;
+  private pass: Promise<void> | null = null;
+  private stopping = false;
 
   constructor(
     private readonly platform: PlatformDatabase,
@@ -50,15 +51,26 @@ export class PrescriptionPurgeScheduler
     this.every.unref();
   }
 
-  onApplicationShutdown(): void {
+  // before the database modules close their pools (this module depends on them, so it is destroyed first): no new
+  // pass, and the running one stops after its current network
+  async onModuleDestroy(): Promise<void> {
+    this.stopping = true;
     clearTimeout(this.first);
     clearInterval(this.every);
+    await this.pass;
   }
 
   /** One pass over every network; a pass still running makes the next one wait for the next hour. */
-  async run(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
+  run(): Promise<void> {
+    if (this.pass !== null || this.stopping)
+      return this.pass ?? Promise.resolve();
+    this.pass = this.purgeAll().finally(() => {
+      this.pass = null;
+    });
+    return this.pass;
+  }
+
+  private async purgeAll(): Promise<void> {
     const correlationId = randomUUID();
     try {
       await runWithContext({ correlationId, principal: null }, async () => {
@@ -69,16 +81,24 @@ export class PrescriptionPurgeScheduler
         let records = 0;
         let envelopes = 0;
         for (const tenantId of tenants) {
+          if (this.stopping) break;
           try {
             const purged = await this.prescriptions.purgeExpired(tenantId);
             if (purged === null) continue;
             // each step writes its own event in its transaction: a failed envelope step keeps the trace of the
             // records already purged
             records += purged.purged;
-            envelopes += await this.inbox.purgeExpired(
+            const cleared = await this.inbox.purgeExpired(
               tenantId,
               purged.retentionDays,
             );
+            envelopes += cleared;
+            // the counts of a network (spec §4.5), never its data
+            if (purged.purged + cleared > 0) {
+              this.logger.log(
+                `Prescription data of a network purged: ${purged.purged} records, ${cleared} envelopes [tenantId=${tenantId}] [correlationId=${correlationId}]`,
+              );
+            }
           } catch (error) {
             this.logger.warn(
               `Prescription data of a network not purged (${errorCode(error)}) [tenantId=${tenantId}] [correlationId=${correlationId}]`,
@@ -95,8 +115,6 @@ export class PrescriptionPurgeScheduler
       this.logger.warn(
         `The prescription purge pass failed (${errorCode(error)}) [correlationId=${correlationId}]`,
       );
-    } finally {
-      this.running = false;
     }
   }
 }

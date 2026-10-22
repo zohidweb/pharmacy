@@ -222,11 +222,11 @@ export class SalesFigures {
       select r.sold_at, r.received_at, r.store_id, l.product_id, b.lot_number, l.qty_pieces,
              l.pieces_per_pack, r.cashier_id, r.number as receipt_number,
              case when c.prescription_note is null then null
-                  else jsonb_strip_nulls(jsonb_build_object(
+                  else nullif(jsonb_strip_nulls(jsonb_build_object(
                     'prescriptionNumber', c.prescription_note -> 'prescriptionNumber',
                     'prescriptionDate', c.prescription_note -> 'prescriptionDate',
                     'clinic', c.prescription_note -> 'clinic',
-                    'doctor', c.prescription_note -> 'doctor')) end as prescription,
+                    'doctor', c.prescription_note -> 'doctor')), '{}'::jsonb) end as prescription,
              c.prescription_purged_at as purged_at
       from pharmacy.controlled_sale_records c
       join pharmacy.receipt_lines l on l.tenant_id = c.tenant_id and l.id = c.receipt_line_id

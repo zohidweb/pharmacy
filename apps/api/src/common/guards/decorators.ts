@@ -15,8 +15,9 @@ export const REQUIRE_FRESH_AUTH_KEY = 'pharmacy:requireFreshAuth';
 // Set by @RequirePermission (app/auth/decorators.ts); defined here so that every guard resolves
 // the route's access the same way.
 export const REQUIRED_PERMISSION_KEY = 'pharmacy:requiredPermission';
-// Set by @BufferReplay (a buffered POS operation, spec 2026-10-21-pos-offline-limits, P9): the route also takes
-// a request without a session, sent under the bound terminal; the POS resolves the terminal.
+// Set only by @BufferedOperation of the POS together with its interceptor (a buffered POS operation, spec
+// 2026-10-21-pos-offline-limits, P9): the route also takes a request without a session, sent under the bound
+// terminal; the guards let it through without the session's right, and the interceptor resolves the terminal.
 export const BUFFER_REPLAY_KEY = 'pharmacy:bufferReplay';
 // Set by @RequireOperatorPermission (app/platform/auth/decorators.ts): the operator contour.
 export const REQUIRED_OPERATOR_PERMISSION_KEY = 'pharmacy:requiredOperatorPermission';
@@ -43,12 +44,6 @@ export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 /** Needs a principal but no catalog permission (own session, own profile). */
 export const Authenticated = () => SetMetadata(IS_AUTHENTICATED_KEY, true);
-
-/**
- * A buffered operation of the POS: besides its own PIN session it is taken under the bound terminal (P9) — the
- * guards let it through without a session and without the session's right; the POS checks the author.
- */
-export const BufferReplay = () => SetMetadata(BUFFER_REPLAY_KEY, true);
 
 /** Needs a session opened with a password no longer than STEP_UP_MAX_AGE_SECONDS ago. */
 export const RequireFreshAuth = () => SetMetadata(REQUIRE_FRESH_AUTH_KEY, true);

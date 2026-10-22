@@ -383,6 +383,9 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       shift.revenueMinor += body.totalMinor;
       shift.cash.salesMinor += cashPart;
       if (discrepancies > 0) shift.discrepancyReceipts += 1;
+      if (body.localNumber) {
+        shift.lastLocalNumber = Math.max(shift.lastLocalNumber ?? 0, body.localNumber);
+      }
       recomputeCash(shift);
       shift.events.unshift({
         id: `e-${body.id}`,

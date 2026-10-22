@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  PRESCRIPTION_RETENTION_DEFAULT_DAYS,
   type PosBufferLimits,
   posBufferDefaults,
 } from '@pharmacy/shared-domain';
@@ -97,7 +98,7 @@ export class PosRepository {
           row?.controlledMaxOperations ??
           posBufferDefaults.controlledMaxOperations,
       },
-      retentionDays: row?.retentionDays ?? 90,
+      retentionDays: row?.retentionDays ?? PRESCRIPTION_RETENTION_DEFAULT_DAYS,
     };
   }
 

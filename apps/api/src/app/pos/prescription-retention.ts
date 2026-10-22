@@ -41,7 +41,7 @@ export class PrescriptionRetention {
         const result = await sql`
           update pharmacy.controlled_sale_records c
           set prescription_note = null, prescription_file_id = null, prescription_purged_at = now()
-          where c.tenant_id = ${tenantId} and c.id in (
+          where c.tenant_id = ${tenantId} and c.prescription_purged_at is null and c.id in (
             select r.id from pharmacy.controlled_sale_records r
             where r.tenant_id = ${tenantId} and r.prescription_purged_at is null
               and (r.prescription_note is not null or r.prescription_file_id is not null)

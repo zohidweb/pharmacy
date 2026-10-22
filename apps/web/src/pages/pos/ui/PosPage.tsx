@@ -124,10 +124,14 @@ function PosPageView() {
   const canChooseBatch = can(session, 'pos:choose-batch');
   const canSeeCost = can(session, 'finance:view-cost');
   const openShift = shift.data ?? null;
-  // the local numbers of the shift go on after the receipts the server has: a browser whose data was cleared does
-  // not start again at 1 (spec 2026-10-21-pos-offline-limits, P12)
+  // the local numbers of the shift go on after the largest one the server has: a browser whose data was cleared does
+  // not start again at 1 nor repeat a delivered number (spec 2026-10-21-pos-offline-limits, P12)
   const shiftId = openShift?.id ?? null;
-  const shiftReceipts = openShift?.receipts ?? 0;
+  // the largest number the server has; the count of its receipts for a shift without local numbers
+  const shiftReceipts = Math.max(
+    openShift?.receipts ?? 0,
+    openShift?.lastLocalNumber ?? 0,
+  );
   useEffect(() => {
     if (runtime && shiftId) {
       void raiseReceiptSeq(runtime.db, shiftId, shiftReceipts);

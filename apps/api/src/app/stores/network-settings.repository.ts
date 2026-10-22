@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+  PRESCRIPTION_RETENTION_DEFAULT_DAYS,
+  posBufferDefaults,
+} from '@pharmacy/shared-domain';
 import type { NotificationKind } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
@@ -34,11 +38,15 @@ export class NetworkSettingsRepository {
              coalesce(ts.expiry_reminder_days, 30) as expiry_notice_days,
              coalesce(ts.warn_below_cost, true) as warn_below_cost,
              coalesce(ts.disabled_notifications, '{}') as disabled_notifications,
-             coalesce(ts.prescription_retention_days, 90) as prescription_retention_days,
-             coalesce(ts.pos_buffer_max_hours, 24) as pos_buffer_max_hours,
-             coalesce(ts.pos_buffer_max_operations, 500) as pos_buffer_max_operations,
-             coalesce(ts.pos_controlled_max_hours, 8) as pos_controlled_max_hours,
-             coalesce(ts.pos_controlled_max_operations, 20) as pos_controlled_max_operations
+             coalesce(ts.prescription_retention_days, ${PRESCRIPTION_RETENTION_DEFAULT_DAYS})
+               as prescription_retention_days,
+             coalesce(ts.pos_buffer_max_hours, ${posBufferDefaults.maxHours}) as pos_buffer_max_hours,
+             coalesce(ts.pos_buffer_max_operations, ${posBufferDefaults.maxOperations})
+               as pos_buffer_max_operations,
+             coalesce(ts.pos_controlled_max_hours, ${posBufferDefaults.controlledMaxHours})
+               as pos_controlled_max_hours,
+             coalesce(ts.pos_controlled_max_operations, ${posBufferDefaults.controlledMaxOperations})
+               as pos_controlled_max_operations
       from pharmacy.tenants t
       left join pharmacy.tenant_settings ts on ts.tenant_id = t.id
       where t.id = ${tenantId}`.execute(trx);

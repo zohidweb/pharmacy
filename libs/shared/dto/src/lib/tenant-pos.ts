@@ -264,6 +264,11 @@ export interface Shift {
   };
   /** Receipts of the shift with discrepancy marks (K4). */
   discrepancyReceipts: number;
+  /**
+   * The largest local number of the receipts of the shift (spec 2026-10-21-pos-offline-limits, P12): a terminal whose
+   * browser data was cleared numbers on after it. Absent in the Z-reports saved before it.
+   */
+  lastLocalNumber?: number | null;
   events: ShiftEvent[];
 }
 

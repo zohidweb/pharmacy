@@ -10,6 +10,29 @@
       "type:app"
     ],
     "targets": {
+      "build": {
+        "inputs": [
+          "default",
+          "^default",
+          {
+            "externalDependencies": [
+              "next"
+            ]
+          },
+          {
+            "dependentTasksOutputFiles": "**/*.d.ts",
+            "transitive": true
+          },
+          {
+            "env": "NEXT_PUBLIC_API_MOCKS"
+          }
+        ],
+        "outputs": [
+          "{projectRoot}/.next/!(cache)/**/*",
+          "{projectRoot}/.next/!(cache)",
+          "{projectRoot}/out"
+        ]
+      },
       "dev": {
         "options": {
           "command": "next dev -p 4300",

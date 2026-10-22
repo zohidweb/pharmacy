@@ -55,7 +55,7 @@
 |---|---|---|
 | E10 | Ключ точки | `license_keys` по модели данных 01. Формат `phk_<keyId>_<secret>`, секрет — `randomBytes(32)` base64url, хранится SHA-256, сравнение `timingSafeEqual`. Резолвер `resolve_license_key(key_id)` (SECURITY DEFINER, владелец `pharmacy_resolver`, только чтение `key_hash, tenant_id, store_id, status, valid_until`), вызов — через `ContextResolvers`. `LicenseKeyGuard` (маршруты `/sync/*` облака, `@Public()` для сессий) кладёт сеть и точку в контекст; `storeId` в теле обязан совпасть. Лимит частоты — по `keyId`, неудачные попытки — по IP |
 | E11 | Выдача ключа до админки | Скрипт `scripts/issue-license-key.mjs --store <id> --valid-until <дата>` ролью `pharmacy_platform` печатает ключ один раз и пишет `platform_audit_log`; `scripts/revoke-license-key.mjs --store <id> [--hard]` — отзыв. Экраны «Лицензии» — с админкой (S2, этап 6) |
-| E12 | Статусы лицензии | `active`, `expiring` (вычисляется: ≤ `notify_before_days`), `expired`, `revoked`, `revoked_hard`, плюс «точка закрыта» и «сеть заблокирована». Возвращаются в handshake и в заголовке `Pharmacy-License-Status` каждого ответа sync. `revoked`/`expired`/закрыта — приём операций ещё `revoked_key_grace_days` (30) дней, лента и снимки не выдаются; `revoked_hard` — 401 `license_revoked` |
+| E12 | Статусы лицензии | `active`, `expiring` (вычисляется: ≤ `notify_before_days`), `expired`, `revoked`, `revoked_hard`, плюс «точка закрыта» и «сеть заблокирована». Возвращаются в handshake и в заголовке `Pharmacy-License-Status` каждого ответа sync. `revoked`/`expired`/закрыта/сеть заблокирована — приём операций ещё `revoked_key_grace_days` (30) дней от самого раннего из этих событий (§13, ревью безопасности 2026-10-22), лента и снимки не выдаются; `revoked_hard` — 401 `license_revoked` |
 | E13 | Настройки платформы | `platform_settings` + `feed_window_days` (90), `revoked_key_grace_days` (30), `min_supported_protocol` (1), `recommended_protocol` (1) — оператор меняет их позже экраном админки; до неё — значения миграции |
 | E14 | Применение | По ADR §2, §4: `set_config` сети → `pg_advisory_xact_lock('sync-apply', store)` → `insert … on conflict do nothing returning` в `sync_inbox` → upcast → валидация (раздел 4.3) → применитель → статус `applied`. Повтор с тем же хешем — `duplicate`, с другим — `rejected` (`id_reused`). Одна операция — одна транзакция облака |
 | E15 | Карантин и зависимости | Ошибка валидации или применения — откат, затем отдельной транзакцией `quarantined` + причина (код). Не найдена ссылка на факт той же точки (чек для возврата, отправка для приёма, смена для чека) — `pending_dependency`; такие операции точки переприменяются автоматически в конце каждого батча. Переприменение карантина вручную — с экраном админки (этап 6); до него — скрипт `scripts/reapply-quarantine.mjs --store <id>` |
@@ -366,4 +366,12 @@
   - запись, чья ссылка ещё не пришла, откладывается в локальный список ожидания и повторяется после следующих
     страниц;
   - штрихкод — upsert по значению с переносом между товарами.
+
+**Ревью безопасности (2026-10-22, `docs/architecture/reviews/2026-10-22-security-review-addendum.md`):**
+- Льготный срок E12 считается от **самого раннего** из наступивших событий: срок ключа, отзыв, закрытие точки,
+  блокировка сети. Более позднее событие окно не открывает заново: отзыв давно истёкшего ключа при продлении или
+  блокировка сети больше не возвращают приём операций старому ключу.
+- «Сеть заблокирована» получает тот же льготный срок, от `tenants.blocked_at`; его отдаёт `resolve_license_key`
+  (миграция `license-key-block-time`). Раньше окно блокировки шло «от сейчас», то есть всю блокировку. Блокировка без
+  времени (вне потока оператора) не принимает ничего: операции остаются на ПК точки и досылаются после разблокировки.
 

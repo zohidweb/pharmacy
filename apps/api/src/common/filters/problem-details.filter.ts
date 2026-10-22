@@ -13,7 +13,7 @@ import {
   UnauthenticatedError,
 } from '../context/request-context';
 import { LockedException, ProblemException } from '../errors/problem.exception';
-import { isSyncPath } from '../http/contour';
+import { isSyncPath, licenseKeyIdOf } from '../http/contour';
 import {
   CORRELATION_ID_HEADER,
   incomingCorrelationId,
@@ -117,8 +117,13 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       known ?? (req ? incomingCorrelationId(req) : null) ?? randomUUID();
 
     const body = this.toBody(error, correlationId);
-    // A batch of an offline store over the body limit of the sync contour (ADR-0014 §6).
-    if (body.status === 413 && isSyncPath(req?.originalUrl)) {
+    // A batch of an offline store over the body limit of the sync contour (ADR-0014 §6): only a request with a
+    // well-formed key is a batch — any other one is told nothing about batches (security review 2026-10-22, A3).
+    if (
+      body.status === 413 &&
+      isSyncPath(req?.originalUrl) &&
+      licenseKeyIdOf(req?.headers?.authorization) !== null
+    ) {
       body.code = 'batch_too_large';
     }
     if (res.headersSent) return;

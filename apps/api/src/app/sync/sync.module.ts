@@ -5,10 +5,8 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { CheckpointFacts } from './checkpoint-facts';
 import { InboxRepository } from './inbox.repository';
 import { InboxRetention } from './inbox-retention';
-import { LicenseKeyGuard } from './license-key.guard';
 import { SyncApplyService } from './sync-apply.service';
 import { SyncFeedService } from './sync-feed.service';
-import { SyncReceiveController } from './sync-receive.controller';
 import { SyncRunsRepository } from './sync-runs.repository';
 import { SyncRunsService } from './sync-runs.service';
 
@@ -16,12 +14,11 @@ import { SyncRunsService } from './sync-runs.service';
 // license key. Registered in the cloud only; the store side of the protocol comes with PR 4. The facts are applied
 // by the appliers the owning modules register in SyncAppliers (core/sync); the stock checkpoint reads the stock
 // of the store through the export of inventory (StockFacts); the hourly purge clears the prescription data of old
-// envelopes (InboxRetention).
+// envelopes (InboxRetention). No routes here: they live in SyncReceiveModule, registered only with
+// OFFLINE_SYNC_ENABLED (security review 2026-10-22, decision 7.4).
 @Module({
   imports: [AuditModule, InventoryModule, SyncCoreModule],
-  controllers: [SyncReceiveController],
   providers: [
-    LicenseKeyGuard,
     SyncRunsRepository,
     SyncRunsService,
     InboxRepository,
@@ -31,7 +28,7 @@ import { SyncRunsService } from './sync-runs.service';
     InboxRetention,
   ],
   // InboxRetention — the purge of the prescription data in the envelopes (spec 2026-10-21-pos-offline-limits, P5;
-  // `sync` → `platform/retention`)
-  exports: [InboxRetention],
+  // `sync` → `platform/retention`); the services — to the routes of SyncReceiveModule
+  exports: [InboxRetention, SyncRunsService, SyncApplyService, SyncFeedService],
 })
 export class SyncModule {}

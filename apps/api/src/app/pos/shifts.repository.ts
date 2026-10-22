@@ -96,6 +96,19 @@ export class ShiftsRepository {
     return result.rows[0] ?? null;
   }
 
+  /** When the last shift of the terminal closed: the opening of the next one is not dated before it (E4). */
+  async lastClosedAt(
+    trx: TenantTransaction,
+    tenantId: string,
+    terminalId: string,
+  ): Promise<Date | null> {
+    const result = await sql<{ closedAt: Date | null }>`
+      select max(closed_at) as closed_at from pharmacy.shifts
+      where tenant_id = ${tenantId} and terminal_id = ${terminalId}
+        and status = 'closed'`.execute(trx);
+    return result.rows[0]?.closedAt ?? null;
+  }
+
   /** The shift locked for the transaction: `share` — an operation in it, `update` — its closing. */
   async lockShift(
     trx: TenantTransaction,

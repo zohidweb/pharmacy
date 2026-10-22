@@ -24,7 +24,7 @@ import { DatabaseModule } from '../core/database';
 import { RedisModule } from '../core/redis/redis.module';
 import { REDIS_CLIENT, type RedisClient } from '../core/redis/redis.tokens';
 import { SessionsModule } from '../core/sessions';
-import { validateEnv } from './config/env.validation';
+import { offlineSyncEnabled, validateEnv } from './config/env.validation';
 import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
 import { StaffModule } from './staff/staff.module';
@@ -49,7 +49,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
 import { ReturnsModule } from './returns/returns.module';
 import { BillingModule } from './billing/billing.module';
-import { SyncModule } from './sync/sync.module';
+import { SyncReceiveModule } from './sync/sync-receive.module';
 import { ImportsCoreModule } from '../core/imports';
 import { SyncCoreModule } from '../core/sync';
 import { FiscalModule } from './fiscal/fiscal.module';
@@ -172,11 +172,9 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
       BillingModule,
       (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
     ),
-    // The cloud side of the offline-store sync: an offline store calls the cloud, never itself (ADR-0014).
-    ConditionalModule.registerWhen(
-      SyncModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    // The routes of the offline-store sync: cloud only (a store calls the cloud, never itself, ADR-0014) and only with
+    // OFFLINE_SYNC_ENABLED (security review 2026-10-22, decision 7.4). SyncModule itself comes with the retention.
+    ConditionalModule.registerWhen(SyncReceiveModule, offlineSyncEnabled),
     FiscalModule,
     Export1cModule,
     AuditModule,

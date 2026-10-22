@@ -43,8 +43,10 @@ services:
       - ${REDIS_MAXMEMORY:-256mb}
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+    # redis-server replaces its arguments with its process title; redis-cli does not, so the healthcheck gives it the
+    # password by REDISCLI_AUTH, not `-a` — every 5 s it would show in `ps` on the host to every user
     healthcheck:
-      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG']
+      test: ['CMD-SHELL', 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -83,6 +85,8 @@ services:
       ADMIN_ORIGIN: ${ADMIN_ORIGIN:?set in the env file}
       AUTH_TEST_COOKIES: ${AUTH_TEST_COOKIES:-false}
       TRUST_PROXY: ${TRUST_PROXY:-0}
+      # The routes of the offline-store sync, off until the first offline store (security review 2026-10-22, 7.4).
+      OFFLINE_SYNC_ENABLED: ${OFFLINE_SYNC_ENABLED:-false}
       # Optional sign-in settings: set in the env file to change them. The defaults repeat those of
       # apps/api/src/app/config/env.validation.ts and must stay in step with them.
       SESSION_IDLE_TIMEOUT_MIN_SECONDS: ${SESSION_IDLE_TIMEOUT_MIN_SECONDS:-300}

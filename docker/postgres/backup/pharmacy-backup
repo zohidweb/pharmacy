@@ -2,8 +2,9 @@
 # pharmacy-backup — daily copies of the cloud database, each verified by a restore (ADR-0019,
 # docs/superpowers/specs/2026-10-21-db-backups-design.md).
 #
-#   daemon                 copy every day at BACKUP_TIME (TZ), at once when no verified copy is younger than 24 h;
-#                          a failed copy is retried in an hour (container `backup`)
+#   daemon                 copy every day at BACKUP_TIME (TZ), at once when the newest verified copy started before
+#                          the last BACKUP_TIME that has passed (a missed or interrupted copy); a failed copy is
+#                          retried in an hour (container `backup`)
 #   run                    one copy now; exit 0 verified, 1 failed, 2 refused (BACKUP_ROOT not writable or the
 #                          empty-database guard), 3 a copy is already running
 #   verify <name>          restore an existing copy into a scratch instance again and compare it with its manifest
@@ -38,9 +39,17 @@ RETRY=3600
 TABLES_SQL="select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname in ('pharmacy', 'public') and c.relkind in ('r', 'p')"
 c_error=''
+s_error=''
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 die() { log "ERROR: $*" >&2; exit 1; }
+
+# A bad value would surface only after a copy is taken (an arithmetic error in the retention).
+check_retention() {
+  case "$RETENTION_DAYS" in
+  '' | *[!0-9]*) die "BACKUP_RETENTION_DAYS must be a whole number of days, got '$RETENTION_DAYS'" ;;
+  esac
+}
 
 # One line, no quotes or backslashes: the value goes into the JSON manifest as is.
 sanitize() { printf '%s' "$1" | tr -d '"\\' | tr '\n\r\t' '   ' | cut -c1-500; }
@@ -120,19 +129,30 @@ preflight() {
 }
 
 scratch_stop() {
-  if [ -f "$SCRATCH/data/postmaster.pid" ]; then
+  # Only a live postmaster of this container is stopped: after a container restart the pid file in the volume is
+  # stale and its number may belong to another process.
+  pid=$(head -n 1 "$SCRATCH/data/postmaster.pid" 2>/dev/null)
+  if [ -n "$pid" ] && [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = postgres ]; then
     pg_ctl -D "$SCRATCH/data" -m fast -w stop >/dev/null 2>&1
   fi
-  rm -rf "$SCRATCH/data" "$SCRATCH/initdb.log" "$SCRATCH/server.log"
+  rm -rf "$SCRATCH/data" "$SCRATCH/initdb.log" "$SCRATCH/server.log" 2>/dev/null
 }
 
-# A throwaway instance on a unix socket only; durability is off, the data is deleted afterwards.
+# A throwaway instance on a unix socket only; durability is off, the data is deleted afterwards. The postmaster gets
+# no lock descriptor (9>&-): if the run is killed, an orphaned instance must not keep the copy lock.
 scratch_start() {
   scratch_stop
-  initdb -D "$SCRATCH/data" -U postgres --auth=trust >"$SCRATCH/initdb.log" 2>&1 || return 1
-  pg_ctl -D "$SCRATCH/data" -l "$SCRATCH/server.log" -w -t 120 -o "-c listen_addresses='' \
+  if ! [ -w "$SCRATCH" ]; then
+    s_error="$SCRATCH is not writable by uid $(id -u)"
+    return 1
+  fi
+  if ! initdb -D "$SCRATCH/data" -U postgres --auth=trust >"$SCRATCH/initdb.log" 2>&1 9>&- ||
+    ! pg_ctl -D "$SCRATCH/data" -l "$SCRATCH/server.log" -w -t 120 -o "-c listen_addresses='' \
 -c unix_socket_directories=$SCRATCH -p $SCRATCH_PORT -c fsync=off -c full_page_writes=off \
--c synchronous_commit=off -c max_parallel_maintenance_workers=0" start >/dev/null 2>&1
+-c synchronous_commit=off -c max_parallel_maintenance_workers=0" start >/dev/null 2>&1 9>&-; then
+    s_error=$(tail -n 2 "$SCRATCH/initdb.log" "$SCRATCH/server.log" 2>/dev/null)
+    return 1
+  fi
 }
 
 # apply_globals <conn> <globals.sql> — the roles of the copy, without passwords. A missing role is created, an
@@ -159,11 +179,13 @@ restore_into() {
 dump_facts() {
   toc=$(pg_restore -l "$1") || return 1
   d_tables=$(printf '%s\n' "$toc" | grep -c -E '^[0-9]+; [0-9]+ [0-9]+ TABLE (pharmacy|public) ')
-  d_migration=$(pg_restore -a -n public -t pgmigrations -f - "$1" | awk -F '\t' '
+  # pg_restore apart from awk: in a pipeline its failure would be lost and surface as a wrong "last migration".
+  migrations=$(pg_restore -a -n public -t pgmigrations -f - "$1") || return 1
+  d_migration=$(printf '%s\n' "$migrations" | awk -F '\t' '
     /^COPY public\.pgmigrations / { data = 1; next }
     data && /^\\\.$/ { data = 0 }
     data && $1 + 0 > max { max = $1 + 0; name = $2 }
-    END { print name }') || return 1
+    END { print name }')
 }
 
 # check_restored <conn> <db> <tables> <migration> — c_tenants, or c_error.
@@ -218,10 +240,12 @@ retention() {
   done
 }
 
-# fail <reason> — the copy in progress becomes <name>.failed with the reason and the tail of its log.
+# fail <reason> — the copy in progress becomes <name>.failed with the reason and the tail of its log. Its dump is
+# deleted: a failure that repeats hourly would otherwise fill BACKUP_DIR, and retention runs only after a success.
 fail() {
   m_error="$1: $(tail -n 3 "$part/log.txt" 2>/dev/null)"
   m_finished=$(date +%s)
+  rm -f "$part/pharmacy.dump"
   write_manifest "$part/manifest.json"
   mv "$part" "$BACKUP_ROOT/$m_name.failed"
   log "copy $m_name FAILED: $(sanitize "$m_error")"
@@ -229,6 +253,7 @@ fail() {
 }
 
 cmd_run() {
+  check_retention
   exec 9>"$LOCK"
   flock -n 9 || { log "a copy is already running"; exit 3; }
   m_started=$(date +%s)
@@ -258,7 +283,7 @@ cmd_run() {
   m_dump_s=$(($(date +%s) - m_started))
 
   t0=$(date +%s)
-  scratch_start || fail "the scratch instance did not start: $(tail -n 2 "$SCRATCH/initdb.log" "$SCRATCH/server.log" 2>/dev/null)"
+  scratch_start || fail "the scratch instance did not start: $s_error"
   apply_globals "$SCRATCH_CONN" "$part/globals.sql" 2>>"$part/log.txt" || fail "the roles of the copy cannot be applied"
   restore_into "$SCRATCH_CONN" "$DB_NAME" "$part/pharmacy.dump" 2>>"$part/log.txt" || fail "pg_restore failed"
   check_restored "$SCRATCH_CONN" "$DB_NAME" "$m_tables" "$m_migration" || fail "$c_error"
@@ -284,7 +309,7 @@ cmd_verify() {
   flock -n 9 || { log "a copy is already running"; exit 3; }
   trap scratch_stop EXIT
   t0=$(date +%s)
-  scratch_start || die "the scratch instance did not start"
+  scratch_start || die "the scratch instance did not start: $s_error"
   apply_globals "$SCRATCH_CONN" "$dir/globals.sql" || die "verify $name: the roles of the copy cannot be applied"
   restore_into "$SCRATCH_CONN" "$DB_NAME" "$dir/pharmacy.dump" || die "verify $name: pg_restore failed"
   check_restored "$SCRATCH_CONN" "$DB_NAME" "$(manifest_get "$m" tables)" "$(manifest_get "$m" lastMigration)" ||
@@ -322,6 +347,10 @@ cmd_status() {
   fi
   [ -f "$STATE/next" ] && printf 'next copy: %s\n' "$(local_time "$(cat "$STATE/next")")"
   [ -f "$STATE/blocked" ] && printf 'BLOCKED: %s\n' "$(cat "$STATE/blocked")"
+  # The backup service could not write its state here (BACKUP_DIR not writable keeps the reason in its container).
+  [ -d "$STATE" ] ||
+    printf 'no state of the backup service in %s — if it is unhealthy, see: npm run stack -- <env> logs backup\n' \
+      "$BACKUP_ROOT"
   return 0
 }
 
@@ -349,17 +378,19 @@ cmd_daemon() {
   [01][0-9]:[0-5][0-9] | 2[0-3]:[0-5][0-9]) ;;
   *) die "BACKUP_TIME must be HH:MM, got '$BACKUP_TIME'" ;;
   esac
+  check_retention
   date +%s >"$STARTED"
   log "daemon: a copy every day at $BACKUP_TIME (${TZ:-UTC}), verified copies kept $RETENTION_DAYS days, in $BACKUP_ROOT"
   now=$(date +%s)
   preflight
   rc=$?
   newest=$(newest_verified)
-  finished=0
-  [ -n "$newest" ] && finished=$(manifest_get "$BACKUP_ROOT/$newest/manifest.json" finishedEpoch)
+  # next_slot is always ahead, so one day earlier is the last BACKUP_TIME that has passed. A copy interrupted by a
+  # restart (a deploy recreates postgres and backup) or a night missed while the container was down is made at once.
+  last_slot=$(($(next_slot) - 86400))
   if [ "$rc" -eq 2 ]; then
     next=$((now + RETRY))
-  elif [ $((now - ${finished:-0})) -ge 86400 ]; then
+  elif [ -z "$newest" ] || [ "$(name_epoch "$newest")" -lt "$last_slot" ]; then
     next=$now
   else
     next=$(next_slot)
@@ -398,8 +429,10 @@ cmd_restore() {
   { is_name "$name" && [ -f "$m" ]; } || die "no copy $name in $BACKUP_ROOT"
   [ "$(manifest_get "$m" verified)" = true ] || die "copy $name is not verified"
   { [ -f "$dir/pharmacy.dump" ] && [ -f "$dir/globals.sql" ]; } || die "copy $name is incomplete"
-  [ "$(q "$conn" postgres "select count(*) from pg_database where datname = '$old'")" = 0 ] ||
-    die "database $old already exists: copy $name was restored before; drop $old first"
+  taken=$(q "$conn" postgres "select count(*) from pg_database where datname = '$old'") ||
+    die "cannot query the server as ${POSTGRES_USER:-postgres} over the local socket"
+  [ "$taken" = 0 ] ||
+    die "database $old already exists: it is the database replaced when copy $name was restored before; check that it is not needed, then drop it"
   printf 'copy %s, taken %s (%s), %s MB, last migration %s, %s networks\n' "$name" \
     "$(local_time "$(name_epoch "$name")")" "${TZ:-UTC}" "$(($(manifest_get "$m" dumpBytes) / 1048576))" \
     "$(manifest_get "$m" lastMigration)" "$(manifest_get "$m" tenants)"
@@ -415,17 +448,29 @@ cmd_restore() {
     q "$conn" postgres "drop database if exists \"$target\"" >/dev/null
     die "restore $name failed${c_error:+: $c_error}; database $db is untouched"
   fi
-  if [ "$(q "$conn" postgres "select count(*) from pg_database where datname = '$db'")" = 1 ]; then
+  present=$(q "$conn" postgres "select count(*) from pg_database where datname = '$db'") ||
+    die "cannot query the server; $target holds the restored copy, database $db is untouched"
+  if [ "$present" = 1 ]; then
     q "$conn" postgres "alter database \"$db\" allow_connections false" >/dev/null || die "cannot close $db"
     tries=0
-    until q "$conn" postgres "alter database \"$db\" rename to \"$old\"" >/dev/null 2>&1; do
+    until err=$(q "$conn" postgres "alter database \"$db\" rename to \"$old\"" 2>&1 >/dev/null); do
       tries=$((tries + 1))
-      [ "$tries" -le 10 ] || die "cannot rename $db: sessions keep it busy; $target holds the restored copy"
+      if [ "$tries" -gt 10 ]; then
+        # The working database stays as it was and takes connections again, so the stack can start.
+        q "$conn" postgres "alter database \"$db\" allow_connections true" >/dev/null
+        die "cannot rename $db to $old: $(sanitize "$err"); $db is open again and untouched, $target holds the restored copy"
+      fi
       q "$conn" postgres "select count(pg_terminate_backend(pid)) from pg_stat_activity where datname = '$db'" >/dev/null
       sleep 1
     done
   fi
-  q "$conn" postgres "alter database \"$target\" rename to \"$db\"" >/dev/null || die "cannot rename $target to $db"
+  if ! err=$(q "$conn" postgres "alter database \"$target\" rename to \"$db\"" 2>&1 >/dev/null); then
+    if [ "$present" = 1 ]; then
+      q "$conn" postgres "alter database \"$old\" rename to \"$db\"" >/dev/null &&
+        q "$conn" postgres "alter database \"$db\" allow_connections true" >/dev/null
+    fi
+    die "cannot rename $target to $db: $(sanitize "$err"); the previous database is back as $db, $target holds the restored copy"
+  fi
   log "restore $name: done; the previous database is kept as $old (no connections allowed)"
 }
 

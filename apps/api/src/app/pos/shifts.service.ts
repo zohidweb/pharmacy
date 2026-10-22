@@ -143,11 +143,16 @@ export class ShiftsService implements OnModuleInit {
         if (await this.shifts.openShiftOfTerminal(trx, op.tenantId, op.terminalId)) {
           throw new ProblemException(409, 'shift_open');
         }
-        // not before the closing of the previous shift of the terminal (E4), as P10 checked the author
-        const openedAt = operationMoment(
-          op,
-          await this.shifts.lastClosedAt(trx, op.tenantId, op.terminalId),
-        );
+        // not before the closing of the previous shift of the terminal (E4), as P10 checked the author; a closing
+        // committed after P10 read its floor means the author was checked against an older one — a quarantine
+        const lastClosed = await this.shifts.lastClosedAt(trx, op.tenantId, op.terminalId);
+        if (
+          op.authorFloor !== undefined &&
+          lastClosed?.getTime() !== op.authorFloor?.getTime()
+        ) {
+          throw new ProblemException(409, 'shift_open');
+        }
+        const openedAt = operationMoment(op, lastClosed);
         const date = await this.repository.businessDate(trx, op.tenantId, openedAt);
         const number = await this.numbering.next(trx, op.tenantId, store, 'z_report', date);
         try {

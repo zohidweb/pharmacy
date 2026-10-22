@@ -52,6 +52,11 @@ export interface PosOperation extends BufferSession {
   occurredAt: Date;
   receivedAt: Date;
   correlationId: string;
+  /**
+   * The floor P10 bounded the moment by when it checked the author under the terminal; absent in the PIN session of
+   * the author. The opening of a shift compares it with the last closing it reads itself.
+   */
+  authorFloor?: Date | null;
 }
 
 /**
@@ -72,7 +77,7 @@ const HORIZON_MS = 30 * 24 * HOUR_MS;
 
 /**
  * The moment of an operation (E4): the corrected PC clock, but not after the server got it, not before `floor` and not
- * more than 30 days back.
+ * more than 30 days back; never after the server got it, whatever the floor.
  */
 export function boundedMoment(
   occurredAt: Date,
@@ -83,7 +88,11 @@ export function boundedMoment(
     Math.min(occurredAt.getTime(), receivedAt.getTime()),
     receivedAt.getTime() - HORIZON_MS,
   );
-  return new Date(floor === null ? at : Math.max(at, floor.getTime()));
+  return new Date(
+    floor === null
+      ? at
+      : Math.max(at, Math.min(floor.getTime(), receivedAt.getTime())),
+  );
 }
 
 /**
@@ -180,20 +189,23 @@ export class PosContext {
       right,
     );
     // under the terminal the author must have held it at the moment of the operation (P10)
-    if (session.via === 'terminal') {
-      await this.requireHolder(
-        session,
-        author.id,
-        occurredAt,
-        receivedAt,
-        floor,
-      );
-    }
+    const checked =
+      session.via === 'terminal'
+        ? await this.requireHolder(
+            session,
+            author.id,
+            occurredAt,
+            receivedAt,
+            floor,
+          )
+        : null;
     // an online operation of another employee than the one signed in is marked too (M10); under the terminal with no
-    // session nobody signed in, so a live operation is always marked
+    // session nobody signed in, so a live operation is always marked. The moment is the bounded one: a moment stated
+    // before the floor is moved to it and may be live.
+    const moment = checked?.moment ?? occurredAt;
     if (
       author.id !== session.employeeId &&
-      receivedAt.getTime() - occurredAt.getTime() < ONLINE_WITHIN_MS
+      receivedAt.getTime() - moment.getTime() < ONLINE_WITHIN_MS
     ) {
       author.flagged = true;
     }
@@ -205,6 +217,7 @@ export class PosContext {
       // never empty: unreachable today (the principal needs a request), kept so that a
       // financial operation always carries a correlation id
       correlationId: getRequestContext()?.correlationId ?? randomUUID(),
+      ...(checked ? { authorFloor: checked.floor } : {}),
     };
   }
 
@@ -252,17 +265,14 @@ export class PosContext {
     occurredAt: Date,
     receivedAt: Date,
     floor: MomentFloor,
-  ): Promise<void> {
-    const held = await this.db.tenantTransaction(async (trx) => {
+  ): Promise<{ moment: Date; floor: Date | null }> {
+    const checked = await this.db.tenantTransaction(async (trx) => {
       const { bufferLimits } = await this.repository.settings(
         trx,
         session.tenantId,
       );
-      const moment = boundedMoment(
-        occurredAt,
-        receivedAt,
-        await this.floorAt(trx, session, floor),
-      );
+      const from = await this.floorAt(trx, session, floor);
+      const moment = boundedMoment(occurredAt, receivedAt, from);
       const signIns = await this.signIns.between(
         trx,
         session.tenantId,
@@ -271,9 +281,17 @@ export class PosContext {
         new Date(moment.getTime() - bufferLimits.maxHours * HOUR_MS),
         new Date(moment.getTime() + AUTHOR_SIGN_IN_TOLERANCE_MS),
       );
-      return heldBy(signIns, authorId, moment, AUTHOR_SIGN_IN_TOLERANCE_MS);
+      const held = heldBy(
+        signIns,
+        authorId,
+        moment,
+        AUTHOR_SIGN_IN_TOLERANCE_MS,
+      );
+      return { held, moment, floor: from };
     });
-    if (!held) throw new ProblemException(422, 'author_session_missing');
+    if (!checked.held)
+      throw new ProblemException(422, 'author_session_missing');
+    return { moment: checked.moment, floor: checked.floor };
   }
 
   private async floorAt(

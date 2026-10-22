@@ -8,7 +8,7 @@
  */
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { sessionQueryKey, useSession } from '@/entities/session/@x/terminal';
+import { recheckSession, useSession } from '@/entities/session/@x/terminal';
 import {
   getTerminalRuntime,
   type OutboxCounts,
@@ -97,11 +97,7 @@ export function useTerminalRuntime(): TerminalRuntime | null {
   const queryClient = useQueryClient();
   const paused = useOutboxCounts(runtime).paused;
   useEffect(() => {
-    if (paused)
-      void queryClient.invalidateQueries(
-        { queryKey: sessionQueryKey },
-        { cancelRefetch: false },
-      );
+    if (paused) void recheckSession(queryClient);
   }, [paused, queryClient]);
 
   return runtime && storeId && runtime.key.endsWith(`:${storeId}`)

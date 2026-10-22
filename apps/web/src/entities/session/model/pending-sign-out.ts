@@ -1,25 +1,26 @@
 /*
- * A sign-out that did not reach the server (security review 2026-10-22, F3, S5). The browser is locked at once; this
- * mark keeps the old session from coming back until the sign-out reaches the server. It holds the `authenticatedAt` of
- * that session, so a new sign-in on the terminal is not taken for it. Without localStorage there is no mark: the
- * browser is still locked, only a reload during the outage may show the old session again.
+ * A sign-out that did not reach the server (security review 2026-10-22, F3, S5). The browser is locked at once; while
+ * this mark stands, the session behind the browser's cookie is the signed-out one — only a sign-in gives the browser
+ * another cookie, and a sign-in drops the mark first (signIn). The session is not identified by its `authenticatedAt`:
+ * the server moves it on a password confirmation. Without localStorage there is no mark: the browser is still locked,
+ * only a reload during the outage may show the old session again.
  */
 const KEY = 'pharmacy-sign-out-pending';
 
-export function markSignOutPending(authenticatedAt: string): void {
+/** The value is the time of the sign-out, for whoever looks at the storage. */
+export function markSignOutPending(): void {
   try {
-    localStorage.setItem(KEY, authenticatedAt);
+    localStorage.setItem(KEY, new Date().toISOString());
   } catch {
     // storage unavailable: no mark
   }
 }
 
-/** The `authenticatedAt` of the session whose sign-out waits for the server, or null. */
-export function pendingSignOut(): string | null {
+export function isSignOutPending(): boolean {
   try {
-    return localStorage.getItem(KEY);
+    return localStorage.getItem(KEY) !== null;
   } catch {
-    return null;
+    return false;
   }
 }
 
@@ -29,4 +30,13 @@ export function clearSignOutPending(): void {
   } catch {
     // storage unavailable: nothing to clear
   }
+}
+
+/** A sign-out marked in another tab of this browser: the tabs share the cookie, so they are signed out together. */
+export function onSignOutPendingElsewhere(listener: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === KEY && event.newValue !== null) listener();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
 }

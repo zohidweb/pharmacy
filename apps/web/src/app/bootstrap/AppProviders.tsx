@@ -16,7 +16,7 @@ import {
 } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { IntlProvider } from 'use-intl';
-import { resetSession, retrySignOutOnReconnect } from '@/entities/session';
+import { resetSession, watchPendingSignOut } from '@/entities/session';
 import { ConfirmPasswordDialog } from '@/features/confirm-password';
 import {
   apiMocksEnabled,
@@ -129,7 +129,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const { locale, messages } = useMessages(useLocale());
   const apiReady = useApiReady();
   useConnectivity(apiReady);
-  useEffect(() => retrySignOutOnReconnect(queryClient), [queryClient]);
+  useEffect(() => watchPendingSignOut(queryClient), [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

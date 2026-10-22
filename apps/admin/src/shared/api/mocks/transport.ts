@@ -23,6 +23,7 @@ import { tenantBilling } from './billing-ledger';
 import { mockDb, mockStats } from './db';
 import { demoActivationCode, demoOperator } from './fixtures';
 
+// Also the marker that stops a test/prod build carrying the mocks (tools/scripts/frontend-mocks.mjs): rename both.
 const SESSION_KEY = 'pharmacy-admin-mock-session';
 /** Simulated network latency in development; none in tests (fast, deterministic). */
 const LATENCY_MS = process.env.NODE_ENV === 'test' ? 0 : 300;

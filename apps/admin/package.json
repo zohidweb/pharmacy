@@ -26,6 +26,11 @@
           {
             "env": "NEXT_PUBLIC_API_MOCKS"
           }
+        ],
+        "outputs": [
+          "{projectRoot}/.next/!(cache)/**/*",
+          "{projectRoot}/.next/!(cache)",
+          "{projectRoot}/out"
         ]
       },
       "dev": {

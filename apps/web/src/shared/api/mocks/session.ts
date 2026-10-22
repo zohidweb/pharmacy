@@ -5,6 +5,7 @@ import { ApiError } from '../client';
 import { mockDb, type MockEmployeeState } from './db';
 import { stores, tenant } from './fixtures';
 
+// Also the marker that stops a test/prod build carrying the mocks (tools/scripts/frontend-mocks.mjs): rename both.
 const SESSION_KEY = 'pharmacy-web-mock-session';
 
 export interface StoredSession {

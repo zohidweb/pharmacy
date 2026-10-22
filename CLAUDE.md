@@ -45,6 +45,7 @@ Project class: Full
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
 | Runtime / тесты | Node.js 22 LTS (≥ 22.20) или 24 LTS (`.nvmrc` — 24, Docker — 24), npm, Jest; e2e фронтенда — Playwright | ADR-0008, ADR-0009 |
 | CI | GitHub Actions | ADR-0009 |
+| Резервное копирование БД | Ежедневный `pg_dump` с проверкой восстановления: сервис `backup` (test, prod) на образе `pharmacy/postgres`, роль `pharmacy_backup` | ADR-0019 |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
 ADR-0012 reverse proxy и статика (отложен до выбора хостинга).
@@ -79,7 +80,7 @@ pharmacy/
 │   ├── shared/domain/  # @pharmacy/shared-domain — Tenant, Store, Batch, Receipt, StockMovement…
 │   ├── shared/util/    # @pharmacy/shared-util — деньги (integer дирамы), даты, i18n RU/TJ
 │   └── ui/             # @pharmacy/ui — общий UI-кит web и admin (сенсорные экраны от 10″)
-├── docker/           # compose.yml + образы postgres/, redis/ (ADR-0005); apps/api/Dockerfile
+├── docker/           # compose.yml (+ compose.backup.yml для test/prod) + образы postgres/, redis/ (ADR-0005); apps/api/Dockerfile
 ├── docs/architecture/, templates/   # архитектура, ADR; шаблоны ai-project-start
 └── nx.json / package.json / tsconfig.base.json / eslint.config.mjs
 ```
@@ -264,6 +265,7 @@ Only these. Financial operations require idempotency and a correlation ID.
 
 ```
 npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs> [service…] [--skip-checks]
+npm run stack -- <test|prod> <backup|backup-status|backup-verify <копия>|restore <копия> [--replace-database]>
 npm run stack -- test init     # env-файл из примера со случайными паролями (один раз)
 npm run test-env:build         # lint + test + static web/admin + образы с тегом <git sha>
 npm run test-env:up            # запуск и ожидание healthy;  test-env:down — остановка
@@ -285,12 +287,36 @@ npm run prod:build / prod:up / prod:down
   новых ролей нужно пересоздать (`docker volume rm`, данные теряются — только для test/dev).
 - web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (ADR-0012, proposed).
 - Сейчас обе среды запускаются локально; хостинг — открытый вопрос № 1 stack.md.
+- **Бэкапы** (ADR-0019, спецификация `docs/superpowers/specs/2026-10-21-db-backups-design.md`) — только test и prod:
+  - сервис `backup` (`docker/compose.backup.yml`, `stack.mjs` добавляет его сам) каждую ночь в `BACKUP_TIME`
+    (02:00, Душанбе) делает `pg_dump` и проверяет копию восстановлением во временный экземпляр; непроверенная копия
+    копией не считается. После неудачи — повтор через час (дамп неудачной копии удаляется); если ночная копия пропущена или
+    оборвана перезапуском — копия сразу при старте контейнера;
+  - копии — в `BACKUP_DIR` на хосте: отдельный диск или сетевой том, не диск данных Docker (на Linux каталог создаётся
+    так: `sudo install -d -o 70 -g 70 -m 700 <dir>`); хранятся `BACKUP_RETENTION_DAYS` (30, у test — 7), самая
+    свежая проверенная — всегда. Переменные добавляет `stack init`;
+  - мониторинга нет: оператор каждый день смотрит `npm run stack -- <env> ps` (`backup` unhealthy — проверенной копии
+    нет 26 ч, каталог недоступен или сработала защита пустой базы) и `backup-status` (копии, длительность
+    копирования и восстановления — оценка RTO, следующий запуск, причина блокировки);
+  - восстановление: `restore <копия>` без флага только показывает план; с `--replace-database` останавливает `api`
+    и `backup`, восстанавливает копию рядом (`pharmacy_restore`), меняет имена (прежняя база остаётся как
+    `pharmacy_before_<копия>`, без подключений, удаляется вручную — команду печатает `restore`), перезапускает Redis
+    (все входят заново) и поднимает стек; `migrate` догоняет миграции, вышедшие после копии;
+  - потеря диска: восстановить env-файл из его копии → `up postgres` → `backup-status` → `restore <копия>
+    --replace-database`. Если сразу сделали полный `up`, защита пустой базы не даст копировать пустую базу поверх
+    истории копий;
+  - env-файл (ключи JWT, pepper, пароли) в копии не входит и хранится отдельно (ADR-0008): без того же pepper
+    пароли и PIN восстановленной базы недействительны. Redis не копируется;
+  - в окне копии не выкладывать и не запускать миграции вручную: `pg_dump` держит блокировки до конца, а
+    `lock_timeout` есть не у всех миграций. `stack up` с новым тегом перезапускает `postgres` и обрывает копию — новый
+    `backup` сделает её сразу после `migrate`;
+  - копия за пределы хоста и шифрование копий — вместе с хостингом (вопрос № 1), до prod.
 
 ## Containers (ADR-0005)
 
 - Образы: `apps/api/Dockerfile` (multi-stage, `nx run api:prune`, non-root), `docker/postgres`
   (роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver` / `pharmacy_provisioner`, схема
-  `pharmacy`, `pg_trgm`), `docker/redis` (без персистентности). Контекст сборки — корень репозитория
+  `pharmacy`, `pg_trgm`; скрипт копий `pharmacy-backup`, ADR-0019), `docker/redis` (без персистентности). Контекст сборки — корень репозитория
   (`.dockerignore`).
 - Роли БД (ADR-0006, ADR-0013): база принадлежит `pharmacy_owner`. API в рантайме подключается ролями
   `pharmacy_app` (tenant-путь, `DATABASE_URL`) и `pharmacy_platform` (только `app/platform/**` и
@@ -299,6 +325,10 @@ npm run prod:build / prod:up / prod:down
   `issue_owner_code`, ADR-0013, поправка 2026-10-05). На кластере, созданном до поправки, роль добавляется
   один раз суперпользователем: `docker/postgres/initdb/03-provisioner-role.sql` (команда — в его шапке).
   `pharmacy_owner` используется только сервисом `migrate`; `PHARMACY_OWNER_PASSWORD` не передаётся в `api`.
+  `pharmacy_backup` (ADR-0019) — LOGIN, BYPASSRLS, член `pg_read_all_data`, не суперпользователь: только сервис
+  `backup` (test, prod), пароль `PHARMACY_BACKUP_PASSWORD`. Роль создаёт или обновляет идемпотентный
+  `docker/postgres/initdb/04-backup-role.sql` — при initdb и при каждом `stack <test|prod> up` до старта остальных
+  сервисов, поэтому новая роль и смена пароля в env-файле ручных шагов не требуют.
 - Миграции: одноразовый сервис `migrate` (тот же образ `pharmacy/api`, `node scripts/migrate.mjs`) применяет
   SQL-миграции ролью `pharmacy_owner` до старта API (`api` ждёт `service_completed_successfully`). Скрипт и
   `migrations/` попадают в образ через assets webpack. Если API не стартует из-за миграции —

@@ -1,0 +1,485 @@
+#!/bin/sh
+# pharmacy-backup — daily copies of the cloud database, each verified by a restore (ADR-0019,
+# docs/superpowers/specs/2026-10-21-db-backups-design.md).
+#
+#   daemon                 copy every day at BACKUP_TIME (TZ), at once when the newest verified copy started before
+#                          the last BACKUP_TIME that has passed (a missed or interrupted copy); a failed copy is
+#                          retried in an hour (container `backup`)
+#   run                    one copy now; exit 0 verified, 1 failed, 2 refused (BACKUP_ROOT not writable or the
+#                          empty-database guard), 3 a copy is already running
+#   verify <name>          restore an existing copy into a scratch instance again and compare it with its manifest
+#   status                 the copies, the newest verified one, the next run, the reason of a block
+#   health                 exit 0 healthy, 1 unhealthy (container healthcheck)
+#   restore <name> [--check]
+#                          container `postgres`, superuser over the local socket: restore the copy beside the working
+#                          database and swap the names; --check only validates and prints the plan
+#
+# Environment: BACKUP_ROOT (/backups), SCRATCH (/scratch), BACKUP_TIME (02:00), BACKUP_RETENTION_DAYS (30), TZ,
+# IMAGE_TAG; `run` connects with PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE (role pharmacy_backup);
+# `restore` with POSTGRES_USER and POSTGRES_DB of the postgres container. Passwords are never logged.
+set -u
+umask 077
+# Notices such as "role … has already been granted membership" are expected when roles are re-applied.
+export PGOPTIONS="${PGOPTIONS:-} -c client_min_messages=warning"
+
+BACKUP_ROOT=${BACKUP_ROOT:-/backups}
+SCRATCH=${SCRATCH:-/scratch}
+BACKUP_TIME=${BACKUP_TIME:-02:00}
+RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+DB_NAME=${PGDATABASE:-pharmacy}
+STATE="$BACKUP_ROOT/.state"
+LOCK=/tmp/pharmacy-backup.lock
+STARTED=/tmp/pharmacy-backup.started
+TMP_BLOCKED=/tmp/pharmacy-backup.blocked
+SCRATCH_PORT=5499
+SCRATCH_CONN="-h $SCRATCH -p $SCRATCH_PORT -U postgres"
+HEALTHY_AGE=$((26 * 3600))
+GRACE=$((2 * 3600))
+RETRY=3600
+TABLES_SQL="select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname in ('pharmacy', 'public') and c.relkind in ('r', 'p')"
+c_error=''
+s_error=''
+
+log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+die() { log "ERROR: $*" >&2; exit 1; }
+
+# A bad value would surface only after a copy is taken (an arithmetic error in the retention).
+check_retention() {
+  case "$RETENTION_DAYS" in
+  '' | *[!0-9]*) die "BACKUP_RETENTION_DAYS must be a whole number of days, got '$RETENTION_DAYS'" ;;
+  esac
+}
+
+# One line, no quotes or backslashes: the value goes into the JSON manifest as is.
+sanitize() { printf '%s' "$1" | tr -d '"\\' | tr '\n\r\t' '   ' | cut -c1-500; }
+
+is_name() { printf '%s' "$1" | grep -q '^[0-9]\{8\}T[0-9]\{6\}Z$'; }
+name_epoch() { date -u -D '%Y%m%dT%H%M%SZ' -d "$1" +%s; }
+local_time() { date -d "@$1" '+%Y-%m-%d %H:%M'; }
+
+# Manifests hold one `"key": value` pair per line, so sed reads them.
+manifest_get() { sed -n "s/^  \"$2\": //p" "$1" 2>/dev/null | head -n 1 | sed 's/,$//; s/^"//; s/"$//'; }
+
+# q <conn> <db> <sql> — one value; <conn> is empty for the PG* environment.
+# shellcheck disable=SC2086
+q() { psql -X -A -t -q -v ON_ERROR_STOP=1 $1 -d "$2" -c "$3"; }
+
+# db_facts <conn> <db> — f_tables, f_migration (empty without pgmigrations), f_tenants (0 without the table).
+db_facts() {
+  f_tables=$(q "$1" "$2" "$TABLES_SQL") || return 1
+  f_migration=''
+  has=$(q "$1" "$2" "select to_regclass('public.pgmigrations') is not null") || return 1
+  if [ "$has" = t ]; then
+    f_migration=$(q "$1" "$2" "select name from public.pgmigrations order by id desc limit 1") || return 1
+  fi
+  f_tenants=0
+  has=$(q "$1" "$2" "select to_regclass('pharmacy.tenants') is not null") || return 1
+  if [ "$has" = t ]; then
+    f_tenants=$(q "$1" "$2" "select count(*) from pharmacy.tenants") || return 1
+  fi
+}
+
+copy_names() {
+  for d in "$BACKUP_ROOT"/*; do
+    n=${d##*/}
+    is_name "$n" && printf '%s\n' "$n"
+  done
+}
+
+newest_verified() {
+  newest=''
+  for n in $(copy_names); do
+    [ "$(manifest_get "$BACKUP_ROOT/$n/manifest.json" verified)" = true ] && newest=$n
+  done
+  printf '%s' "$newest"
+}
+
+verified_with_tenants() {
+  for n in $(copy_names); do
+    m="$BACKUP_ROOT/$n/manifest.json"
+    [ "$(manifest_get "$m" verified)" = true ] || continue
+    [ "$(manifest_get "$m" tenants)" -gt 0 ] 2>/dev/null && return 0
+  done
+  return 1
+}
+
+block() {
+  log "BLOCKED: $1"
+  { printf '%s\n' "$1" >"$STATE/blocked"; } 2>/dev/null || printf '%s\n' "$1" >"$TMP_BLOCKED"
+}
+
+unblock() { rm -f "$STATE/blocked" "$TMP_BLOCKED"; }
+
+# preflight — 0 ready, 1 the source database cannot be read (psql errors in /tmp/pharmacy-backup.err), 2 refused:
+# BACKUP_ROOT is not writable (B16) or the database has no networks while verified copies have them (B15).
+preflight() {
+  if ! mkdir -p "$STATE" 2>/dev/null || ! { : >"$STATE/.probe"; } 2>/dev/null; then
+    block "BACKUP_ROOT $BACKUP_ROOT is not writable by uid $(id -u); on a Linux host create BACKUP_DIR with: sudo install -d -o 70 -g 70 -m 700 <BACKUP_DIR>"
+    return 2
+  fi
+  rm -f "$STATE/.probe"
+  db_facts "" "$DB_NAME" 2>/tmp/pharmacy-backup.err || return 1
+  if [ "$f_tenants" = 0 ] && verified_with_tenants; then
+    block "the database has no networks while verified copies have them (data loss?): no copy is taken; restore the database with: npm run stack -- <env> restore <copy> --replace-database"
+    return 2
+  fi
+  unblock
+  return 0
+}
+
+scratch_stop() {
+  # Only a live postmaster of this container is stopped: after a container restart the pid file in the volume is
+  # stale and its number may belong to another process.
+  pid=$(head -n 1 "$SCRATCH/data/postmaster.pid" 2>/dev/null)
+  if [ -n "$pid" ] && [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = postgres ]; then
+    pg_ctl -D "$SCRATCH/data" -m fast -w stop >/dev/null 2>&1
+  fi
+  rm -rf "$SCRATCH/data" "$SCRATCH/initdb.log" "$SCRATCH/server.log" 2>/dev/null
+}
+
+# A throwaway instance on a unix socket only; durability is off, the data is deleted afterwards. The postmaster gets
+# no lock descriptor (9>&-): if the run is killed, an orphaned instance must not keep the copy lock.
+scratch_start() {
+  scratch_stop
+  if ! [ -w "$SCRATCH" ]; then
+    s_error="$SCRATCH is not writable by uid $(id -u)"
+    return 1
+  fi
+  if ! initdb -D "$SCRATCH/data" -U postgres --auth=trust >"$SCRATCH/initdb.log" 2>&1 9>&- ||
+    ! pg_ctl -D "$SCRATCH/data" -l "$SCRATCH/server.log" -w -t 120 -o "-c listen_addresses='' \
+-c unix_socket_directories=$SCRATCH -p $SCRATCH_PORT -c fsync=off -c full_page_writes=off \
+-c synchronous_commit=off -c max_parallel_maintenance_workers=0" start >/dev/null 2>&1 9>&-; then
+    s_error=$(tail -n 2 "$SCRATCH/initdb.log" "$SCRATCH/server.log" 2>/dev/null)
+    return 1
+  fi
+}
+
+# apply_globals <conn> <globals.sql> — the roles of the copy, without passwords. A missing role is created, an
+# existing one keeps its password; lines of the superuser role postgres are skipped. Plain SQL only: the dump is
+# wrapped in \restrict, which forbids psql meta-commands such as \gexec.
+# shellcheck disable=SC2086
+apply_globals() {
+  grep -v -E '^(CREATE|ALTER) ROLE postgres( |;)' "$2" |
+    sed -E 's/^CREATE ROLE ([a-z_][a-z0-9_]*);$/DO $$BEGIN CREATE ROLE \1; EXCEPTION WHEN duplicate_object THEN NULL; END$$;/' |
+    psql -X -q -v ON_ERROR_STOP=1 $1 -d postgres >/dev/null
+}
+
+# restore_into <conn> <db> <dump> — the procedure of a real restore (spec B9): an empty database owned by
+# pharmacy_owner, then pg_restore.
+# shellcheck disable=SC2086
+restore_into() {
+  psql -X -q -v ON_ERROR_STOP=1 $1 -d postgres -c "create database \"$2\" owner pharmacy_owner" &&
+    pg_restore $1 -j 2 --exit-on-error -d "$2" "$3"
+}
+
+# dump_facts <dump> — d_tables, d_migration of the copy itself, from its table of contents and its pgmigrations
+# data: the snapshot of the copy. A query of the live database before or after pg_dump would race with DDL (a
+# migration committed in between) and fail a sound copy or pass a broken one.
+dump_facts() {
+  toc=$(pg_restore -l "$1") || return 1
+  d_tables=$(printf '%s\n' "$toc" | grep -c -E '^[0-9]+; [0-9]+ [0-9]+ TABLE (pharmacy|public) ')
+  # pg_restore apart from awk: in a pipeline its failure would be lost and surface as a wrong "last migration".
+  migrations=$(pg_restore -a -n public -t pgmigrations -f - "$1") || return 1
+  d_migration=$(printf '%s\n' "$migrations" | awk -F '\t' '
+    /^COPY public\.pgmigrations / { data = 1; next }
+    data && /^\\\.$/ { data = 0 }
+    data && $1 + 0 > max { max = $1 + 0; name = $2 }
+    END { print name }')
+}
+
+# check_restored <conn> <db> <tables> <migration> — c_tenants, or c_error.
+check_restored() {
+  db_facts "$1" "$2" || { c_error="the restored database cannot be read"; return 1; }
+  [ "$f_tables" = "$3" ] || { c_error="tables: restored $f_tables, source $3"; return 1; }
+  [ "$f_migration" = "$4" ] || { c_error="last migration: restored '$f_migration', source '$4'"; return 1; }
+  c_tenants=$f_tenants
+}
+
+write_manifest() {
+  {
+    printf '{\n'
+    printf '  "name": "%s",\n' "$m_name"
+    printf '  "startedEpoch": %s,\n' "$m_started"
+    printf '  "startedAt": "%s",\n' "$(date -u -d "@$m_started" +%Y-%m-%dT%H:%M:%SZ)"
+    printf '  "finishedEpoch": %s,\n' "$m_finished"
+    printf '  "finishedAt": "%s",\n' "$(date -u -d "@$m_finished" +%Y-%m-%dT%H:%M:%SZ)"
+    printf '  "imageTag": "%s",\n' "$(sanitize "${IMAGE_TAG:-unknown}")"
+    printf '  "serverVersion": "%s",\n' "$(sanitize "$m_server")"
+    printf '  "dumpBytes": %s,\n' "${m_bytes:-0}"
+    printf '  "dumpSeconds": %s,\n' "${m_dump_s:-0}"
+    printf '  "restoreSeconds": %s,\n' "${m_restore_s:-0}"
+    printf '  "tables": %s,\n' "${m_tables:-0}"
+    printf '  "lastMigration": "%s",\n' "$(sanitize "$m_migration")"
+    printf '  "tenants": %s,\n' "${m_tenants:-0}"
+    printf '  "verified": %s,\n' "$m_verified"
+    printf '  "error": "%s"\n' "$(sanitize "$m_error")"
+    printf '}\n'
+  } >"$1"
+}
+
+retention() {
+  now=$(date +%s)
+  keep=$(newest_verified)
+  limit=$((now - RETENTION_DAYS * 86400))
+  for d in "$BACKUP_ROOT"/*; do
+    n=${d##*/}
+    case "$n" in
+    *.failed)
+      is_name "${n%.failed}" || continue
+      [ "$(name_epoch "${n%.failed}")" -lt $((now - 86400)) ] || continue
+      ;;
+    *)
+      is_name "$n" || continue
+      [ "$n" != "$keep" ] || continue
+      [ "$(manifest_get "$d/manifest.json" verified)" = true ] || continue
+      [ "$(name_epoch "$n")" -lt "$limit" ] || continue
+      ;;
+    esac
+    rm -rf "$d" && log "removed $n (older than the retention period)"
+  done
+}
+
+# fail <reason> — the copy in progress becomes <name>.failed with the reason and the tail of its log. Its dump is
+# deleted: a failure that repeats hourly would otherwise fill BACKUP_DIR, and retention runs only after a success.
+fail() {
+  m_error="$1: $(tail -n 3 "$part/log.txt" 2>/dev/null)"
+  m_finished=$(date +%s)
+  rm -f "$part/pharmacy.dump"
+  write_manifest "$part/manifest.json"
+  mv "$part" "$BACKUP_ROOT/$m_name.failed"
+  log "copy $m_name FAILED: $(sanitize "$m_error")"
+  exit 1
+}
+
+cmd_run() {
+  check_retention
+  exec 9>"$LOCK"
+  flock -n 9 || { log "a copy is already running"; exit 3; }
+  m_started=$(date +%s)
+  m_name=$(date -u -d "@$m_started" +%Y%m%dT%H%M%SZ)
+  m_server='' m_migration='' m_error='' m_verified=false
+  m_bytes='' m_dump_s='' m_restore_s='' m_tables='' m_tenants=''
+  preflight
+  rc=$?
+  [ "$rc" -eq 2 ] && exit 2
+  # Under the lock a .partial directory is always the remainder of an interrupted run.
+  rm -rf "$BACKUP_ROOT"/*.partial
+  part="$BACKUP_ROOT/$m_name.partial"
+  mkdir "$part" || die "cannot create $part"
+  if [ "$rc" -ne 0 ]; then
+    cat /tmp/pharmacy-backup.err >>"$part/log.txt" 2>/dev/null
+    fail "the source database cannot be read"
+  fi
+  trap scratch_stop EXIT
+  m_server=$(q "" "$DB_NAME" "show server_version" 2>>"$part/log.txt") || fail "the source database cannot be read"
+  log "copy $m_name: started ($f_tenants networks)"
+
+  pg_dumpall --globals-only --no-role-passwords -f "$part/globals.sql" 2>>"$part/log.txt" || fail "pg_dumpall failed"
+  pg_dump -Fc --lock-wait-timeout=60s -f "$part/pharmacy.dump" 2>>"$part/log.txt" || fail "pg_dump failed"
+  dump_facts "$part/pharmacy.dump" 2>>"$part/log.txt" || fail "the copy cannot be read"
+  m_tables=$d_tables m_migration=$d_migration
+  m_bytes=$(stat -c %s "$part/pharmacy.dump")
+  m_dump_s=$(($(date +%s) - m_started))
+
+  t0=$(date +%s)
+  scratch_start || fail "the scratch instance did not start: $s_error"
+  apply_globals "$SCRATCH_CONN" "$part/globals.sql" 2>>"$part/log.txt" || fail "the roles of the copy cannot be applied"
+  restore_into "$SCRATCH_CONN" "$DB_NAME" "$part/pharmacy.dump" 2>>"$part/log.txt" || fail "pg_restore failed"
+  check_restored "$SCRATCH_CONN" "$DB_NAME" "$m_tables" "$m_migration" || fail "$c_error"
+  scratch_stop
+  m_restore_s=$(($(date +%s) - t0))
+  m_tenants=$c_tenants
+  m_verified=true
+  m_finished=$(date +%s)
+  write_manifest "$part/manifest.json"
+  rm -f "$part/log.txt"
+  mv "$part" "$BACKUP_ROOT/$m_name" || die "cannot rename $part"
+  log "copy $m_name: verified — $((m_bytes / 1048576)) MB, dump ${m_dump_s} s, restore ${m_restore_s} s, $m_tenants networks"
+  retention
+  exit 0
+}
+
+cmd_verify() {
+  name=${1:-}
+  dir="$BACKUP_ROOT/$name"
+  m="$dir/manifest.json"
+  { is_name "$name" && [ -f "$m" ]; } || die "no copy $name in $BACKUP_ROOT"
+  exec 9>"$LOCK"
+  flock -n 9 || { log "a copy is already running"; exit 3; }
+  trap scratch_stop EXIT
+  t0=$(date +%s)
+  scratch_start || die "the scratch instance did not start: $s_error"
+  apply_globals "$SCRATCH_CONN" "$dir/globals.sql" || die "verify $name: the roles of the copy cannot be applied"
+  restore_into "$SCRATCH_CONN" "$DB_NAME" "$dir/pharmacy.dump" || die "verify $name: pg_restore failed"
+  check_restored "$SCRATCH_CONN" "$DB_NAME" "$(manifest_get "$m" tables)" "$(manifest_get "$m" lastMigration)" ||
+    die "verify $name: $c_error"
+  log "verify $name: ok — restore $(($(date +%s) - t0)) s, $c_tenants networks"
+}
+
+cmd_status() {
+  now=$(date +%s)
+  printf 'times: %s\n' "${TZ:-UTC}"
+  printf '%-18s %-16s %-10s %8s %8s %8s  %-40s %s\n' copy taken state size dump restore "last migration" networks
+  for d in "$BACKUP_ROOT"/*; do
+    n=${d##*/}
+    base=${n%.failed}
+    base=${base%.partial}
+    is_name "$base" || continue
+    m="$d/manifest.json"
+    case "$n" in
+    *.partial) state=partial ;;
+    *.failed) state=FAILED ;;
+    *) if [ "$(manifest_get "$m" verified)" = true ]; then state=verified; else state=unverified; fi ;;
+    esac
+    bytes=$(manifest_get "$m" dumpBytes)
+    printf '%-18s %-16s %-10s %5s MB %6ss %6ss  %-40s %s\n' "$base" "$(local_time "$(name_epoch "$base")")" "$state" \
+      "$(( ${bytes:-0} / 1048576 ))" "$(manifest_get "$m" dumpSeconds)" "$(manifest_get "$m" restoreSeconds)" \
+      "$(manifest_get "$m" lastMigration)" "$(manifest_get "$m" tenants)"
+    [ "$state" = FAILED ] && printf '    error: %s\n' "$(manifest_get "$m" error)"
+  done
+  newest=$(newest_verified)
+  if [ -n "$newest" ]; then
+    age=$((now - $(manifest_get "$BACKUP_ROOT/$newest/manifest.json" finishedEpoch)))
+    printf 'newest verified copy: %s, %d h %d min ago\n' "$newest" $((age / 3600)) $((age % 3600 / 60))
+  else
+    printf 'no verified copies\n'
+  fi
+  [ -f "$STATE/next" ] && printf 'next copy: %s\n' "$(local_time "$(cat "$STATE/next")")"
+  [ -f "$STATE/blocked" ] && printf 'BLOCKED: %s\n' "$(cat "$STATE/blocked")"
+  # The backup service could not write its state here (BACKUP_DIR not writable keeps the reason in its container).
+  [ -d "$STATE" ] ||
+    printf 'no state of the backup service in %s — if it is unhealthy, see: npm run stack -- <env> logs backup\n' \
+      "$BACKUP_ROOT"
+  return 0
+}
+
+cmd_health() {
+  if [ -f "$STATE/blocked" ] || [ -f "$TMP_BLOCKED" ]; then exit 1; fi
+  now=$(date +%s)
+  newest=$(newest_verified)
+  if [ -n "$newest" ]; then
+    finished=$(manifest_get "$BACKUP_ROOT/$newest/manifest.json" finishedEpoch)
+    [ $((now - ${finished:-0})) -lt "$HEALTHY_AGE" ] && exit 0
+  fi
+  started=$(cat "$STARTED" 2>/dev/null || echo 0)
+  [ $((now - started)) -lt "$GRACE" ] && exit 0
+  exit 1
+}
+
+next_slot() {
+  slot=$(date -d "$BACKUP_TIME" +%s)
+  [ "$slot" -gt "$(date +%s)" ] || slot=$((slot + 86400)) # Asia/Dushanbe has no daylight saving time
+  printf '%s' "$slot"
+}
+
+cmd_daemon() {
+  case "$BACKUP_TIME" in
+  [01][0-9]:[0-5][0-9] | 2[0-3]:[0-5][0-9]) ;;
+  *) die "BACKUP_TIME must be HH:MM, got '$BACKUP_TIME'" ;;
+  esac
+  check_retention
+  date +%s >"$STARTED"
+  log "daemon: a copy every day at $BACKUP_TIME (${TZ:-UTC}), verified copies kept $RETENTION_DAYS days, in $BACKUP_ROOT"
+  now=$(date +%s)
+  preflight
+  rc=$?
+  newest=$(newest_verified)
+  # next_slot is always ahead, so one day earlier is the last BACKUP_TIME that has passed. A copy interrupted by a
+  # restart (a deploy recreates postgres and backup) or a night missed while the container was down is made at once.
+  last_slot=$(($(next_slot) - 86400))
+  if [ "$rc" -eq 2 ]; then
+    next=$((now + RETRY))
+  elif [ -z "$newest" ] || [ "$(name_epoch "$newest")" -lt "$last_slot" ]; then
+    next=$now
+  else
+    next=$(next_slot)
+  fi
+  while :; do
+    { printf '%s\n' "$next" >"$STATE/next"; } 2>/dev/null
+    [ "$next" -gt "$(date +%s)" ] && log "next copy at $(local_time "$next")"
+    while [ "$(date +%s)" -lt "$next" ]; do
+      left=$((next - $(date +%s)))
+      sleep $((left < 300 ? left : 300))
+    done
+    "$0" run
+    rc=$?
+    now=$(date +%s)
+    case "$rc" in
+    0) next=$(next_slot) ;;
+    1)
+      slot=$(next_slot)
+      next=$((now + RETRY < slot ? now + RETRY : slot))
+      ;;
+    *) next=$((now + RETRY)) ;;
+    esac
+  done
+}
+
+cmd_restore() {
+  name=${1:-}
+  check=${2:-}
+  dir="$BACKUP_ROOT/$name"
+  m="$dir/manifest.json"
+  db=${POSTGRES_DB:-pharmacy}
+  target="${db}_restore"
+  old="${db}_before_$(printf '%s' "$name" | tr 'A-Z' 'a-z')"
+  conn="-h /var/run/postgresql -U ${POSTGRES_USER:-postgres}"
+  unset PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
+  { is_name "$name" && [ -f "$m" ]; } || die "no copy $name in $BACKUP_ROOT"
+  [ "$(manifest_get "$m" verified)" = true ] || die "copy $name is not verified"
+  { [ -f "$dir/pharmacy.dump" ] && [ -f "$dir/globals.sql" ]; } || die "copy $name is incomplete"
+  taken=$(q "$conn" postgres "select count(*) from pg_database where datname = '$old'") ||
+    die "cannot query the server as ${POSTGRES_USER:-postgres} over the local socket"
+  [ "$taken" = 0 ] ||
+    die "database $old already exists: it is the database replaced when copy $name was restored before; check that it is not needed, then drop it"
+  printf 'copy %s, taken %s (%s), %s MB, last migration %s, %s networks\n' "$name" \
+    "$(local_time "$(name_epoch "$name")")" "${TZ:-UTC}" "$(($(manifest_get "$m" dumpBytes) / 1048576))" \
+    "$(manifest_get "$m" lastMigration)" "$(manifest_get "$m" tenants)"
+  printf 'database %s is restored as %s, then %s is renamed to %s and %s to %s\n' "$db" "$target" "$db" "$old" \
+    "$target" "$db"
+  [ "$check" = --check ] && exit 0
+
+  log "restore $name: into $target"
+  q "$conn" postgres "drop database if exists \"$target\"" >/dev/null || die "cannot drop $target"
+  apply_globals "$conn" "$dir/globals.sql" || die "restore $name: the roles of the copy cannot be applied"
+  if ! restore_into "$conn" "$target" "$dir/pharmacy.dump" ||
+    ! check_restored "$conn" "$target" "$(manifest_get "$m" tables)" "$(manifest_get "$m" lastMigration)"; then
+    q "$conn" postgres "drop database if exists \"$target\"" >/dev/null
+    die "restore $name failed${c_error:+: $c_error}; database $db is untouched"
+  fi
+  present=$(q "$conn" postgres "select count(*) from pg_database where datname = '$db'") ||
+    die "cannot query the server; $target holds the restored copy, database $db is untouched"
+  if [ "$present" = 1 ]; then
+    q "$conn" postgres "alter database \"$db\" allow_connections false" >/dev/null || die "cannot close $db"
+    tries=0
+    until err=$(q "$conn" postgres "alter database \"$db\" rename to \"$old\"" 2>&1 >/dev/null); do
+      tries=$((tries + 1))
+      if [ "$tries" -gt 10 ]; then
+        # The working database stays as it was and takes connections again, so the stack can start.
+        q "$conn" postgres "alter database \"$db\" allow_connections true" >/dev/null
+        die "cannot rename $db to $old: $(sanitize "$err"); $db is open again and untouched, $target holds the restored copy"
+      fi
+      q "$conn" postgres "select count(pg_terminate_backend(pid)) from pg_stat_activity where datname = '$db'" >/dev/null
+      sleep 1
+    done
+  fi
+  if ! err=$(q "$conn" postgres "alter database \"$target\" rename to \"$db\"" 2>&1 >/dev/null); then
+    if [ "$present" = 1 ]; then
+      q "$conn" postgres "alter database \"$old\" rename to \"$db\"" >/dev/null &&
+        q "$conn" postgres "alter database \"$db\" allow_connections true" >/dev/null
+    fi
+    die "cannot rename $target to $db: $(sanitize "$err"); the previous database is back as $db, $target holds the restored copy"
+  fi
+  log "restore $name: done; the previous database is kept as $old (no connections allowed)"
+}
+
+case "${1:-}" in
+daemon) cmd_daemon ;;
+run) cmd_run ;;
+verify) cmd_verify "${2:-}" ;;
+status) cmd_status ;;
+health) cmd_health ;;
+restore) cmd_restore "${2:-}" "${3:-}" ;;
+*) die "usage: pharmacy-backup daemon | run | verify <copy> | status | health | restore <copy> [--check]" ;;
+esac

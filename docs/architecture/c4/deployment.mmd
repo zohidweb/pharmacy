@@ -15,8 +15,9 @@ flowchart TB
     subgraph vmDb["VM БД (приватная сеть)"]
       pg[("PostgreSQL")]
       rd[("Redis")]
+      bk["backup: pg_dump +<br/>проверка восстановления"]
     end
-    backup[("Внешнее хранилище бэкапов<br/>30 дней, RPO 24 ч")]
+    backups[("BACKUP_DIR: отдельный диск / сетевой том<br/>30 дней, RPO 24 ч; вне хоста — с хостингом")]
   end
 
   subgraph pointPc["ПК офлайн-точки (Docker, волна 3)"]
@@ -31,6 +32,7 @@ flowchart TB
   proxy --> api
   api --> pg
   api --> rd
-  pg -. ежедневно .-> backup
+  bk -. ежедневно .-> pg
+  bk --> backups
   lweb --> lapi --> lpg
   lapi -- "HTTPS + лицензионный ключ<br/>/api/v1/sync/* (по расписанию / вручную)" --> proxy

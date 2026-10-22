@@ -41,6 +41,11 @@ const BACKUP_ENVS = ['test', 'prod'];
 const BACKUP_VARIABLES = ['PHARMACY_BACKUP_PASSWORD', 'BACKUP_DIR'];
 // A copy is named by its UTC start time; the strict pattern also keeps the argument safe for cmd.exe (shell: true).
 const COPY_NAME = /^\d{8}T\d{6}Z$/;
+// Commands that build or start the stack refuse the placeholders of the example in a test or prod env file (security
+// review 2026-10-22, S2): a hand-copied example would run PostgreSQL, the roles and Redis with the password `change-me`.
+const STARTING_COMMANDS = ['build', 'up', 'restore'];
+const PLACEHOLDER = /change-me|generate-key/;
+const MIN_PASSWORD_LENGTH = 16;
 
 function fail(message) {
   console.error(`\n✖ ${message}\n`);
@@ -60,13 +65,36 @@ function runStatus(cmd, args) {
   return spawnSync(cmd, args, { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' }).status;
 }
 
-// A variable of the shell or the env file (compose gives the shell precedence), never printed.
+// The variables whose example value is a placeholder: missing from the env file, or still holding a placeholder, or a
+// password of the example (`change-me`) shorter than MIN_PASSWORD_LENGTH. Names only, values are never printed.
+function weakSecrets(env) {
+  const result = { missing: [], weak: [] };
+  for (const line of readFileSync(join(root, env.example), 'utf8').split(/\r?\n/)) {
+    const match = /^([A-Z0-9_]+)=(.*)$/.exec(line);
+    if (match === null || !PLACEHOLDER.test(match[2])) continue;
+    const [, name, example] = match;
+    const value = envValue(env, name, '');
+    if (value === '') result.missing.push(name);
+    else if (PLACEHOLDER.test(value) || (example.includes('change-me') && value.length < MIN_PASSWORD_LENGTH)) {
+      result.weak.push(name);
+    }
+  }
+  return result;
+}
+
+// A variable of the shell or the env file (compose gives the shell precedence), never printed. The file is read as
+// compose reads it: the last definition wins, `export ` and spaces around `=` are allowed, a quoted value loses its
+// quotes and an unquoted one its ` # comment`.
 function envValue(env, name, fallback) {
   if (process.env[name]) return process.env[name];
-  const line = readFileSync(join(root, env.envFile), 'utf8')
+  const pattern = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*(.*)$`);
+  const raw = readFileSync(join(root, env.envFile), 'utf8')
     .split(/\r?\n/)
-    .find((l) => l.startsWith(`${name}=`));
-  return line ? line.slice(name.length + 1).trim() : fallback;
+    .map((line) => pattern.exec(line)?.[1])
+    .findLast((value) => value !== undefined);
+  if (raw === undefined) return fallback;
+  const quoted = /^(["'])(.*)\1\s*(?:#.*)?$/.exec(raw);
+  return quoted ? quoted[2] : raw.replace(/\s+#.*$/, '').trim();
 }
 
 function capture(cmd, args) {
@@ -237,6 +265,23 @@ if (BACKUP_ENVS.includes(envName)) {
   if (missing.length > 0) {
     fail(`${env.envFile} lacks ${missing.join(', ')} (backups, ADR-0019). Run: npm run stack -- ${envName} init, then set BACKUP_DIR.`);
   }
+}
+if (BACKUP_ENVS.includes(envName) && STARTING_COMMANDS.includes(command)) {
+  const { missing, weak } = weakSecrets(env);
+  const problems = [];
+  if (missing.length > 0) {
+    problems.push(`${env.envFile} lacks ${missing.join(', ')}: \`npm run stack -- ${envName} init\` appends them with random values.`);
+  }
+  if (weak.length > 0) {
+    problems.push(
+      `${env.envFile}: ${weak.join(', ')} still hold a placeholder of ${env.example} or a password shorter than ` +
+        `${MIN_PASSWORD_LENGTH} characters. Replace only these with random values (passwords — ${MIN_PASSWORD_LENGTH}+ ` +
+        `characters, keys — 32 bytes base64url). On a database that has data a new role password also needs ` +
+        `ALTER ROLE … PASSWORD by the superuser (test may recreate its volume), and a new pepper voids every password ` +
+        `and PIN: a new env file from \`init\` is for a new stack only.`,
+    );
+  }
+  if (problems.length > 0) fail(problems.join('\n  '));
 }
 
 process.env.IMAGE_TAG = imageTag(envName);

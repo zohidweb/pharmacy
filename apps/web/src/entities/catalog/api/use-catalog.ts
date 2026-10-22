@@ -10,7 +10,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useLocale } from 'use-intl';
 import { ApiError, apiRequest } from '@/shared/api';
-import type { TerminalRuntime } from '@/shared/lib/offline-queue';
+import {
+  storeBufferLimits,
+  type TerminalRuntime,
+} from '@/shared/lib/offline-queue';
 import { buildCatalogIndex, mergeSnapshot } from '../model/catalog-index';
 
 const SNAPSHOT_KEY = 'snapshot';
@@ -35,7 +38,11 @@ export function storeSnapshot(
       batches: product.batches.map(({ costMinor: _cost, ...batch }) => batch),
     })),
   };
-  return runtime.db.put('catalog', stored, SNAPSHOT_KEY);
+  // the limits of the buffer of the network stay for an outage (spec 2026-10-21-pos-offline-limits, P6)
+  return Promise.all([
+    runtime.db.put('catalog', stored, SNAPSHOT_KEY),
+    storeBufferLimits(runtime.db, snapshot.settings?.bufferLimits),
+  ]);
 }
 
 export interface CatalogData {

@@ -13,6 +13,10 @@ import {
 } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import type { StoreScopeOptions } from '../../common/guards/decorators';
+import {
+  bufferReplayMode,
+  isBufferReplay,
+} from '../../common/guards/buffer-replay';
 import { resolveRouteAccess } from '../../common/guards/route-access';
 import { isOperatorPath } from '../../common/http/contour';
 import { isUuid, TenantDatabase } from '../../core/database';
@@ -105,8 +109,16 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    // AuthGuard runs first; this is a second line, and a guest has no tenant to audit in.
+    // A buffered POS operation sent under the bound terminal: the session's right does not apply, the POS checks
+    // the right of the author of the operation (spec 2026-10-21-pos-offline-limits, P9; K7).
     const principal = getPrincipal();
+    if (
+      isBufferReplay(this.reflector, context) &&
+      bufferReplayMode(principal, req.body) === 'terminal'
+    ) {
+      return true;
+    }
+    // AuthGuard runs first; this is a second line, and a guest has no tenant to audit in.
     if (!principal) throw new ProblemException(401, 'unauthenticated');
 
     if (access.kind === 'authenticated') return true;

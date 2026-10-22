@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { countries } from '@pharmacy/shared-domain';
-import { requirePrincipal } from '../../common/context/request-context';
+import {
+  getPrincipal,
+  requirePrincipal,
+} from '../../common/context/request-context';
 import type { TenantTransaction } from '../../core/database';
 import {
   CatalogRepository,
@@ -256,7 +259,9 @@ export class ProductsReader {
     tenantId: string,
     ids: readonly string[] | null,
   ): Promise<PosCatalogProduct[]> {
-    const { locale } = requirePrincipal();
+    // a sale sent under the bound terminal has no principal (spec 2026-10-21-pos-offline-limits, P9): its check
+    // does not read the names, so they come in Russian
+    const locale = getPrincipal()?.locale ?? 'ru';
     const language = await this.repository.networkLanguage(trx, tenantId);
     const rows = await this.repository.posProducts(trx, tenantId, ids);
     return rows.map((row) => {

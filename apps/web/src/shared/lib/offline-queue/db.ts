@@ -29,6 +29,11 @@ export interface OutboxRecord<Kind extends string = string, Payload = unknown> {
   /** Epoch ms before which the operation is not resent (backoff). */
   nextAttemptAt: number;
   lastError: OutboxError | null;
+  /**
+   * A sale with a ПКУ line: counted against the ПКУ limit of the buffer (spec 2026-10-21-pos-offline-limits, P7).
+   * Optional: records written before it have none, and a new field needs no new version of the database.
+   */
+  controlled?: boolean;
 }
 
 interface PosDbSchema extends DBSchema {

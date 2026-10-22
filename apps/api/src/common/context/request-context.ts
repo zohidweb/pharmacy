@@ -27,6 +27,20 @@ export interface OperatorPrincipal {
   readonly authenticatedAt: string;
 }
 
+// The bound terminal a buffered POS operation is sent under, without a session of its author (spec
+// 2026-10-21-pos-offline-limits, P9; ADR-0008, amendment 2026-10-21): set only by the POS from a resolved
+// device-cookie, with no principal and the tenant of the terminal.
+export interface TerminalContext {
+  readonly tenantId: string;
+  readonly storeId: string;
+  readonly terminalId: string;
+  /**
+   * The employee of the session the request had (a PIN session of another cashier, a password session), null
+   * without one: only for the mark of an online operation of another employee (E3, M10).
+   */
+  readonly sessionEmployeeId: string | null;
+}
+
 // Per-request context, readable anywhere in the request without passing parameters. The data
 // layer reads the tenant from here (requireTenantId -> set_config('app.tenant_id', ...)).
 // tenantId is set only by server-side guards (session, license key), never from client input;
@@ -36,6 +50,7 @@ export interface RequestContext {
   readonly correlationId: string;
   readonly tenantId?: string;
   readonly principal: EmployeePrincipal | OperatorPrincipal | null;
+  readonly terminal?: TerminalContext;
 }
 
 // Module-private: only runWithContext enters a context, so every stored context is a frozen copy
@@ -79,6 +94,11 @@ export function requirePrincipal(): EmployeePrincipal {
   return principal;
 }
 
+/** The terminal a buffered POS operation is sent under (P9); null for every other request. */
+export function getTerminal(): TerminalContext | null {
+  return getRequestContext()?.terminal ?? null;
+}
+
 /** The operator of the request; null for a guest and for an employee. */
 export function getOperator(): OperatorPrincipal | null {
   const principal = getRequestContext()?.principal ?? null;
@@ -114,7 +134,14 @@ function deepFreeze<T>(value: T): T {
  * (queue workers, cron) and tests. The given object is neither frozen nor retained.
  */
 export function runWithContext<T>(context: RequestContext, fn: () => T): T {
-  const { tenantId, principal } = context;
+  const { tenantId, principal, terminal } = context;
+  if (
+    terminal !== undefined &&
+    (principal !== null || tenantId !== terminal.tenantId)
+  ) {
+    // A programming error: the terminal context runs without a principal, in the tenant of the terminal.
+    throw new Error('A terminal context has no principal and its own tenant');
+  }
   if (principal?.kind === 'operator' && tenantId !== undefined) {
     // An operator has no tenant: tenant data is never reached through an operator context.
     throw new Error('An operator context has no tenant');

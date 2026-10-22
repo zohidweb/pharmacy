@@ -5,6 +5,7 @@ import type {
   UpdateNetworkSettingsRequest,
 } from '@pharmacy/shared-dto';
 import { requirePrincipal } from '../../common/context/request-context';
+import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { TenantDatabase } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -33,6 +34,11 @@ function toSettings(row: NetworkSettingsRow): NetworkSettings {
     minPinLength: row.minPinLength,
     expiryNoticeDays: row.expiryNoticeDays,
     warnBelowCost: row.warnBelowCost,
+    prescriptionRetentionDays: row.prescriptionRetentionDays,
+    posBufferMaxHours: row.posBufferMaxHours,
+    posBufferMaxOperations: row.posBufferMaxOperations,
+    posControlledMaxHours: row.posControlledMaxHours,
+    posControlledMaxOperations: row.posControlledMaxOperations,
     notifications: Object.fromEntries(
       NOTIFICATION_KINDS.map((kind) => [kind, !disabled.has(kind)]),
     ) as Record<NotificationKind, boolean>,
@@ -47,10 +53,17 @@ function editable(settings: NetworkSettings): UpdateNetworkSettingsRequest {
     expiryNoticeDays: settings.expiryNoticeDays,
     warnBelowCost: settings.warnBelowCost,
     notifications: settings.notifications,
+    prescriptionRetentionDays: settings.prescriptionRetentionDays,
+    posBufferMaxHours: settings.posBufferMaxHours,
+    posBufferMaxOperations: settings.posBufferMaxOperations,
+    posControlledMaxHours: settings.posControlledMaxHours,
+    posControlledMaxOperations: settings.posControlledMaxOperations,
   };
 }
 
-// The network settings of the owner cabinet (spec 2026-10-14-owner-cabinet, E14, E15). A new
+// The network settings of the owner cabinet (spec 2026-10-14-owner-cabinet, E14, E15; the POS buffer and the
+// prescription retention — spec 2026-10-21-pos-offline-limits, P2, P6: the POS reads the limits with the catalog
+// snapshot, the hourly purge reads the retention). A new
 // timeout applies to new sessions, a new PIN length to the next PIN set; the notifications read
 // the change at their next refresh (tenant_settings.updated_at, E11).
 @Injectable()
@@ -70,6 +83,20 @@ export class SettingsService {
 
   update(body: UpdateNetworkSettingsRequest): Promise<NetworkSettings> {
     const { tenantId, employeeId } = requirePrincipal();
+    // the ПКУ limits of the buffer are not above the general ones (P6); the bounds are the DTO's
+    const above = [
+      body.posControlledMaxHours > body.posBufferMaxHours &&
+        'posControlledMaxHours',
+      body.posControlledMaxOperations > body.posBufferMaxOperations &&
+        'posControlledMaxOperations',
+    ].filter((field): field is string => field !== false);
+    if (above.length > 0) {
+      throw new FieldProblemException(
+        400,
+        'validation_failed',
+        above.map((field) => ({ field, code: 'max' })),
+      );
+    }
     const next = {
       posSessionTimeoutMinutes: body.posSessionTimeoutMinutes,
       minPinLength: body.minPinLength,
@@ -78,6 +105,11 @@ export class SettingsService {
       disabledNotifications: NOTIFICATION_KINDS.filter(
         (kind) => !body.notifications[kind],
       ),
+      prescriptionRetentionDays: body.prescriptionRetentionDays,
+      posBufferMaxHours: body.posBufferMaxHours,
+      posBufferMaxOperations: body.posBufferMaxOperations,
+      posControlledMaxHours: body.posControlledMaxHours,
+      posControlledMaxOperations: body.posControlledMaxOperations,
     };
     return this.db.tenantTransaction(async (trx) => {
       const before = toSettings(await this.repository.read(trx, tenantId));

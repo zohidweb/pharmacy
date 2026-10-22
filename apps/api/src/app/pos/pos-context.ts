@@ -4,13 +4,19 @@ import { hasPermissions, type Permission } from '@pharmacy/shared-domain';
 import type { PosOperationContext } from '@pharmacy/shared-dto';
 import {
   getRequestContext,
+  getTerminal,
   requirePrincipal,
 } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
-import type { TenantTransaction } from '../../core/database';
+import { TenantDatabase, type TenantTransaction } from '../../core/database';
+import { PinSignIns } from '../audit/pin-sign-ins';
 import { PrincipalLoader } from '../auth/principal-loader';
 import { PosRepository, type PosStore } from './pos.repository';
+import { ShiftsRepository } from './shifts.repository';
+import { AUTHOR_SIGN_IN_TOLERANCE_MS, heldBy } from './terminal-holder';
+
+const HOUR_MS = 3_600_000;
 
 /** The PIN session of a bound terminal: the only place the POS works (K6). */
 export interface TerminalSession {
@@ -18,6 +24,16 @@ export interface TerminalSession {
   storeId: string;
   terminalId: string;
   employeeId: string;
+}
+
+/**
+ * Who sends a buffered operation: the PIN session of the terminal, or the bound terminal itself (spec
+ * 2026-10-21-pos-offline-limits, P9) — then `employeeId` is the employee of the session the request had, null
+ * without one.
+ */
+export interface BufferSession extends Omit<TerminalSession, 'employeeId'> {
+  employeeId: string | null;
+  via: 'session' | 'terminal';
 }
 
 /** The author of an operation as of now (K7): a mark instead of a refusal. */
@@ -29,13 +45,45 @@ export interface OperationAuthor {
   permissions: readonly Permission[];
 }
 
-/** A buffered operation of the POS, checked against the session (spec 4.2). */
-export interface PosOperation extends TerminalSession {
+/** A buffered operation of the POS, checked against the session or the terminal (spec 4.2; P9). */
+export interface PosOperation extends BufferSession {
   author: OperationAuthor;
   /** The moment of the PC (untrusted): the caller clamps it (E4). */
   occurredAt: Date;
   receivedAt: Date;
   correlationId: string;
+}
+
+/**
+ * The audit of an operation sent under the terminal (spec 2026-10-21-pos-offline-limits, P11): its author is the
+ * employee of the row (there is no principal), and the details say `via: 'terminal'`.
+ */
+export const terminalAuthor = (
+  op: PosOperation,
+): { employeeId?: string; terminalId?: string } =>
+  op.via === 'terminal'
+    ? { employeeId: op.author.id, terminalId: op.terminalId }
+    : {};
+export const terminalVia = (op: PosOperation): { via?: 'terminal' } =>
+  op.via === 'terminal' ? { via: 'terminal' } : {};
+
+/** The oldest moment of an operation (E4). */
+const HORIZON_MS = 30 * 24 * HOUR_MS;
+
+/**
+ * The moment of an operation (E4): the corrected PC clock, but not after the server got it, not before `floor` and not
+ * more than 30 days back.
+ */
+export function boundedMoment(
+  occurredAt: Date,
+  receivedAt: Date,
+  floor: Date | null,
+): Date {
+  const at = Math.max(
+    Math.min(occurredAt.getTime(), receivedAt.getTime()),
+    receivedAt.getTime() - HORIZON_MS,
+  );
+  return new Date(floor === null ? at : Math.max(at, floor.getTime()));
 }
 
 /** An operation delivered within this of its moment was made online (`origin`, M10). */
@@ -48,6 +96,9 @@ export class PosContext {
   constructor(
     private readonly repository: PosRepository,
     private readonly principals: PrincipalLoader,
+    private readonly db: TenantDatabase,
+    private readonly signIns: PinSignIns,
+    private readonly shifts: ShiftsRepository,
   ) {}
 
   /** The PIN session of a bound terminal, else 403 `terminal_required`. */
@@ -68,6 +119,21 @@ export class PosContext {
     };
   }
 
+  /** The terminal a buffered operation is sent under (BufferReplayInterceptor), else the PIN session. */
+  private bufferSession(): BufferSession {
+    const terminal = getTerminal();
+    if (terminal) {
+      return {
+        tenantId: terminal.tenantId,
+        storeId: terminal.storeId,
+        terminalId: terminal.terminalId,
+        employeeId: terminal.sessionEmployeeId,
+        via: 'terminal',
+      };
+    }
+    return { ...this.terminalSession(), via: 'session' };
+  }
+
   /**
    * An operation of the buffer: of the terminal and store of the session (409 `wrong_terminal` —
    * a quarantine, not a pause of the buffer), the author an employee of the network (422
@@ -77,8 +143,10 @@ export class PosContext {
     body: PosOperationContext,
     right: Permission,
     sentAt?: string,
+    /** The shift of a receipt or a cash operation: the P10 moment is not before its opening (E4). */
+    shiftId?: string,
   ): Promise<PosOperation> {
-    const session = this.terminalSession();
+    const session = this.bufferSession();
     if (
       body.storeId.toLowerCase() !== session.storeId ||
       (body.terminalId ?? '').toLowerCase() !== session.terminalId
@@ -105,7 +173,18 @@ export class PosContext {
       body.employeeId.toLowerCase(),
       right,
     );
-    // an online operation of another employee than the one signed in is marked too (M10)
+    // under the terminal the author must have held it at the moment of the operation (P10)
+    if (session.via === 'terminal') {
+      await this.requireHolder(
+        session,
+        author.id,
+        occurredAt,
+        receivedAt,
+        shiftId,
+      );
+    }
+    // an online operation of another employee than the one signed in is marked too (M10); under the terminal with no
+    // session nobody signed in, so a live operation is always marked
     if (
       author.id !== session.employeeId &&
       receivedAt.getTime() - occurredAt.getTime() < ONLINE_WITHIN_MS
@@ -155,12 +234,59 @@ export class PosContext {
     if (!allowed) throw new ProblemException(403, 'store_not_in_scope');
   }
 
+  /**
+   * The PIN sign-ins of the terminal no older than the buffer limit of the network before the moment: the author
+   * held the terminal at `moment ± 5 min`, else 422 `author_session_missing` — the buffer keeps it in quarantine. The
+   * moment is the one of E4 (not after the receipt, not older than 30 days, not before the opening of the shift of
+   * the operation): a moment the client states freely would let it pick any past holder of the terminal.
+   */
+  private async requireHolder(
+    session: BufferSession,
+    authorId: string,
+    occurredAt: Date,
+    receivedAt: Date,
+    shiftId: string | undefined,
+  ): Promise<void> {
+    const held = await this.db.tenantTransaction(async (trx) => {
+      const { bufferLimits } = await this.repository.settings(
+        trx,
+        session.tenantId,
+      );
+      const shift = shiftId
+        ? await this.shifts.findShift(trx, session.tenantId, shiftId)
+        : null;
+      const moment = boundedMoment(
+        occurredAt,
+        receivedAt,
+        shift && shift.terminalId === session.terminalId
+          ? shift.openedAt
+          : null,
+      );
+      const signIns = await this.signIns.between(
+        trx,
+        session.tenantId,
+        session.storeId,
+        session.terminalId,
+        new Date(moment.getTime() - bufferLimits.maxHours * HOUR_MS),
+        new Date(moment.getTime() + AUTHOR_SIGN_IN_TOLERANCE_MS),
+      );
+      return heldBy(signIns, authorId, moment, AUTHOR_SIGN_IN_TOLERANCE_MS);
+    });
+    if (!held) throw new ProblemException(422, 'author_session_missing');
+  }
+
   private async author(
-    session: TerminalSession,
+    session: BufferSession,
     employeeId: string,
     right: Permission,
   ): Promise<OperationAuthor> {
-    if (employeeId === session.employeeId) {
+    if (session.via === 'session') {
+      // another author goes under the terminal (bufferReplayMode): reaching here is a wiring error, refused
+      if (employeeId !== session.employeeId) {
+        throw new Error(
+          'An operation of another author must be sent under the terminal',
+        );
+      }
       const principal = requirePrincipal();
       return {
         id: employeeId,

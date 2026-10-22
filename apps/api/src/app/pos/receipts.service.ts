@@ -5,7 +5,7 @@ import {
   piecePriceMinor,
 } from '@pharmacy/shared-domain';
 import type { ControlledSaleData, CreatedReceipt } from '@pharmacy/shared-dto';
-import { requirePrincipal } from '../../common/context/request-context';
+import { requireTenantId } from '../../common/context/request-context';
 import {
   type FieldError,
   FieldProblemException,
@@ -21,7 +21,12 @@ import { PosStock } from '../inventory/pos-stock';
 import { StorePricesReader } from '../pricing/store-prices-reader';
 import type { CreateReceiptDto } from './dto/pos.dto';
 import { PosIdempotency } from './idempotency';
-import { ONLINE_WITHIN_MS, PosContext } from './pos-context';
+import {
+  ONLINE_WITHIN_MS,
+  PosContext,
+  terminalAuthor,
+  terminalVia,
+} from './pos-context';
 import { PosRepository } from './pos.repository';
 import {
   cashPart,
@@ -86,7 +91,7 @@ export class ReceiptsService {
     this.idempotency.checkHeader(key, body.id);
     const id = body.id.toLowerCase();
     const replay = await this.idempotency.replay<CreatedReceipt>(
-      requirePrincipal().tenantId,
+      requireTenantId(),
       'receipt',
       id,
       body,
@@ -94,7 +99,12 @@ export class ReceiptsService {
     if (replay) return replay.response;
     const arithmetic = checkArithmetic(body);
     if (arithmetic.length > 0) throw invalid(arithmetic);
-    const op = await this.context.operation(body, 'pos:create', sentAt);
+    const op = await this.context.operation(
+      body,
+      'pos:create',
+      sentAt,
+      body.shiftId.toLowerCase(),
+    );
     const { tenantId, storeId } = op;
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, tenantId, 'receipt', id, body, 201, async () => {
@@ -290,6 +300,7 @@ export class ReceiptsService {
               ? 'offline_buffer'
               : 'online',
           language: body.language,
+          localNumber: body.localNumber ?? null,
         });
         await this.receipts.insertLines(trx, tenantId, id, lines);
         // the cash line holds what was handed over: Σ payments = total + change (E10)
@@ -342,8 +353,11 @@ export class ReceiptsService {
           entityType: 'receipt',
           entityId: id,
           storeId,
+          ...terminalAuthor(op),
           details: {
+            ...terminalVia(op),
             number,
+            localNumber: body.localNumber ?? null,
             shiftId: shift.id,
             authorId: author.id,
             totalMinor: body.totalMinor,

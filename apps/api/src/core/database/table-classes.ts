@@ -101,7 +101,8 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
   });
 
 // Tenant tables that are append-only (insert and select only; a trigger rejects update, delete
-// and truncate). pharmacy_app has exactly SELECT, INSERT on them instead of full DML.
+// and truncate). pharmacy_app has exactly SELECT, INSERT on them instead of full DML — the one exception
+// is the column UPDATE of the purge of controlled_sale_records (below).
 export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
   'audit_log',
   'stock_movements',
@@ -111,6 +112,8 @@ export const APPEND_ONLY_TABLES: readonly string[] = Object.freeze([
   'receipts',
   'receipt_lines',
   'payments',
+  // rows are never deleted; only the prescription data is purged by the retention term (a trigger allows
+  // nothing else, spec 2026-10-21-pos-offline-limits, P4)
   'controlled_sale_records',
   'customer_returns',
   'customer_return_lines',

@@ -113,6 +113,11 @@ export interface TerminalCashier {
  */
 export interface BoundTerminal {
   id: string;
+  /**
+   * The network of the terminal: the sign-in screen sends the buffer of the terminal without a session (spec
+   * 2026-10-21-pos-offline-limits, P18).
+   */
+  tenantId: string;
   name: string;
   store: SessionStore;
   cashiers: TerminalCashier[];

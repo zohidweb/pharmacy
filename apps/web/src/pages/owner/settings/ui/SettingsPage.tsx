@@ -16,6 +16,10 @@ import {
   TextField,
   useToast,
 } from '@pharmacy/ui';
+import {
+  posBufferBounds,
+  prescriptionRetentionBounds,
+} from '@pharmacy/shared-domain';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
@@ -40,14 +44,38 @@ const NOTIFICATIONS: NotificationKind[] = [
 ];
 
 type NumberField =
-  'posSessionTimeoutMinutes' | 'minPinLength' | 'expiryNoticeDays';
+  | 'posSessionTimeoutMinutes'
+  | 'minPinLength'
+  | 'expiryNoticeDays'
+  | 'prescriptionRetentionDays'
+  | 'posBufferMaxHours'
+  | 'posBufferMaxOperations'
+  | 'posControlledMaxHours'
+  | 'posControlledMaxOperations';
 
-const RANGES: Record<NumberField, [number, number]> = {
+const RANGES: Record<NumberField, readonly [number, number]> = {
   // the API keeps an idle session at least 5 minutes (spec 2026-10-14-owner-cabinet, E14)
   posSessionTimeoutMinutes: [5, 240],
   minPinLength: [4, 8],
   expiryNoticeDays: [1, 365],
+  // the POS without the connection and the prescription data (spec 2026-10-21-pos-offline-limits, P2, P6)
+  prescriptionRetentionDays: prescriptionRetentionBounds,
+  posBufferMaxHours: posBufferBounds.maxHours,
+  posBufferMaxOperations: posBufferBounds.maxOperations,
+  posControlledMaxHours: posBufferBounds.controlledMaxHours,
+  posControlledMaxOperations: posBufferBounds.controlledMaxOperations,
 };
+
+/** The ПКУ limits of the buffer are not above the general ones (P6): the field over its general one. */
+function aboveGeneral(form: NetworkSettings, field: NumberField): boolean {
+  if (field === 'posControlledMaxHours') {
+    return form.posControlledMaxHours > form.posBufferMaxHours;
+  }
+  if (field === 'posControlledMaxOperations') {
+    return form.posControlledMaxOperations > form.posBufferMaxOperations;
+  }
+  return false;
+}
 
 function NetworkCard({
   settings,
@@ -69,6 +97,11 @@ function NetworkCard({
         expiryNoticeDays: form.expiryNoticeDays,
         warnBelowCost: form.warnBelowCost,
         notifications: form.notifications,
+        prescriptionRetentionDays: form.prescriptionRetentionDays,
+        posBufferMaxHours: form.posBufferMaxHours,
+        posBufferMaxOperations: form.posBufferMaxOperations,
+        posControlledMaxHours: form.posControlledMaxHours,
+        posControlledMaxOperations: form.posControlledMaxOperations,
       };
       return withFreshAuth(() => apiRequest('settings.update', { body }));
     },
@@ -85,7 +118,9 @@ function NetworkCard({
   const error = useApiErrorMessage(save.error);
   const outOfRange = (field: NumberField) =>
     form[field] < RANGES[field][0] || form[field] > RANGES[field][1];
-  const invalid = (Object.keys(RANGES) as NumberField[]).some(outOfRange);
+  const invalid = (Object.keys(RANGES) as NumberField[]).some(
+    (field) => outOfRange(field) || aboveGeneral(form, field),
+  );
   const number = (field: NumberField) => (
     <TextField
       label={t(`network.${field}`)}
@@ -93,7 +128,13 @@ function NetworkCard({
       disabled={!editable}
       value={String(form[field])}
       hint={t('range', { min: RANGES[field][0], max: RANGES[field][1] })}
-      error={outOfRange(field) ? t('outOfRange') : undefined}
+      error={
+        outOfRange(field)
+          ? t('outOfRange')
+          : aboveGeneral(form, field)
+            ? t('offline.aboveGeneral')
+            : undefined
+      }
       onChange={(event) =>
         setForm((current) => ({
           ...current,
@@ -139,6 +180,30 @@ function NetworkCard({
             setForm((current) => ({ ...current, warnBelowCost: checked }))
           }
         />
+        {editable && (
+          <Button
+            className="self-end"
+            loading={save.isPending}
+            disabled={invalid}
+            onClick={() => save.mutate()}
+          >
+            {t('save')}
+          </Button>
+        )}
+      </Card>
+      <Card className="flex flex-col gap-4">
+        <CardHeader
+          title={t('offline.title')}
+          description={t('offline.hint')}
+        />
+        <DemoDataNotice routes={['settings.get']} />
+        <div className="grid grid-cols-3 gap-4">
+          {number('posBufferMaxHours')}
+          {number('posBufferMaxOperations')}
+          {number('prescriptionRetentionDays')}
+          {number('posControlledMaxHours')}
+          {number('posControlledMaxOperations')}
+        </div>
         {editable && (
           <Button
             className="self-end"

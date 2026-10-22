@@ -29,7 +29,30 @@ export interface OutboxCounts {
   quarantine: number;
   /** The sender is waiting for the session (401/403). */
   paused: boolean;
+  /**
+   * What the limits of the buffer count (spec 2026-10-21-pos-offline-limits, P7): the operations waiting to be sent,
+   * paused ones too — the quarantine waits for a review, not for the connection.
+   */
+  oldestPendingAt: string | null;
+  controlledPending: number;
+  oldestControlledAt: string | null;
 }
+
+const NO_COUNTS: OutboxCounts = {
+  pending: 0,
+  quarantine: 0,
+  paused: false,
+  oldestPendingAt: null,
+  controlledPending: 0,
+  oldestControlledAt: null,
+};
+
+const oldest = (records: readonly OutboxRecord[]): string | null =>
+  records.reduce<string | null>(
+    (min, record) =>
+      min === null || record.createdAt < min ? record.createdAt : min,
+    null,
+  );
 
 type DeliveredListener = (record: OutboxRecord, response: unknown) => void;
 
@@ -67,7 +90,7 @@ function classify(error: SendError): Outcome {
 }
 
 export class OfflineQueue {
-  private counts: OutboxCounts = { pending: 0, quarantine: 0, paused: false };
+  private counts: OutboxCounts = NO_COUNTS;
   private readonly listeners = new Set<(counts: OutboxCounts) => void>();
   private readonly delivered = new Set<DeliveredListener>();
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -81,17 +104,30 @@ export class OfflineQueue {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** Writes the operation (and optional extra writes) in one transaction, then starts sending. */
+  /**
+   * Writes the operation (and optional extra writes) in one transaction, then starts sending. `prepare` runs first in
+   * that transaction and returns the record to write (the local number of a receipt, P12).
+   */
   async enqueue(
     record: Omit<
       OutboxRecord,
       'attempts' | 'status' | 'nextAttemptAt' | 'lastError'
     >,
     alsoInTransaction?: (tx: PosWriteTransaction) => Promise<void>,
+    prepare?: (
+      tx: PosWriteTransaction,
+      record: Omit<
+        OutboxRecord,
+        'attempts' | 'status' | 'nextAttemptAt' | 'lastError'
+      >,
+    ) => Promise<
+      Omit<OutboxRecord, 'attempts' | 'status' | 'nextAttemptAt' | 'lastError'>
+    >,
   ): Promise<void> {
     const tx = this.db.transaction(['outbox', 'state'], 'readwrite');
+    const prepared = prepare ? await prepare(tx, record) : record;
     await tx.objectStore('outbox').put({
-      ...record,
+      ...prepared,
       attempts: 0,
       status: 'pending',
       nextAttemptAt: 0,
@@ -221,15 +257,25 @@ export class OfflineQueue {
 
   async refreshCounts(): Promise<void> {
     const all = await this.db.getAll('outbox');
-    const pending = all.filter((r) => r.status === 'pending').length;
-    const quarantine = all.length - pending;
+    const waiting = all.filter((r) => r.status === 'pending');
+    const controlled = waiting.filter((r) => r.controlled === true);
+    const next = {
+      pending: waiting.length,
+      quarantine: all.length - waiting.length,
+      oldestPendingAt: oldest(waiting),
+      controlledPending: controlled.length,
+      oldestControlledAt: oldest(controlled),
+    };
     if (
-      pending === this.counts.pending &&
-      quarantine === this.counts.quarantine
+      next.pending === this.counts.pending &&
+      next.quarantine === this.counts.quarantine &&
+      next.oldestPendingAt === this.counts.oldestPendingAt &&
+      next.controlledPending === this.counts.controlledPending &&
+      next.oldestControlledAt === this.counts.oldestControlledAt
     ) {
       return;
     }
-    this.counts = { ...this.counts, pending, quarantine };
+    this.counts = { ...this.counts, ...next };
     this.emit();
   }
 

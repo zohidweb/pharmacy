@@ -4,8 +4,13 @@
  */
 import { subscribeConnectivity } from '@/shared/api';
 import { openPosDb, posDbName, type PosDb } from './db';
-import { sendPosOperation, type PosOperation } from './operations';
+import {
+  sendPosOperation,
+  type PosOperation,
+  type StoredReceiptRequest,
+} from './operations';
 import { OfflineQueue } from './queue';
+import { nextLocalNumber } from './receipt-seq';
 
 export interface TerminalRuntime {
   key: string;
@@ -16,7 +21,20 @@ export interface TerminalRuntime {
     operation: PosOperation,
     alsoInTransaction?: Parameters<OfflineQueue['enqueue']>[1],
   ) => Promise<void>;
+  /**
+   * Enqueues a sale with its local number within the shift, given in the same transaction (spec
+   * 2026-10-21-pos-offline-limits, P12); resolves to that number.
+   */
+  enqueueReceipt: (
+    payload: StoredReceiptRequest,
+    alsoInTransaction?: Parameters<OfflineQueue['enqueue']>[1],
+  ) => Promise<number>;
 }
+
+/** A sale with a ПКУ line counts against the ПКУ limit of the buffer (P7). */
+const isControlledSale = (operation: PosOperation): boolean =>
+  operation.kind === 'receipt' &&
+  operation.payload.lines.some((line) => line.controlled !== null);
 
 const runtimes = new Map<string, Promise<TerminalRuntime>>();
 
@@ -35,20 +53,31 @@ async function create(key: string): Promise<TerminalRuntime> {
   void navigator.storage?.persist?.().catch(() => false);
   await queue.refreshCounts();
   void queue.flush();
+  const recordOf = (operation: PosOperation) => ({
+    id: operation.payload.id,
+    kind: operation.kind,
+    payload: operation.payload,
+    createdAt: new Date().toISOString(),
+    controlled: isControlledSale(operation),
+  });
   return {
     key,
     db,
     queue,
     enqueue: (operation, alsoInTransaction) =>
-      queue.enqueue(
-        {
-          id: operation.payload.id,
-          kind: operation.kind,
-          payload: operation.payload,
-          createdAt: new Date().toISOString(),
-        },
+      queue.enqueue(recordOf(operation), alsoInTransaction),
+    enqueueReceipt: async (payload, alsoInTransaction) => {
+      let localNumber = 0;
+      await queue.enqueue(
+        recordOf({ kind: 'receipt', payload }),
         alsoInTransaction,
-      ),
+        async (tx, record) => {
+          localNumber = await nextLocalNumber(tx, payload.shiftId);
+          return { ...record, payload: { ...payload, localNumber } };
+        },
+      );
+      return localNumber;
+    },
   };
 }
 

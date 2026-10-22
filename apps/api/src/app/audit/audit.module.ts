@@ -4,6 +4,7 @@ import { AuditJournal } from './audit-journal';
 import { AuditJournalController } from './audit-journal.controller';
 import { AuditJournalRepository } from './audit-journal.repository';
 import { AuditService } from './audit.service';
+import { PinSignIns } from './pin-sign-ins';
 import { SyncCoreModule } from '../../core/sync';
 
 // Domain module boundary (ADR-0002). Other modules use only what is listed in `exports`. The
@@ -13,7 +14,14 @@ import { SyncCoreModule } from '../../core/sync';
   imports: [SyncCoreModule],
   controllers: [AuditJournalController],
   // AuditFacts — the journal rows of offline stores without a domain operation (spec 2026-10-16-offline-sync)
-  providers: [AuditService, AuditJournalRepository, AuditJournal, AuditFacts],
-  exports: [AuditService, AuditJournal],
+  // PinSignIns — who held a terminal at the moment of a POS operation sent under it (spec 2026-10-21-pos-offline-limits)
+  providers: [
+    AuditService,
+    AuditJournalRepository,
+    AuditJournal,
+    AuditFacts,
+    PinSignIns,
+  ],
+  exports: [AuditService, AuditJournal, PinSignIns],
 })
 export class AuditModule {}

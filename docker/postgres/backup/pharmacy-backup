@@ -425,7 +425,10 @@ cmd_restore() {
   target="${db}_restore"
   old="${db}_before_$(printf '%s' "$name" | tr 'A-Z' 'a-z')"
   conn="-h /var/run/postgresql -U ${POSTGRES_USER:-postgres}"
-  unset PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
+  unset PGHOST PGPORT PGUSER PGDATABASE
+  # the socket asks the superuser for its password in test and prod (docker/postgres/pg_hba.conf, Z6)
+  PGPASSWORD=${POSTGRES_PASSWORD:-}
+  export PGPASSWORD
   { is_name "$name" && [ -f "$m" ]; } || die "no copy $name in $BACKUP_ROOT"
   [ "$(manifest_get "$m" verified)" = true ] || die "copy $name is not verified"
   { [ -f "$dir/pharmacy.dump" ] && [ -f "$dir/globals.sql" ]; } || die "copy $name is incomplete"

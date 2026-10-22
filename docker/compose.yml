@@ -10,6 +10,15 @@ x-logging: &logging
     max-size: '10m'
     max-file: '5'
 
+# Containers of our code run read-only, without Linux capabilities and without privilege escalation (security review
+# 2026-10-22, S3): code execution in them cannot rewrite the code or the binaries of the image; /tmp is a tmpfs.
+x-hardened: &hardened
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+
 services:
   postgres:
     build: ./postgres
@@ -18,12 +27,17 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-pharmacy}
       POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in the env file}
+      # psql in this container over the local socket (`stack up`, `restore`): in test and prod the socket needs a
+      # password too (docker/postgres/pg_hba.conf).
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in the env file}
       PHARMACY_OWNER_PASSWORD: ${PHARMACY_OWNER_PASSWORD:?set in the env file}
       PHARMACY_APP_PASSWORD: ${PHARMACY_APP_PASSWORD:?set in the env file}
       PHARMACY_PLATFORM_PASSWORD: ${PHARMACY_PLATFORM_PASSWORD:?set in the env file}
       PHARMACY_TEST_DATABASE: ${PHARMACY_TEST_DATABASE:-}
     volumes:
       - pg-data:/var/lib/postgresql/data
+      # The local socket, shared with migrate and backup: their roles do not sign in over TCP in test and prod.
+      - pg-socket:/var/run/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 5s
@@ -55,10 +69,14 @@ services:
   # One-shot: applies SQL migrations as pharmacy_owner before the API starts (ADR-0006).
   # PHARMACY_OWNER_PASSWORD is passed to this service only - never to api.
   migrate:
+    <<: *hardened
     image: pharmacy/api:${IMAGE_TAG:-local}
     command: ['node', 'scripts/migrate.mjs']
     environment:
-      MIGRATION_DATABASE_URL: postgres://pharmacy_owner:${PHARMACY_OWNER_PASSWORD:?set in the env file}@postgres:5432/${POSTGRES_DB:-pharmacy}
+      # Over the shared local socket (pg-socket): pharmacy_owner does not sign in over TCP in test and prod (Z6).
+      MIGRATION_DATABASE_URL: postgres://pharmacy_owner:${PHARMACY_OWNER_PASSWORD:?set in the env file}@localhost/${POSTGRES_DB:-pharmacy}?host=/var/run/postgresql
+    volumes:
+      - pg-socket:/var/run/postgresql
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,6 +84,7 @@ services:
     logging: *logging
 
   api:
+    <<: *hardened
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
@@ -114,3 +133,4 @@ services:
 
 volumes:
   pg-data:
+  pg-socket:

@@ -3,6 +3,8 @@
 # through the reverse proxy (future ADR-0012).
 services:
   postgres:
+    # Over TCP only the runtime roles of the API sign in (docker/postgres/pg_hba.conf; security review 2026-10-22, Z6).
+    command: ['postgres', '-c', 'hba_file=/etc/pharmacy/pg_hba.conf']
     restart: unless-stopped
     deploy:
       resources:

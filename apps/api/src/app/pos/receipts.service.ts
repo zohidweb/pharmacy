@@ -89,6 +89,7 @@ export class ReceiptsService {
     sentAt?: string,
   ): Promise<CreatedReceipt> {
     this.idempotency.checkHeader(key, body.id);
+    this.context.requireStore(body.storeId);
     const id = body.id.toLowerCase();
     const replay = await this.idempotency.replay<CreatedReceipt>(
       requireTenantId(),

@@ -283,7 +283,9 @@ export class ReceiptLineDto {
   @IsBoolean()
   batchChosenManually!: boolean;
 
+  // required, null without ПКУ data: a missing field is 400, not a line taken for a ПКУ one without data
   @ValidateIf((_, value) => value !== null)
+  @IsObject()
   @ValidateNested()
   @Type(() => ControlledSaleDataDto)
   controlled!: ControlledSaleDataDto | null;

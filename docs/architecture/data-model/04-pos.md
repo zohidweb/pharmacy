@@ -65,7 +65,7 @@ erDiagram
 | `discrepancy_reason` | text null | Обязательна при расхождении ≠ 0 |
 | `z_report` | jsonb null | Снимок Z-отчёта при закрытии: выручка по способам оплаты, возвраты, число чеков — повторная печать совпадает |
 
-На один терминал — не больше одной смены `open` (уникальный частичный индекс `(tenant_id, terminal_id) where status = 'open'`).
+На один терминал — не больше одной смены `open` (уникальный частичный индекс `(tenant_id, terminal_id) where status = 'open'`). Открытие смены датируется не раньше закрытия последней смены терминала (частичный индекс `(tenant_id, terminal_id, closed_at) where status = 'closed'`; спецификация `2026-10-21-pos-offline-limits`, У17).
 
 ## `shift_cash_operations` (класс `tenant`, только добавление)
 

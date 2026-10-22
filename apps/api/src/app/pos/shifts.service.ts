@@ -115,6 +115,7 @@ export class ShiftsService implements OnModuleInit {
     sentAt?: string,
   ): Promise<Shift> {
     this.idempotency.checkHeader(key, body.id);
+    this.context.requireStore(body.storeId);
     const id = body.id.toLowerCase();
     const replay = await this.idempotency.replay<Shift>(
       requireTenantId(),
@@ -200,6 +201,7 @@ export class ShiftsService implements OnModuleInit {
   ): Promise<Shift> {
     this.idempotency.checkHeader(key, body.id);
     this.sameShift(shiftId, body.shiftId);
+    this.context.requireStore(body.storeId);
     const replay = await this.idempotency.replay<Shift>(
       requireTenantId(),
       'shift.cash',
@@ -267,6 +269,7 @@ export class ShiftsService implements OnModuleInit {
   ): Promise<ZReport> {
     this.idempotency.checkHeader(key, body.id);
     this.sameShift(shiftId, body.shiftId);
+    this.context.requireStore(body.storeId);
     const replay = await this.idempotency.replay<ZReport>(
       requireTenantId(),
       'shift.close',

@@ -56,6 +56,11 @@ export class HeldReceiptsService {
     return this.db.tenantTransaction(async (trx) => {
       const { tenantId, storeId } = session;
       const [existing] = await this.shifts.heldReceipts(trx, tenantId, { id });
+      // a repeat answers with the held receipt of the store of the session only: the id of another store's one is a
+      // conflict, its lines are not given away
+      if (existing && existing.storeId !== storeId) {
+        throw new ProblemException(409, 'idempotency_conflict');
+      }
       if (existing) return toHeld(existing);
       await this.context.cloudStore(trx, tenantId, storeId);
       const open = await this.shifts.openShiftOfTerminal(

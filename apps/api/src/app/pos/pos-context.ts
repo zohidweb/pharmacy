@@ -151,6 +151,18 @@ export class PosContext {
   }
 
   /**
+   * The store of a repeat of an accepted operation: its stored answer is read before the rest of the session check
+   * (final review M4), so it goes only to the PIN session or the terminal of the operation's store — 409
+   * `wrong_terminal` otherwise, as the operation itself. A browser rebound to another store sends no buffer of the old
+   * one (У15), so no legitimate repeat is refused.
+   */
+  requireStore(storeId: string): void {
+    if (storeId.toLowerCase() !== this.bufferSession().storeId) {
+      throw new ProblemException(409, 'wrong_terminal');
+    }
+  }
+
+  /**
    * An operation of the buffer: of the terminal and store of the session (409 `wrong_terminal` —
    * a quarantine, not a pause of the buffer), the author an employee of the network (422
    * `author_not_allowed`), flagged when inactive, out of the store or without `right` now.

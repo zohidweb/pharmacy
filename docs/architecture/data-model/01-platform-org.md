@@ -223,7 +223,7 @@ E16). Владелец вносит их раз в месяц по точке и
 
 ## `license_keys` — ключ офлайн-точки (класс `platform`, ADR-0013, ADR-0014 §6–7)
 
-Тенант читает ключи своих точек. Резолвер `resolve_license_key(key_id)` (SECURITY DEFINER, владелец `pharmacy_resolver`) отдаёт `key_hash, tenant_id, store_id, status, valid_until, revoked_at, notify_before_days` ключа, статус, дату закрытия и режим точки и статус сети — по ним облако вычисляет состояние лицензии (спецификация `2026-10-16-offline-sync`, E10, E12; миграция `sync-receive`). Первичный ключ — `id uuid`.
+Тенант читает ключи своих точек. Резолвер `resolve_license_key(key_id)` (SECURITY DEFINER, владелец `pharmacy_resolver`) отдаёт `key_hash, tenant_id, store_id, status, valid_until, revoked_at, notify_before_days` ключа, статус, дату закрытия и режим точки, статус сети и время её блокировки — по ним облако вычисляет состояние лицензии (спецификация `2026-10-16-offline-sync`, E10, E12; миграции `sync-receive`, `license-key-block-time`). Первичный ключ — `id uuid`.
 
 | Колонка | Тип | Правило |
 |---|---|---|

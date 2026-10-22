@@ -83,6 +83,8 @@ services:
       ADMIN_ORIGIN: ${ADMIN_ORIGIN:?set in the env file}
       AUTH_TEST_COOKIES: ${AUTH_TEST_COOKIES:-false}
       TRUST_PROXY: ${TRUST_PROXY:-0}
+      # The routes of the offline-store sync, off until the first offline store (security review 2026-10-22, 7.4).
+      OFFLINE_SYNC_ENABLED: ${OFFLINE_SYNC_ENABLED:-false}
       # Optional sign-in settings: set in the env file to change them. The defaults repeat those of
       # apps/api/src/app/config/env.validation.ts and must stay in step with them.
       SESSION_IDLE_TIMEOUT_MIN_SECONDS: ${SESSION_IDLE_TIMEOUT_MIN_SECONDS:-300}

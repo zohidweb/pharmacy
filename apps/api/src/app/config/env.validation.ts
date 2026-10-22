@@ -116,6 +116,13 @@ class EnvironmentVariables {
   @IsOptional()
   OFFLINE_TENANT_ID?: string;
 
+  // The cloud routes of the offline-store sync, /api/v1/sync/*, and their 2 MB body parser (ADR-0014 §6): off unless
+  // set, while no network has an offline store (security review 2026-10-22, decision 7.4). Cloud only.
+  @Transform(toBoolean)
+  @IsBoolean()
+  @IsOptional()
+  OFFLINE_SYNC_ENABLED = false;
+
   // Required in cloud mode (cross-field check in validateEnv).
   @Matches(REDIS_URL)
   @IsOptional()
@@ -276,6 +283,11 @@ function checkCrossFields(env: EnvironmentVariables): string[] {
   if (env.STORE_MODE === 'cloud' && env.OFFLINE_TENANT_ID) {
     problems.push('OFFLINE_TENANT_ID is allowed only when STORE_MODE=offline');
   }
+  if (env.STORE_MODE === 'offline' && env.OFFLINE_SYNC_ENABLED) {
+    problems.push(
+      'OFFLINE_SYNC_ENABLED=true is allowed only when STORE_MODE=cloud (a store calls the cloud, never serves it)',
+    );
+  }
   if (
     env.SESSION_IDLE_TIMEOUT_MIN_SECONDS > env.SESSION_IDLE_TIMEOUT_MAX_SECONDS
   ) {
@@ -322,6 +334,19 @@ function checkCrossFields(env: EnvironmentVariables): string[] {
     }
   }
   return problems;
+}
+
+/**
+ * The sync contour switch read from the raw environment, as ConditionalModule sees it before ConfigService exists: the
+ * same parse as the validated OFFLINE_SYNC_ENABLED (validateEnv refuses any other value, and `true` offline).
+ */
+export function offlineSyncEnabled(env: NodeJS.ProcessEnv): boolean {
+  return (
+    env.STORE_MODE !== 'offline' &&
+    String(env.OFFLINE_SYNC_ENABLED ?? '')
+      .trim()
+      .toLowerCase() === 'true'
+  );
 }
 
 export function validateEnv(

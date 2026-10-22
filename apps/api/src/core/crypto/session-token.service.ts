@@ -126,18 +126,27 @@ export class SessionTokenService {
     token: string,
     audience: SessionAudience,
   ): Promise<VerifiedSessionClaims | null> {
+    return this.verifyNow(token, audience);
+  }
+
+  /**
+   * The same check without a promise, for synchronous callers: the body parser of the loads asks it whether a request
+   * carries a genuine session token before it reads 10 MB (security review 2026-10-22, A3). HMAC only — the session
+   * record is still checked by SessionMiddleware.
+   */
+  verifyNow(
+    token: string,
+    audience: SessionAudience,
+  ): VerifiedSessionClaims | null {
     try {
       const key = this.keyFor(token);
       if (!key) return null;
-      const payload = await this.jwt.verifyAsync<Record<string, unknown>>(
-        token,
-        {
-          secret: key,
-          algorithms: [ALGORITHM],
-          issuer: SESSION_TOKEN_ISSUER,
-          audience,
-        },
-      );
+      const payload = this.jwt.verify<Record<string, unknown>>(token, {
+        secret: key,
+        algorithms: [ALGORITHM],
+        issuer: SESSION_TOKEN_ISSUER,
+        audience,
+      });
       const { jti, sub, tid, aud, iat, exp } = payload;
       if (
         !isNonEmptyString(jti) ||
@@ -155,7 +164,7 @@ export class SessionTokenService {
     }
   }
 
-  // The header is read unverified only to choose the key; verifyAsync then checks the signature
+  // The header is read unverified only to choose the key; verify then checks the signature
   // with that key and the pinned algorithm, so a forged header gains nothing.
   private keyFor(token: string): Buffer | null {
     const decoded: unknown = this.jwt.decode(token, { complete: true });

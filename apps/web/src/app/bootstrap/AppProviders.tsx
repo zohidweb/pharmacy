@@ -10,17 +10,20 @@ import { ToastProvider } from '@pharmacy/ui';
 import {
   MutationCache,
   onlineManager,
+  QueryCache,
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { IntlProvider } from 'use-intl';
+import { resetSession } from '@/entities/session';
 import { ConfirmPasswordDialog } from '@/features/confirm-password';
 import {
   apiMocksEnabled,
   apiMocksMode,
   apiRequest,
   isOnline,
+  isSessionEnded,
   loadMockTransport,
   partialTransport,
   setApiTransport,
@@ -42,13 +45,28 @@ import { ServiceWorker } from './ServiceWorker';
 function createQueryClient() {
   const client: QueryClient = new QueryClient({
     defaultOptions: {
-      queries: { staleTime: 30_000, refetchOnWindowFocus: false },
+      queries: {
+        staleTime: 30_000,
+        refetchOnWindowFocus: false,
+        // no retries of an answer that the session is gone: the sign-in opens at once
+        retry: (failures, error) => !isSessionEnded(error) && failures < 3,
+      },
     },
+    // a session the server ended (timeout, blocked, ended elsewhere) returns to the sign-in at the first answer that
+    // says so, whatever screen asked (security review 2026-10-22, F2)
+    queryCache: new QueryCache({
+      onError: (error) => {
+        if (isSessionEnded(error)) resetSession(client);
+      },
+    }),
     // the menu counters follow the employee's own changes at once — an accepted transfer, a price,
     // a posted document (spec 2026-10-15-nav-counters, E9); others' changes — within a minute
     mutationCache: new MutationCache({
       onSuccess: () =>
         void client.invalidateQueries({ queryKey: navCountersKey }),
+      onError: (error) => {
+        if (isSessionEnded(error)) resetSession(client);
+      },
     }),
   });
   return client;

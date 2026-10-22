@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { sessionQueryKey } from '@/entities/session';
+import { resetSession } from '@/entities/session';
 import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
-import { forgetTerminal } from '@/shared/lib/terminal-cache';
 
 /** DELETE /sessions/current; drops all cached data of the employee and opens the sign-in. */
 export function useSignOut() {
@@ -12,11 +11,7 @@ export function useSignOut() {
   return useMutation({
     mutationFn: () => apiRequest('sessions.delete'),
     onSuccess: () => {
-      void forgetTerminal();
-      queryClient.removeQueries({
-        predicate: (query) => query.queryKey[0] !== sessionQueryKey[0],
-      });
-      queryClient.setQueryData(sessionQueryKey, null);
+      resetSession(queryClient);
       router.replace(routes.login());
     },
   });

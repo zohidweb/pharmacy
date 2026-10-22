@@ -346,6 +346,16 @@ export const isUnreachable = (error: unknown) =>
   error instanceof ApiError &&
   (error.code === 'network' || error.code === 'timeout');
 
+/**
+ * The server has no session for the request (401 `unauthenticated`): it timed out, was ended or blocked. A failed
+ * sign-in answers other codes (`invalid_credentials`, `invalid_pin`, `invalid_code`) and a step-up asks with 403, so
+ * neither ends the session here (security review 2026-10-22, F2).
+ */
+export const isSessionEnded = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 401 &&
+  error.code === 'unauthenticated';
+
 export async function apiRequest<K extends ApiRouteKey>(
   route: K,
   options: ApiRequestOptions<K> = {},

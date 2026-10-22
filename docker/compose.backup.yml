@@ -40,7 +40,9 @@ services:
     volumes:
       - ${BACKUP_DIR:?set in the env file}:/backups
       - backup-scratch:/scratch
-      - pg-socket:/var/run/postgresql
+      # Read-only: this container runs as the uid of the server (postgres) and would otherwise own the directory and
+      # could put its own socket in place of the server's (pg-socket of postgres).
+      - pg-socket:/var/run/postgresql:ro
     shm_size: 256mb
     depends_on:
       postgres:

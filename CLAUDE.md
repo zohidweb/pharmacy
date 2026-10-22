@@ -333,8 +333,22 @@ npm run prod:build / prod:up / prod:down
   В test и prod PostgreSQL берёт правила входа из `docker/postgres/pg_hba.conf` (ревью безопасности 2026-10-22, Z6):
   по TCP входят только `pharmacy_app` и `pharmacy_platform`. Суперпользователь, `pharmacy_owner` (`migrate`) и
   `pharmacy_backup` (`backup`) — только через локальный сокет: том `pg-socket` общий у `postgres`, `migrate` и
-  `backup`, но не у `api`. Вход по сокету тоже с паролем; в контейнере `postgres` его даёт `PGPASSWORD`, поэтому
+  `backup`, но не у `api`; `migrate` и `backup` подключают его только для чтения: `backup` работает с uid сервера и
+  иначе мог бы подменить сокет. Вход по сокету тоже с паролем; в контейнере `postgres` его даёт `PGPASSWORD`, поэтому
   `docker compose exec postgres psql -U <суперпользователь>` работает без ввода. В dev правила образа прежние.
+  - Раньше суперпользователь входил по сокету без пароля, и его пароль в базе мог разойтись с
+    `POSTGRES_SUPERUSER_PASSWORD` env-файла. Поэтому перед первой выкладкой этих правил на существующий кластер его
+    нужно проверить (ответ `1`):
+    `docker compose --project-name pharmacy-<env> --env-file docker/env/<env>.env -f docker/compose.yml -f
+    docker/compose.<env>.yml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$(hostname -i)" -U
+    "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select 1"'`.
+  - Если пароль разошёлся и `up` уже упал:
+    1. в контейнере `postgres` выполнить
+       `sed -i '1i local all <суперпользователь> trust' /etc/pharmacy/pg_hba.conf && kill -HUP 1`;
+    2. задать пароль через `alter role … password …`;
+    3. вернуть файл образа: `up -d --force-recreate postgres`.
+  - Пароль `pharmacy_backup` остаётся в окружении `postgres` для `04-backup-role.sql` (вторая половина Z6 не
+    сделана). Тот же контейнер и так держит пароль суперпользователя.
   `pharmacy_backup` (ADR-0019) — LOGIN, BYPASSRLS, член `pg_read_all_data`, не суперпользователь: только сервис
   `backup` (test, prod), пароль `PHARMACY_BACKUP_PASSWORD`. Роль создаёт или обновляет идемпотентный
   `docker/postgres/initdb/04-backup-role.sql` — при initdb и при каждом `stack <test|prod> up` до старта остальных
@@ -402,8 +416,10 @@ npm run prod:build / prod:up / prod:down
   возвращает операции из карантина в очередь — облако переприменит их в конце следующего батча точки.
 - Порты в compose публикуются только на `127.0.0.1`.
 - Контейнеры `api`, `migrate` и `backup` работают только для чтения (`/tmp` — tmpfs), без Linux capabilities и с
-  `no-new-privileges` (ревью безопасности 2026-10-22, S3). Скрипты `run --rm api node scripts/…` работают так же:
-  они только читают и подключаются к базе. Dev-серверы web и admin слушают только `127.0.0.1` (S4).
+  `no-new-privileges` (ревью безопасности 2026-10-22, S3). Скрипты базы через `run --rm api node scripts/…` (код
+  активации, оператор, ключи точки, карантин) работают так же: они только читают файлы образа и подключаются к базе.
+  `generate-store-secrets.mjs` пишет в env-файл и запускается на ПК точки, а не в контейнере. Dev-серверы web и admin
+  слушают только `127.0.0.1` (S4).
 
 ## Local development secrets
 

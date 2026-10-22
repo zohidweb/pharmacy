@@ -36,10 +36,14 @@ services:
       PHARMACY_TEST_DATABASE: ${PHARMACY_TEST_DATABASE:-}
     volumes:
       - pg-data:/var/lib/postgresql/data
-      # The local socket, shared with migrate and backup: their roles do not sign in over TCP in test and prod.
+      # The local socket, shared with migrate and backup: their roles do not sign in over TCP in test and prod. Only this
+      # container writes the directory; they mount it read-only and cannot put another socket in its place.
       - pg-socket:/var/run/postgresql
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      # Over TCP and without a password: the temporary server of initdb listens on the socket only, so the service is
+      # not healthy before the real server runs (migrate would reach it over the shared socket). The role is one TCP may
+      # sign in as; asked for a password, pg_isready answers "accepting" and logs nothing.
+      test: ['CMD-SHELL', 'PGPASSWORD= pg_isready -q -h 127.0.0.1 -U pharmacy_app -d "$${POSTGRES_DB}"']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -76,7 +80,8 @@ services:
       # Over the shared local socket (pg-socket): pharmacy_owner does not sign in over TCP in test and prod (Z6).
       MIGRATION_DATABASE_URL: postgres://pharmacy_owner:${PHARMACY_OWNER_PASSWORD:?set in the env file}@localhost/${POSTGRES_DB:-pharmacy}?host=/var/run/postgresql
     volumes:
-      - pg-socket:/var/run/postgresql
+      # Read-only: connect() to the socket works, replacing it does not (pg-socket of postgres).
+      - pg-socket:/var/run/postgresql:ro
     depends_on:
       postgres:
         condition: service_healthy

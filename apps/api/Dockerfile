@@ -16,13 +16,14 @@ RUN npx nx run api:prune --configuration=production
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-# The code stays root-owned: the runtime user `node` reads it and cannot rewrite it; the source map and npm are not
-# shipped (security review 2026-10-22, S3 — compose runs the container read-only as well).
+# The code stays root-owned: the runtime user `node` reads it and cannot rewrite it; the source map and the package
+# managers of the base image (npm, corepack, yarn) are not shipped (security review 2026-10-22, S3 — compose runs the
+# container read-only as well).
 COPY --from=build /workspace/apps/api/dist ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force \
   && rm -f main.js.map \
-  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
-    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \

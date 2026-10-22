@@ -86,6 +86,13 @@ export function boundedMoment(
   return new Date(floor === null ? at : Math.max(at, floor.getTime()));
 }
 
+/**
+ * What the P10 moment of an operation may not precede (E4): the opening of its shift for a receipt or a cash
+ * operation, the last closing of a shift of the terminal for an opening. Without the second an opening dated back
+ * would name any past holder of the terminal its author and move the floor of its whole shift back with it.
+ */
+export type MomentFloor = { shiftId: string } | 'shift-opening';
+
 /** An operation delivered within this of its moment was made online (`origin`, M10). */
 export const ONLINE_WITHIN_MS = 60_000;
 
@@ -142,9 +149,8 @@ export class PosContext {
   async operation(
     body: PosOperationContext,
     right: Permission,
-    sentAt?: string,
-    /** The shift of a receipt or a cash operation: the P10 moment is not before its opening (E4). */
-    shiftId?: string,
+    sentAt: string | undefined,
+    floor: MomentFloor,
   ): Promise<PosOperation> {
     const session = this.bufferSession();
     if (
@@ -180,7 +186,7 @@ export class PosContext {
         author.id,
         occurredAt,
         receivedAt,
-        shiftId,
+        floor,
       );
     }
     // an online operation of another employee than the one signed in is marked too (M10); under the terminal with no
@@ -237,30 +243,25 @@ export class PosContext {
   /**
    * The PIN sign-ins of the terminal no older than the buffer limit of the network before the moment: the author
    * held the terminal at `moment ± 5 min`, else 422 `author_session_missing` — the buffer keeps it in quarantine. The
-   * moment is the one of E4 (not after the receipt, not older than 30 days, not before the opening of the shift of
-   * the operation): a moment the client states freely would let it pick any past holder of the terminal.
+   * moment is the one of E4 (not after the receipt, not older than 30 days, not before `floor`): a moment the client
+   * states freely would let it pick any past holder of the terminal.
    */
   private async requireHolder(
     session: BufferSession,
     authorId: string,
     occurredAt: Date,
     receivedAt: Date,
-    shiftId: string | undefined,
+    floor: MomentFloor,
   ): Promise<void> {
     const held = await this.db.tenantTransaction(async (trx) => {
       const { bufferLimits } = await this.repository.settings(
         trx,
         session.tenantId,
       );
-      const shift = shiftId
-        ? await this.shifts.findShift(trx, session.tenantId, shiftId)
-        : null;
       const moment = boundedMoment(
         occurredAt,
         receivedAt,
-        shift && shift.terminalId === session.terminalId
-          ? shift.openedAt
-          : null,
+        await this.floorAt(trx, session, floor),
       );
       const signIns = await this.signIns.between(
         trx,
@@ -273,6 +274,28 @@ export class PosContext {
       return heldBy(signIns, authorId, moment, AUTHOR_SIGN_IN_TOLERANCE_MS);
     });
     if (!held) throw new ProblemException(422, 'author_session_missing');
+  }
+
+  private async floorAt(
+    trx: TenantTransaction,
+    session: BufferSession,
+    floor: MomentFloor,
+  ): Promise<Date | null> {
+    if (floor === 'shift-opening') {
+      return this.shifts.lastClosedAt(
+        trx,
+        session.tenantId,
+        session.terminalId,
+      );
+    }
+    const shift = await this.shifts.findShift(
+      trx,
+      session.tenantId,
+      floor.shiftId,
+    );
+    return shift && shift.terminalId === session.terminalId
+      ? shift.openedAt
+      : null;
   }
 
   private async author(

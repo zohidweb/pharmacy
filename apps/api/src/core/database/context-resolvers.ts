@@ -34,6 +34,7 @@ export interface ResolvedLicenseKey {
   storeClosedAt: Date | null;
   storeMode: string;
   tenantStatus: string;
+  tenantBlockedAt: Date | null;
 }
 
 const LOGIN_KINDS: readonly string[] = ['login', 'phone', 'email'];
@@ -47,7 +48,8 @@ const RESOLVE_TERMINAL_SQL =
 
 const RESOLVE_LICENSE_KEY_SQL =
   'select key_hash, tenant_id, store_id, status, valid_until, revoked_at, notify_before_days, ' +
-  'store_status, store_closed_at, store_mode, tenant_status from pharmacy.resolve_license_key($1)';
+  'store_status, store_closed_at, store_mode, tenant_status, tenant_blocked_at ' +
+  'from pharmacy.resolve_license_key($1)';
 
 // A small pool: resolvers run once per sign-in and once per sync request of an offline store.
 const RESOLVER_POOL_MAX = 2;
@@ -78,6 +80,7 @@ interface ResolveLicenseKeyRow {
   store_closed_at: Date | null;
   store_mode: string;
   tenant_status: string;
+  tenant_blocked_at: Date | null;
 }
 
 // The open key id of a license key: phk_<16 hex>_<secret> (spec 2026-10-16-offline-sync, E10).
@@ -175,6 +178,7 @@ export class ContextResolvers implements OnModuleDestroy {
       storeClosedAt: row.store_closed_at,
       storeMode: row.store_mode,
       tenantStatus: row.tenant_status,
+      tenantBlockedAt: row.tenant_blocked_at,
     };
   }
 

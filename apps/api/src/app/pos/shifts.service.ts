@@ -123,7 +123,12 @@ export class ShiftsService implements OnModuleInit {
       body,
     );
     if (replay) return replay.response;
-    const op = await this.context.operation(body, 'shifts:create', sentAt);
+    const op = await this.context.operation(
+      body,
+      'shifts:create',
+      sentAt,
+      'shift-opening',
+    );
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, op.tenantId, 'shift.open', id, body, 201, async () => {
         // the store first, then the terminal — the order of a store closing, which holds the
@@ -138,7 +143,11 @@ export class ShiftsService implements OnModuleInit {
         if (await this.shifts.openShiftOfTerminal(trx, op.tenantId, op.terminalId)) {
           throw new ProblemException(409, 'shift_open');
         }
-        const openedAt = operationMoment(op, null);
+        // not before the closing of the previous shift of the terminal (E4), as P10 checked the author
+        const openedAt = operationMoment(
+          op,
+          await this.shifts.lastClosedAt(trx, op.tenantId, op.terminalId),
+        );
         const date = await this.repository.businessDate(trx, op.tenantId, openedAt);
         const number = await this.numbering.next(trx, op.tenantId, store, 'z_report', date);
         try {
@@ -199,12 +208,9 @@ export class ShiftsService implements OnModuleInit {
         { field: 'reason', code: 'invalid' },
       ]);
     }
-    const op = await this.context.operation(
-      body,
-      'shifts:update',
-      sentAt,
-      shiftId.toLowerCase(),
-    );
+    const op = await this.context.operation(body, 'shifts:update', sentAt, {
+      shiftId: shiftId.toLowerCase(),
+    });
     const id = body.id.toLowerCase();
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, op.tenantId, 'shift.cash', id, body, 201, async () => {
@@ -263,12 +269,9 @@ export class ShiftsService implements OnModuleInit {
       body,
     );
     if (replay) return replay.response;
-    const op = await this.context.operation(
-      body,
-      'shifts:update',
-      sentAt,
-      shiftId.toLowerCase(),
-    );
+    const op = await this.context.operation(body, 'shifts:update', sentAt, {
+      shiftId: shiftId.toLowerCase(),
+    });
     const id = body.id.toLowerCase();
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, op.tenantId, 'shift.close', id, body, 201, async () => {

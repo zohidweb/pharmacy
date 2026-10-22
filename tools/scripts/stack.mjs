@@ -25,6 +25,7 @@ import { randomBytes } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findMockBuild } from './frontend-mocks.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -200,9 +201,13 @@ function build(envName, env, skipChecks) {
     console.log('\n⚠ Quality gate skipped (--skip-checks).');
   }
   // Static export of the frontends: apps/web/out, apps/admin/out (served after the reverse-proxy ADR, future ADR-0012).
+  // Never with the API mocks (security review 2026-10-22, F1): the flag is pinned off, it is an input of the Nx build
+  // (a cached mock build is not restored), and a bundle that still carries the mocks stops the build.
   run('npx', [...nx, 'run-many', '-t', 'build', '-p', 'web', 'admin', '--outputStyle=static'], {
-    env: { ...process.env, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1' },
+    env: { ...process.env, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', NEXT_PUBLIC_API_MOCKS: 'false' },
   });
+  const mocks = findMockBuild(root);
+  if (mocks) fail(`${mocks} carries the API mocks (NEXT_PUBLIC_API_MOCKS): rebuild web/admin without it.`);
   run('docker', [...composeArgs(envName, env), 'build']);
   console.log(`\n✔ ${envName}: images tagged ${process.env.IMAGE_TAG}; static web/admin in apps/*/out`);
 }

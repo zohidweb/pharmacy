@@ -277,6 +277,10 @@ npm run prod:build / prod:up / prod:down
   проектов, затем сборка. Для prod `--skip-checks` запрещён, а сборка — только из чистого дерева
   git (тег образа = короткий sha; у test с незакоммиченными изменениями — `<sha>-dirty`).
 - `up` для test/prod запускает ровно те образы, что собрал `build` (`--no-build`).
+- `build` собирает web/admin без моков API: `NEXT_PUBLIC_API_MOCKS=false` закреплён, переменная — вход кэша Nx
+  (сборка с моками не восстанавливается из кэша), а бандл, в котором остались моки, останавливает сборку
+  (`tools/scripts/frontend-mocks.mjs`; ревью безопасности 2026-10-22, F1). Ответы API — с `Cache-Control: no-store`
+  и без ETag (P1).
 - Env-файлы сред лежат в `docker/env/`, а не `.env.test`: Nx автоматически грузит `.env.<имя>`
   в задачи (`.env.test` попал бы в `nx test`). В корневом `.env` не задавать `NODE_ENV`.
 - `APP_ENV` (dev|test|prod) — среда развёртывания; `NODE_ENV` в test/prod всегда `production`.

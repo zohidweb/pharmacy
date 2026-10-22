@@ -40,6 +40,11 @@ const BACKUP_ENVS = ['test', 'prod'];
 const BACKUP_VARIABLES = ['PHARMACY_BACKUP_PASSWORD', 'BACKUP_DIR'];
 // A copy is named by its UTC start time; the strict pattern also keeps the argument safe for cmd.exe (shell: true).
 const COPY_NAME = /^\d{8}T\d{6}Z$/;
+// Commands that build or start the stack refuse the placeholders of the example in a test or prod env file (security
+// review 2026-10-22, S2): a hand-copied example would run PostgreSQL, the roles and Redis with the password `change-me`.
+const STARTING_COMMANDS = ['build', 'up', 'restore'];
+const PLACEHOLDER = /change-me|generate-key/;
+const MIN_PASSWORD_LENGTH = 16;
 
 function fail(message) {
   console.error(`\n✖ ${message}\n`);
@@ -57,6 +62,20 @@ function run(cmd, args, options = {}) {
 function runStatus(cmd, args) {
   console.log(`\n$ ${[cmd, ...args].join(' ')}`);
   return spawnSync(cmd, args, { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' }).status;
+}
+
+// The variables whose example value is a placeholder and that still hold one, or a password of the example (`change-me`)
+// shorter than MIN_PASSWORD_LENGTH: names only, values are never printed.
+function weakSecrets(env) {
+  return readFileSync(join(root, env.example), 'utf8')
+    .split(/\r?\n/)
+    .map((line) => /^([A-Z0-9_]+)=(.*)$/.exec(line))
+    .filter((match) => match !== null && PLACEHOLDER.test(match[2]))
+    .filter(([, name, example]) => {
+      const value = envValue(env, name, '');
+      return PLACEHOLDER.test(value) || (example.includes('change-me') && value.length < MIN_PASSWORD_LENGTH);
+    })
+    .map(([, name]) => name);
 }
 
 // A variable of the shell or the env file (compose gives the shell precedence), never printed.
@@ -230,6 +249,16 @@ if (BACKUP_ENVS.includes(envName)) {
   const missing = BACKUP_VARIABLES.filter((name) => !envValue(env, name, ''));
   if (missing.length > 0) {
     fail(`${env.envFile} lacks ${missing.join(', ')} (backups, ADR-0019). Run: npm run stack -- ${envName} init, then set BACKUP_DIR.`);
+  }
+}
+if (BACKUP_ENVS.includes(envName) && STARTING_COMMANDS.includes(command)) {
+  const weak = weakSecrets(env);
+  if (weak.length > 0) {
+    fail(
+      `${env.envFile}: ${weak.join(', ')} still hold a placeholder of ${env.example} or a password shorter than ` +
+        `${MIN_PASSWORD_LENGTH} characters. Set random values (keys — 32 bytes base64url, passwords — ${MIN_PASSWORD_LENGTH}+ ` +
+        `characters); \`npm run stack -- ${envName} init\` writes them into a new file.`,
+    );
   }
 }
 

@@ -332,6 +332,18 @@ function checkCrossFields(env: EnvironmentVariables): string[] {
         );
       }
     }
+    // prod runs behind the reverse proxy of ADR-0012 (security review 2026-10-22, A7 and decision 7.2): https origins,
+    // and the real hop count — with 0 every guest behind the proxy shares one rate-limit bucket
+    for (const name of ['WEB_ORIGIN', 'ADMIN_ORIGIN'] as const) {
+      if (!env[name].startsWith('https://')) {
+        problems.push(`${name} must be an https:// origin when APP_ENV=prod`);
+      }
+    }
+    if (env.TRUST_PROXY === 0) {
+      problems.push(
+        'TRUST_PROXY must be the number of reverse proxies in front of the API (at least 1) when APP_ENV=prod',
+      );
+    }
   }
   return problems;
 }

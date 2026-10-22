@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { importLimits } from '@pharmacy/shared-domain';
 import cookieParser from 'cookie-parser';
+import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app/app.module';
 import {
@@ -33,6 +34,13 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   // First, so that the answers of the body parsers (413, 415) carry the security headers too.
   app.use(helmet());
+  // No API answer is stored by the browser: they carry personal and prescription data, and pharmacy PCs are shared
+  // (security review 2026-10-22, P1). No ETag either — nothing is revalidated.
+  app.set('etag', false);
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   // Before the body parsers: the parser of the loads reads the session token from the cookie.
   app.use(cookieParser());
   const extractor = app.get(TokenExtractor);

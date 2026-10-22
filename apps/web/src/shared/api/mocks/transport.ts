@@ -24,7 +24,7 @@ import { daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { mockDb, type MockEmployeeState } from './db';
-import { storeDay, stores } from './fixtures';
+import { storeDay, stores, tenant } from './fixtures';
 import {
   authorize,
   current,
@@ -293,6 +293,7 @@ const handlers: MockHandlers = {
     if (!store) throw new ApiError(404, 'not_bound', correlationId);
     return {
       id: terminal.id,
+      tenantId: tenant.id,
       name: terminal.name,
       store,
       cashiers: db.employees

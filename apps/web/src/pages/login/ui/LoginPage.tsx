@@ -8,7 +8,12 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { canWrite, useSession } from '@/entities/session';
 import { LoginForm } from '@/features/auth-by-password';
-import { PinLoginForm, useBoundTerminal } from '@/features/auth-by-pin';
+import { PinLoginForm } from '@/features/auth-by-pin';
+import {
+  useBoundTerminal,
+  useOutboxCounts,
+  useTerminalRuntime,
+} from '@/entities/terminal';
 import { StorePicker } from '@/features/select-store';
 import { SignOutButton } from '@/features/sign-out';
 import { routes } from '@/shared/config';
@@ -28,6 +33,8 @@ export function LoginPage() {
   const router = useRouter();
   const session = useSession();
   const terminal = useBoundTerminal();
+  // the buffer of the terminal is sent from here too, without a session (spec 2026-10-21-pos-offline-limits, P18)
+  const unsent = useOutboxCounts(useTerminalRuntime()).pending;
   const [method, setMethod] = useState<Method | null>(null);
   const ready = Boolean(session.data?.currentStoreId);
 
@@ -96,6 +103,11 @@ export function LoginPage() {
           terminal: bound.name,
         })}
       >
+        {unsent > 0 && (
+          <Alert tone="info" live="polite">
+            {t('unsentOperations', { count: unsent })}
+          </Alert>
+        )}
         <PinLoginForm terminal={bound} onSuccess={goOn} />
         <Button
           variant="tertiary"
@@ -112,6 +124,11 @@ export function LoginPage() {
   return (
     <LoginCard title={t('title')} subtitle={t('subtitle')}>
       {terminal.isError && <Alert tone="warning">{t('terminalUnknown')}</Alert>}
+      {unsent > 0 && (
+        <Alert tone="info" live="polite">
+          {t('unsentOperations', { count: unsent })}
+        </Alert>
+      )}
       <LoginForm onSuccess={goOn} />
       {bound && (
         <Button

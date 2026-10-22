@@ -488,7 +488,7 @@ function ReturnsPageView() {
             <TextField
               label={t('receiptNumber')}
               hint={t('receiptNumberHint')}
-              inputMode="numeric"
+              // a receipt printed without the connection carries a code of hex digits and letters (P14)
               value={number}
               disabled={!online}
               onChange={(event) => setNumber(event.target.value)}
@@ -613,10 +613,19 @@ function ReturnsPageView() {
                   number: receipt.number,
                   at: formatDateTime(receipt.soldAt),
                 })}
-                description={t('receiptMeta', {
-                  store: receipt.storeName,
-                  cashier: receipt.cashierName,
-                })}
+                description={[
+                  t('receiptMeta', {
+                    store: receipt.storeName,
+                    cashier: receipt.cashierName,
+                  }),
+                  // the number of the receipt on its terminal, the one a receipt printed without the connection carries
+                  // (spec 2026-10-21-pos-offline-limits, P14)
+                  receipt.localNumber !== null
+                    ? t('localNumber', { number: receipt.localNumber })
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
                 actions={
                   <StatusPill
                     tone={receipt.daysLeft <= 2 ? 'warning' : 'info'}

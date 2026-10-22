@@ -11,6 +11,8 @@ import {
   daysInMonth,
   expenseKinds,
   hasPermissions,
+  posBufferBounds,
+  prescriptionRetentionBounds,
   prorateExpense,
   stockState,
 } from '@pharmacy/shared-domain';
@@ -847,6 +849,10 @@ function report(
     }
     case 'controlled': {
       const ids = scoped.map((s) => s.id);
+      // the prescription data past the retention term of the network is purged (spec 2026-10-21-pos-offline-limits, P3)
+      const retention = mockDb().owner.settings.prescriptionRetentionDays;
+      const purged = (soldAt: string) =>
+        daysBetween(toAppDate(new Date(soldAt)), toAppDate()) > retention;
       const rows = mockDb()
         .pos.receipts.filter(
           (r) => ids.includes(r.storeId) && inPeriod(r.soldAt, from, to),
@@ -856,6 +862,7 @@ function report(
             .filter((l) => l.controlled !== null)
             .map((l) => ({
               at: r.soldAt,
+              receivedAt: r.receivedAt ?? r.soldAt,
               store: scoped.find((s) => s.id === r.storeId)?.name ?? '—',
               product: l.productName,
               batch: l.batchNumber,
@@ -864,7 +871,10 @@ function report(
               piecesPerPack: l.piecesPerPack,
               cashier: r.cashierName,
               receipt: r.number,
-              prescription: l.controlled
+              ...(purged(r.soldAt) ? { prescriptionPurged: 1 } : {}),
+              prescription: purged(r.soldAt)
+                ? null
+                : l.controlled
                 ? [
                     l.controlled.prescriptionNumber,
                     l.controlled.prescriptionDate,
@@ -880,6 +890,7 @@ function report(
       return {
         columns: [
           col('at', 'datetime'),
+          col('receivedAt', 'datetime'),
           col('store', 'text'),
           col('product', 'text'),
           col('batch', 'text'),
@@ -988,6 +999,18 @@ function settingsInput(
   range('posSessionTimeoutMinutes', 5, 240);
   range('minPinLength', 4, 8);
   range('expiryNoticeDays', 1, 365);
+  // the POS without the connection and the prescription data (spec 2026-10-21-pos-offline-limits, P2, P6)
+  range('prescriptionRetentionDays', ...prescriptionRetentionBounds);
+  range('posBufferMaxHours', ...posBufferBounds.maxHours);
+  range('posBufferMaxOperations', ...posBufferBounds.maxOperations);
+  range('posControlledMaxHours', ...posBufferBounds.controlledMaxHours);
+  range('posControlledMaxOperations', ...posBufferBounds.controlledMaxOperations);
+  if (body.posControlledMaxHours > body.posBufferMaxHours) {
+    throw validation(correlationId, 'posControlledMaxHours', 'max');
+  }
+  if (body.posControlledMaxOperations > body.posBufferMaxOperations) {
+    throw validation(correlationId, 'posControlledMaxOperations', 'max');
+  }
   const kinds = Object.keys(owner().settings.notifications);
   const given = Object.keys(body.notifications ?? {});
   if (
@@ -1006,6 +1029,11 @@ function settingsInput(
     expiryNoticeDays: body.expiryNoticeDays,
     warnBelowCost: body.warnBelowCost,
     notifications: { ...body.notifications },
+    prescriptionRetentionDays: body.prescriptionRetentionDays,
+    posBufferMaxHours: body.posBufferMaxHours,
+    posBufferMaxOperations: body.posBufferMaxOperations,
+    posControlledMaxHours: body.posControlledMaxHours,
+    posControlledMaxOperations: body.posControlledMaxOperations,
   };
 }
 
@@ -1486,8 +1514,13 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       query.to,
       query.storeId,
     );
-    // the cells of the columns left out are not sent either (ADR-0018, п. 6)
-    const keys = new Set(table.columns.map((c) => c.key));
+    // the cells of the columns left out are not sent either (ADR-0018, п. 6); the marks of a row stay, as the API
+    // sends them (`piecesPerPack`, `prescriptionPurged`)
+    const keys = new Set([
+      ...table.columns.map((c) => c.key),
+      'piecesPerPack',
+      'prescriptionPurged',
+    ]);
     const pick = (row: Record<string, ReportCell>) =>
       Object.fromEntries(Object.entries(row).filter(([key]) => keys.has(key)));
     return {

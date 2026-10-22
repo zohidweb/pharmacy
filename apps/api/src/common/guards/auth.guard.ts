@@ -8,6 +8,7 @@ import type { Request } from 'express';
 import { getOperator, getPrincipal } from '../context/request-context';
 import { isOperatorPath } from '../http/contour';
 import { ProblemException } from '../errors/problem.exception';
+import { isBufferReplay } from './buffer-replay';
 import { resolveRouteAccess } from './route-access';
 
 // First global guard (auth design 2026-10-02, section 7, guard 1): every route except a public
@@ -24,6 +25,9 @@ export class AuthGuard implements CanActivate {
     // The principal of the route's contour: an operator on /operator/*, an employee elsewhere.
     const { originalUrl } = context.switchToHttp().getRequest<Request>();
     const principal = isOperatorPath(originalUrl) ? getOperator() : getPrincipal();
+    // A buffered POS operation may come without a session, under the bound terminal: the POS resolves the
+    // device-cookie, a request without one is 401 there (spec 2026-10-21-pos-offline-limits, P9).
+    if (!principal && isBufferReplay(this.reflector, context)) return true;
     if (!principal) throw new ProblemException(401, 'unauthenticated');
     return true;
   }

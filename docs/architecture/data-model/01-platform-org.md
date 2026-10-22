@@ -67,9 +67,13 @@ erDiagram
 | `supplier_payment_reminder_days` | integer | 3 | БЛ W2-02 |
 | `piece_price_rounding_dirams` | integer ≥ 1 | 10 | Шаг округления вверх расчётной цены штуки (решение 2026-09-30) |
 | `backdating_max_days` | integer ≥ 0 | 30 | На сколько дней назад можно поставить дату документа (решение 2026-10-01) |
-| `prescription_retention_days` | integer 1…3650 | 90 | Срок хранения данных рецептов ПКУ (решение 2026-09-30; подтвердить с юристом) |
+| `prescription_retention_days` | integer 1…3650 | 90 | Срок хранения данных рецептов ПКУ (решение 2026-09-30; подтвердить с юристом); меняет владелец на экране настроек, данные старше срока очищаются ежечасно (спецификация `2026-10-21-pos-offline-limits`, P2, P3) |
 | `warn_below_cost` | boolean | true | Предупреждать о розничной цене ниже закупочной на экране цен (кабинет владельца, E15; миграция `owner-cabinet`) |
 | `disabled_notifications` | text[] | `{}` | Выключенные виды уведомлений сети (E13): только известные виды — `batch_expiring`, `low_stock`, `supplier_payment_due`, `transfer_in_transit`, `shift_discrepancy`, `negative_stock`, `sync_conflict`, `license_expiring` (миграция `owner-cabinet`) |
+| `pos_buffer_max_hours` | integer 1…72 | 24 | Предел буфера перебоев кассы по возрасту самой старой операции, часы (спецификация `2026-10-21-pos-offline-limits`, P6; ADR-0015) |
+| `pos_buffer_max_operations` | integer 50…2000 | 500 | Предел буфера по числу ожидающих операций терминала (P6) |
+| `pos_controlled_max_hours` | integer 1…24 | 8 | Предел ПКУ без связи по возрасту самого старого чека с ПКУ в буфере, часы; не больше `pos_buffer_max_hours` (P6) |
+| `pos_controlled_max_operations` | integer 1…200 | 20 | Предел ПКУ без связи по числу чеков с ПКУ в буфере; не больше `pos_buffer_max_operations` (P6) |
 | `updated_at`, `updated_by` | | | |
 
 ## `legal_entities` — юрлица сети (класс `tenant`, D5)

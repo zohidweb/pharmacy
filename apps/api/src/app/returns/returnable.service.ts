@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { hasPermissions } from '@pharmacy/shared-domain';
+import { hasPermissions, isReceiptCode } from '@pharmacy/shared-domain';
 import type {
   PrescriptionKind,
   ReceiptPayment,
@@ -8,6 +8,7 @@ import type {
   ReturnableReceipt,
   SaleSearchItem,
 } from '@pharmacy/shared-dto';
+import { addDays } from '@pharmacy/shared-util';
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
@@ -93,13 +94,21 @@ export class ReturnableService {
     ) {
       throw new ProblemException(403, 'forbidden');
     }
-    const by = query.id
-      ? { id: query.id.toLowerCase() }
-      : { number: (query.number ?? '').replace(/^№\s*/, '').trim() };
+    const number = (query.number ?? '').replace(/^№\s*/, '').trim();
     const productId = query.productId?.toLowerCase() ?? null;
     return this.db.tenantTransaction(async (trx) => {
       const { tenantId } = principal;
       const settings = await this.repository.settings(trx, tenantId);
+      // the code printed on a receipt made without the connection (spec 2026-10-21-pos-offline-limits, P14): among
+      // the receipts still in the return window
+      const by = query.id
+        ? { id: query.id.toLowerCase() }
+        : isReceiptCode(number)
+          ? {
+              code: number,
+              sinceDate: addDays(settings.today, -settings.returnWindowDays),
+            }
+          : { number };
       const receipt = await this.sold.find(trx, tenantId, storeId, by);
       if (!receipt) throw new ProblemException(404, 'not_found');
       const left = daysLeft(receipt, settings);
@@ -114,6 +123,7 @@ export class ReturnableService {
       return {
         id: receipt.id,
         number: receipt.number,
+        localNumber: receipt.localNumber,
         soldAt: receipt.soldAt.toISOString(),
         storeName: await this.repository.storeName(trx, tenantId, storeId),
         cashierName: receipt.cashierName,

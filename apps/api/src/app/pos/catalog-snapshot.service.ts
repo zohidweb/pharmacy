@@ -188,6 +188,7 @@ export class CatalogSnapshotService {
             settings.defaultLanguage,
           ),
           returnWindowDays: settings.returnPeriodDays,
+          bufferLimits: settings.bufferLimits,
         },
       };
     });

@@ -11,6 +11,7 @@ import {
   SegmentedControl,
   type PaperWidth,
 } from '@pharmacy/ui';
+import { receiptCode } from '@pharmacy/shared-domain';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import {
@@ -25,6 +26,8 @@ export function useReceiptLabels(): ReceiptLabels {
   return {
     receipt: (number) => t('receipt', { number }),
     pendingNumber: t('pendingNumber'),
+    localNumber: (number, code) => t('localNumber', { number, code }),
+    serverNumberLater: t('serverNumberLater'),
     cashier: t('cashier'),
     subtotal: tPos('subtotal'),
     discount: (percent) => tPos('discount', { percent }),
@@ -66,7 +69,12 @@ export function SaleReceiptDialog({
       description={
         data?.number
           ? t('receipt', { number: data.number })
-          : t('pendingNumber')
+          : data?.request.localNumber
+            ? t('localNumber', {
+                number: data.request.localNumber,
+                code: receiptCode(data.request.id),
+              })
+            : t('pendingNumber')
       }
       closeLabel={tPos('close')}
       size="md"

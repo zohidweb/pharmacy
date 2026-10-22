@@ -304,6 +304,13 @@ export class CreateReceiptDto
   extends PosOperationContextDto
   implements CreateReceiptRequest
 {
+  // the number of the receipt of the terminal within its shift (spec 2026-10-21-pos-offline-limits, P12)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(999999)
+  localNumber?: number;
+
   @IsUUID()
   shiftId!: string;
 

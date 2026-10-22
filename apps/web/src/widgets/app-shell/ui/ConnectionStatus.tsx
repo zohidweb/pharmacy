@@ -6,7 +6,11 @@ import { Icon, type IconName } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 import { useTranslations } from 'use-intl';
-import { useOutboxCounts, useTerminalRuntime } from '@/entities/terminal';
+import {
+  useBufferState,
+  useOutboxCounts,
+  useTerminalRuntime,
+} from '@/entities/terminal';
 import { apiRequest, isOnline, subscribeConnectivity } from '@/shared/api';
 
 const SYNC_REFRESH_MS = 60_000;
@@ -23,7 +27,10 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
     isOnline,
     () => true,
   );
-  const counts = useOutboxCounts(useTerminalRuntime());
+  const runtime = useTerminalRuntime();
+  const counts = useOutboxCounts(runtime);
+  // the limits of the buffer (spec 2026-10-21-pos-offline-limits, P6–P8): a warning from 80 %, then a stop
+  const buffer = useBufferState(runtime);
   const offlineStore = store?.mode === 'offline';
   const sync = useQuery({
     queryKey: ['sync', 'status', store?.id],
@@ -64,6 +71,39 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
           <Icon name="triangle-alert" size="xs" />
           {t('quarantine', { count: counts.quarantine })}
         </span>
+      )}
+      {buffer?.general === 'blocked' ? (
+        <span className="flex items-center gap-1 font-medium text-danger">
+          <Icon name="triangle-alert" size="xs" />
+          {t('bufferBlocked')}
+        </span>
+      ) : (
+        buffer?.general === 'warn' && (
+          <span className="flex items-center gap-1 text-warning">
+            <Icon name="triangle-alert" size="xs" />
+            {t('bufferWarn', {
+              count: buffer.pending,
+              max: buffer.limits.maxOperations,
+              hours: buffer.oldestHours,
+            })}
+          </span>
+        )
+      )}
+      {buffer?.controlled === 'blocked' ? (
+        <span className="flex items-center gap-1 font-medium text-danger">
+          <Icon name="triangle-alert" size="xs" />
+          {t('controlledBlocked')}
+        </span>
+      ) : (
+        buffer?.controlled === 'warn' && (
+          <span className="flex items-center gap-1 text-warning">
+            <Icon name="triangle-alert" size="xs" />
+            {t('controlledWarn', {
+              count: buffer.controlledPending,
+              max: buffer.limits.controlledMaxOperations,
+            })}
+          </span>
+        )
       )}
       {counts.paused && <span className="text-warning">{t('paused')}</span>}
     </p>

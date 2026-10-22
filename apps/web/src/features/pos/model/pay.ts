@@ -115,18 +115,22 @@ export function applySaleToSnapshot(
   };
 }
 
-/** Enqueues the sale together with clearing the stored draft (one IndexedDB transaction). */
+/**
+ * Enqueues the sale together with clearing the stored draft (one IndexedDB transaction) and gives it its local
+ * number within the shift (spec 2026-10-21-pos-offline-limits, P12): the sale as enqueued, with that number.
+ */
 export async function enqueueSale(
   runtime: TerminalRuntime,
   request: CreateReceiptRequest,
-): Promise<void> {
+): Promise<CreateReceiptRequest> {
   // the prescription data of the ПКУ lines goes into the buffer sealed (E17)
   const payload = await sealReceipt(runtime.db, request);
   // a draft write still queued from before the payment must not bring the paid cart back
   forgetStoredDraft();
-  await runtime.enqueue({ kind: 'receipt', payload }, async (tx) => {
+  const localNumber = await runtime.enqueueReceipt(payload, async (tx) => {
     await tx.objectStore('state').delete(DRAFT_KEY);
   });
+  return { ...request, localNumber };
 }
 
 /**

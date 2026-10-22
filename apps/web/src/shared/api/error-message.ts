@@ -26,6 +26,8 @@ const knownCodes = [
   'wrong_terminal',
   'idempotency_conflict',
   'author_not_allowed',
+  'author_session_missing',
+  'receipt_code_ambiguous',
   'terminal_required',
   'return_window_expired',
   'return_exceeds_sold',

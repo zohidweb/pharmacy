@@ -6,7 +6,7 @@
  * (ADR-0015, «Буфер кассы»): a repeat with the same key returns the original result, another
  * payload with the same key — 409.
  */
-import type { DiscountRule } from '@pharmacy/shared-domain';
+import type { DiscountRule, PosBufferLimits } from '@pharmacy/shared-domain';
 import type { Page } from './platform-tenants.js';
 
 /** none — OTC; rx — prescription (warning); controlled — ПКУ (right + prescription data). */
@@ -62,6 +62,8 @@ export interface PosStoreSettings {
   receiptFooter: string;
   /** Customer return window of the network, days. */
   returnWindowDays: number;
+  /** Limits of the outage buffer of the network (spec 2026-10-21-pos-offline-limits, P6). */
+  bufferLimits: PosBufferLimits;
 }
 
 /**
@@ -119,7 +121,11 @@ export interface ReceiptPayment {
   amountMinor: number;
 }
 
-/** Context of every buffered POS operation (ADR-0015). */
+/**
+ * Context of every buffered POS operation (ADR-0015). Without a session of its author the operation is sent under
+ * the terminal (device-cookie): the author must have held the terminal at its moment, else 422
+ * `author_session_missing` (spec 2026-10-21-pos-offline-limits, P9, P10).
+ */
 export interface PosOperationContext {
   /** UUIDv7; also the Idempotency-Key. */
   id: string;
@@ -135,9 +141,15 @@ export interface PosOperationContext {
  * differences are marked, not refused. 400 `validation_failed` (`unknown_product`, `unknown_batch`,
  * `wrong_store`, `batch_expired`, `unknown_discount`, `total_mismatch`, `mismatch`, `too_small`),
  * 403 `terminal_required`, 409 `idempotency_conflict` / `no_open_shift` / `shift_closed` /
- * `wrong_terminal` / `offline_store_read_only`, 422 `author_not_allowed`.
+ * `wrong_terminal` / `offline_store_read_only`, 422 `author_not_allowed`; sent under the terminal without the
+ * author's session (spec 2026-10-21-pos-offline-limits, P9, P10) — 422 `author_session_missing`.
  */
 export interface CreateReceiptRequest extends PosOperationContext {
+  /**
+   * The number of the receipt of the terminal within its shift, 1–999999 (P12); absent in operations buffered
+   * before it existed.
+   */
+  localNumber?: number;
   shiftId: string;
   /** Snapshot version the prices come from: the server accepts them («продажа — факт»). */
   priceListVersion: number;
@@ -252,6 +264,11 @@ export interface Shift {
   };
   /** Receipts of the shift with discrepancy marks (K4). */
   discrepancyReceipts: number;
+  /**
+   * The largest local number of the receipts of the shift (spec 2026-10-21-pos-offline-limits, P12): a terminal whose
+   * browser data was cleared numbers on after it. Absent in the Z-reports saved before it.
+   */
+  lastLocalNumber?: number | null;
   events: ShiftEvent[];
 }
 
@@ -320,11 +337,15 @@ export interface ReturnableLine {
  * GET /api/v1/receipts/returnable?number= (or ?id= — the QR of the receipt) — a receipt of the store
  * for a return (`returns:create`). With `&productId=` — a sale found without the receipt: only the
  * lines of that product (R8, `returns:without-receipt`). 404 `not_found`; 422
- * `return_window_expired` past the return window of the network.
+ * `return_window_expired` past the return window of the network. `number` may also be the code printed on a
+ * receipt made without the connection — the last 8 hex digits of its id (spec 2026-10-21-pos-offline-limits,
+ * P14): 409 `receipt_code_ambiguous` when it fits several receipts of the store.
  */
 export interface ReturnableReceipt {
   id: string;
   number: string;
+  /** The number of the receipt of the terminal within its shift (P12); null for older receipts. */
+  localNumber: number | null;
   soldAt: string;
   storeName: string;
   cashierName: string;

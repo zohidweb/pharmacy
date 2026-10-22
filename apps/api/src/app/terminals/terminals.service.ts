@@ -327,6 +327,8 @@ export class TerminalsService {
     ).map((row) => ({ employeeId: row.employeeId, shortName: shortName(row.fullName) }));
     return {
       id: terminal.id,
+      // the sign-in screen sends the buffer of the terminal without a session (spec 2026-10-21-pos-offline-limits, P18)
+      tenantId,
       name: terminal.name,
       store: {
         id: store.id,

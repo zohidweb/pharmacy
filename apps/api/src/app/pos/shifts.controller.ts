@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Shift, ZReport } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
+import { BufferedOperation } from './buffer-replay.interceptor';
 import { CashMovementDto, CloseShiftDto, OpenShiftDto } from './dto/pos.dto';
 import { ShiftsService } from './shifts.service';
 
@@ -28,6 +29,7 @@ export class ShiftsController {
 
   /** 409 `shift_open`. */
   @RequirePermission('shifts:create')
+  @BufferedOperation()
   @Post()
   open(
     @Body() body: OpenShiftDto,
@@ -39,6 +41,7 @@ export class ShiftsController {
 
   /** 409 `no_open_shift` / `shift_closed`. */
   @RequirePermission('shifts:update')
+  @BufferedOperation()
   @Post(':id/cash-movements')
   cashMovement(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -51,6 +54,7 @@ export class ShiftsController {
 
   /** Accepted as a fact (E24); 409 `no_open_shift` / `shift_closed`. */
   @RequirePermission('shifts:update')
+  @BufferedOperation()
   @Post(':id/closure')
   close(
     @Param('id', new ParseUUIDPipe()) id: string,

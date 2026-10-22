@@ -22,6 +22,11 @@ export interface AuditEvent {
    * its session exists). A principal's own terminal wins.
    */
   terminalId?: string;
+  /**
+   * UUID of the employee of an event written without a principal: the author of a POS operation sent under the
+   * bound terminal (spec 2026-10-21-pos-offline-limits, P11). A principal's own employee wins.
+   */
+  employeeId?: string;
   /** Free-form facts about the event. Never passwords, PINs, tokens, codes or keys. */
   details?: Record<string, unknown>;
 }
@@ -95,7 +100,7 @@ export class AuditService {
         businessDate: sql<string>`(now() at time zone coalesce(
           (select ts.timezone from tenant_settings ts where ts.tenant_id = ${tenantId}),
           ${DEFAULT_TIMEZONE}))::date`,
-        employeeId: principal?.employeeId ?? null,
+        employeeId: principal?.employeeId ?? event.employeeId ?? null,
         terminalId: principal?.terminalId ?? event.terminalId ?? null,
         storeId: event.storeId ?? null,
         correlationId: context.correlationId,

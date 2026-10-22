@@ -403,6 +403,11 @@ export function createOwnerDb(): OwnerMockDb {
       minPinLength: 4,
       expiryNoticeDays: 30,
       warnBelowCost: true,
+      prescriptionRetentionDays: 90,
+      posBufferMaxHours: 24,
+      posBufferMaxOperations: 500,
+      posControlledMaxHours: 8,
+      posControlledMaxOperations: 20,
       notifications: {
         batch_expiring: true,
         low_stock: true,

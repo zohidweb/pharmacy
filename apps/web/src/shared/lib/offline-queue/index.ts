@@ -32,3 +32,11 @@ export {
   resetTerminalRuntimes,
   type TerminalRuntime,
 } from './runtime';
+export { raiseReceiptSeq } from './receipt-seq';
+export {
+  bufferState,
+  readBufferLimits,
+  storeBufferLimits,
+  type BufferLevel,
+  type BufferState,
+} from './buffer-state';

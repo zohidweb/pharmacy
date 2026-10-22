@@ -4,7 +4,12 @@
  * (prices of the snapshot are accepted, differences are counted for the manager), expired batches
  * never sold, ПКУ only with the right and prescription data, the return window of the network.
  */
-import { hasPermissions, returnRefundTotal } from '@pharmacy/shared-domain';
+import {
+  hasPermissions,
+  isReceiptCode,
+  receiptCode,
+  returnRefundTotal,
+} from '@pharmacy/shared-domain';
 import type {
   CatalogSnapshot,
   CreatedReceipt,
@@ -182,6 +187,12 @@ function networkSettingsOf(storeName: string, storeAddress: string) {
     ...base,
     networkName: network.networkName,
     returnWindowDays: mockDb().owner.returnPolicy.returnWindowDays,
+    bufferLimits: {
+      maxHours: network.posBufferMaxHours,
+      maxOperations: network.posBufferMaxOperations,
+      controlledMaxHours: network.posControlledMaxHours,
+      controlledMaxOperations: network.posControlledMaxOperations,
+    },
     ...(store && {
       taxId:
         mockDb().owner.legalEntities.find((e) => e.id === store.legalEntityId)
@@ -196,14 +207,25 @@ function findReturnable(
   sessionStores: ReadonlyArray<{ id: string }>,
   correlationId: string,
 ): MockReceipt {
-  const number = by.number?.replace(/^№\s*/, '').trim();
-  const receipt = pos().receipts.find(
+  const number = by.number?.replace(/^№\s*/, '').trim() ?? '';
+  const window = mockDb().owner.returnPolicy.returnWindowDays;
+  // the code printed on a receipt made without the connection, among the receipts of the window (P14)
+  const byCode = !by.id && isReceiptCode(number);
+  const found = pos().receipts.filter(
     (r) =>
-      (by.id ? r.id === by.id : r.number === number) &&
+      (by.id
+        ? r.id === by.id
+        : byCode
+          ? receiptCode(r.id) === number.toUpperCase() &&
+            daysBetween(toAppDate(new Date(r.soldAt)), today()) <= window
+          : r.number === number) &&
       sessionStores.some((s) => s.id === r.storeId),
   );
+  if (found.length > 1) {
+    throw new ApiError(409, 'receipt_code_ambiguous', correlationId);
+  }
+  const receipt = found[0];
   if (!receipt) throw new ApiError(404, 'not_found', correlationId);
-  const window = mockDb().owner.returnPolicy.returnWindowDays;
   if (daysBetween(toAppDate(new Date(receipt.soldAt)), today()) > window) {
     throw new ApiError(422, 'return_window_expired', correlationId);
   }
@@ -348,6 +370,8 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         discountMinor: body.discountMinor,
         payments: body.payments,
         refunded: {},
+        localNumber: body.localNumber ?? null,
+        receivedAt: new Date().toISOString(),
       };
       pos().receipts.unshift(receipt);
       shift.receipts += 1;
@@ -359,6 +383,9 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       shift.revenueMinor += body.totalMinor;
       shift.cash.salesMinor += cashPart;
       if (discrepancies > 0) shift.discrepancyReceipts += 1;
+      if (body.localNumber) {
+        shift.lastLocalNumber = Math.max(shift.lastLocalNumber ?? 0, body.localNumber);
+      }
       recomputeCash(shift);
       shift.events.unshift({
         id: `e-${body.id}`,
@@ -544,6 +571,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
     return {
       id: receipt.id,
       number: receipt.number,
+      localNumber: receipt.localNumber ?? null,
       soldAt: receipt.soldAt,
       storeName: stores.find((s) => s.id === receipt.storeId)?.name ?? '—',
       cashierName: receipt.cashierName,

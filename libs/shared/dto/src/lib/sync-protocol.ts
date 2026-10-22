@@ -206,6 +206,11 @@ export interface SyncControlledRecordRow {
   prescriptionNote: Record<string, unknown> | null;
   recordedBy: string;
   recordedAt: string;
+  /**
+   * Set by the cloud only, when it purged the prescription data of a stored envelope by the retention term (spec
+   * 2026-10-21-pos-offline-limits, P5): the record is created purged. A store never sends it.
+   */
+  prescriptionPurged?: boolean;
 }
 
 export interface SyncShiftOpenRow {

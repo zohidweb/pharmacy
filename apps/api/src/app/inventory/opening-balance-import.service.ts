@@ -124,6 +124,8 @@ export class OpeningBalanceImportService {
     employeeId: string,
     storeId: string,
   ): Promise<OpeningBalanceImportResult> {
+    // the result of a repeat goes only to a user with the store in the scope; the store may have closed since
+    this.stores.inScope(storeId);
     await this.jobs.lock(trx, tenantId);
     const replayed = await this.jobs.replay<OpeningBalanceImportResult>(
       trx,

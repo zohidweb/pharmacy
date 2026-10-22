@@ -74,7 +74,9 @@ export class ReturnsService {
   async create(body: CreateReturnDto, key?: string): Promise<CreatedReturn> {
     const principal = requirePrincipal();
     const id = body.id.toLowerCase();
-    // a repeat of an accepted return gets its answer before any check of the session (as the POS)
+    // a repeat of an accepted return gets its answer before the rest of the check of the session (as the POS), from its
+    // store only
+    this.context.requireStore(body.storeId);
     const replay = await this.idempotency.replay<CreatedReturn>(
       principal.tenantId,
       'return',

@@ -39,8 +39,10 @@ bootstrap();
 - Ошибки старта (конфиг, БД) должны ронять процесс — не глушить `catch`-ом.
 - CORS не включается (ADR-0008): браузер ходит в API с того же origin. Запросы с чужого origin
   отсекает CSRF-проверка (`Origin`, Fetch Metadata) — `nestjs-security-auth.md`.
-- `trust proxy` (`app.getHttpAdapter().getInstance().set('trust proxy', 1)`) включать только
-  если перед api реально стоит обратный прокси — иначе `req.ip` подделывается заголовком.
+- `trust proxy` задаётся `TRUST_PROXY` (`main.ts`): в test/prod за Caddy (ADR-0012) — `1`; без прокси — `0`,
+  иначе `req.ip` подделывается заголовком. Лимиты тела API и proxy согласованы: `/api` — 100 KB в API и 1 MiB на
+  proxy, синхронизация — 2 MiB после распаковки и 4 MiB, загрузки `*-imports` — 10 MiB
+  (Caddy считает `MB` по 10⁶ байт — в Caddyfile только `MiB`).
 - Лимит тела запроса Express по умолчанию 100 KB; для пакетов синхронизации (≤ 2 МБ после
   распаковки, ADR-0014) задать явно — осознанно, не «на всякий случай».
 

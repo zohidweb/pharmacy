@@ -1,7 +1,11 @@
 # test: acceptance environment (customer test database, backlog W2-05). Same topology as prod,
-# smaller resources (C4 deployment). PostgreSQL is published on localhost only, for diagnostics.
+# smaller resources (C4 deployment). The proxy serves HTTPS on *.localhost with Caddy's local CA
+# (ADR-0012 «Принятие», 5). PostgreSQL and the API are published on localhost only, for diagnostics: over TCP only
+# pharmacy_app and pharmacy_platform sign in; the superuser — `docker compose exec postgres psql`.
 services:
   postgres:
+    # Over TCP only the runtime roles of the API sign in (docker/postgres/pg_hba.conf; security review 2026-10-22, Z6).
+    command: ['postgres', '-c', 'hba_file=/etc/pharmacy/pg_hba.conf']
     restart: unless-stopped
     ports:
       - '127.0.0.1:${POSTGRES_PORT:-5433}:5432'
@@ -15,6 +19,10 @@ services:
         limits: { cpus: '0.5', memory: 384m }
   api:
     restart: unless-stopped
+    # Diagnostics only, on 127.0.0.1; with TRUST_PROXY=1 a local client of this port sets its own req.ip through
+    # X-Forwarded-For — the way in for testers is the proxy.
+    ports:
+      - '127.0.0.1:${API_PORT:?set in the env file}:3000'
     deploy:
       resources:
         limits: { cpus: '1', memory: 512m }
@@ -23,3 +31,20 @@ services:
     deploy:
       resources:
         limits: { cpus: '0.5', memory: 512m }
+  proxy:
+    restart: unless-stopped
+    environment:
+      PROXY_PROFILE: ${PROXY_PROFILE:?set in the env file}
+      TLS_MODE: ${TLS_MODE:?set in the env file}
+      WEB_ADDR: ${WEB_ADDR:?set in the env file}
+      ADMIN_ADDR: ${ADMIN_ADDR:?set in the env file}
+      # The addresses that reach the admin host (security review 2026-10-22, A1): CIDR, space-separated.
+      OPERATOR_ALLOW: ${OPERATOR_ALLOW:?set in the env file}
+      PROXY_HTTP_PORT: ${PROXY_HTTP_PORT:?set in the env file}
+      PROXY_HTTPS_PORT: ${PROXY_HTTPS_PORT:?set in the env file}
+    ports:
+      - '127.0.0.1:${PROXY_HTTP_PORT}:${PROXY_HTTP_PORT}'
+      - '127.0.0.1:${PROXY_HTTPS_PORT}:${PROXY_HTTPS_PORT}'
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 128m }

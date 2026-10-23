@@ -30,7 +30,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useCatalog } from '@/entities/catalog';
-import { canWrite, currentStoreOf, useSession } from '@/entities/session';
+import {
+  canWrite,
+  currentStoreOf,
+  ensureSession,
+  useSession,
+} from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
 import {
   useBufferState,
@@ -373,11 +378,13 @@ function ShiftPageView() {
     occurredAt: new Date().toISOString(),
   });
 
-  // the actions wait for the buffer of the terminal: without it the dialog stays open, nothing is dropped
+  // the actions wait for the buffer of the terminal: without it the dialog stays open, nothing is dropped; like a sale,
+  // they are taken under the terminal, so the session is checked first (security review 2026-10-22, F2)
   const run = async (work: (terminal: TerminalRuntime) => Promise<void>) => {
     if (!runtime) return;
     setBusy(true);
     try {
+      if ((await ensureSession(queryClient)) === null) return;
       await work(runtime);
       setDialog(null);
     } finally {
@@ -413,7 +420,12 @@ function ShiftPageView() {
         receipts: 0,
         byMethod: { cash: zero(), card: zero(), qr: zero(), nfc: zero() },
         returns: zero(),
-        returnsByMethod: { cash: zero(), card: zero(), qr: zero(), nfc: zero() },
+        returnsByMethod: {
+          cash: zero(),
+          card: zero(),
+          qr: zero(),
+          nfc: zero(),
+        },
         revenueMinor: 0,
         cash: {
           openingMinor: openingCashMinor,

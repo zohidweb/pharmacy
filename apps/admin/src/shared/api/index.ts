@@ -4,6 +4,7 @@ import type { ApiRouteKey } from './routes';
 export {
   ApiError,
   apiRequest,
+  isSessionEnded,
   partialTransport,
   REAL_API_ROUTES,
   setApiTransport,

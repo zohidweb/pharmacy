@@ -24,7 +24,13 @@ import {
   useCatalog,
   type CatalogData,
 } from '@/entities/catalog';
-import { can, canWrite, currentStoreOf, useSession } from '@/entities/session';
+import {
+  can,
+  canWrite,
+  currentStoreOf,
+  ensureSession,
+  useSession,
+} from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
 import { useBufferState, useTerminalRuntime } from '@/entities/terminal';
 import {
@@ -328,6 +334,9 @@ function PosPageView() {
     }
     setPaying(true);
     try {
+      // online, the sale needs a live session: without one the server would take it under the terminal in the name of
+      // the cashier who has left (security review 2026-10-22, F2); null — the PIN form opens, nothing is sold
+      if ((await ensureSession(queryClient)) === null) return;
       const current = usePosStore.getState().draft;
       const request = buildReceiptRequest(current, {
         session,

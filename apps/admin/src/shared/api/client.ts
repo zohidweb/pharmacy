@@ -36,6 +36,16 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The server has no session for the request (401 `unauthenticated`): it timed out, was ended or blocked. A failed
+ * sign-in answers other codes (`invalid_credentials`, `invalid_pin`, `invalid_code`) and a step-up asks with 403, so
+ * neither ends the session here (security review 2026-10-22, F2).
+ */
+export const isSessionEnded = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 401 &&
+  error.code === 'unauthenticated';
+
 export interface ApiRequestOptions<K extends ApiRouteKey> {
   params?: ApiParams<K>;
   query?: ApiQuery<K>;

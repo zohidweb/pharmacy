@@ -1,8 +1,8 @@
 /*
  * Connection detector (ADR-0015, ось 2а): navigator.onLine is only a hint — the signal is whether
- * requests to apps/api go through. A network error or timeout switches to «offline», then
- * /api/v1/health is pinged until it answers. TanStack Query's onlineManager and the POS buffer
- * follow this state.
+ * requests to apps/api go through. A network error, a timeout or a gateway answer in place of the
+ * API (stopped or restarting behind the reverse proxy) switches to «offline», then /api/v1/health
+ * is pinged until it answers. TanStack Query's onlineManager and the POS buffer follow this state.
  */
 const PING_INTERVAL_MS = 10_000;
 

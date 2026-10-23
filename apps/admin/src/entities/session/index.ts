@@ -3,3 +3,4 @@ export {
   sessionQueryKey,
   useSession,
 } from './api/session-queries';
+export { resetSession } from './api/session-reset';

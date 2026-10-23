@@ -32,8 +32,10 @@ async function bootstrap() {
     bodyParser: false,
   });
   const config = app.get(ConfigService);
-  // First, so that the answers of the body parsers (413, 415) carry the security headers too.
-  app.use(helmet());
+  // First, so that the answers of the body parsers (413, 415) carry the security headers too. HSTS comes from the
+  // reverse proxy, only where it terminates TLS (ADR-0012): sent here too, it would also reach the offline store over
+  // plain http://localhost and duplicate the header of the proxy.
+  app.use(helmet({ strictTransportSecurity: false }));
   // No API answer is stored by the browser: they carry personal and prescription data, and pharmacy PCs are shared
   // (security review 2026-10-22, P1). No ETag either — nothing is revalidated.
   app.set('etag', false);

@@ -1,0 +1,12 @@
+# Offline store (ADR-0012, ADR-0014): plain http on localhost, web only — no admin on the store PC.
+# localhost is a potentially trustworthy context: the store uses cookie names without the __Host- prefix (ADR-0008).
+http://localhost {
+	import access-log
+	root * /srv/web
+	import api-tenant
+	import static
+}
+
+http://127.0.0.1 {
+	redir http://localhost{uri}
+}

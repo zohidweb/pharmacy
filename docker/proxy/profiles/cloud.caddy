@@ -1,0 +1,13 @@
+# Cloud (ADR-0020): app.<domain> — web and /api, admin.<domain> — the operator admin, apex — redirect to web.
+{$WEB_ADDR} {
+	import web-site
+}
+
+{$ADMIN_ADDR} {
+	import admin-site
+}
+
+{$APEX_ADDR} {
+	import tls-{$TLS_MODE}
+	redir {$WEB_ORIGIN}{uri} permanent
+}

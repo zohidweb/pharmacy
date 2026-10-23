@@ -8,3 +8,10 @@ services:
   redis:
     ports:
       - '127.0.0.1:6379:6379'
+  # `npm run stack -- dev up` without services also starts the dockerized api (dev:deps does not)
+  api:
+    ports:
+      - '127.0.0.1:${API_PORT:-3000}:3000'
+  # dev serves web/admin with `next dev` and its /api rewrite; the proxy runs on test/prod only (ADR-0012)
+  proxy:
+    profiles: ['proxy']

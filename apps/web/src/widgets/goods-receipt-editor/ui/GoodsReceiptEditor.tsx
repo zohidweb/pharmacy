@@ -26,13 +26,13 @@ import { useMemo, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
 import {
-  MoneyInput,
   ProductSearch,
   QuantityInput,
   UnpostDialog,
   type StockAccess,
 } from '@/features/stock-document';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
+import { MoneyInput } from '@/shared/ui';
 
 type Line = GoodsReceiptInput['lines'][number] & {
   key: string;

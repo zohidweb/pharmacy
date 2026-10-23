@@ -2,8 +2,8 @@
 
 /*
  * What the employee may do with stock documents (ADR-0018 + ADR-0014): the role permissions and
- * the offline store whose stock the cloud only reads. The server
- * decides; this only hides and disables controls.
+ * the offline store whose stock the cloud only reads. The server decides; this only hides and
+ * disables controls.
  */
 import { can, canWrite, useSession } from '@/entities/session';
 

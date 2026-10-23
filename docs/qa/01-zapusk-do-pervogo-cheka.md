@@ -11,10 +11,9 @@
 
 | Что | Зачем | Где |
 |---|---|---|
-| Привязка кассы из web, скрытие офлайн-разделов | Без привязки касса, смена и возвраты недоступны из интерфейса; офлайн-разделы в меню падали бы с ошибкой | ветка `fix/qa-blockers-terminal-offline` |
-| Reverse proxy (Caddy) и стенд test по HTTPS | Общая среда для команды QA (раздел 1, вариант Б) | ветка `feature/hosting-proxy-pilot` |
+| Привязка кассы из web, скрытие офлайн-разделов | Без привязки касса, смена и возвраты недоступны из интерфейса (шаги 6–7); офлайн-разделы в меню падали бы с ошибкой | ветка `fix/qa-blockers-terminal-offline` |
 
-Пока proxy не слит, QA работает по варианту А — локально.
+Reverse proxy (Caddy) и стенд test по HTTPS уже в `main` (PR #75) — раздел 1, вариант Б.
 
 ## 1. Где запустить
 
@@ -58,12 +57,30 @@ npx nx run admin:dev-api
 **Не используйте `npm run dev`, `npx nx dev web` и `npx nx dev admin`:** они работают на встроенных моках, а не на API.
 Всё, что видно в таком режиме, — демонстрационные данные.
 
-### Вариант Б. Стенд test по HTTPS (после слияния proxy)
+### Вариант Б. Стенд test по HTTPS
 
-`npm run stack -- test init`, `npm run test-env:build`, `npm run test-env:up` (CLAUDE.md, раздел «Environments»).
-Адреса — `https://pharmacy-test.localhost:8443` (web) и `https://admin.pharmacy-test.localhost:8443` (админка);
-корневой сертификат Caddy доверяется один раз, команда — в CLAUDE.md. Скрипты из раздела 2 запускаются из образа `api`
-(`docker compose … run --rm --no-deps api node scripts/…`, команда — там же).
+Ближе всего к prod: Caddy, HTTPS, cookie `__Host-*`, собранные образы. Подробности — CLAUDE.md, раздел
+«Environments».
+
+```bash
+npm run stack -- test init
+npm run test-env:build
+npm run test-env:up
+```
+
+- `init` создаёт `docker/env/test.env` со случайными паролями. В файле, созданном до proxy, он допишет новые
+  переменные, но `WEB_ORIGIN` и `ADMIN_ORIGIN` нужно поправить вручную на адреса ниже.
+- `OPERATOR_ALLOW` — откуда пускают в админку: локально `private_ranges`, на общем стенде — адреса тестировщиков.
+- Корневой сертификат Caddy доверяется один раз (команда — в CLAUDE.md), иначе браузер не примет cookie и вход не
+  пройдёт.
+
+| Что | Адрес |
+|---|---|
+| Клиентский продукт | https://pharmacy-test.localhost:8443 |
+| Админка оператора | https://admin.pharmacy-test.localhost:8443 |
+
+Скрипты из раздела 2 на стенде запускаются из образа `api` (`docker compose … run --rm --no-deps api node scripts/…`,
+полная команда — в CLAUDE.md, раздел «Containers»), а не через `node --env-file=.env`.
 
 ## 2. Первый оператор платформы
 

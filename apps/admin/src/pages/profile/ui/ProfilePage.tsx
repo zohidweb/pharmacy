@@ -20,7 +20,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useOperatorAuditText } from '@/entities/operator-audit';
-import { sessionQueryKey } from '@/entities/session';
+import { resetSession, sessionQueryKey } from '@/entities/session';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { setLocale, type Locale } from '@/shared/i18n';
@@ -274,8 +274,9 @@ export function ProfilePage() {
   });
   const logout = useMutation({
     mutationFn: () => apiRequest('operator.sessions.delete'),
+    // every cached query goes too: the next operator on this tab sees none of these data (security review F6)
     onSuccess: () => {
-      queryClient.setQueryData(sessionQueryKey, null);
+      resetSession(queryClient);
       router.replace(routes.login());
     },
   });

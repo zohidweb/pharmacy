@@ -6,8 +6,9 @@
  * reload) the runtime of the bound terminal sends the buffer under the terminal (spec
  * 2026-10-21-pos-offline-limits, P18): the binding comes from the API, offline — the remembered one.
  */
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { useSession } from '@/entities/session/@x/terminal';
+import { recheckSession, useSession } from '@/entities/session/@x/terminal';
 import {
   getTerminalRuntime,
   type OutboxCounts,
@@ -90,6 +91,14 @@ export function useTerminalRuntime(): TerminalRuntime | null {
   useEffect(() => {
     if (runtime && signedInAt) runtime.queue.resume();
   }, [runtime, signedInAt]);
+
+  // a pause of the buffer (401/403) asks whether the session is still there: without it the shell opens the PIN form
+  // (security review 2026-10-22, F2, S4); every user of the runtime sees the pause, they share one request
+  const queryClient = useQueryClient();
+  const paused = useOutboxCounts(runtime).paused;
+  useEffect(() => {
+    if (paused) void recheckSession(queryClient);
+  }, [paused, queryClient]);
 
   return runtime && storeId && runtime.key.endsWith(`:${storeId}`)
     ? runtime

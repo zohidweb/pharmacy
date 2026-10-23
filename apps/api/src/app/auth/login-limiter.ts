@@ -25,7 +25,15 @@ export const LOGIN_LIMITER_DEFAULTS: Readonly<LoginLimiterOptions> = {
 };
 
 export type LoginAttempt =
-  { allowed: true } | { allowed: false; retryAfterSeconds: number };
+  | {
+      allowed: true;
+      /**
+       * This attempt reached the maximum and placed a lock of that many seconds (security review
+       * 2026-10-22, P2): if it does not succeed, the lock is written to the journal once.
+       */
+      lockSeconds?: number;
+    }
+  | { allowed: false; retryAfterSeconds: number };
 
 /** Limiter key of a normalized identifier: the kind and a SHA-256 of the value, never the value. */
 export function loginLimiterKey(kind: LoginKind, value: string): string {
@@ -39,7 +47,8 @@ export const LIMITER_KEY_PURPOSE = 'pharmacy/login-limiter-keys';
 
 // One atomic reservation of a sign-in attempt, made before the password is hashed (KEYS: attempts,
 // lock, lock history; ARGV: max attempts, window ms, lock ms, repeat lock ms, history ms). Returns
-// 0 when the attempt may proceed, otherwise the milliseconds left of the lock:
+// 0 when the attempt may proceed, minus the lock in milliseconds when it may proceed and has just
+// placed a lock, otherwise the milliseconds left of the lock:
 // - while locked, the attempt is refused and not counted (the lock is neither extended nor
 //   repeated);
 // - INCR the attempts; the first one (or a key that lost its expiry) opens the window;
@@ -68,6 +77,7 @@ if count >= tonumber(ARGV[1]) then
   redis.call('SET', lock, tostring(remembered), 'PX', lockMs)
   redis.call('SET', history, '1', 'PX', ARGV[5])
   redis.call('DEL', attempts)
+  return -tonumber(lockMs)
 end
 return 0
 `;
@@ -127,8 +137,11 @@ export class RedisLoginLimiter extends LoginLimiter {
     if (typeof reply !== 'number') {
       throw new Error('Unexpected login limiter script reply');
     }
-    return reply > 0
-      ? { allowed: false, retryAfterSeconds: Math.ceil(reply / 1000) }
+    if (reply > 0) {
+      return { allowed: false, retryAfterSeconds: Math.ceil(reply / 1000) };
+    }
+    return reply < 0
+      ? { allowed: true, lockSeconds: Math.round(-reply / 1000) }
       : { allowed: true };
   }
 

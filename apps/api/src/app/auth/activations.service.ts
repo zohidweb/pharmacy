@@ -28,6 +28,7 @@ import { EmployeeAuthRepository } from './employee-auth.repository';
 import { normalizeIdentifier } from './identifier';
 import { LoginClock, padFailure } from './login-clock';
 import { LoginLimiter } from './login-limiter';
+import { SignInLocks } from './sign-in-locks';
 
 // One answer for every failed code: unknown login, no code, expired, used or wrong code are
 // indistinguishable.
@@ -48,6 +49,7 @@ export class ActivationsService {
     private readonly hasher: PasswordHasher,
     private readonly sessions: SessionStore,
     private readonly limiter: LoginLimiter,
+    private readonly locks: SignInLocks,
     private readonly audit: AuditService,
     private readonly clock: LoginClock,
     config: ConfigService,
@@ -149,5 +151,7 @@ export class ActivationsService {
     await afterCommitBestEffort(this.logger, 'Resetting the activation attempts', () =>
       this.limiter.reset(key),
     );
+    // The new password lifts the sign-in locks of the owner (security review A2): best effort.
+    await this.locks.unlock(tenantId, employeeId);
   }
 }

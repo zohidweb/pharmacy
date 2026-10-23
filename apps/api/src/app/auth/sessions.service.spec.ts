@@ -30,6 +30,7 @@ import type {
 } from './employee-auth.repository';
 import { LoginClock } from './login-clock';
 import { type LoginLimiter, loginLimiterKey } from './login-limiter';
+import type { SignInLocks } from './sign-in-locks';
 import type { PrincipalLoader, PrincipalSnapshot } from './principal-loader';
 import { SessionsService } from './sessions.service';
 import { SessionIssuer } from './session-issuer';
@@ -239,6 +240,13 @@ function setup() {
     ),
     reset: jest.fn(async () => undefined),
   };
+  // The account budget, the journal and the lifting of sign-in locks (security review A2, P2).
+  const locks = {
+    reserveAccount: jest.fn(async () => ({ allowed: true }) as const),
+    resetAccount: jest.fn(async () => undefined),
+    record: jest.fn(async () => undefined),
+    unlock: jest.fn(async () => undefined),
+  };
   const clock = new FakeClock();
   const audits: RecordedAudit[] = [];
   const audit = {
@@ -269,6 +277,7 @@ function setup() {
     ),
     sessions,
     limiter as unknown as LoginLimiter,
+    locks as unknown as SignInLocks,
     audit as unknown as AuditService,
     clock,
     config,

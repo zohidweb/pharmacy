@@ -37,6 +37,7 @@ import {
   SessionIssuer,
 } from './session-issuer';
 import { buildEmployeeSession, type SessionView } from './session-profile';
+import { reconfirmLimiterKey, SignInLocks } from './sign-in-locks';
 
 export interface LoginResult {
   /** Session JWT for the cookie; never in a response body or a log. */
@@ -96,6 +97,7 @@ export class SessionsService {
     private readonly issuer: SessionIssuer,
     private readonly sessions: SessionStore,
     private readonly limiter: LoginLimiter,
+    private readonly locks: SignInLocks,
     private readonly audit: AuditService,
     private readonly clock: LoginClock,
     config: ConfigService,
@@ -225,10 +227,14 @@ export class SessionsService {
     }
     const { tenantId, employeeId } = principal;
     // Reserved atomically before any hashing or database call (see LoginLimiter).
-    const limiterKey = `reconfirm:${tenantId}:${employeeId}`;
+    const limiterKey = reconfirmLimiterKey(tenantId, employeeId);
     const attempt = await this.limiter.tryAcquire(limiterKey);
     if (!attempt.allowed)
       throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
+    // The account budget is shared with the sign-in and the password change (security review A2).
+    const account = await this.locks.reserveAccount(tenantId, employeeId);
+    if (!account.allowed)
+      throw new LockedException(429, 'login_locked', account.retryAfterSeconds);
 
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
@@ -252,6 +258,7 @@ export class SessionsService {
       ]);
     }
     await this.limiter.reset(limiterKey);
+    await this.locks.resetAccount(tenantId, employeeId);
     await this.sessions.update(principal.sessionId, {
       authenticatedAt: new Date().toISOString(),
     });
@@ -271,6 +278,12 @@ export class SessionsService {
     key: string,
   ): Promise<LoginResult> {
     const { tenantId, employeeId } = resolved;
+    // The account budget (security review A2): every identifier of the employee spends it, so the
+    // three of them do not triple the guesses. Reserved before any hashing.
+    const account = await this.locks.reserveAccount(tenantId, employeeId);
+    if (!account.allowed) {
+      throw new LockedException(429, 'login_locked', account.retryAfterSeconds);
+    }
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
     );
@@ -354,6 +367,7 @@ export class SessionsService {
     );
 
     await this.limiter.reset(key);
+    await this.locks.resetAccount(tenantId, employeeId);
     return {
       token: issued.token,
       maxAgeSeconds: issued.maxAgeSeconds,

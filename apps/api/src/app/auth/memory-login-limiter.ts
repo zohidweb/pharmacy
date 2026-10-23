@@ -55,13 +55,15 @@ export class MemoryLoginLimiter extends LoginLimiter {
 
     if (state.attempts >= this.options.maxFailures) {
       const repeated = state.historyUntil > now;
+      const lockSeconds = repeated ? this.options.repeatLockSeconds : this.options.lockSeconds;
       state.lockStartedHistory = !repeated;
-      state.lockedUntil =
-        now +
-        (repeated ? this.options.repeatLockSeconds : this.options.lockSeconds) * 1000;
+      state.lockedUntil = now + lockSeconds * 1000;
       state.historyUntil = now + this.options.repeatWindowSeconds * 1000;
       state.attempts = 0;
       state.windowEndsAt = 0;
+      this.keep(key, state);
+      // This attempt proceeds and placed the lock (see LoginAttempt.lockSeconds).
+      return Promise.resolve({ allowed: true, lockSeconds });
     }
     this.keep(key, state);
     return Promise.resolve({ allowed: true });

@@ -80,6 +80,8 @@ interface PendingAdd {
   product: PosProduct;
   unit: SaleUnit;
   batch?: PosBatch;
+  /** Version of the snapshot `product` (and its price) comes from: taken with it, not when the line is added. */
+  priceVersion?: number;
 }
 
 function useOnlineState(): boolean {
@@ -188,6 +190,7 @@ function PosPageView() {
         batch: pending.batch,
         today,
         controlled: controlledData,
+        priceVersion: pending.priceVersion,
       });
       failed = result.error;
       return result.draft;
@@ -204,7 +207,7 @@ function PosPageView() {
     unit: SaleUnit,
     batch?: PosBatch,
   ) => {
-    const pending = { product, unit, batch };
+    const pending = { product, unit, batch, priceVersion: snapshot?.version };
     if (product.prescription === 'controlled') {
       if (!can(session, 'pos:sell-controlled')) {
         setNotice(t('controlledForbidden', { name: product.name }));
@@ -300,6 +303,7 @@ function PosPageView() {
         quantity: line.quantity,
         batch: batch && batch.expiresOn >= today ? batch : undefined,
         today,
+        priceVersion: snapshot?.version,
       });
       next = result.draft;
     }
@@ -614,6 +618,7 @@ function PosPageView() {
               product,
               batch,
               today,
+              snapshot?.version,
             );
             failed = result.error;
             return result.draft;

@@ -20,9 +20,21 @@ export interface SendError {
   status: number;
   code: string;
   correlationId: string;
+  errors?: Array<{ field: string; code: string }>;
 }
 
-export type Sender = (record: OutboxRecord) => Promise<unknown>;
+export interface SendOptions {
+  /**
+   * The send of a receipt refused by the price rules that a manager accepts as it is (`X-Accept-Discrepancy`; ADR-0015,
+   * amendment 2026-10-23): only the one send that the manager's click starts.
+   */
+  acceptDiscrepancy: boolean;
+}
+
+export type Sender = (
+  record: OutboxRecord,
+  options: SendOptions,
+) => Promise<unknown>;
 
 export interface OutboxCounts {
   pending: number;
@@ -69,11 +81,19 @@ function asSendError(error: unknown): SendError {
     'status' in error &&
     'code' in error
   ) {
-    const e = error as { status: number; code: string; correlationId?: string };
+    const e = error as {
+      status: number;
+      code: string;
+      correlationId?: string;
+      errors?: unknown;
+    };
     return {
       status: e.status,
       code: e.code,
       correlationId: e.correlationId ?? '—',
+      ...(Array.isArray(e.errors) && e.errors.length > 0
+        ? { errors: e.errors as Array<{ field: string; code: string }> }
+        : {}),
     };
   }
   return { status: 0, code: 'unexpected', correlationId: '—' };
@@ -96,6 +116,8 @@ export class OfflineQueue {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running: Promise<void> | null = null;
   private stopped = false;
+  /** The ids a manager has just accepted as they are (`retry` with `acceptDiscrepancy`): in memory, one send each. */
+  private readonly acceptOnce = new Set<string>();
 
   constructor(
     private readonly db: PosDb,
@@ -157,10 +179,19 @@ export class OfflineQueue {
     return this.db.getAllFromIndex('outbox', 'byCreatedAt');
   }
 
-  /** Back to the queue with the same key (the manager fixed the cause). */
-  async retry(id: string): Promise<void> {
+  /**
+   * Back to the queue with the same key (the manager fixed the cause); `acceptDiscrepancy` — a receipt refused by the
+   * price rules goes as it is, accepted by the manager: for this one send only, never kept on the record (a flag left
+   * on it would go out with whoever's session sends the buffer next).
+   */
+  async retry(
+    id: string,
+    options: { acceptDiscrepancy?: boolean } = {},
+  ): Promise<void> {
     const record = await this.db.get('outbox', id);
     if (!record) return;
+    if (options.acceptDiscrepancy) this.acceptOnce.add(id);
+    else this.acceptOnce.delete(id);
     await this.db.put('outbox', {
       ...record,
       status: 'pending',
@@ -173,6 +204,8 @@ export class OfflineQueue {
 
   /** Session restored or connection back: try again now. */
   resume(): void {
+    // another session sends from now on: an acceptance given in the previous one is not carried over
+    this.acceptOnce.clear();
     this.counts = { ...this.counts, paused: false };
     this.emit();
     void this.flush();
@@ -180,6 +213,7 @@ export class OfflineQueue {
 
   stop(): void {
     this.stopped = true;
+    this.acceptOnce.clear();
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
@@ -209,8 +243,10 @@ export class OfflineQueue {
         this.schedule(wait);
         break;
       }
+      // the manager's acceptance goes with this attempt only, whatever its outcome
+      const acceptDiscrepancy = this.acceptOnce.delete(next.id);
       try {
-        const response = await this.send(next);
+        const response = await this.send(next, { acceptDiscrepancy });
         await this.db.delete('outbox', next.id);
         this.delivered.forEach((listener) => listener(next, response));
       } catch (raw) {

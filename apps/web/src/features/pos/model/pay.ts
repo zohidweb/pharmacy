@@ -50,7 +50,12 @@ export function buildReceiptRequest(
     employeeId: session.employee.id,
     occurredAt,
     shiftId,
-    priceListVersion: snapshot.version,
+    // the oldest snapshot a line was priced by: a line keeps its price when the snapshot is refreshed (ADR-0015,
+    // amendment 2026-10-23)
+    priceListVersion: Math.min(
+      snapshot.version,
+      ...draft.lines.map((line) => line.priceVersion ?? snapshot.version),
+    ),
     lines: draft.lines.map((line) => ({
       productId: line.productId,
       batchId: line.batchId,

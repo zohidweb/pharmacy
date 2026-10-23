@@ -36,8 +36,9 @@ export function Sidebar() {
       }),
     enabled: !!session,
     // not on the POS screen: there a waiting new version of the app activates between receipts,
-    // and with this polling on it stayed waiting in the web-e2e run (cause not established); the
-    // sales there go through the outbox, so leaving the POS refreshes the numbers at once
+    // and a request at that moment restarts the old worker, so Chrome puts the activation off until
+    // the old worker is idle again (~30 s); the sales there go through the outbox, so leaving the
+    // POS refreshes the numbers at once
     refetchInterval: onPos ? false : 60_000,
   });
   const wasOnPos = useRef(onPos);

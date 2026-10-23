@@ -269,6 +269,10 @@ export class FakeApi {
         );
       case 'GET /nav-counters':
         return session() ?? json({});
+      // every screen of the shell asks for it; a 404 would be retried by the app and, under the page clock,
+      // a retry can hit the old worker at the moment a new one is told to activate (service-worker.spec)
+      case 'GET /announcements':
+        return session() ?? json([]);
       case 'GET /sync/status':
         return problem(404, 'not_found');
       case 'GET /shifts/current':

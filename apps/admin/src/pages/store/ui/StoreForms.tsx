@@ -16,119 +16,35 @@ import { useForm } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
 import { z } from 'zod';
 import { useApiErrorMessage } from '@/shared/api';
-import {
-  useUpdateLicenseSettings,
-  useUpdateStore,
-} from '../api/store-mutations';
+import { useUpdateLicenseSettings } from '../api/store-mutations';
 
-const PHONE = /^\+992(\s?\d){9}$/;
-
-const paramsSchema = z.object({
-  name: z.string().trim().min(1, { error: 'required' }),
-  address: z.string().trim().min(1, { error: 'required' }),
-  managerName: z.string().trim().min(1, { error: 'required' }),
-  managerPhone: z.string().trim().regex(PHONE, { error: 'phone' }),
-});
-type ParamsValues = z.input<typeof paramsSchema>;
-
-type FieldErrorKey = 'required' | 'phone' | 'notifyDays';
 const fieldErrorKey = (
   message: string | undefined,
-): FieldErrorKey | undefined =>
-  message === 'required' || message === 'phone' || message === 'notifyDays'
-    ? message
-    : undefined;
+): 'notifyDays' | undefined => (message === 'notifyDays' ? message : undefined);
 
-export function StoreParamsForm({ store }: { store: StoreDetails }) {
+/**
+ * The parameters of a store, read only: the owner of the network edits the store in the cabinet (spec
+ * 2026-10-23-admin-store-card-tenant-log, A6; ADR-0013 §5).
+ */
+export function StoreParams({ store }: { store: StoreDetails }) {
   const t = useTranslations('store.params');
-  const tErrors = useTranslations('validation');
-  const toast = useToast();
-  const update = useUpdateStore(store.id);
-  const error = useApiErrorMessage(update.error);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isDirty },
-    reset,
-  } = useForm<ParamsValues>({
-    resolver: zodResolver(paramsSchema),
-    values: {
-      name: store.name,
-      address: store.address,
-      managerName: store.managerName,
-      managerPhone: store.managerPhone,
-    },
-  });
-  const message = (value?: string) => {
-    const key = fieldErrorKey(value);
-    return key ? tErrors(key) : undefined;
-  };
-
   return (
     <Card as="section" aria-labelledby="store-params-title">
-      <CardHeader title={t('title')} titleId="store-params-title" />
-      <form
-        noValidate
-        className="flex flex-col gap-4"
-        onSubmit={handleSubmit((values) =>
-          update.mutate(paramsSchema.parse(values), {
-            onSuccess: (saved) => {
-              reset({
-                name: saved.name,
-                address: saved.address,
-                managerName: saved.managerName,
-                managerPhone: saved.managerPhone,
-              });
-              toast.show(t('saved'));
-            },
-          }),
-        )}
-      >
-        {error && (
-          <Alert tone="danger" live="assertive">
-            {error}
-          </Alert>
-        )}
-        <TextField
-          label={t('name')}
-          required
-          error={message(errors.name?.message)}
-          {...register('name')}
-        />
-        <TextField
-          label={t('address')}
-          required
-          error={message(errors.address?.message)}
-          {...register('address')}
-        />
+      <CardHeader
+        title={t('title')}
+        titleId="store-params-title"
+        description={t('ownerEdits')}
+      />
+      <div className="flex flex-col gap-4">
+        <TextField label={t('name')} readOnly value={store.name} />
+        <TextField label={t('address')} readOnly value={store.address || '—'} />
         <TextField
           label={t('mode')}
           readOnly
           value={t(`modeValue.${store.mode}`)}
           hint={t('modeHint')}
         />
-        <div className="grid grid-cols-2 gap-4">
-          <TextField
-            label={t('managerName')}
-            required
-            error={message(errors.managerName?.message)}
-            {...register('managerName')}
-          />
-          <TextField
-            label={t('managerPhone')}
-            type="tel"
-            placeholder="+992 00 000 00 00"
-            required
-            error={message(errors.managerPhone?.message)}
-            {...register('managerPhone')}
-          />
-        </div>
-        <div className="flex justify-end">
-          <Button type="submit" disabled={!isDirty} loading={update.isPending}>
-            {t('save')}
-          </Button>
-        </div>
-      </form>
+      </div>
     </Card>
   );
 }

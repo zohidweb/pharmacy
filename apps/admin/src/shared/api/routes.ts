@@ -68,7 +68,6 @@ import type {
   OperatorActivationRequest,
   OperatorLoginRequest,
   OperatorSession,
-  AuditEntry,
   Page,
   StoreDetails,
   StoreSummary,
@@ -83,7 +82,6 @@ import type {
   TenantServiceItem,
   TenantStats,
   UpdateStoreLicenseSettingsRequest,
-  UpdateStoreRequest,
 } from '@pharmacy/shared-dto';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -195,19 +193,9 @@ export const apiRoutes = {
     'GET',
     (p) => `/operator/tenants/${id(p)}/stats`,
   ),
-  'tenants.audit': route<
-    Page<AuditEntry>,
-    undefined,
-    { id: string },
-    { limit?: number; offset?: number }
-  >('GET', (p) => `/operator/tenants/${id(p)}/audit-log`),
 
   'stores.get': route<StoreDetails, undefined, { id: string }>(
     'GET',
-    (p) => `/operator/stores/${id(p)}`,
-  ),
-  'stores.update': route<StoreDetails, UpdateStoreRequest, { id: string }>(
-    'PATCH',
     (p) => `/operator/stores/${id(p)}`,
   ),
   'stores.updateLicenseSettings': route<

@@ -2,7 +2,6 @@ import type {
   MigrateStoreToCloudRequest,
   StoreDetails,
   UpdateStoreLicenseSettingsRequest,
-  UpdateStoreRequest,
 } from '@pharmacy/shared-dto';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { storeKeys } from '@/entities/store';
@@ -23,12 +22,6 @@ function useStoreMutation<Body>(
       });
     },
   });
-}
-
-export function useUpdateStore(id: string) {
-  return useStoreMutation(id, (body: UpdateStoreRequest) =>
-    apiRequest('stores.update', { params: { id }, body }),
-  );
 }
 
 export function useUpdateLicenseSettings(id: string) {

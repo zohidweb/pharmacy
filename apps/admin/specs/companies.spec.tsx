@@ -144,10 +144,9 @@ describe('CompanyPage', () => {
     // debt, advance and the discount of the network (spec 2026-10-15-billing-services, B12)
     expect(await screen.findByText('Скидки')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Аудит' }));
-    expect(
-      await screen.findByText('Принята накладная поставщика'),
-    ).toBeTruthy();
+    // no log of the network: its employees' actions stay with its owner (spec
+    // 2026-10-23-admin-store-card-tenant-log, A7)
+    expect(screen.queryByRole('tab', { name: 'Аудит' })).toBeNull();
   });
 
   it('reports an unknown company', async () => {
@@ -197,20 +196,17 @@ describe('StorePage', () => {
     );
   });
 
-  it('validates and saves store parameters', async () => {
+  // the owner of the network edits the store, the operator only sees it (spec
+  // 2026-10-23-admin-store-card-tenant-log, A6)
+  it('shows the store parameters read only', async () => {
     searchParams = new URLSearchParams('id=s-101');
     renderWithProviders(<StorePage />);
-    const phone = await screen.findByLabelText('Телефон заведующей');
 
-    fireEvent.input(phone, { target: { value: '12345' } });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Сохранить' })[0]);
-    expect(
-      await screen.findByText('Телефон в формате +992 00 000 00 00'),
-    ).toBeTruthy();
-
-    fireEvent.input(phone, { target: { value: '+992 00 000 00 99' } });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Сохранить' })[0]);
-    expect(await screen.findByText('Параметры точки сохранены')).toBeTruthy();
+    const address = await screen.findByLabelText('Адрес');
+    expect((address as HTMLInputElement).readOnly).toBe(true);
+    expect(screen.getByText('Меняет владелец сети в своём кабинете')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Сохранить' })).toBeNull();
+    expect(screen.queryByLabelText('Телефон заведующей')).toBeNull();
   });
 });
 

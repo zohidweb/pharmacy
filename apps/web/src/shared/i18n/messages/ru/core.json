@@ -300,6 +300,10 @@
       "title": "{positions, plural, one {# строка продана} few {# строки проданы} other {# строк продано}} при нехватке остатка",
       "detail": "{store} · проверьте приход и остатки"
     },
+    "receipt_discrepancy": {
+      "title": "{positions, plural, one {# чек} few {# чека} other {# чеков}} с расхождением цены, скидки или автора",
+      "detail": "{store} · проверьте смену и Z-отчёт"
+    },
     "sync_conflict": {
       "title": "Конфликт синхронизации",
       "detail": "{store} · нужно решение владельца"

@@ -58,6 +58,11 @@ export type NotificationKind =
   | 'transfer_in_transit'
   | 'shift_discrepancy'
   | 'negative_stock'
+  /**
+   * Receipts with a price, discount or author mark — a store × business date (event; security review 2026-10-22, I2):
+   * `positions` holds the count of receipts.
+   */
+  | 'receipt_discrepancy'
   | 'sync_conflict'
   | 'license_expiring'
   /** The operator approved (with a price), rejected or cancelled a service of the network (event). */

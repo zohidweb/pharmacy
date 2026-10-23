@@ -40,6 +40,9 @@ export class NotificationSwitchesDto implements Record<
   negative_stock!: boolean;
 
   @IsBoolean()
+  receipt_discrepancy!: boolean;
+
+  @IsBoolean()
   sync_conflict!: boolean;
 
   @IsBoolean()

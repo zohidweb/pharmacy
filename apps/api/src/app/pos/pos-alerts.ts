@@ -18,6 +18,14 @@ export interface ShortfallsOfDay {
   lines: number;
 }
 
+export interface ReceiptDiscrepanciesOfDay {
+  storeId: string;
+  /** YYYY-MM-DD — the business date of the sales. */
+  businessDate: string;
+  /** Receipts of the day with a price, discount or author mark. */
+  receipts: number;
+}
+
 // The POS events of the notifications (spec 2026-10-14-owner-cabinet, 5.4): shifts closed with a
 // cash discrepancy and sales into minus. The notifications module reads them after a moment and
 // keeps one notification per shift and per store × business date.
@@ -63,6 +71,31 @@ export class PosAlerts {
       join affected a on a.store_id = r.store_id and a.business_date = r.business_date
       join pharmacy.receipt_lines l on l.tenant_id = r.tenant_id and l.receipt_id = r.id
       where r.tenant_id = ${tenantId} and l.shortfall_pieces > 0
+      group by r.store_id, r.business_date`.execute(trx);
+    return result.rows;
+  }
+
+  /**
+   * The days with receipts marked for the price, the discount or the author among the receipts received after `after`
+   * (security review 2026-10-22, I2): for each store × business date, every such receipt of that day.
+   */
+  async discrepanciesByDay(
+    trx: TenantTransaction,
+    tenantId: string,
+    after: Date,
+  ): Promise<ReceiptDiscrepanciesOfDay[]> {
+    const marks = sql`array['price', 'discount', 'author']::text[]`;
+    const result = await sql<ReceiptDiscrepanciesOfDay>`
+      with affected as (
+        select distinct store_id, business_date
+        from pharmacy.receipts
+        where tenant_id = ${tenantId} and received_at > ${after}
+          and discrepancy_kinds && ${marks}
+      )
+      select r.store_id, r.business_date::text as business_date, count(*)::integer as receipts
+      from pharmacy.receipts r
+      join affected a on a.store_id = r.store_id and a.business_date = r.business_date
+      where r.tenant_id = ${tenantId} and r.discrepancy_kinds && ${marks}
       group by r.store_id, r.business_date`.execute(trx);
     return result.rows;
   }

@@ -60,6 +60,7 @@ const KIND_PERMISSION: Record<NotificationKind, Permission> = {
   transfer_in_transit: 'inventory:view',
   supplier_payment_due: 'purchasing:view',
   shift_discrepancy: 'shifts:view',
+  receipt_discrepancy: 'shifts:view',
   sync_conflict: 'sync:view',
   license_expiring: 'stores:view',
   service_decided: 'services:view',

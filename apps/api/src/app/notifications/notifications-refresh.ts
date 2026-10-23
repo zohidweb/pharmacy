@@ -202,6 +202,29 @@ export class NotificationsRefresh {
         })),
       );
     }
+    if (enabled('receipt_discrepancy')) {
+      // receipts sold at a price or a discount off the current rules, or by an author without the right (I2)
+      const days = await this.pos.discrepanciesByDay(
+        trx,
+        tenantId,
+        new Date(eventsFrom),
+      );
+      await this.repository.upsert(
+        trx,
+        tenantId,
+        days.map((day) => ({
+          kind: 'receipt_discrepancy',
+          storeId: day.storeId,
+          dedupeKey: `receipt_discrepancy:${day.storeId}:${day.businessDate}`,
+          entityType: 'store',
+          entityId: day.storeId,
+          params: {
+            positions: day.receipts,
+            storeName: storeName(day.storeId),
+          },
+        })),
+      );
+    }
     if (enabled('service_decided')) {
       // the operator's decisions on the services of the network (spec 2026-10-15-billing-services,
       // A17): one event per decision, an approval and a later cancellation are two

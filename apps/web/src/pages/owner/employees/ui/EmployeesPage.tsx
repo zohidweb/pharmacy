@@ -25,6 +25,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
+import { useBoundTerminal } from '@/entities/terminal';
+import { BindTerminalButton } from '@/features/bind-terminal';
 import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
@@ -366,7 +368,9 @@ function RolesTab() {
 
 function TerminalsTab() {
   const t = useTranslations('employees.terminals');
+  const tBind = useTranslations('bindTerminal');
   const { data: session } = useSession();
+  const thisTerminal = useBoundTerminal().data ?? null;
   const queryClient = useQueryClient();
   const terminals = useQuery({
     queryKey: ['terminals'],
@@ -422,7 +426,20 @@ function TerminalsTab() {
     <QueryState query={terminals}>
       {(data) => (
         <Card padding="none">
-          <CardHeader title={t('title')} description={t('hint')} inset />
+          <CardHeader
+            title={t('title')}
+            description={t('hint')}
+            actions={<BindTerminalButton />}
+            inset
+          />
+          {thisTerminal && (
+            <p className="m-0 px-(--ph-card-padding) pb-3 text-sm text-fg-subtle">
+              {tBind('bound', {
+                name: thisTerminal.name,
+                store: thisTerminal.store.name,
+              })}
+            </p>
+          )}
           {error && (
             <div className="px-(--ph-card-padding) pb-3">
               <Alert tone="danger" live="assertive">

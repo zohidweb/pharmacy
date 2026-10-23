@@ -27,6 +27,7 @@ import {
 import { can, canWrite, currentStoreOf, useSession } from '@/entities/session';
 import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
 import { useBufferState, useTerminalRuntime } from '@/entities/terminal';
+import { BindTerminalButton } from '@/features/bind-terminal';
 import {
   addProduct,
   applySaleToSnapshot,
@@ -421,6 +422,7 @@ function PosPageView() {
             icon="lock"
             title={t('noTerminal')}
             description={t('noTerminalHint')}
+            action={<BindTerminalButton variant="primary" unboundOnly />}
           />
         </div>
       </>

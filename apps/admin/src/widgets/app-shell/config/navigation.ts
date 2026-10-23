@@ -1,4 +1,5 @@
 import type { IconName } from '@pharmacy/ui';
+import { isApiRouteAvailable, type ApiRouteKey } from '@/shared/api';
 import { routes, type StaticRouteName } from '@/shared/config';
 
 type NavLabelKey =
@@ -20,6 +21,8 @@ export interface NavItem {
   icon: IconName;
   /** Field of AttentionCounts shown as a counter next to the item. */
   counter?: 'serviceRequests' | 'expiringLicenses' | 'unreadNotifications';
+  /** The route the screen loads; the item is hidden in a build where it does not answer. */
+  api?: ApiRouteKey;
 }
 
 export interface NavSection {
@@ -63,8 +66,14 @@ export const navigation: NavSection[] = [
         label: 'licenses',
         icon: 'key-round',
         counter: 'expiringLicenses',
+        api: 'licenses.list',
       },
-      { route: 'versions', label: 'versions', icon: 'package' },
+      {
+        route: 'versions',
+        label: 'versions',
+        icon: 'package',
+        api: 'installations.list',
+      },
     ],
   },
   {
@@ -81,6 +90,21 @@ export const navigation: NavSection[] = [
     ],
   },
 ];
+
+/**
+ * Sections and items this build can open: offline stores are not in the pilot, their screens have no
+ * apps/api routes yet (the code stays for the full mocks); empty sections are dropped.
+ */
+export function visibleNavigation(): NavSection[] {
+  return navigation
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(
+        (item) => !item.api || isApiRouteAvailable(item.api),
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
+}
 
 /** Screens without a menu item of their own, shown under a parent item. */
 const parentSection: Array<[prefix: string, parent: string]> = [

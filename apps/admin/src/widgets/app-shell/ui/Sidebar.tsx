@@ -7,7 +7,7 @@ import { useTranslations } from 'use-intl';
 import { useAttentionCounts } from '@/entities/event';
 import { useSession } from '@/entities/session';
 import { routes } from '@/shared/config';
-import { activeRoute, navigation } from '../config/navigation';
+import { activeRoute, visibleNavigation } from '../config/navigation';
 
 export function Sidebar() {
   const t = useTranslations();
@@ -31,7 +31,7 @@ export function Sidebar() {
         aria-label={t('shell.navLabel')}
         className="flex flex-1 flex-col gap-4 overflow-y-auto"
       >
-        {navigation.map((section) => {
+        {visibleNavigation().map((section) => {
           const headingId = `nav-${section.title}`;
           return (
             <div key={section.title} className="flex flex-col gap-0.5">

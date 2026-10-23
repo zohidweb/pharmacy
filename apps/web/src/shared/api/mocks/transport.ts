@@ -220,6 +220,32 @@ function toMe(employee: MockEmployeeState): EmployeeMe {
   };
 }
 
+/** The terminal of this browser (`terminals.current`); 404 `not_bound`. */
+function boundTerminalOf(
+  correlationId: string,
+): ApiResponse<'terminals.current'> {
+  const db = mockDb();
+  const terminal = db.terminal;
+  if (!terminal) throw new ApiError(404, 'not_bound', correlationId);
+  const store = stores.find((s) => s.id === terminal.storeId);
+  if (!store) throw new ApiError(404, 'not_bound', correlationId);
+  return {
+    id: terminal.id,
+    tenantId: tenant.id,
+    name: terminal.name,
+    store,
+    cashiers: db.employees
+      .filter(
+        (e) =>
+          e.pin !== null &&
+          e.status === 'active' &&
+          e.storeIds?.includes(store.id),
+      )
+      .map((e) => ({ employeeId: e.id, shortName: e.shortName })),
+    pinLength: 4,
+  };
+}
+
 const handlers: MockHandlers = {
   ...posHandlers,
   ...stockHandlers,
@@ -285,28 +311,43 @@ const handlers: MockHandlers = {
     }
   },
 
-  'terminals.current': ({ correlationId }) => {
+  'terminals.bind': ({ body, correlationId }) => {
+    const { session, stored } = authorize(correlationId, 'terminals:create', {
+      write: true,
+    });
+    if (stored.auth !== 'password') {
+      throw new ApiError(403, 'fresh_auth_required', correlationId);
+    }
+    const store = session.stores.find((s) => s.id === body.storeId);
+    if (!store) throw new ApiError(404, 'not_found', correlationId);
+    const name = body.name.trim();
     const db = mockDb();
-    const terminal = db.terminal;
-    if (!terminal) throw new ApiError(404, 'not_bound', correlationId);
-    const store = stores.find((s) => s.id === terminal.storeId);
-    if (!store) throw new ApiError(404, 'not_bound', correlationId);
-    return {
-      id: terminal.id,
-      tenantId: tenant.id,
-      name: terminal.name,
-      store,
-      cashiers: db.employees
-        .filter(
-          (e) =>
-            e.pin !== null &&
-            e.status === 'active' &&
-            e.storeIds?.includes(store.id),
-        )
-        .map((e) => ({ employeeId: e.id, shortName: e.shortName })),
-      pinLength: 4,
-    };
+    // the browser's previous terminal is revoked by the binding
+    const previousId = db.terminal?.id;
+    const others = db.owner.terminals.filter((t) => t.id !== previousId);
+    if (others.some((t) => t.storeId === store.id && t.name === name)) {
+      throw new ApiError(409, 'terminal_name_taken', correlationId);
+    }
+    const id = `term-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    db.owner.terminals = [
+      ...others,
+      {
+        id,
+        name,
+        serial: '—',
+        storeId: store.id,
+        storeName: store.name,
+        storeOffline: false,
+        boundByName: session.employee.fullName,
+        boundAt: now,
+        lastSeenAt: now,
+      },
+    ];
+    db.terminal = { id, name, storeId: store.id };
+    return boundTerminalOf(correlationId);
   },
+  'terminals.current': ({ correlationId }) => boundTerminalOf(correlationId),
   'terminals.unbind': ({ params, correlationId }) => {
     const { session, stored } = authorize(correlationId, 'terminals:delete', {
       write: true,

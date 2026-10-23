@@ -157,34 +157,49 @@ export function DashboardPage() {
                             item.kind,
                             item.params,
                           );
-                          return (
-                            <li
-                              key={item.id}
-                              className="border-t border-border"
-                            >
-                              <Link
-                                href={eventHref(item.target)}
-                                className="flex items-start gap-3 px-(--ph-card-padding) py-3 hover:bg-surface-sunken"
+                          const href = eventHref(item.target);
+                          const row =
+                            'flex items-start gap-3 px-(--ph-card-padding) py-3';
+                          const content = (
+                            <>
+                              <span
+                                className={`grid size-8 shrink-0 place-items-center rounded-md ${toneSurface[eventTone[item.kind]]}`}
                               >
-                                <span
-                                  className={`grid size-8 shrink-0 place-items-center rounded-md ${toneSurface[eventTone[item.kind]]}`}
-                                >
-                                  <Icon name={eventIcon[item.kind]} size="sm" />
+                                <Icon name={eventIcon[item.kind]} size="sm" />
+                              </span>
+                              <span className="flex min-w-0 flex-1 flex-col">
+                                <span className="text-sm font-medium text-fg">
+                                  {title}
                                 </span>
-                                <span className="flex min-w-0 flex-1 flex-col">
-                                  <span className="text-sm font-medium text-fg">
-                                    {title}
-                                  </span>
-                                  <span className="text-xs text-fg-subtle">
-                                    {detail}
-                                  </span>
+                                <span className="text-xs text-fg-subtle">
+                                  {detail}
                                 </span>
+                              </span>
+                              {href && (
                                 <Icon
                                   name="chevron-right"
                                   size="sm"
                                   className="mt-1 text-fg-subtle"
                                 />
-                              </Link>
+                              )}
+                            </>
+                          );
+                          return (
+                            <li
+                              key={item.id}
+                              className="border-t border-border"
+                            >
+                              {/* no link where the screen has no API in this build */}
+                              {href ? (
+                                <Link
+                                  href={href}
+                                  className={`${row} hover:bg-surface-sunken`}
+                                >
+                                  {content}
+                                </Link>
+                              ) : (
+                                <div className={row}>{content}</div>
+                              )}
                             </li>
                           );
                         })}

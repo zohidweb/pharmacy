@@ -3,7 +3,8 @@
 /*
  * Registration of the Service Worker (ADR-0015, ось 6б): production build only, cloud deployment
  * only (the offline store serves the API on localhost and needs no worker). A waiting new version
- * is activated only while the POS receipt is empty — never in the middle of a sale.
+ * is activated only while the POS receipt is empty — never in the middle of a sale; the page reloads
+ * onto it the same way, also when the activation came late and found a receipt in progress.
  */
 import { useEffect } from 'react';
 import { usePosStore } from '@/features/pos';
@@ -43,15 +44,24 @@ export function ServiceWorker() {
       // no worker is not an error: the app works online without it
       .catch(() => undefined);
     let reloaded = false;
-    const onController = () => {
+    let deferred: ReturnType<typeof setInterval> | null = null;
+    const reloadWhenIdle = () => {
       if (reloaded || usePosStore.getState().draft.lines.length > 0) return;
       reloaded = true;
       window.location.reload();
+    };
+    const onController = () => {
+      reloadWhenIdle();
+      // Chrome may put the activation off (~30 s, until the old worker is idle again) and a sale may
+      // have started meanwhile: the page reloads at the first check that finds the receipt empty. A
+      // check, not the moment the receipt empties: payment empties it before its last steps are done
+      if (!reloaded) deferred ??= setInterval(reloadWhenIdle, CHECK_MS);
     };
     navigator.serviceWorker.addEventListener('controllerchange', onController);
     return () => {
       cancelled = true;
       stop?.();
+      if (deferred) clearInterval(deferred);
       navigator.serviceWorker.removeEventListener(
         'controllerchange',
         onController,

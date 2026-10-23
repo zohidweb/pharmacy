@@ -65,7 +65,6 @@ interface ProblemsFilter {
  */
 function PricingPageView({ initial }: { initial: ProblemsFilter }) {
   const t = useTranslations('pricing');
-  const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
   const [tab, setTab] = useState<Tab>('prices');
   // price conflicts of offline stores come with the sync (ADR-0014): no tab until the API has them
@@ -81,9 +80,6 @@ function PricingPageView({ initial }: { initial: ProblemsFilter }) {
     <>
       <PageHeader title={t('title')} />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        {session?.impersonation && (
-          <Alert tone="info">{tDocs('notices.impersonation')}</Alert>
-        )}
         <Tabs
           label={t('title')}
           value={tab}

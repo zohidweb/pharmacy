@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { networkSettingsDefaults } from '@pharmacy/shared-domain';
 import type { TenantTerminal } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
@@ -60,22 +61,9 @@ const MY_TERMINALS_DAYS = 90;
 /** PIN failures in a row that lock the PIN (auth design 2026-10-02, section 8). */
 export const PIN_MAX_FAILED_ATTEMPTS = 3;
 
-// The column default of tenant_settings.pin_min_length, for a tenant without a settings row.
-const DEFAULT_PIN_MIN_LENGTH = 4;
-
 // last_seen_at is written at most once per this interval (auth design, section 8).
 const LAST_SEEN_INTERVAL = '5 minutes';
 
-// PostgreSQL unique_violation.
-const UNIQUE_VIOLATION = '23505';
-
-export function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { code?: unknown }).code === UNIQUE_VIOLATION
-  );
-}
 
 // Data access of terminals and PIN sign-in. Every query runs in the caller's tenant transaction and
 // filters by tenant_id; RLS is the second line.
@@ -246,7 +234,7 @@ export class TerminalsRepository {
       .select('pinMinLength')
       .where('tenantId', '=', tenantId)
       .executeTakeFirst();
-    return row?.pinMinLength ?? DEFAULT_PIN_MIN_LENGTH;
+    return row?.pinMinLength ?? networkSettingsDefaults.pinMinLength;
   }
 
   async pinCandidate(

@@ -1,10 +1,9 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import type { OperatorAuditEntry, Page } from '@pharmacy/shared-dto';
+import { DEFAULT_PAGE_LIMIT } from '../../../common/pagination';
 import { RequireOperatorPermission } from '../auth/decorators';
 import { OperatorAuditQueryDto } from './dto/operator-audit.dto';
 import { OperatorAuditLogService } from './operator-audit.service';
-
-const DEFAULT_LIMIT = 20;
 
 // The operators' audit log, read only (data model 06): what operators and platform jobs did.
 @Controller({ path: 'operator/operator-audit-log', version: '1' })
@@ -21,7 +20,7 @@ export class OperatorAuditController {
       type: query.type ?? null,
       from: query.from ?? null,
       to: query.to ?? null,
-      limit: query.limit ?? DEFAULT_LIMIT,
+      limit: query.limit ?? DEFAULT_PAGE_LIMIT,
       offset: query.offset ?? 0,
     });
   }

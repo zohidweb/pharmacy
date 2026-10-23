@@ -11,6 +11,7 @@ import { ProblemException } from '../../common/errors/problem.exception';
 import { randomToken, sha256Hex } from '../../core/crypto';
 import {
   ContextResolvers,
+  isUniqueViolation,
   newId,
   type ResolvedTerminal,
   TenantDatabase,
@@ -20,7 +21,7 @@ import { SessionStore } from '../../core/sessions';
 import { AuditService } from '../audit/audit.service';
 import { sessionStoreMode } from '../auth/session-profile';
 import { TerminalRevocationChecks } from './terminal-revocation-checks';
-import { isUniqueViolation, TerminalsRepository } from './terminals.repository';
+import { TerminalsRepository } from './terminals.repository';
 
 export interface BindResult {
   /** The device secret for the device-cookie; never in a response body or a log. */

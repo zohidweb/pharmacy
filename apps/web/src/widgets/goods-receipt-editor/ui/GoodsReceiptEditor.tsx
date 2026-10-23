@@ -26,19 +26,13 @@ import { useMemo, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DocumentStatusPill } from '@/entities/stock-document';
 import {
-  MoneyInput,
   ProductSearch,
   QuantityInput,
   UnpostDialog,
   type StockAccess,
 } from '@/features/stock-document';
-import {
-  apiFieldErrors,
-  apiRequest,
-  isApiRouteAvailable,
-  sameTransport,
-  useApiErrorMessage,
-} from '@/shared/api';
+import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
+import { MoneyInput } from '@/shared/ui';
 
 type Line = GoodsReceiptInput['lines'][number] & {
   key: string;
@@ -147,10 +141,6 @@ export function GoodsReceiptEditor({
       doc.paymentDueOn !== dueByDeferral(doc.date, doc.supplierId));
   const dueAuto = editable && !dueTyped;
   const autoDue = dueByDeferral(draft.date, draft.supplierId);
-  // an order of the mocks is unknown to a receipt of apps/api (partial mode)
-  const ordersAvailable =
-    isApiRouteAvailable('purchaseOrders.open') &&
-    sameTransport('purchaseOrders.open', 'goodsReceipts.create');
   const orders = useQuery({
     queryKey: ['purchase-orders', 'open', draft.supplierId],
     queryFn: ({ signal }) =>
@@ -158,7 +148,7 @@ export function GoodsReceiptEditor({
         query: { supplierId: draft.supplierId },
         signal,
       }),
-    enabled: Boolean(draft.supplierId) && ordersAvailable,
+    enabled: Boolean(draft.supplierId),
   });
   const productList = useQuery({
     queryKey: ['stock-products', draft.storeId, 'all'],
@@ -468,27 +458,25 @@ export function GoodsReceiptEditor({
                 }))
               }
             />
-            {ordersAvailable && (
-              <Select
-                label={t('order')}
-                disabled={!editable || !draft.supplierId}
-                error={serverError('orderId')}
-                value={draft.orderId ?? ''}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    orderId: event.target.value || null,
-                  }))
-                }
-                options={[
-                  { value: '', label: t('noOrder') },
-                  ...(orders.data ?? []).map((o) => ({
-                    value: o.id,
-                    label: `${o.number}${o.status === 'partially_received' ? ` (${t('partial')})` : ''}`,
-                  })),
-                ]}
-              />
-            )}
+            <Select
+              label={t('order')}
+              disabled={!editable || !draft.supplierId}
+              error={serverError('orderId')}
+              value={draft.orderId ?? ''}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  orderId: event.target.value || null,
+                }))
+              }
+              options={[
+                { value: '', label: t('noOrder') },
+                ...(orders.data ?? []).map((o) => ({
+                  value: o.id,
+                  label: `${o.number}${o.status === 'partially_received' ? ` (${t('partial')})` : ''}`,
+                })),
+              ]}
+            />
             <TextField
               label={t('invoice')}
               required

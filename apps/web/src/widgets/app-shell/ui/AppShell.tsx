@@ -11,7 +11,6 @@ import { useShellChrome } from '@/shared/lib/shell-chrome';
 import { landingRoute } from '../config/navigation';
 import { ConnectionStatus } from './ConnectionStatus';
 import { AnnouncementsBanner } from './AnnouncementsBanner';
-import { ImpersonationBanner } from './ImpersonationBanner';
 import { NotificationsBell } from './NotificationsBell';
 import { Sidebar } from './Sidebar';
 import { StoreSwitcher } from './StoreSwitcher';
@@ -114,9 +113,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           tabIndex={-1}
           className="flex min-w-0 flex-1 flex-col pb-6"
         >
-          {data.impersonation && (
-            <ImpersonationBanner info={data.impersonation} />
-          )}
           <AnnouncementsBanner />
           {children}
         </main>

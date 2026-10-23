@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { networkSettingsDefaults as defaults } from '@pharmacy/shared-domain';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import {
+  settingsTimeZone,
+  type TenantTransaction,
+  tenantTimeZone,
+} from '../../core/database';
 
 export interface ReportStore {
   id: string;
@@ -20,8 +25,8 @@ export class ReportsRepository {
     tenantId: string,
   ): Promise<{ today: string; expiryDays: number }> {
     const result = await sql<{ today: string; expiryDays: number }>`
-      select (now() at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date::text as today,
-             coalesce(ts.expiry_reminder_days, 30) as expiry_days
+      select (now() at time zone ${settingsTimeZone()})::date::text as today,
+             coalesce(ts.expiry_reminder_days, ${defaults.expiryReminderDays}) as expiry_days
       from (select 1) one
       left join pharmacy.tenant_settings ts on ts.tenant_id = ${tenantId}`.execute(
       trx,
@@ -61,9 +66,8 @@ export class ReportsRepository {
       where s.tenant_id = ${tenantId}
         and (s.status in ('active', 'closing')
              or (s.status = 'closed'
-                 and (s.closed_at at time zone coalesce(
-                       (select ts.timezone from pharmacy.tenant_settings ts
-                        where ts.tenant_id = s.tenant_id), 'Asia/Dushanbe'))::date >= ${from}::date))
+                 and (s.closed_at at time zone ${tenantTimeZone(sql.ref('s.tenant_id'))})::date
+                     >= ${from}::date))
         ${scope === 'all' ? sql`` : sql`and s.id = any(${sql.val([...scope])}::uuid[])`}
       order by s.name, s.id`.execute(trx);
     return result.rows;

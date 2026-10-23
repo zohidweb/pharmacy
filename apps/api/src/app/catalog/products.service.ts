@@ -16,6 +16,7 @@ import type {
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import {
   newId,
   TenantDatabase,
@@ -120,7 +121,7 @@ export class ProductsService {
     offset?: number;
   }): Promise<CatalogListResponse> {
     const { tenantId, locale, currentStoreId } = requirePrincipal();
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.tenantTransaction(async (trx) => {
       const language = await this.repository.networkLanguage(trx, tenantId);

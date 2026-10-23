@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { allocatePayments } from '@pharmacy/shared-domain';
 import { sql, type Transaction } from 'kysely';
-import type { DB } from '../../../core/database';
+import { type DB, platformDate } from '../../../core/database';
 
 type Money = bigint | string | number;
 
@@ -28,7 +28,7 @@ export class TenantAllocation {
     }>`
       select id, to_char(period_month, 'YYYY-MM') as period, number, total_dirams, paid_dirams,
              paid_on::text as paid_on,
-             (issued_at at time zone 'Asia/Dushanbe')::date::text as issued_on
+             ${platformDate(sql.ref('issued_at'))}::text as issued_on
       from pharmacy.invoices where tenant_id = ${tenantId}`.execute(trx);
     const { rows: payments } = await sql<{
       id: string;

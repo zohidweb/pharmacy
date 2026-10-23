@@ -22,6 +22,7 @@ import {
 import type { Transaction } from 'kysely';
 import { requireOperator } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../../common/pagination';
 import { type DB, newId } from '../../../core/database';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { StoreUsage } from '../../billing/store-usage';
@@ -176,7 +177,7 @@ export class InvoicesService {
   }
 
   async list(query: InvoiceListQueryDto): Promise<InvoiceListResponse> {
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.platformTransaction(this.actor(), async (trx) => {
       const today = await this.invoices.today(trx);

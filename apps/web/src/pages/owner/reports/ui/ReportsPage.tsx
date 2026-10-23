@@ -119,7 +119,6 @@ function ReportsPageView() {
     <>
       <PageHeader
         title={t('title')}
-        demoRoutes={['reports.get']}
         actions={
           <>
             <Button

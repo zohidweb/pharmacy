@@ -17,11 +17,10 @@ import type {
   TenantListResponse,
 } from '@pharmacy/shared-dto';
 import { RequireFreshAuth } from '../../../common/guards/decorators';
+import { DEFAULT_PAGE_LIMIT } from '../../../common/pagination';
 import { RequireOperatorPermission } from '../auth/decorators';
 import { BlockTenantDto, CreateTenantDto, TenantListQueryDto } from './dto/tenant.dto';
 import { TenantsService } from './tenants.service';
-
-const DEFAULT_LIMIT = 20;
 
 // Networks of the platform, the operator contour (spec 2026-10-05-tenants-module, section 3).
 @Controller({ path: 'operator/tenants', version: '1' })
@@ -36,7 +35,7 @@ export class TenantsController {
       q: query.q ? query.q : null,
       sort: query.sort ?? 'name',
       direction: query.direction ?? 'asc',
-      limit: query.limit ?? DEFAULT_LIMIT,
+      limit: query.limit ?? DEFAULT_PAGE_LIMIT,
       offset: query.offset ?? 0,
     });
   }

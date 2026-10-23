@@ -26,6 +26,8 @@ interface FeedPosition {
   maxSeq: number;
   /** Unnumbered changes left for the next reads. */
   backlog: boolean;
+  /** Rows older than the window dropped by this read, numbered or not. */
+  dropped: number;
 }
 
 interface ScanRow {
@@ -79,8 +81,11 @@ export class SyncFeedService {
     );
   }
 
-  /** Numbers the next chunk of committed changes and drops the window; returns the position of the feed. */
-  private async advance(
+  /**
+   * Numbers the next chunk of committed changes and drops the window; returns the position of the feed. Also the
+   * hourly window step of `FeedRetention`, so the feed of a network no store reads stays within the window.
+   */
+  async advance(
     trx: TenantTransaction,
     tenantId: string,
     windowDays: number,
@@ -137,6 +142,7 @@ export class SyncFeedService {
       horizon,
       maxSeq: last,
       backlog: left.rows[0]?.backlog ?? false,
+      dropped: lost.count + dropped.count,
     };
   }
 

@@ -2,7 +2,7 @@
  * In-memory mock transport: answers the same routes and errors (problem codes) as apps/api will,
  * so screens are built against the real contract — including the rules the server enforces:
  * permissions and store scope (ADR-0018), PIN only on a bound terminal and PIN lock after three
- * failures (ADR-0008), view-only impersonation. The mock session lives in sessionStorage to survive
+ * failures (ADR-0008). The mock session lives in sessionStorage to survive
  * a reload in development. Enabled only by NEXT_PUBLIC_API_MOCKS=true.
  */
 import {
@@ -511,17 +511,6 @@ export const mockTransport: ApiTransport = async (
     : (JSON.parse(JSON.stringify(result)) as typeof result);
 };
 
-/** Dev and tests only: start a view-only «от имени» session as the owner (ADR-0008). */
-export function startMockImpersonation(operatorName: string): void {
-  const owner = mockDb().employees.find((e) => e.role === 'owner');
-  if (!owner) return;
-  const stored = startSession(owner, 'password', stores[0].id, null);
-  writeSession({
-    ...stored,
-    impersonation: { operatorName, startedAt: new Date().toISOString() },
-  });
-}
-
 /** Dev and tests only: forget the device-cookie (an unbound browser). */
 export function unbindMockTerminal(): void {
   mockDb().terminal = null;
@@ -530,19 +519,11 @@ export function unbindMockTerminal(): void {
 /** Dev and tests: put the mocks into a state that is hard to reach by clicking. */
 export function applyScenario(
   scenario:
-    | 'impersonation'
-    | 'unbound-terminal'
-    | 'offline'
-    | 'online'
-    | 'no-shift'
-    | 'offline-store',
+    'unbound-terminal' | 'offline' | 'online' | 'no-shift' | 'offline-store',
 ): void {
   switch (scenario) {
     case 'offline-store':
       mockDb().owner.deployment = 'offline-store';
-      break;
-    case 'impersonation':
-      startMockImpersonation('Оператор платформы');
       break;
     case 'unbound-terminal':
       unbindMockTerminal();

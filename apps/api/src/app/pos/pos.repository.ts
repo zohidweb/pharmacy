@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import {
+  networkSettingsDefaults,
   PRESCRIPTION_RETENTION_DEFAULT_DAYS,
   type PosBufferLimits,
   posBufferDefaults,
 } from '@pharmacy/shared-domain';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { type TenantTransaction, tenantTimeZone } from '../../core/database';
 
 /** A store as the POS sees it: the receipt header and the rules of a sale. */
 export interface PosStore {
@@ -86,9 +87,13 @@ export class PosRepository {
     return {
       networkName: row?.networkName ?? '',
       defaultLanguage: row?.defaultLanguage === 'tj' ? 'tj' : 'ru',
-      returnPeriodDays: row?.returnPeriodDays ?? 14,
+      returnPeriodDays:
+        row?.returnPeriodDays ?? networkSettingsDefaults.returnPeriodDays,
       receiptFooter: row?.receiptFooter ?? null,
-      pieceStepDirams: Math.max(1, row?.pieceStepDirams ?? 1),
+      pieceStepDirams: Math.max(
+        1,
+        row?.pieceStepDirams ?? networkSettingsDefaults.pieceRoundingDirams,
+      ),
       bufferLimits: {
         maxHours: row?.maxHours ?? posBufferDefaults.maxHours,
         maxOperations: row?.maxOperations ?? posBufferDefaults.maxOperations,
@@ -109,9 +114,9 @@ export class PosRepository {
     moment: Date,
   ): Promise<string> {
     const result = await sql<{ date: string }>`
-      select (${moment}::timestamptz at time zone coalesce(
-        (select ts.timezone from pharmacy.tenant_settings ts where ts.tenant_id = ${tenantId}),
-        'Asia/Dushanbe'))::date::text as date`.execute(trx);
+      select (${moment}::timestamptz at time zone ${tenantTimeZone(tenantId)})::date::text as date`.execute(
+      trx,
+    );
     return result.rows[0].date;
   }
 }

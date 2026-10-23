@@ -22,8 +22,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
-import { MoneyInput } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { MoneyInput } from '@/shared/ui';
 
 /**
  * New prices of a product by store (UI mockup «Изменение цены»): above the regulated maximum is a
@@ -191,7 +191,7 @@ export function PriceDialog({
                       label={t('newOf', { store: price.storeName })}
                       valueMinor={value(price.storeId)}
                       invalidText={tDocs('amountFormat')}
-                      allowEmpty
+                      empty={0}
                       onChange={(priceMinor) =>
                         setPrices((current) => ({
                           ...current,

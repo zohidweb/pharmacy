@@ -5,7 +5,7 @@ import type {
   NotificationTopic,
 } from '@pharmacy/shared-dto';
 import { type RawBuilder, type SqlBool, sql, type Transaction } from 'kysely';
-import { type DB, newId } from '../../../core/database';
+import { type DB, newId, platformToday } from '../../../core/database';
 import { EVENT_KINDS, STATE_KINDS } from './notification-topics';
 
 type Money = bigint | string | number;
@@ -51,9 +51,7 @@ const ofKinds = (kinds: readonly EventKind[]): RawBuilder<SqlBool> =>
 export class PlatformNotificationsRepository {
   async today(trx: Transaction<DB>): Promise<string> {
     const { rows } = await sql<{ today: string }>`
-      select (now() at time zone 'Asia/Dushanbe')::date::text as today`.execute(
-      trx,
-    );
+      select ${platformToday()}::text as today`.execute(trx);
     return rows[0].today;
   }
 

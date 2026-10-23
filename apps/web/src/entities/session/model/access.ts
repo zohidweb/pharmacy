@@ -4,7 +4,6 @@
  */
 import { hasPermissions, type Permission } from '@pharmacy/shared-domain';
 import type { EmployeeSession, SessionStore } from '@pharmacy/shared-dto';
-import { useSession } from '../api/session-queries';
 
 export function can(
   session: EmployeeSession | null | undefined,
@@ -30,10 +29,4 @@ export function currentStoreOf(
   return (
     session.stores.find((store) => store.id === session.currentStoreId) ?? null
   );
-}
-
-/** `can` bound to the current session, for components. */
-export function useCan() {
-  const { data: session } = useSession();
-  return (...required: Permission[]) => can(session, ...required);
 }

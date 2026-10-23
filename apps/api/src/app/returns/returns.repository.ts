@@ -4,8 +4,13 @@ import type {
   ReceiptPaymentMethod,
   ReturnReason,
 } from '@pharmacy/shared-dto';
+import { networkSettingsDefaults as defaults } from '@pharmacy/shared-domain';
 import { sql } from 'kysely';
-import { newId, type TenantTransaction } from '../../core/database';
+import {
+  newId,
+  settingsTimeZone,
+  type TenantTransaction,
+} from '../../core/database';
 import type { ShiftReturnTotals } from '../pos/shift-returns';
 
 /** The return window and policy of the network, with its business date (R3, E4). */
@@ -68,11 +73,12 @@ export class ReturnsRepository {
       rx: boolean;
       controlled: boolean;
     }>`
-      select (now() at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date::text as today,
-             coalesce(ts.return_period_days, 14) as return_window_days,
-             coalesce(ts.customer_return_otc, true) as otc,
-             coalesce(ts.customer_return_rx, false) as rx,
-             coalesce(ts.customer_return_controlled, false) as controlled
+      select (now() at time zone ${settingsTimeZone()})::date::text as today,
+             coalesce(ts.return_period_days, ${defaults.returnPeriodDays}) as return_window_days,
+             coalesce(ts.customer_return_otc, ${defaults.customerReturnOtc}) as otc,
+             coalesce(ts.customer_return_rx, ${defaults.customerReturnRx}) as rx,
+             coalesce(ts.customer_return_controlled, ${defaults.customerReturnControlled})
+               as controlled
       from (select 1) one
       left join pharmacy.tenant_settings ts on ts.tenant_id = ${tenantId}`.execute(trx);
     const row = result.rows[0];

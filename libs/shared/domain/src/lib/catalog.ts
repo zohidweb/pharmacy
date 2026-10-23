@@ -8,13 +8,6 @@
 export const productUnits = ['pack', 'piece', 'ml'] as const;
 export type ProductUnit = (typeof productUnits)[number];
 
-export function isProductUnit(value: unknown): value is ProductUnit {
-  return (
-    typeof value === 'string' &&
-    (productUnits as readonly string[]).includes(value)
-  );
-}
-
 /** A name in both languages of the product (data model D6). */
 export interface LocalizedName {
   ru: string;

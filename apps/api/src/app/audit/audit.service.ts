@@ -1,13 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { SyncAuditRow } from '@pharmacy/shared-dto';
-import { sql } from 'kysely';
 import {
   getPrincipal,
   getRequestContext,
   requireTenantId,
 } from '../../common/context/request-context';
-import { newId, type TenantTransaction } from '../../core/database';
+import {
+  newId,
+  type TenantTransaction,
+  tenantToday,
+} from '../../core/database';
 
 export interface AuditEvent {
   /** Event name, e.g. `access.denied`, `auth.login-succeeded`, `role.changed`. */
@@ -30,9 +33,6 @@ export interface AuditEvent {
   /** Free-form facts about the event. Never passwords, PINs, tokens, codes or keys. */
   details?: Record<string, unknown>;
 }
-
-// Same default as tenant_settings.timezone, for a tenant without a settings row.
-const DEFAULT_TIMEZONE = 'Asia/Dushanbe';
 
 // Appends tenant audit events (audit_log, data model 06; ADR-0018 p. 9) inside the caller's
 // tenant transaction, so the event commits or rolls back together with the operation it records.
@@ -97,9 +97,7 @@ export class AuditService {
         tenantId,
         id: newId(),
         // Today in the tenant's time zone, in the same statement and transaction as the insert.
-        businessDate: sql<string>`(now() at time zone coalesce(
-          (select ts.timezone from tenant_settings ts where ts.tenant_id = ${tenantId}),
-          ${DEFAULT_TIMEZONE}))::date`,
+        businessDate: tenantToday(tenantId),
         employeeId: principal?.employeeId ?? event.employeeId ?? null,
         terminalId: principal?.terminalId ?? event.terminalId ?? null,
         storeId: event.storeId ?? null,

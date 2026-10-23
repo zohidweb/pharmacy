@@ -21,10 +21,3 @@ export const OPERATOR_ROLE_PERMISSIONS: Readonly<
 > = Object.freeze({
   full_access: Object.freeze([...OPERATOR_PERMISSIONS]),
 });
-
-export function isOperatorPermission(value: unknown): value is OperatorPermission {
-  return (
-    typeof value === 'string' &&
-    (OPERATOR_PERMISSIONS as readonly string[]).includes(value)
-  );
-}

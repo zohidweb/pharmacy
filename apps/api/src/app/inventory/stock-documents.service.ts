@@ -15,6 +15,7 @@ import type {
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import {
   newId,
   TenantDatabase,
@@ -357,7 +358,7 @@ export class StockDocumentsService {
     const scope = this.stores.scope();
     if (query.storeId) this.stores.inScope(query.storeId.toLowerCase());
     const storeIds = query.storeId ? [query.storeId.toLowerCase()] : scope;
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     const { rows, total } = await this.documents.listDocuments(
       trx,

@@ -6,8 +6,9 @@ import { PrescriptionPurgeScheduler } from './prescription-purge.scheduler';
 import { RetentionRepository } from './retention.repository';
 
 // The retention of the prescription data (spec 2026-10-21-pos-offline-limits, P3, P5; ADR-0013, amendment
-// 2026-10-21): the hourly pass over the networks reads them as the platform and purges through the exports of
-// `pos` (`PrescriptionRetention`) and `sync` (`InboxRetention`). Cloud only: the POS of an offline store has no API yet.
+// 2026-10-21) and of the change feed (spec 2026-10-16-offline-sync, section 13, 2026-10-23): the hourly pass over the
+// networks reads them as the platform and purges through the exports of `pos` (`PrescriptionRetention`) and `sync`
+// (`InboxRetention`, `FeedRetention`). Cloud only: the POS of an offline store has no API yet.
 @Module({
   imports: [PlatformDatabaseModule, PosModule, SyncModule],
   providers: [RetentionRepository, PrescriptionPurgeScheduler],

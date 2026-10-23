@@ -7,7 +7,6 @@ import { useTranslations } from 'use-intl';
 import { reminderIcon, useReminderText } from '@/entities/reminder';
 import { can, canWrite, useSession } from '@/entities/session';
 import { apiRequest } from '@/shared/api';
-import { DemoDataNotice } from '@/shared/ui';
 
 const notificationsKey = ['notifications'] as const;
 const LIMIT = 20;
@@ -70,7 +69,6 @@ function NotificationsBellView() {
             </Button>
           )}
         </div>
-        <DemoDataNotice routes={['notifications.list']} className="mx-4 my-3" />
         {items.length === 0 ? (
           <EmptyState icon="bell-off" title={t('noNotifications')} />
         ) : (

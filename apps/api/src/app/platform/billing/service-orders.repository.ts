@@ -5,7 +5,7 @@ import type {
   TenantServiceStatus,
 } from '@pharmacy/shared-dto';
 import { sql, type Transaction } from 'kysely';
-import type { DB } from '../../../core/database';
+import { type DB, platformDate, platformToday } from '../../../core/database';
 import { textOf } from './billing.repository';
 
 export interface RequestRow {
@@ -83,15 +83,15 @@ export class ServiceOrdersRepository {
 
   /**
    * Today and the day of the decision of a service by the calendar of the platform
-   * (`Asia/Dushanbe`, as the operators' journal); null for an unknown service.
+   * (as the operators' journal); null for an unknown service.
    */
   async calendar(
     trx: Transaction<DB>,
     id: string,
   ): Promise<{ today: string; decidedOn: string } | null> {
     const { rows } = await sql<{ today: string; decidedOn: string }>`
-      select (now() at time zone 'Asia/Dushanbe')::date::text as today,
-             (decided_at at time zone 'Asia/Dushanbe')::date::text as "decidedOn"
+      select ${platformToday()}::text as today,
+             ${platformDate(sql.ref('decided_at'))}::text as "decidedOn"
       from pharmacy.tenant_services
       where id = ${id}`.execute(trx);
     return rows[0] ?? null;

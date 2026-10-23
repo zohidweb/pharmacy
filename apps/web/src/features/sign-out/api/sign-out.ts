@@ -9,10 +9,10 @@ const SIGN_OUT_TIMEOUT_MS = 3_000;
 
 /**
  * DELETE /sessions/current; drops all cached data of the employee and opens the sign-in. The request goes even when the
- * POS already shows «Нет связи» (an outage is when the cashier leaves). When it does not end the session — unreachable,
- * no answer in time, or a server error (the reverse proxy answers 5xx while the API restarts) — the terminal is locked
- * all the same and the sign-out goes when the server answers (security review 2026-10-22, F3, S5); a refusal (4xx) is
- * shown, as before.
+ * POS already shows «Нет связи» (an outage is when the cashier leaves). When it does not end the session — unreachable
+ * (no answer in time, or the reverse proxy answers in place of a stopped or restarting API), or a server error of the
+ * API — the terminal is locked all the same and the sign-out goes when the server answers (security review 2026-10-22,
+ * F3, S5); a refusal (4xx) is shown, as before.
  */
 export function useSignOut() {
   const queryClient = useQueryClient();

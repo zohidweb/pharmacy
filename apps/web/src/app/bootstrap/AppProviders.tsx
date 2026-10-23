@@ -48,6 +48,10 @@ function createQueryClient() {
       queries: {
         staleTime: 30_000,
         refetchOnWindowFocus: false,
+        // the queries that run during an outage too (networkMode 'always': the session, the bound terminal, the shift,
+        // the catalog) answered it with an error or a remembered value: a stale one is asked again when the connection
+        // is back, as every other query (TanStack Query does not refetch such queries on reconnect by default)
+        refetchOnReconnect: true,
         // no retries of an answer that the session is gone: the sign-in opens at once
         retry: (failures, error) => !isSessionEnded(error) && failures < 3,
       },

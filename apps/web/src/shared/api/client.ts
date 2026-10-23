@@ -18,6 +18,7 @@ import { reportRequest } from './connectivity';
 
 const API_BASE = '/api/v1';
 const REQUEST_TIMEOUT_MS = 15_000;
+const PROBLEM_CONTENT_TYPE = 'application/problem+json';
 
 export interface ApiFieldError {
   field: string;
@@ -27,7 +28,9 @@ export interface ApiFieldError {
 export class ApiError extends Error {
   constructor(
     readonly status: number,
-    /** Machine code from problem+json `code` (or "network" / "timeout" / "aborted" / "unexpected"). */
+    /**
+     * Machine code from problem+json `code` (or "network" / "timeout" / "aborted" / "gateway" / "unexpected").
+     */
     readonly code: string,
     readonly correlationId: string,
     readonly errors: ApiFieldError[] = [],
@@ -109,6 +112,14 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
   }
 
   if (!response.ok) {
+    // apps/api answers every error as problem+json: a 5xx without it came from the reverse proxy (or the dev server)
+    // in its place — the API is stopped or restarting, not reached
+    if (
+      response.status >= 500 &&
+      !response.headers.get('Content-Type')?.includes(PROBLEM_CONTENT_TYPE)
+    ) {
+      throw new ApiError(response.status, 'gateway', correlationId);
+    }
     const problem: ProblemDetails = await response
       .json()
       .catch(() => ({}) as ProblemDetails);
@@ -341,10 +352,16 @@ export function setApiTransport(next: ApiTransport): void {
   transport = next;
 }
 
-/** The request did not reach the server (outage or timeout), as opposed to an answer of it. */
+/**
+ * apps/api did not answer — an outage, a timeout or a gateway answer in its place (the API stopped or restarting behind
+ * the reverse proxy) — as opposed to an answer of the API, an error one too. Whether a request that went was processed
+ * is unknown: only idempotent operations are repeated.
+ */
 export const isUnreachable = (error: unknown) =>
   error instanceof ApiError &&
-  (error.code === 'network' || error.code === 'timeout');
+  (error.code === 'network' ||
+    error.code === 'timeout' ||
+    error.code === 'gateway');
 
 /**
  * The server has no session for the request (401 `unauthenticated`): it timed out, was ended or blocked. A failed
@@ -365,7 +382,8 @@ export async function apiRequest<K extends ApiRouteKey>(
     reportRequest(true);
     return response;
   } catch (error) {
-    // any answer of the server, even an error, means it is reachable; a cancelled request says nothing
+    // any answer of the API, even an error, means it is reachable (a gateway answer in its place does not); a
+    // cancelled request says nothing
     if (!(error instanceof ApiError && error.code === 'aborted')) {
       reportRequest(!isUnreachable(error));
     }

@@ -737,6 +737,14 @@ function ShiftPageView() {
                       open
                       shift={withPending(current, records.data ?? [])}
                       pendingOperations={counts.pending}
+                      refusedSales={
+                        quarantined.filter(
+                          (r) =>
+                            r.kind === 'receipt' &&
+                            r.lastError?.code === 'price_rules_violated' &&
+                            r.payload.shiftId === current.id,
+                        ).length
+                      }
                       heldReceipts={held.data?.length ?? 0}
                       busy={busy}
                       onConfirm={(input) =>

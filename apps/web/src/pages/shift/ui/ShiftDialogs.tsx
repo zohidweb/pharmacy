@@ -212,6 +212,7 @@ export function CloseShiftDialog({
   open,
   shift,
   pendingOperations,
+  refusedSales,
   heldReceipts,
   busy,
   onConfirm,
@@ -220,6 +221,11 @@ export function CloseShiftDialog({
   open: boolean;
   shift: Shift;
   pendingOperations: number;
+  /**
+   * Sales of this shift refused by the price rules and waiting in the quarantine: after the closing they can no longer
+   * be accepted (ADR-0015, amendment 2026-10-23) — a warning, not a ban.
+   */
+  refusedSales: number;
   heldReceipts: number;
   busy: boolean;
   onConfirm: (input: {
@@ -295,6 +301,11 @@ export function CloseShiftDialog({
         {pendingOperations > 0 && (
           <Alert tone="warning" title={t('pendingTitle')}>
             {t('pendingClose', { count: pendingOperations })}
+          </Alert>
+        )}
+        {refusedSales > 0 && (
+          <Alert tone="danger" title={t('refusedTitle')}>
+            {t('refusedClose', { count: refusedSales })}
           </Alert>
         )}
         {heldReceipts > 0 && (

@@ -98,7 +98,7 @@ export async function resetApiMocks(): Promise<void> {
 }
 
 export type MockScenario =
-  'impersonation' | 'unbound-terminal' | 'offline' | 'online' | 'no-shift';
+  'unbound-terminal' | 'offline' | 'online' | 'no-shift';
 
 /** Puts the mocks into a state that is hard to reach by clicking (tests only). */
 export async function applyMockScenario(scenario: MockScenario): Promise<void> {

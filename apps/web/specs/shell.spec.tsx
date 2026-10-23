@@ -1,13 +1,13 @@
 /*
  * Shell, dashboard and profile of the client product against the in-memory API mocks:
- * menu by role (ADR-0018), working store, view-only impersonation, step-up for secrets (ADR-0008).
+ * menu by role (ADR-0018), working store, step-up for secrets (ADR-0008).
  */
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { axe } from 'jest-axe';
 import { DashboardPage } from '@/pages/dashboard';
 import { ProfilePage } from '@/pages/profile';
 import { AppShell } from '@/widgets/app-shell';
-import { scenario, signInAs, signInByPin, useMockApi } from './mock-env';
+import { signInAs, signInByPin, useMockApi } from './mock-env';
 import { renderWithProviders } from './test-utils';
 
 const replace = jest.fn();
@@ -92,17 +92,6 @@ describe('AppShell', () => {
     expect(
       await screen.findByText(/Синхронизировано .* · в очереди: 3/),
     ).toBeTruthy();
-  });
-
-  it('marks a view-only session of the platform operator', async () => {
-    await scenario('impersonation');
-    renderWithProviders(
-      <AppShell>
-        <p>content</p>
-      </AppShell>,
-    );
-    expect(await screen.findByText('Сеанс оператора платформы')).toBeTruthy();
-    expect(screen.getByText(/Только просмотр/)).toBeTruthy();
   });
 
   it('sends a signed-out visitor to the sign-in', async () => {

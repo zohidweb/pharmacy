@@ -151,9 +151,6 @@ function SuppliersPageView() {
         }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        {session?.impersonation && (
-          <Alert tone="info">{tDocs('notices.impersonation')}</Alert>
-        )}
         {!canSeeCost && <Alert tone="info">{t('costHidden')}</Alert>}
         <QueryState query={list}>
           {(data) => (

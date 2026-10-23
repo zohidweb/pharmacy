@@ -50,7 +50,7 @@ const passwordRules = domainPasswordRules.map((key) => ({
 const fieldErrorOf = (error: unknown, field: string) =>
   error instanceof ApiError && error.errors.some((e) => e.field === field);
 
-function MainInfo({ me, readOnly }: { me: EmployeeMe; readOnly: boolean }) {
+function MainInfo({ me }: { me: EmployeeMe }) {
   const t = useTranslations('profile.main');
   const tLocales = useTranslations('locales');
   const toast = useToast();
@@ -112,7 +112,7 @@ function MainInfo({ me, readOnly }: { me: EmployeeMe; readOnly: boolean }) {
           label={t('locale')}
           value={me.locale}
           onValueChange={(locale) => {
-            if (!readOnly) update.mutate(locale);
+            update.mutate(locale);
           }}
           options={locales.map((value) => ({
             value,
@@ -462,13 +462,8 @@ function ProfilePageView() {
     queryKey: meKey,
     queryFn: ({ signal }) => apiRequest('me.get', { signal }),
   });
-  const readOnly = Boolean(session?.impersonation);
   // step-up (ADR-0008): secrets change only in a session opened by password
-  const locked = readOnly
-    ? t('readOnly')
-    : session?.auth === 'pin'
-      ? t('stepUp')
-      : null;
+  const locked = session?.auth === 'pin' ? t('stepUp') : null;
 
   return (
     <>
@@ -491,7 +486,7 @@ function ProfilePageView() {
                 </div>
                 <SignOutButton variant="secondary" />
               </Card>
-              <MainInfo me={data} readOnly={readOnly} />
+              <MainInfo me={data} />
               <div className="grid grid-cols-2 items-start gap-4">
                 <PasswordCard locked={locked} />
                 <PinCard me={data} locked={locked} />

@@ -15,7 +15,6 @@ import {
   toAppDate,
 } from '@pharmacy/shared-util';
 import {
-  Alert,
   Button,
   buttonClassName,
   Card,
@@ -550,7 +549,6 @@ function StoresPageView() {
     <>
       <PageHeader title={t('title')} />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        {session?.impersonation && <Alert tone="info">{t('readOnly')}</Alert>}
         <Tabs
           label={t('title')}
           value={items.some((item) => item.value === tab) ? tab : 'stores'}

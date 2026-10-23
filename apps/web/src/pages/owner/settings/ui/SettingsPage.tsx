@@ -519,7 +519,6 @@ function SettingsPageView() {
     <>
       <PageHeader title={t('title')} />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        {session?.impersonation && <Alert tone="info">{t('readOnly')}</Alert>}
         <QueryState query={settings}>
           {(data) => <NetworkCard settings={data} editable={editable} />}
         </QueryState>

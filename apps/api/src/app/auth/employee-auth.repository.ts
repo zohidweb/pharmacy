@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { networkSettingsDefaults } from '@pharmacy/shared-domain';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
 
@@ -44,10 +45,6 @@ export interface ProfileStore {
   /** Database mode `online` | `offline_pending` | `offline`. */
   mode: string;
 }
-
-// Column defaults of tenant_settings, for a tenant without a settings row.
-const DEFAULT_LANGUAGE = 'ru';
-const DEFAULT_IDLE_MINUTES = 15;
 
 // Data access of sign-in and the session profile (auth design 2026-10-02, section 6). Every query
 // runs in the caller's tenant transaction and filters by tenant_id; RLS is the second line.
@@ -283,10 +280,13 @@ export class EmployeeAuthRepository {
       },
       tenant: { id: row.tenantId, name: row.tenantName },
       settings: {
-        defaultLanguage: row.defaultLanguage ?? DEFAULT_LANGUAGE,
+        defaultLanguage:
+          row.defaultLanguage ?? networkSettingsDefaults.defaultLanguage,
         cashierSessionIdleMin:
-          row.cashierSessionIdleMin ?? DEFAULT_IDLE_MINUTES,
-        warnBelowCost: row.warnBelowCost ?? true,
+          row.cashierSessionIdleMin ??
+          networkSettingsDefaults.cashierSessionIdleMinutes,
+        warnBelowCost:
+          row.warnBelowCost ?? networkSettingsDefaults.warnBelowCost,
       },
     };
   }

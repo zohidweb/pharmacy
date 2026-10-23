@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
-import { newId, type TenantTransaction } from '../../core/database';
+import {
+  newId,
+  type TenantTransaction,
+  tenantToday,
+} from '../../core/database';
 
 export interface SupplierRow {
   id: string;
@@ -89,9 +93,7 @@ export class PurchasingRepository {
     tenantId: string,
   ): Promise<string> {
     const result = await sql<{ today: string }>`
-      select (now() at time zone coalesce(
-        (select timezone from pharmacy.tenant_settings where tenant_id = ${tenantId}),
-        'Asia/Dushanbe'))::date::text as today`.execute(trx);
+      select ${tenantToday(tenantId)}::text as today`.execute(trx);
     return result.rows[0].today;
   }
 

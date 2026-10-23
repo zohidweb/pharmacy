@@ -3,8 +3,9 @@ import type {
   NotificationKind,
   TenantAnnouncement,
 } from '@pharmacy/shared-dto';
+import { networkSettingsDefaults as defaults } from '@pharmacy/shared-domain';
 import { type RawBuilder, sql, type SqlBool } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { settingsTimeZone, type TenantTransaction } from '../../core/database';
 
 export interface NotificationContext {
   /** YYYY-MM-DD in the time zone of the network. */
@@ -55,11 +56,12 @@ export class NotificationsRepository {
     tenantId: string,
   ): Promise<NotificationContext> {
     const result = await sql<NotificationContext>`
-      select (now() at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date::text as today,
+      select (now() at time zone ${settingsTimeZone()})::date::text as today,
              r.refreshed_at, r.events_after, ts.updated_at as settings_updated_at,
              coalesce(ts.disabled_notifications, '{}') as disabled,
-             coalesce(ts.expiry_reminder_days, 30) as expiry_days,
-             coalesce(ts.supplier_payment_reminder_days, 3) as supplier_days
+             coalesce(ts.expiry_reminder_days, ${defaults.expiryReminderDays}) as expiry_days,
+             coalesce(ts.supplier_payment_reminder_days, ${defaults.supplierPaymentReminderDays})
+               as supplier_days
       from (select 1) one
       left join pharmacy.tenant_settings ts on ts.tenant_id = ${tenantId}
       left join pharmacy.notification_refresh r on r.tenant_id = ${tenantId}`.execute(

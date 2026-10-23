@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { piecePriceMinor } from '@pharmacy/shared-domain';
+import {
+  networkSettingsDefaults,
+  piecePriceMinor,
+} from '@pharmacy/shared-domain';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
 import { StorePricesReader } from '../pricing/store-prices-reader';
@@ -227,7 +230,8 @@ export class StockFigures {
       group by b.id, b.store_id, b.product_id, b.expiry_date, b.cost_per_piece_dirams
       having sum(m.qty_delta_pieces) <> 0`.execute(trx);
     const step = await sql<{ step: number }>`
-      select coalesce(ts.piece_price_rounding_dirams, 10) as step
+      select coalesce(ts.piece_price_rounding_dirams,
+                      ${networkSettingsDefaults.pieceRoundingDirams}) as step
       from (select 1) one
       left join pharmacy.tenant_settings ts on ts.tenant_id = ${tenantId}`.execute(
       trx,

@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { Permission } from '@pharmacy/shared-domain';
+import {
+  networkSettingsDefaults,
+  type Permission,
+} from '@pharmacy/shared-domain';
 import type { EmployeeStatus } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
@@ -237,7 +240,7 @@ export class StaffRepository {
       .select('defaultLanguage')
       .where('tenantId', '=', tenantId)
       .executeTakeFirst();
-    return row?.defaultLanguage ?? 'ru';
+    return row?.defaultLanguage ?? networkSettingsDefaults.defaultLanguage;
   }
 
   async pinMinLength(trx: TenantTransaction, tenantId: string): Promise<number> {
@@ -246,7 +249,7 @@ export class StaffRepository {
       .select('pinMinLength')
       .where('tenantId', '=', tenantId)
       .executeTakeFirst();
-    return row?.pinMinLength ?? 4;
+    return row?.pinMinLength ?? networkSettingsDefaults.pinMinLength;
   }
 
   /**

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { type TenantTransaction, tenantToday } from '../../core/database';
 import { StorePriceWriter } from '../pricing/store-price-writer';
 
 export interface LowStockOfStore {
@@ -163,11 +163,7 @@ export class StockAlerts {
         where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
       ) s on true
       where b.tenant_id = ${tenantId} ${storeFilter('b.store_id', storeIds)}
-        and b.expiry_date <= (
-          select (now() at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date
-          from (select 1) one
-          left join pharmacy.tenant_settings ts on ts.tenant_id = ${tenantId}
-        ) + ${thresholdDays}::integer
+        and b.expiry_date <= ${tenantToday(tenantId)} + ${thresholdDays}::integer
         and s.qty > 0
       order by b.expiry_date, b.id`.execute(trx);
     return result.rows;

@@ -5,7 +5,7 @@ import {
   type AuditGroupRule,
 } from '@pharmacy/shared-domain';
 import { type RawBuilder, sql, type SqlBool } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { settingsTimeZone, type TenantTransaction } from '../../core/database';
 
 export interface AuditJournalFilter {
   /** YYYY-MM-DD, both days included, in the time zone of the network. */
@@ -73,8 +73,8 @@ export class AuditJournalRepository {
     tenantId: string,
   ): Promise<{ today: string; timezone: string }> {
     const result = await sql<{ today: string; timezone: string }>`
-      select (now() at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date::text as today,
-             coalesce(ts.timezone, 'Asia/Dushanbe') as timezone
+      select (now() at time zone ${settingsTimeZone()})::date::text as today,
+             ${settingsTimeZone()} as timezone
       from (select 1) one
       left join pharmacy.tenant_settings ts on ts.tenant_id = ${tenantId}`.execute(
       trx,

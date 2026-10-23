@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ControlledSaleData } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { type TenantTransaction, tenantTimeZone } from '../../core/database';
 
 export interface SalesOfDay {
   storeId: string;
@@ -265,9 +265,8 @@ export class SalesFigures {
       where o.tenant_id = ${tenantId}
         and o.kind = 'withdrawal' and o.reason = 'expense'
         and s.store_id = any(${stores(storeIds)}::uuid[])
-        and (o.occurred_at at time zone coalesce(
-              (select ts.timezone from pharmacy.tenant_settings ts where ts.tenant_id = ${tenantId}),
-              'Asia/Dushanbe'))::date between ${from}::date and ${to}::date
+        and (o.occurred_at at time zone ${tenantTimeZone(tenantId)})::date
+            between ${from}::date and ${to}::date
       group by s.store_id`.execute(trx);
     return result.rows.map((row) => ({
       storeId: row.storeId,

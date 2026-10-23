@@ -9,7 +9,7 @@ import type { CatalogSnapshot } from '@pharmacy/shared-dto';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useLocale } from 'use-intl';
-import { ApiError, apiRequest } from '@/shared/api';
+import { apiRequest, isUnreachable } from '@/shared/api';
 import {
   storeBufferLimits,
   type TerminalRuntime,
@@ -71,10 +71,8 @@ async function loadCatalog(
     if (snapshot !== stored) await storeSnapshot(runtime, snapshot, locale);
     return { snapshot, stale: false };
   } catch (error) {
-    const unreachable =
-      error instanceof ApiError &&
-      (error.code === 'network' || error.code === 'timeout');
-    if (unreachable && stored) return { snapshot: stored, stale: true };
+    if (isUnreachable(error) && stored)
+      return { snapshot: stored, stale: true };
     throw error;
   }
 }
@@ -96,6 +94,8 @@ export function useCatalog(
     // after each delivered sale, and a focus or a reconnect refreshes a stale one
     staleTime: 60_000,
     networkMode: 'always',
+    // the stored snapshot shown during an outage is asked again as soon as the connection is back, not a minute later
+    refetchOnReconnect: (query) => (query.state.data?.stale ? 'always' : true),
   });
   const snapshot = query.data?.snapshot;
   const index = useMemo(

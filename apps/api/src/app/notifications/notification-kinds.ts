@@ -10,6 +10,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'shift_discrepancy',
   'negative_stock',
   'receipt_discrepancy',
+  'login_locked',
   'sync_conflict',
   'license_expiring',
   'service_decided',
@@ -21,6 +22,7 @@ export const EVENT_KINDS: readonly NotificationKind[] = [
   'shift_discrepancy',
   'negative_stock',
   'receipt_discrepancy',
+  'login_locked',
   'service_decided',
 ];
 
@@ -30,6 +32,8 @@ export const KIND_PERMISSION: Readonly<Record<NotificationKind, Permission>> = {
   low_stock: 'inventory:view',
   negative_stock: 'inventory:view',
   receipt_discrepancy: 'shifts:view',
+  // whoever can set a new password and so lift the lock (security review A2)
+  login_locked: 'employees:update',
   transfer_in_transit: 'inventory:view',
   supplier_payment_due: 'purchasing:view',
   shift_discrepancy: 'shifts:view',

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 import type { TenantTransaction } from '../../core/database';
+import { zoneOf } from './network-zone';
 
 /** The sales refused at a store on a business date (YYYY-MM-DD): the ids the POS gave them. */
 export interface RefusedReceiptsOfDay {
@@ -57,7 +58,3 @@ export class ReceiptRefusals {
     return result.rows;
   }
 }
-
-/** The time zone of the network, as the business date of its receipts (PosRepository.businessDate). */
-const zoneOf = (tenantId: string) => sql`coalesce(
-  (select ts.timezone from pharmacy.tenant_settings ts where ts.tenant_id = ${tenantId}), 'Asia/Dushanbe')`;

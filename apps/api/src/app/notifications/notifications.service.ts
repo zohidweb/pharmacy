@@ -34,6 +34,7 @@ const STRING_PARAMS = [
   'fromStore',
   'toStore',
   'shiftNumber',
+  'employeeName',
   'reason',
 ] as const;
 const NUMBER_PARAMS = ['quantity', 'positions', 'priceMinor'] as const;

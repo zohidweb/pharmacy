@@ -63,6 +63,11 @@ export type NotificationKind =
    * (event; security review 2026-10-22, I2): `positions` holds their count.
    */
   | 'receipt_discrepancy'
+  /**
+   * An employee's sign-in was locked after wrong passwords — an employee × day of the network (event; security review
+   * 2026-10-22, A2): `positions` holds the count of the day's locks, `employeeName` the employee; `employees:update`.
+   */
+  | 'login_locked'
   | 'sync_conflict'
   | 'license_expiring'
   /** The operator approved (with a price), rejected or cancelled a service of the network (event). */
@@ -91,6 +96,8 @@ export interface ReminderParams {
   toStore?: string;
   positions?: number;
   operatorName?: string;
+  /** `login_locked`: the employee whose sign-in was locked. */
+  employeeName?: string;
   shiftNumber?: string;
   /** `service_decided`: the service, the decision and its price or reason. */
   serviceName?: string;

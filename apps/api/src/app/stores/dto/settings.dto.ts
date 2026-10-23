@@ -43,6 +43,9 @@ export class NotificationSwitchesDto implements Record<
   receipt_discrepancy!: boolean;
 
   @IsBoolean()
+  login_locked!: boolean;
+
+  @IsBoolean()
   sync_conflict!: boolean;
 
   @IsBoolean()

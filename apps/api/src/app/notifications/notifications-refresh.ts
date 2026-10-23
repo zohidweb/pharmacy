@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { NotificationKind } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
+import { LoginLocks } from '../audit/login-locks';
 import { ReceiptRefusals } from '../audit/receipt-refusals';
 import { OverdueInvoices } from '../billing/overdue-invoices';
 import { ServiceDecisions } from '../billing/service-decisions';
@@ -41,6 +42,7 @@ export class NotificationsRefresh {
     private readonly services: ServiceDecisions,
     private readonly invoices: OverdueInvoices,
     private readonly refusals: ReceiptRefusals,
+    private readonly loginLocks: LoginLocks,
   ) {}
 
   async run(trx: TenantTransaction, tenantId: string): Promise<void> {
@@ -239,6 +241,25 @@ export class NotificationsRefresh {
         }),
       );
       // a count grown after the notice was read comes back unread: a sale forged later that day must not stay silent
+      await this.repository.reopenGrown(trx, tenantId, items);
+      await this.repository.upsert(trx, tenantId, items);
+    }
+    if (enabled('login_locked')) {
+      // an employee's sign-in locked after wrong passwords — one count per employee × day of the network (A2)
+      const days = await this.loginLocks.lockedDays(
+        trx,
+        tenantId,
+        new Date(eventsFrom),
+      );
+      const items: NewNotification[] = days.map((day) => ({
+        kind: 'login_locked',
+        storeId: null,
+        dedupeKey: `login_locked:${day.employeeId}:${day.day}`,
+        entityType: 'employee',
+        entityId: day.employeeId,
+        params: { positions: day.locks, employeeName: day.employeeName },
+      }));
+      // a lock later that day comes back unread: a guess going on must not stay silent
       await this.repository.reopenGrown(trx, tenantId, items);
       await this.repository.upsert(trx, tenantId, items);
     }

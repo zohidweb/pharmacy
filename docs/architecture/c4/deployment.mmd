@@ -1,38 +1,36 @@
 flowchart TB
   subgraph internet["Интернет"]
     direction TB
-    pos["POS/ПК облачной точки<br/>(браузер + буфер перебоев)"]
-    opws["Рабочее место оператора<br/>(браузер)"]
+    pos["POS/ПК облачной точки<br/>(браузер + буфер перебоев)<br/>app.nurmed.online"]
+    opws["Рабочее место оператора<br/>(браузер)<br/>admin.nurmed.online"]
   end
 
-  subgraph cloudEnv["Облако платформы (хостинг TBD — вопрос №1)"]
+  subgraph cloudEnv["Облако платформы — VPS Contabo, EU (ADR-0020)"]
     direction TB
-    subgraph vmApp["VM приложений"]
-      proxy["Reverse proxy / TLS"]
+    subgraph vmApp["Один VPS: Compose-проект pharmacy-prod"]
+      proxy["Caddy (pharmacy/proxy)<br/>TLS Let's Encrypt + статика web/admin"]
       api["API (NestJS)"]
-      static["web + admin (статика)"]
-    end
-    subgraph vmDb["VM БД (приватная сеть)"]
       pg[("PostgreSQL")]
       rd[("Redis")]
-      bk["backup: pg_dump +<br/>проверка восстановления"]
+      bk["backup: pg_dump +<br/>проверка восстановления (ADR-0019)"]
     end
-    backups[("BACKUP_DIR: отдельный диск / сетевой том<br/>30 дней, RPO 24 ч; вне хоста — с хостингом")]
+    backups[("BACKUP_DIR: отдельный диск / сетевой том<br/>30 дней, RPO 24 ч")]
+    offsite[("Object Storage другого региона<br/>копии age, 30 дней (ADR-0020, до prod)")]
   end
 
   subgraph pointPc["ПК офлайн-точки (Docker, волна 3)"]
-    lweb["web (локально)"]
+    lproxy["Caddy (тот же образ)<br/>http://localhost"]
     lapi["API + sync_outbox<br/>(ключ в env-файле)"]
     lpg[("PostgreSQL (локально)")]
   end
 
-  pos -- HTTPS --> proxy
-  opws -- HTTPS --> proxy
-  proxy --> static
-  proxy --> api
+  pos -- "HTTPS (80/443)" --> proxy
+  opws -- "HTTPS (80/443)" --> proxy
+  proxy -- "/api/*" --> api
   api --> pg
   api --> rd
   bk -. ежедневно .-> pg
   bk --> backups
-  lweb --> lapi --> lpg
-  lapi -- "HTTPS + лицензионный ключ<br/>/api/v1/sync/* (по расписанию / вручную)" --> proxy
+  backups -. "age + rclone (до prod)" .-> offsite
+  lproxy --> lapi --> lpg
+  lapi -- "HTTPS + лицензионный ключ<br/>app.nurmed.online/api/v1/sync/*" --> proxy

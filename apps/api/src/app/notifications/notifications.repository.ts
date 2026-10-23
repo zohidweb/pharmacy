@@ -111,6 +111,28 @@ export class NotificationsRepository {
     }
   }
 
+  /**
+   * An open notification that someone has read and whose `positions` grew is resolved, so the upsert that follows
+   * opens a new, unread one (security review 2026-10-22, I2: receipts with discrepancies).
+   */
+  async reopenGrown(
+    trx: TenantTransaction,
+    tenantId: string,
+    items: readonly NewNotification[],
+  ): Promise<void> {
+    for (const item of items) {
+      await sql`
+        update pharmacy.notifications n set resolved_at = now()
+        where n.tenant_id = ${tenantId} and n.dedupe_key = ${item.dedupeKey}
+          and n.resolved_at is null
+          and coalesce((n.params ->> 'positions')::integer, 0) < ${Number(item.params['positions'] ?? 0)}
+          and exists (select 1 from pharmacy.notification_reads nr
+                      where nr.tenant_id = n.tenant_id and nr.notification_id = n.id)`.execute(
+        trx,
+      );
+    }
+  }
+
   /** Resolves the open notifications of a state kind whose state is gone. */
   async resolveMissing(
     trx: TenantTransaction,

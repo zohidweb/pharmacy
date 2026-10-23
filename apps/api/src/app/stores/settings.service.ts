@@ -20,6 +20,7 @@ const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'transfer_in_transit',
   'shift_discrepancy',
   'negative_stock',
+  'receipt_discrepancy',
   'sync_conflict',
   'license_expiring',
   'service_decided',

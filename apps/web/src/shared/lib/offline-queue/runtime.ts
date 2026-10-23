@@ -44,7 +44,7 @@ async function create(key: string): Promise<TerminalRuntime> {
     db,
     `pharmacy-outbox:${key}`,
     // the sender opens the sealed prescription data of a sale with the key of this database
-    (record) => sendPosOperation(record, db),
+    (record, options) => sendPosOperation(record, db, options),
   );
   subscribeConnectivity((online) => {
     if (online) void queue.flush();

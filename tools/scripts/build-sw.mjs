@@ -26,6 +26,8 @@ function walk(dir) {
 const files = walk(outDir)
   .map((path) => relative(outDir, path).split(sep).join('/'))
   .filter((path) => !SKIP.has(path))
+  // source maps are dropped from the proxy image (ADR-0012), so cache.addAll would fail on them
+  .filter((path) => !path.endsWith('.map'))
   .sort();
 
 const hash = createHash('sha256');

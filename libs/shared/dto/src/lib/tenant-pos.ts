@@ -138,7 +138,10 @@ export interface PosOperationContext {
 
 /**
  * POST /api/v1/receipts — a paid sale, a fact (ADR-0015): stock, price, discount and catalog
- * differences are marked, not refused. 400 `validation_failed` (`unknown_product`, `unknown_batch`,
+ * differences are marked, not refused — but a price or a discount that was never the store's is refused with 422
+ * `price_rules_violated` (errors[]: `lines.N.unitPriceMinor` `price_not_allowed`, `discountRuleId`
+ * `discount_not_allowed`; ADR-0015, amendment 2026-10-23); the same operation with `X-Accept-Discrepancy: true` is
+ * accepted when the session of the request may set the prices or the discount rules of the store. 400 `validation_failed` (`unknown_product`, `unknown_batch`,
  * `wrong_store`, `batch_expired`, `unknown_discount`, `total_mismatch`, `mismatch`, `too_small`),
  * 403 `terminal_required`, 409 `idempotency_conflict` / `no_open_shift` / `shift_closed` /
  * `wrong_terminal` / `offline_store_read_only`, 422 `author_not_allowed`; sent under the terminal without the
@@ -151,7 +154,10 @@ export interface CreateReceiptRequest extends PosOperationContext {
    */
   localNumber?: number;
   shiftId: string;
-  /** Snapshot version the prices come from: the server accepts them («продажа — факт»). */
+  /**
+   * The oldest snapshot version the lines were priced by: the server accepts the price of the store at that moment
+   * (ADR-0015, amendment 2026-10-23), when it is not older than the buffer limit of the network.
+   */
   priceListVersion: number;
   lines: ReceiptLineInput[];
   subtotalMinor: number;

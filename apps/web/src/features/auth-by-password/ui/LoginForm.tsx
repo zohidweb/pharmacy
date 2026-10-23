@@ -6,7 +6,7 @@ import { Alert, Button, IconButton, TextField } from '@pharmacy/ui';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
-import { ApiError } from '@/shared/api';
+import { ApiError, isUnreachable } from '@/shared/api';
 import { useLogin } from '../api/login';
 import {
   isLoginErrorKey,
@@ -48,12 +48,7 @@ export function LoginForm({ onSuccess, defaultLogin = '' }: LoginFormProps) {
     if (error instanceof ApiError && error.status === 401) {
       return t('invalidCredentials');
     }
-    if (
-      error instanceof ApiError &&
-      (error.code === 'network' || error.code === 'timeout')
-    ) {
-      return tErrors('network');
-    }
+    if (isUnreachable(error)) return tErrors('network');
     return tErrors('unexpected', {
       correlationId: error instanceof ApiError ? error.correlationId : '—',
     });

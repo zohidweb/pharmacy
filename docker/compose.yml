@@ -1,8 +1,12 @@
-# Base stack shared by all environments (ADR-0005): PostgreSQL + Redis + API.
+# Base stack shared by all environments (ADR-0005): PostgreSQL + Redis + API + reverse proxy (ADR-0012).
 # Do not run this file alone — use the environment scripts (CLAUDE.md, "Environments"):
 #   npm run stack -- <dev|test|prod> <up|down|ps|logs|build>
 # Environment overrides: compose.dev.yml, compose.test.yml, compose.prod.yml.
-# web/admin are built as static files; serving them comes with the reverse proxy (future ADR-0012).
+# web/admin are baked into the proxy image (Caddy, docker/proxy); in test/prod the API is reachable only through it
+# (test also publishes it on 127.0.0.1 for diagnostics, dev — for the dockerized api).
+# The proxy addresses and ports are required by the test/prod overrides, not here: dev runs no proxy.
+# The pharmacy/* images are built locally, never pulled (pull_policy: never): a missing or mistyped IMAGE_TAG fails
+# instead of fetching a same-named image from Docker Hub.
 
 x-logging: &logging
   driver: json-file
@@ -10,22 +14,41 @@ x-logging: &logging
     max-size: '10m'
     max-file: '5'
 
+# Containers of our code run read-only, without Linux capabilities and without privilege escalation (security review
+# 2026-10-22, S3): code execution in them cannot rewrite the code or the binaries of the image; /tmp is a tmpfs.
+x-hardened: &hardened
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+
 services:
   postgres:
     build: ./postgres
     image: pharmacy/postgres:${IMAGE_TAG:-local}
+    pull_policy: never
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-pharmacy}
       POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in the env file}
+      # psql in this container over the local socket (`stack up`, `restore`): in test and prod the socket needs a
+      # password too (docker/postgres/pg_hba.conf).
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in the env file}
       PHARMACY_OWNER_PASSWORD: ${PHARMACY_OWNER_PASSWORD:?set in the env file}
       PHARMACY_APP_PASSWORD: ${PHARMACY_APP_PASSWORD:?set in the env file}
       PHARMACY_PLATFORM_PASSWORD: ${PHARMACY_PLATFORM_PASSWORD:?set in the env file}
       PHARMACY_TEST_DATABASE: ${PHARMACY_TEST_DATABASE:-}
     volumes:
       - pg-data:/var/lib/postgresql/data
+      # The local socket, shared with migrate and backup: their roles do not sign in over TCP in test and prod. Only this
+      # container writes the directory; they mount it read-only and cannot put another socket in its place.
+      - pg-socket:/var/run/postgresql
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      # Over TCP and without a password: the temporary server of initdb listens on the socket only, so the service is
+      # not healthy before the real server runs (migrate would reach it over the shared socket). The role is one TCP may
+      # sign in as; asked for a password, pg_isready answers "accepting" and logs nothing.
+      test: ['CMD-SHELL', 'PGPASSWORD= pg_isready -q -h 127.0.0.1 -U pharmacy_app -d "$${POSTGRES_DB}"']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -34,6 +57,7 @@ services:
   redis:
     build: ./redis
     image: pharmacy/redis:${IMAGE_TAG:-local}
+    pull_policy: never
     command:
       - redis-server
       - /usr/local/etc/redis/redis.conf
@@ -55,10 +79,16 @@ services:
   # One-shot: applies SQL migrations as pharmacy_owner before the API starts (ADR-0006).
   # PHARMACY_OWNER_PASSWORD is passed to this service only - never to api.
   migrate:
+    <<: *hardened
     image: pharmacy/api:${IMAGE_TAG:-local}
+    pull_policy: never
     command: ['node', 'scripts/migrate.mjs']
     environment:
-      MIGRATION_DATABASE_URL: postgres://pharmacy_owner:${PHARMACY_OWNER_PASSWORD:?set in the env file}@postgres:5432/${POSTGRES_DB:-pharmacy}
+      # Over the shared local socket (pg-socket): pharmacy_owner does not sign in over TCP in test and prod (Z6).
+      MIGRATION_DATABASE_URL: postgres://pharmacy_owner:${PHARMACY_OWNER_PASSWORD:?set in the env file}@localhost/${POSTGRES_DB:-pharmacy}?host=/var/run/postgresql
+    volumes:
+      # Read-only: connect() to the socket works, replacing it does not (pg-socket of postgres).
+      - pg-socket:/var/run/postgresql:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,10 +96,12 @@ services:
     logging: *logging
 
   api:
+    <<: *hardened
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
     image: pharmacy/api:${IMAGE_TAG:-local}
+    pull_policy: never
     environment:
       NODE_ENV: production
       APP_ENV: ${APP_ENV:?set in the env file}
@@ -101,8 +133,6 @@ services:
       TERMINAL_PIN_WINDOW_SECONDS: ${TERMINAL_PIN_WINDOW_SECONDS:-900}
       OPERATOR_SESSION_IDLE_SECONDS: ${OPERATOR_SESSION_IDLE_SECONDS:-1800}
       OPERATOR_SESSION_ABSOLUTE_SECONDS: ${OPERATOR_SESSION_ABSOLUTE_SECONDS:-28800}
-    ports:
-      - '127.0.0.1:${API_PORT:?set in the env file}:3000'
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,5 +142,27 @@ services:
         condition: service_completed_successfully
     logging: *logging
 
+  # The single entry point (ADR-0012): TLS, static web/admin, /api to the API on the same origin.
+  proxy:
+    <<: *hardened
+    # Caddy runs as root in its image: of the capabilities it keeps only binding 80 and 443.
+    cap_add: [NET_BIND_SERVICE]
+    build:
+      context: ..
+      dockerfile: docker/proxy/Dockerfile
+    image: pharmacy/proxy:${IMAGE_TAG:-local}
+    pull_policy: never
+    volumes:
+      # ACME account key, certificates, Caddy's local CA — must survive restarts (Let's Encrypt rate limits)
+      - proxy-data:/data
+      - proxy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
 volumes:
   pg-data:
+  pg-socket:
+  proxy-data:
+  proxy-config:

@@ -8,12 +8,14 @@ import {
   Post,
 } from '@nestjs/common';
 import type { Announcement } from '@pharmacy/shared-dto';
+import { RequireFreshAuth } from '../../../common/guards/decorators';
 import { RequireOperatorPermission } from '../auth/decorators';
 import { AnnouncementsService } from './announcements.service';
 import { CreateAnnouncementDto } from './dto/announcements.dto';
 
 // Announcements to networks (spec 2026-10-19-operator-notifications, 5): the list for every operator,
-// publishing and cancelling with `platform:manage`.
+// publishing and cancelling with `platform:manage` and a fresh sign-in — a text shown to every user of every
+// network is not left to a stolen session (security review 2026-10-22, Z10).
 @Controller({ path: 'operator/announcements', version: '1' })
 export class AnnouncementsController {
   constructor(private readonly announcements: AnnouncementsService) {}
@@ -24,15 +26,20 @@ export class AnnouncementsController {
     return this.announcements.list();
   }
 
-  /** 201; 400 `validation_failed` (`title`, `text`, `startsAt`, `endsAt`: `before_start`, `past`, `scope`). */
+  /**
+   * 201; 400 `validation_failed` (`title`, `text`, `startsAt`, `endsAt`: `before_start`, `past`, `scope`); 403
+   * `fresh_auth_required`.
+   */
   @RequireOperatorPermission('platform:manage')
+  @RequireFreshAuth()
   @Post()
   create(@Body() body: CreateAnnouncementDto): Promise<Announcement> {
     return this.announcements.create(body);
   }
 
-  /** 200; 404; 409 `not_active` — already cancelled or ended. */
+  /** 200; 404; 409 `not_active` — already cancelled or ended; 403 `fresh_auth_required`. */
   @RequireOperatorPermission('platform:manage')
+  @RequireFreshAuth()
   @Post(':id/cancellation')
   @HttpCode(200)
   cancel(@Param('id', new ParseUUIDPipe()) id: string): Promise<Announcement> {

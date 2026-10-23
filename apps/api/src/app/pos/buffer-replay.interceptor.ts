@@ -67,6 +67,7 @@ export class BufferReplayInterceptor implements NestInterceptor {
       storeId: device.storeId,
       terminalId: device.terminalId,
       sessionEmployeeId: principal?.employeeId ?? null,
+      sessionPrincipal: principal,
     };
     const correlationId = getRequestContext()?.correlationId ?? randomUUID();
     return new Observable((subscriber) =>

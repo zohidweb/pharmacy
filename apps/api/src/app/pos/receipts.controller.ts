@@ -18,7 +18,9 @@ export class ReceiptsController {
     @Body() body: CreateReceiptDto,
     @Headers('idempotency-key') key?: string,
     @Headers('x-client-sent-at') sentAt?: string,
+    // «Принять расхождение» of a receipt refused by the price rules (security review 2026-10-22, I2)
+    @Headers('x-accept-discrepancy') accept?: string,
   ): Promise<CreatedReceipt> {
-    return this.receipts.create(body, key, sentAt);
+    return this.receipts.create(body, key, sentAt, accept === 'true');
   }
 }

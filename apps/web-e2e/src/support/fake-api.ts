@@ -121,7 +121,8 @@ function openShift(): Shift {
   };
 }
 
-function cashierSession(): EmployeeSession {
+/** `authenticatedAt` is the time of the sign-in, as on the server: the same on every GET of one session. */
+function cashierSession(authenticatedAt: string): EmployeeSession {
   return {
     employee: {
       id: 'emp-cashier',
@@ -141,7 +142,7 @@ function cashierSession(): EmployeeSession {
     stores: [store],
     currentStoreId: store.id,
     auth: 'pin',
-    authenticatedAt: new Date().toISOString(),
+    authenticatedAt,
     terminalId: 'term-3-1',
     impersonation: null,
     locale: 'ru',
@@ -166,6 +167,7 @@ export class FakeApi {
   /** False — every API request fails as a dropped connection. */
   online = true;
   signedIn = true;
+  private signedInAt = new Date().toISOString();
   /** Every POST /receipts that reached the server, retries included. */
   readonly receiptRequests: ReceivedReceipt[] = [];
   /** Idempotency-Key → the first answer (a retry gets it again, no second sale). */
@@ -248,7 +250,8 @@ export class FakeApi {
         const body = request.postDataJSON() as { pin: string };
         if (body.pin !== CASHIER_PIN) return problem(401, 'invalid_pin');
         this.signedIn = true;
-        return json(cashierSession(), 201);
+        this.signedInAt = new Date().toISOString();
+        return json(cashierSession(this.signedInAt), 201);
       }
       case 'POST /sessions':
         return problem(401, 'invalid_credentials');
@@ -256,7 +259,7 @@ export class FakeApi {
         this.signedIn = false;
         return route.fulfill({ status: 204 });
       case 'GET /sessions/current':
-        return session() ?? json(cashierSession());
+        return session() ?? json(cashierSession(this.signedInAt));
       case 'GET /notifications':
         return (
           session() ??

@@ -53,7 +53,8 @@ const documentEvents = [
 ] as const;
 
 export const AUDIT_GROUP_RULES: readonly AuditGroupRule[] = [
-  { group: 'sale', actions: ['receipt.completed'] },
+  // a sale and a sale refused by the price rules (security review 2026-10-22, I2)
+  { group: 'sale', actions: ['receipt.completed', 'receipt.refused'] },
   { group: 'return', actions: ['return.completed'] },
   { group: 'shift', prefixes: ['shift.'] },
   { group: 'unpost', actions: ['document.unposted', 'transfer.recalled'] },

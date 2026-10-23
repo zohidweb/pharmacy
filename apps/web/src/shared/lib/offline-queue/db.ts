@@ -15,6 +15,8 @@ export interface OutboxError {
   status: number;
   code: string;
   correlationId: string;
+  /** The refused fields of the body (errors[] of the problem), e.g. the lines off the price rules of the store. */
+  errors?: Array<{ field: string; code: string }>;
 }
 
 export interface OutboxRecord<Kind extends string = string, Payload = unknown> {

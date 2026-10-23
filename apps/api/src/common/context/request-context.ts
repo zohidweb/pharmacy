@@ -39,6 +39,11 @@ export interface TerminalContext {
    * without one: only for the mark of an online operation of another employee (E3, M10).
    */
   readonly sessionEmployeeId: string | null;
+  /**
+   * That session itself: only to check what the person at the POS may do on top of the author's operation — accept a
+   * receipt refused by the price rules (security review 2026-10-22, I2). Never the rights of the author.
+   */
+  readonly sessionPrincipal: EmployeePrincipal | null;
 }
 
 // Per-request context, readable anywhere in the request without passing parameters. The data

@@ -5,7 +5,7 @@
  * first answer), problem+json errors — and can simulate an outage or a failure of the next sale.
  * Synthetic data only. When apps/api exists, the same scenarios run against the real stack.
  */
-import { roleTemplates } from '@pharmacy/shared-domain';
+import { posBufferDefaults, roleTemplates } from '@pharmacy/shared-domain';
 import type {
   BoundTerminal,
   CatalogSnapshot,
@@ -151,6 +151,7 @@ function cashierSession(authenticatedAt: string): EmployeeSession {
 
 const terminal: BoundTerminal = {
   id: 'term-3-1',
+  tenantId: 'tenant-shifo',
   name: 'Касса 1 · Аптека №3',
   store,
   cashiers: [{ employeeId: 'emp-cashier', shortName: 'Зарина Р.' }],
@@ -192,6 +193,7 @@ export class FakeApi {
       taxId: '020012345',
       receiptFooter: 'Спасибо за покупку!',
       returnWindowDays: 14,
+      bufferLimits: { ...posBufferDefaults },
     },
   };
   private readonly shift = openShift();

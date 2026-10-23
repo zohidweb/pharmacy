@@ -69,6 +69,46 @@ test('opens the POS without any network after the first visit', async ({
   expect(api.sales).toBe(1);
 });
 
+test('reloads onto a late-activated version once the receipt is empty', async ({
+  page,
+}) => {
+  // the app checks every 30 s: the test moves the clock instead of waiting
+  await page.clock.install();
+  await openPos(page);
+  await waitForWorker(page);
+  await scan(page, PARACETAMOL);
+  await expect(
+    receipt(page).getByText('Парацетамол 500 мг, таб. №10'),
+  ).toBeVisible();
+
+  // Chrome may activate a new version ~30 s after the app asked for it (a request restarted the old
+  // worker): the controller then changes in the middle of a sale, and the page must not reload
+  await page.evaluate(() => {
+    document.body.dataset.e2e = 'before-reload';
+    navigator.serviceWorker.dispatchEvent(new Event('controllerchange'));
+  });
+  await page.clock.fastForward(31_000);
+  await expect(
+    receipt(page).getByText('Парацетамол 500 мг, таб. №10'),
+  ).toBeVisible();
+  expect(await page.evaluate(() => document.body.dataset.e2e)).toBe(
+    'before-reload',
+  );
+
+  // the receipt is emptied: the next check reloads the page
+  await receipt(page)
+    .getByRole('button', {
+      name: 'Удалить из чека: Парацетамол 500 мг, таб. №10',
+    })
+    .click();
+  await expect(receipt(page).getByText('Чек пуст')).toBeVisible();
+  const reloaded = page.waitForEvent('load');
+  await page.clock.fastForward(31_000);
+  await reloaded;
+  await expect(receipt(page).getByText('Чек пуст')).toBeVisible();
+  expect(await page.evaluate(() => document.body.dataset.e2e)).toBeUndefined();
+});
+
 test('activates a new version only when the receipt is empty', async ({
   page,
   context,

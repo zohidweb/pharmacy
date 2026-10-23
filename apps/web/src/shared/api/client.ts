@@ -284,6 +284,9 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'stockCounts.post',
   'stockCounts.unpost',
   'stockCounts.cancel',
+  // the unposting check of every kind that has one: goods receipts, opening balances, write-offs, stock counts and
+  // supplier returns
+  'documents.unpostCheck',
   // the POS: shift and sale (spec 2026-10-13-pos-shift-sale)
   'catalog.snapshot',
   'receipts.create',
@@ -301,35 +304,10 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'health.get',
 ]);
 
-/**
- * Routes shared by several kinds of documents that apps/api serves only for some of them: the
- * unposting check of goods receipts, opening balances, write-offs, stock counts and supplier returns
- * is real, of
- * the other documents — mocks.
- */
-export const REAL_API_WHEN: Partial<
-  Record<ApiRouteKey, (params: unknown) => boolean>
-> = {
-  'documents.unpostCheck': (params) =>
-    [
-      'goods-receipts',
-      'opening-balances',
-      'write-offs',
-      'stock-counts',
-      'supplier-returns',
-    ].includes((params as { kind?: string } | undefined)?.kind ?? ''),
-};
-
-/** Whether a request of the route goes to apps/api in the `partial` mode. */
-export function isRealApiRequest(route: ApiRouteKey, params: unknown): boolean {
-  const when = REAL_API_WHEN[route];
-  return when ? when(params) : REAL_API_ROUTES.has(route);
-}
-
 /** The API for the routes it serves, the given mocks for the rest. */
 export function partialTransport(mocks: ApiTransport): ApiTransport {
   return (route, options, correlationId) =>
-    isRealApiRequest(route, (options as { params?: unknown }).params)
+    REAL_API_ROUTES.has(route)
       ? fetchTransport(route, options, correlationId)
       : mocks(route, options, correlationId);
 }

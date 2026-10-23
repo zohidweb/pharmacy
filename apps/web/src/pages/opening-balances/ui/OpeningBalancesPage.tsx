@@ -24,11 +24,7 @@ import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
 import { DocumentStatusPill } from '@/entities/stock-document';
 import { StockNotices, useStockAccess } from '@/features/stock-document';
-import {
-  apiRequest,
-  isApiRouteAvailable,
-  useApiErrorMessage,
-} from '@/shared/api';
+import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
@@ -127,19 +123,17 @@ function OpeningBalancesPageView() {
         actions={
           <>
             {/* loading the opening balances from a file (spec 2026-10-20-data-import, F20) */}
-            {access.canCreate &&
-              access.canSeeCost &&
-              isApiRouteAvailable('openingBalanceImports.apply') && (
-                <Button
-                  variant="secondary"
-                  iconStart="download"
-                  onClick={() =>
-                    router.push(routes.dataImport('opening-balances'))
-                  }
-                >
-                  {t('import')}
-                </Button>
-              )}
+            {access.canCreate && access.canSeeCost && (
+              <Button
+                variant="secondary"
+                iconStart="download"
+                onClick={() =>
+                  router.push(routes.dataImport('opening-balances'))
+                }
+              >
+                {t('import')}
+              </Button>
+            )}
             <Button
               iconStart="plus"
               disabled={!access.canCreate || !access.canSeeCost}

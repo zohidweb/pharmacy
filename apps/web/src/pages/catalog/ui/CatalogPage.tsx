@@ -207,7 +207,7 @@ function CatalogPageView() {
         actions={
           <>
             {/* loading the catalog from a file (spec 2026-10-20-data-import, F20) */}
-            {canCreate && isApiRouteAvailable('catalogImports.apply') && (
+            {canCreate && (
               <Button
                 variant="secondary"
                 iconStart="download"

@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { DebtStatePill } from '@/entities/purchasing';
 import { can, canWrite, useSession } from '@/entities/session';
-import { apiRequest, isApiRouteAvailable, sameTransport } from '@/shared/api';
+import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -40,11 +40,7 @@ function SuppliersPageView() {
   const tDocs = useTranslations('stockDocs');
   const { data: session } = useSession();
   const canSeeCost = can(session, 'finance:view-cost');
-  // a supplier of apps/api is unknown to the payments of the mocks (partial mode)
-  const canPay =
-    canWrite(session, 'purchasing:post') &&
-    canSeeCost &&
-    sameTransport('suppliers.pay', 'suppliers.get');
+  const canPay = canWrite(session, 'purchasing:post') && canSeeCost;
   const canCreate = canWrite(session, 'purchasing:create');
   const router = useRouter();
   const canEdit = canWrite(session, 'purchasing:update');
@@ -135,7 +131,7 @@ function SuppliersPageView() {
         actions={
           <>
             {/* loading the suppliers from a file (spec 2026-10-20-data-import, F20) */}
-            {canCreate && isApiRouteAvailable('supplierImports.apply') && (
+            {canCreate && (
               <Button
                 variant="secondary"
                 iconStart="download"

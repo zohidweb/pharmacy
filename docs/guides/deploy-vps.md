@@ -32,6 +32,16 @@
    (docs.docker.com/engine/install/ubuntu, пакеты `docker-ce`, `docker-compose-plugin`). `usermod -aG docker deploy`:
    группа `docker` равна root на этом хосте — только для `deploy`.
 5. Каталог `/opt/pharmacy` (владелец `deploy`) с подкаталогами `docker/` и `docker/env/` (`chmod 700`).
+6. Каталог копий БД (ADR-0019) — `BACKUP_DIR` env-файла, владелец uid 70 (postgres в образе):
+   `install -d -o 70 -g 70 -m 700 /srv/pharmacy-backups/prod`. На VPS один диск: копии на нём не переживут потерю
+   сервера — до выгрузки копий вне хоста (`age` + `rclone`, ADR-0020, ещё не сделана) реальные данные не вносить.
+7. Команды compose пользователя `deploy` — одни на все шаги ниже (`~/.bashrc`):
+
+   ```bash
+   dc() { (cd /opt/pharmacy && docker compose --project-name pharmacy-prod --env-file docker/env/prod.env \
+     -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml "$@"); }
+   pb() { dc exec -T -u postgres -e TZ=Asia/Dushanbe postgres pharmacy-backup "$@"; }
+   ```
 
 ## 2. Env-файл prod (один раз, на своей машине)
 
@@ -39,7 +49,10 @@
 npm run stack -- prod init
 ```
 
-В `docker/env/prod.env` заполнить `ACME_EMAIL`; адреса `nurmed.online` уже стоят. Перенести на хост и закрыть права:
+В `docker/env/prod.env` заполнить `ACME_EMAIL` и `OPERATOR_ALLOW` — публичные IP офисов операторов или VPN (CIDR через
+пробел, `203.0.113.10/32`): админка и `/api/v1/operator/*` отвечают только им, остальным 403 (ревью безопасности
+2026-10-22, A1; поправка ADR-0012 2026-10-23). Адреса `nurmed.online` и `BACKUP_DIR` уже стоят. Перенести на хост и
+закрыть права:
 
 ```bash
 scp docker/env/prod.env deploy@<IP>:/opt/pharmacy/docker/env/prod.env
@@ -66,7 +79,7 @@ docker save pharmacy/api:<sha> pharmacy/postgres:<sha> pharmacy/redis:<sha> phar
 Compose-файлы — те же, что в репозитории на этом коммите:
 
 ```bash
-scp docker/compose.yml docker/compose.prod.yml deploy@<IP>:/opt/pharmacy/docker/
+scp docker/compose.yml docker/compose.prod.yml docker/compose.backup.yml deploy@<IP>:/opt/pharmacy/docker/
 ```
 
 ## 4. Запуск
@@ -75,14 +88,18 @@ scp docker/compose.yml docker/compose.prod.yml deploy@<IP>:/opt/pharmacy/docker/
 
 ```bash
 ssh deploy@<IP>
-cd /opt/pharmacy
 export IMAGE_TAG=<sha>
-docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml up -d --no-build --wait
-docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml ps
+dc up -d --no-build --wait postgres
+dc exec -T postgres psql -q -v ON_ERROR_STOP=1 -U postgres -d pharmacy -f /docker-entrypoint-initdb.d/04-backup-role.sql
+dc up -d --no-build --wait
+dc ps
 ```
 
+Второй шаг `npm run stack -- prod up` делает сам: создаёт или обновляет роль `pharmacy_backup` по паролю из env-файла
+(ADR-0019).
+
 Первый старт proxy выпускает сертификаты Let's Encrypt: нужны DNS из шага 1.2 и открытый 80-й порт. Ошибка выпуска —
-в `docker compose … logs proxy`. Том `pharmacy-prod_proxy-data` хранит ключ ACME-аккаунта и сертификаты — не удалять.
+в `dc logs proxy`. Том `pharmacy-prod_proxy-data` хранит ключ ACME-аккаунта и сертификаты — не удалять.
 
 ## 5. Проверка
 
@@ -91,21 +108,39 @@ curl -fsS https://app.nurmed.online/api/v1/health
 curl -sI https://app.nurmed.online/ | grep -i strict-transport
 curl -s -o /dev/null -w '%{http_code}\n' https://app.nurmed.online/api/v1/operator/session   # 404
 curl -s -o /dev/null -w '%{http_code}\n' https://nurmed.online/                             # 301 → app.
+curl -s -o /dev/null -w '%{http_code}\n' https://admin.nurmed.online/       # 403 не с адресов OPERATOR_ALLOW, 200 — с них
 ```
 
-Затем в браузере: вход оператора на `admin.nurmed.online`, вход сотрудника и касса на `app.nurmed.online`.
+Затем в браузере: вход оператора на `admin.nurmed.online` (с адреса из `OPERATOR_ALLOW`), вход сотрудника и касса на
+`app.nurmed.online`. Первая копия БД — сразу, не ночью: `dc exec -T backup pharmacy-backup run`.
 
 ## 6. Первый оператор и сеть
 
 Как в CLAUDE.md, раздел «Containers»: `create-operator.mjs`, затем `create-activation-code.mjs` — командой
-`docker compose … run --rm --no-deps api node scripts/<скрипт> …` из `/opt/pharmacy` с тем же `IMAGE_TAG`.
+`dc run --rm --no-deps api node scripts/<скрипт> …` с тем же `IMAGE_TAG`.
 
 ## 7. Откат
 
-Предыдущий тег: `export IMAGE_TAG=<прежний sha>` и тот же `up -d --no-build --wait`. Если новая версия применила миграции —
+Предыдущий тег: `export IMAGE_TAG=<прежний sha>` и `dc up -d --no-build --wait`. Если новая версия применила миграции —
 откат кода без отката БД возможен не всегда: восстановить снимок диска из шага 4.
 
 ## Ежедневно, пока нет мониторинга
 
-`docker compose … ps` — все сервисы `healthy`; место на диске `df -h`; после слияния ADR-0019 — состояние сервиса `backup`
-и наличие свежей копии во внешнем хранилище.
+`dc ps` — все сервисы `healthy` (`backup` unhealthy — проверенной копии нет 26 ч); место на диске `df -h`; копии и
+причина блокировки — `pb status`; после выгрузки копий вне хоста (ADR-0020) — свежая копия во внешнем хранилище.
+
+## Восстановление из копии
+
+Node на хосте нет — те же шаги, что `npm run stack -- prod restore <копия> --replace-database` (CLAUDE.md, «Бэкапы»):
+
+```bash
+pb restore <копия> --check
+dc stop api backup
+pb restore <копия>      # при ошибке рабочая база не тронута: dc up -d --no-build --wait api backup
+dc restart redis        # все входят заново
+```
+
+Затем шаг 4 целиком: роль копий и `migrate`, который догоняет миграции новее копии. Прежняя база остаётся как
+`pharmacy_before_<копия>` (без подключений) и удаляется вручную:
+`dc exec -T postgres psql -U postgres -d postgres -c "drop database pharmacy_before_<копия>"`. Пароли и PIN
+восстановленной базы работают только с pepper её env-файла (ADR-0008).

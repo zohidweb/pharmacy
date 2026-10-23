@@ -293,6 +293,8 @@ npm run prod:build / prod:up / prod:down
 - Вход в test/prod — только через proxy (Caddy, ADR-0012); `PROXY_PROFILE` (`cloud` | `local` | `offline`) и
   `TLS_MODE` (`acme` | `internal` | `files` | `off`) выбирают схему, адреса — `WEB_ADDR`, `ADMIN_ADDR`, `APEX_ADDR`.
   `WEB_ORIGIN`/`ADMIN_ORIGIN` (проверка `Origin` в API) должны совпадать с адресами proxy, `TRUST_PROXY=1`.
+  `OPERATOR_ALLOW` обязателен: в test — `private_ranges` (локально клиенты приходят из сети Docker; на общем стенде —
+  адреса тестировщиков), в prod — публичные IP офисов операторов или VPN.
   В env-файле, созданном до proxy, `stack init` допишет новые переменные, но старые `WEB_ORIGIN`/`ADMIN_ORIGIN` и
   закомментированный `TRUST_PROXY` нужно поправить вручную.
 - test локально: HTTPS на `*.localhost` с локальным УЦ Caddy (`tls internal`). Корневой сертификат тома
@@ -372,9 +374,13 @@ npm run prod:build / prod:up / prod:down
 - Proxy: `docker/proxy/Dockerfile` (стадия node собирает web и admin без моков и предсжимает их
   `tools/scripts/precompress.mjs`, `*.map` удаляются; стадия `caddy:2.11.7-alpine` по digest), `Caddyfile` и профили
   `docker/proxy/profiles/`. На `app.` — статика web и весь `/api`, кроме `/api/v1/operator/*` (404); на `admin.` — статика
-  admin и только `/api/v1/operator/*`. Лимиты тела: `/api` 1 MB, `/api/v1/sync/*` 4 MB, загрузки `*-imports` 10 MB.
+  admin и только `/api/v1/operator/*` — и то лишь адресам `OPERATOR_ALLOW` (CIDR через пробел: офисы операторов, VPN;
+  по адресу соединения, без `X-Forwarded-For`), остальным 403 (ревью безопасности 2026-10-22, A1; поправка ADR-0012
+  2026-10-23). Лимиты тела: `/api` 1 MB, `/api/v1/sync/*` 4 MB, загрузки `*-imports` 10 MB; сжатое тело
+  (`Content-Encoding`) вне sync — 415; ответы `/api` — `Cache-Control: no-store` (эшелоны к A3 и P1 в API).
   Без SPA-fallback: маршрут — свой HTML, неизвестный путь — `404.html` со статусом 404. HSTS ставит только proxy
-  (`acme`/`files`), helmet API его не шлёт. В dev proxy не запускается (compose-профиль `proxy`).
+  (`acme`/`files`), helmet API его не шлёт. В dev proxy не запускается (compose-профиль `proxy`). Образ сначала собирает
+  декларации библиотек (`typecheck`): `next build` проверяет типы по `libs/*/dist`, а в контексте сборки их нет.
 - `TRUST_PROXY` (число reverse proxy перед API, 0–5, по умолчанию 0 = выключено; в env-примерах test и prod — 1)
   — обязательная часть выкладки за reverse proxy ADR-0012: без него `req.ip` — адрес
   прокси, и лимиты по IP (гостевой, входа, активации) становятся одним общим лимитом платформы, а адрес в

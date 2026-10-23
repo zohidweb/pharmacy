@@ -19,6 +19,7 @@ import { ActivationsService } from './activations.service';
 import type { EmployeeAuthRepository } from './employee-auth.repository';
 import { LoginClock } from './login-clock';
 import type { LoginLimiter } from './login-limiter';
+import type { SignInLocks } from './sign-in-locks';
 
 // ActivationsService (auth design 2026-10-02, section 6) with fakes of the resolver, the
 // repository, the hasher, the session store, the limiter and the audit.
@@ -133,6 +134,14 @@ function setup() {
     ),
     reset: jest.fn(async () => undefined),
   };
+  // The account budget, the journal and the lifting of sign-in locks (security review A2, P2).
+  const locks = {
+    reserveAccount: jest.fn(async () => ({ allowed: true }) as const),
+    reserveUnknown: jest.fn(async () => ({ allowed: true }) as const),
+    resetAccount: jest.fn(async () => undefined),
+    record: jest.fn(async () => undefined),
+    unlock: jest.fn(async () => undefined),
+  };
   const clock = new FakeClock();
   const audits: {
     trx: TenantTransaction;
@@ -151,6 +160,7 @@ function setup() {
     hasher as unknown as PasswordHasher,
     sessions,
     limiter as unknown as LoginLimiter,
+    locks as unknown as SignInLocks,
     audit as unknown as AuditService,
     clock,
     config,
@@ -176,7 +186,7 @@ const activate = (
   password = PASSWORD,
 ) =>
   runWithContext({ correlationId: 'corr-activation-1', principal: null }, () =>
-    t.service.activate(login, code, password),
+    t.service.activate(login, code, password, ''),
   );
 
 async function problemOf(promise: Promise<unknown>): Promise<ProblemException> {

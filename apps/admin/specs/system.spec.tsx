@@ -269,7 +269,8 @@ describe('ProfilePage', () => {
       'не выполнено',
     );
     fireEvent.change(next, { target: { value: 'NewPassw0rd' } });
-    expect(within(rules).getAllByText(/, выполнено/)).toHaveLength(3);
+    // every rule of the policy, the common-password one included (security review A2)
+    expect(within(rules).getAllByText(/, выполнено/)).toHaveLength(4);
 
     fireEvent.change(screen.getByLabelText('Текущий пароль'), {
       target: { value: 'wrong' },

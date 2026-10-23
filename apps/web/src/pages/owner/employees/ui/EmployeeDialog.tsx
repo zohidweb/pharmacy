@@ -171,7 +171,9 @@ export function EmployeeDialog({
   );
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
-  const rules = (value: string): PasswordRule[] => passwordProblems(value);
+  // an empty password is not a common one: only the rules it has to meet are listed
+  const rules = (value: string): PasswordRule[] =>
+    passwordProblems(value).filter((rule) => value !== '' || rule !== 'common');
 
   const activityColumns: DataTableColumn<EmployeeActivityEntry>[] = [
     {

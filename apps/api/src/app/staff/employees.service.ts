@@ -26,6 +26,7 @@ import { AuditService } from '../audit/audit.service';
 import { normalizeIdentifier } from '../auth/identifier';
 import { PermissionsVersionService } from '../auth/permissions-version.service';
 import { dbLanguage, roleDisplayName, uiLocale } from '../auth/session-profile';
+import { SignInLocks } from '../auth/sign-in-locks';
 import {
   type Editor,
   isPeer,
@@ -89,6 +90,7 @@ export class EmployeesService {
     private readonly versions: PermissionsVersionService,
     private readonly sessions: SessionStore,
     private readonly audit: AuditService,
+    private readonly locks: SignInLocks,
   ) {}
 
   async list(query: EmployeeListQuery): Promise<EmployeeListResponse> {
@@ -231,7 +233,7 @@ export class EmployeesService {
     }
   }
 
-  /** The manager sets a new password; every session of the employee ends. */
+  /** The manager sets a new password; every session of the employee ends and the sign-in locks go. */
   async resetPassword(id: string, newPassword: string): Promise<void> {
     const { tenantId } = requirePrincipal();
     const employeeId = id.toLowerCase();
@@ -255,6 +257,8 @@ export class EmployeesService {
       });
     });
     await this.sessions.destroyAllFor(tenantId, employeeId);
+    // The new password lifts the sign-in locks (security review A2): best effort, logged.
+    await this.locks.unlock(tenantId, employeeId);
   }
 
   /** The manager sets a new PIN; it also lifts the PIN lock. */

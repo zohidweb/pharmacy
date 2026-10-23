@@ -1,5 +1,13 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import type { Request } from 'express';
 import { Public } from '../../common/guards/decorators';
 import { ActivationsService } from './activations.service';
 import { ActivationDto } from './dto/activation.dto';
@@ -16,7 +24,16 @@ export class ActivationsController {
   @Throttle({ default: AUTH_ROUTE_LIMIT })
   @Post()
   @HttpCode(HttpStatus.NO_CONTENT)
-  async activate(@Body() body: ActivationDto): Promise<void> {
-    await this.activations.activate(body.login, body.code, body.newPassword);
+  async activate(
+    @Body() body: ActivationDto,
+    @Req() req: Request,
+  ): Promise<void> {
+    // The address goes to the journal of a lock (security review P2).
+    await this.activations.activate(
+      body.login,
+      body.code,
+      body.newPassword,
+      req.ip ?? '',
+    );
   }
 }

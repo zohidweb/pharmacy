@@ -20,6 +20,11 @@ import { AuditService } from '../audit/audit.service';
 import { EmployeeAuthRepository } from './employee-auth.repository';
 import { LoginLimiter } from './login-limiter';
 import { dbLanguage, roleDisplayName } from './session-profile';
+import {
+  passwordChangeLimiterKey,
+  placedLock,
+  SignInLocks,
+} from './sign-in-locks';
 
 /** The rotated session of a password change: the JWT for the cookie, never in a body or a log. */
 export interface PasswordChangeResult {
@@ -51,6 +56,7 @@ export class MeService {
     private readonly tokens: SessionTokenService,
     private readonly sessions: SessionStore,
     private readonly limiter: LoginLimiter,
+    private readonly locks: SignInLocks,
     private readonly audit: AuditService,
     config: ConfigService,
   ) {
@@ -87,7 +93,8 @@ export class MeService {
   /**
    * Order: an attempt is reserved with the limiter (429 `login_locked` while locked: the same
    * 5 attempts / 900 s policy as the sign-in, keyed by the employee, so a hijacked fresh session
-   * cannot guess the current password), the current password is verified (422
+   * cannot guess the current password; then one attempt of the account budget shared with the
+   * sign-in), the current password is verified (422
    * `invalid_current_password` on the field `currentPassword`; no padding - the employee is known
    * and signed in), then the policy of the new one (422), then the hash, the audit and the new
    * session commit together. After the commit the old session and every other session of the
@@ -103,25 +110,50 @@ export class MeService {
     const { tenantId, employeeId } = principal;
 
     // The attempt is reserved atomically before any hashing or database call (see LoginLimiter).
-    const limiterKey = `password-change:${tenantId}:${employeeId}`;
+    const limiterKey = passwordChangeLimiterKey(tenantId, employeeId);
     const attempt = await this.limiter.tryAcquire(limiterKey);
     if (!attempt.allowed)
       throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
+    // The account budget is shared with the sign-in and the confirmation (security review A2).
+    const account = await this.locks.reserveAccount(tenantId, employeeId);
+    if (!account.allowed) {
+      await this.locks.record(
+        employeeId,
+        placedLock(attempt, 'password-change'),
+      );
+      throw new LockedException(429, 'login_locked', account.retryAfterSeconds);
+    }
+    // The locks this attempt placed are written when it ends without a verified password, an
+    // unexpected error included (P2).
+    const locks = [
+      ...placedLock(attempt, 'password-change'),
+      ...placedLock(account, 'account'),
+    ];
+    const failed = async (error: unknown): Promise<never> => {
+      await this.locks.record(employeeId, locks);
+      throw error;
+    };
 
-    const credentials = await this.db.tenantTransaction((trx) =>
-      this.repository.findCredentials(trx, tenantId, employeeId),
-    );
+    const credentials = await this.db
+      .tenantTransaction((trx) =>
+        this.repository.findCredentials(trx, tenantId, employeeId),
+      )
+      .catch(failed);
     // A blocked employee whose session has not ended yet does not change the password.
     if (credentials === null || credentials.status !== 'active') {
-      throw unauthenticated();
+      return failed(unauthenticated());
     }
     const { passwordHash: phc, passwordPepperVersion: pepperVersion } =
       credentials;
-    if (phc === null || pepperVersion === null) throw invalidCurrentPassword();
-    if (!(await this.hasher.verify(currentPassword, phc, pepperVersion))) {
-      throw invalidCurrentPassword();
+    if (phc === null || pepperVersion === null) {
+      return failed(invalidCurrentPassword());
     }
+    const verified = await this.hasher
+      .verify(currentPassword, phc, pepperVersion)
+      .catch(failed);
+    if (!verified) return failed(invalidCurrentPassword());
     await this.limiter.reset(limiterKey);
+    await this.locks.resetAccount(tenantId, employeeId);
 
     if (passwordProblems(newPassword).length > 0) {
       throw new ProblemException(422, 'password_policy');

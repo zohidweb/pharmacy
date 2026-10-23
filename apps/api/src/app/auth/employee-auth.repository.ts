@@ -12,6 +12,13 @@ export interface LoginCredentials {
   passwordChangedAt: Date | null;
 }
 
+/** The stored sign-in identifiers of an employee. */
+export interface EmployeeIdentifiers {
+  login: string;
+  phone: string | null;
+  email: string | null;
+}
+
 /** Rows the session profile is built from (session-profile.ts). */
 export interface EmployeeProfile {
   employee: {
@@ -82,6 +89,23 @@ export class EmployeeAuthRepository {
           ? null
           : new Date(row.passwordChangedAt),
     };
+  }
+
+  /** The sign-in identifiers of an employee, to lift their locks (SignInLocks.unlock). */
+  async identifiers(
+    trx: TenantTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<EmployeeIdentifiers | null> {
+    const row = await trx
+      .selectFrom('employees')
+      .select(['login', 'phone', 'email'])
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', employeeId)
+      .executeTakeFirst();
+    return row
+      ? { login: row.login, phone: row.phone ?? null, email: row.email ?? null }
+      : null;
   }
 
   /**

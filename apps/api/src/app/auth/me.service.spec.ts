@@ -23,6 +23,7 @@ import type {
   ProfileStore,
 } from './employee-auth.repository';
 import type { LoginLimiter } from './login-limiter';
+import type { SignInLocks } from './sign-in-locks';
 import { MeService } from './me.service';
 
 // MeService (auth design 2026-10-02, section 6): the own profile, the interface language and the
@@ -242,6 +243,14 @@ function setup() {
     ),
     reset: jest.fn(async () => undefined),
   };
+  // The account budget, the journal and the lifting of sign-in locks (security review A2, P2).
+  const locks = {
+    reserveAccount: jest.fn(async () => ({ allowed: true }) as const),
+    reserveUnknown: jest.fn(async () => ({ allowed: true }) as const),
+    resetAccount: jest.fn(async () => undefined),
+    record: jest.fn(async () => undefined),
+    unlock: jest.fn(async () => undefined),
+  };
   const service = new MeService(
     db as unknown as TenantDatabase,
     repository as unknown as EmployeeAuthRepository,
@@ -249,6 +258,7 @@ function setup() {
     tokens as unknown as SessionTokenService,
     sessions,
     limiter as unknown as LoginLimiter,
+    locks as unknown as SignInLocks,
     audit as unknown as AuditService,
     config,
   );

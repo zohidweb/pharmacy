@@ -4,6 +4,7 @@ import { AuditJournal } from './audit-journal';
 import { AuditJournalController } from './audit-journal.controller';
 import { AuditJournalRepository } from './audit-journal.repository';
 import { AuditService } from './audit.service';
+import { LoginLocks } from './login-locks';
 import { PinSignIns } from './pin-sign-ins';
 import { PriceChanges } from './price-changes';
 import { ReceiptRefusals } from './receipt-refusals';
@@ -19,6 +20,7 @@ import { SyncCoreModule } from '../../core/sync';
   // PinSignIns — who held a terminal at the moment of a POS operation sent under it (spec 2026-10-21-pos-offline-limits)
   // PriceChanges — the price of a store at the moment of a POS snapshot (security review 2026-10-22, I2)
   // ReceiptRefusals — the sales the price rules refused, for the owner's notification (I2)
+  // LoginLocks — the sign-in locks of the employees, for the owner's notification (A2)
   providers: [
     AuditService,
     AuditJournalRepository,
@@ -27,6 +29,7 @@ import { SyncCoreModule } from '../../core/sync';
     PinSignIns,
     PriceChanges,
     ReceiptRefusals,
+    LoginLocks,
   ],
   exports: [
     AuditService,
@@ -34,6 +37,7 @@ import { SyncCoreModule } from '../../core/sync';
     PinSignIns,
     PriceChanges,
     ReceiptRefusals,
+    LoginLocks,
   ],
 })
 export class AuditModule {}

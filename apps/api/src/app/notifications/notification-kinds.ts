@@ -10,6 +10,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'shift_discrepancy',
   'negative_stock',
   'receipt_discrepancy',
+  'login_locked',
   'sync_conflict',
   'license_expiring',
   'service_decided',
@@ -21,7 +22,16 @@ export const EVENT_KINDS: readonly NotificationKind[] = [
   'shift_discrepancy',
   'negative_stock',
   'receipt_discrepancy',
+  'login_locked',
   'service_decided',
+];
+
+/**
+ * Kinds seen only by an employee whose scope is the whole network: a sign-in lock names an employee
+ * of any store, the owner included (final review of security review A2, I3).
+ */
+export const NETWORK_SCOPE_KINDS: readonly NotificationKind[] = [
+  'login_locked',
 ];
 
 /** The permission of the area of a kind, besides `notifications:view` (E10). */
@@ -30,6 +40,8 @@ export const KIND_PERMISSION: Readonly<Record<NotificationKind, Permission>> = {
   low_stock: 'inventory:view',
   negative_stock: 'inventory:view',
   receipt_discrepancy: 'shifts:view',
+  // whoever can set a new password and so lift the lock (security review A2)
+  login_locked: 'employees:update',
   transfer_in_transit: 'inventory:view',
   supplier_payment_due: 'purchasing:view',
   shift_discrepancy: 'shifts:view',

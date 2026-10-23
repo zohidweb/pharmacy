@@ -100,6 +100,7 @@ export const AUDIT_GROUP_RULES: readonly AuditGroupRule[] = [
     actions: [
       'auth.login-succeeded',
       'auth.login-failed',
+      'auth.login-locked',
       'auth.pin-succeeded',
       'auth.pin-failed',
       'auth.pin-locked',

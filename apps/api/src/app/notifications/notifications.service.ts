@@ -16,6 +16,7 @@ import { TenantDatabase, type TenantTransaction } from '../../core/database';
 import {
   EVENT_KINDS,
   KIND_PERMISSION,
+  NETWORK_SCOPE_KINDS,
   NOTIFICATION_KINDS,
 } from './notification-kinds';
 import { NotificationsRefresh } from './notifications-refresh';
@@ -35,6 +36,7 @@ const STRING_PARAMS = [
   'fromStore',
   'toStore',
   'shiftNumber',
+  'employeeName',
   'reason',
 ] as const;
 const NUMBER_PARAMS = ['quantity', 'positions', 'priceMinor'] as const;
@@ -139,10 +141,12 @@ export class NotificationsService {
   ): Promise<{ filter: VisibleFilter; today: string }> {
     await this.refresh.run(trx, principal.tenantId);
     const context = await this.repository.context(trx, principal.tenantId);
+    const scope = scopeOf(principal);
     const kinds = NOTIFICATION_KINDS.filter(
       (kind) =>
         !context.disabled.includes(kind) &&
-        hasPermissions(principal.permissions, KIND_PERMISSION[kind]),
+        hasPermissions(principal.permissions, KIND_PERMISSION[kind]) &&
+        (scope === 'all' || !NETWORK_SCOPE_KINDS.includes(kind)),
     );
     return {
       today: context.today,
@@ -150,7 +154,7 @@ export class NotificationsService {
         employeeId: principal.employeeId,
         kinds,
         eventKinds: EVENT_KINDS,
-        scope: scopeOf(principal),
+        scope,
       },
     };
   }

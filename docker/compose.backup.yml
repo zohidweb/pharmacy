@@ -15,6 +15,7 @@ services:
 
   backup:
     image: pharmacy/postgres:${IMAGE_TAG:-local}
+    pull_policy: never
     user: postgres
     # Read-only, without capabilities and privilege escalation, as api and migrate (security review 2026-10-22, S3):
     # it writes only /backups, /scratch and the tmpfs /tmp.

@@ -42,13 +42,14 @@ Project class: Full
 | UI и стили (web, admin, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей | ADR-0007 |
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
+| Reverse proxy и статика | Caddy 2.11 (`docker/proxy`): TLS, статика web/admin в образе `pharmacy/proxy`, `/api` на тот же origin | ADR-0012 |
+| Хостинг (пилот) | Один VPS Contabo (EU), домен `nurmed.online`; копии БД вне хоста — `age` + `rclone` | ADR-0020 |
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
 | Runtime / тесты | Node.js 22 LTS (≥ 22.20) или 24 LTS (`.nvmrc` — 24, Docker — 24), npm, Jest; e2e фронтенда — Playwright | ADR-0008, ADR-0009 |
 | CI | GitHub Actions | ADR-0009 |
 | Резервное копирование БД | Ежедневный `pg_dump` с проверкой восстановления: сервис `backup` (test, prod) на образе `pharmacy/postgres`, роль `pharmacy_backup` | ADR-0019 |
 
-**Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:**
-ADR-0012 reverse proxy и статика (отложен до выбора хостинга).
+**Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:** на `main` таких нет.
 
 ## Architecture references
 
@@ -80,7 +81,7 @@ pharmacy/
 │   ├── shared/domain/  # @pharmacy/shared-domain — Tenant, Store, Batch, Receipt, StockMovement…
 │   ├── shared/util/    # @pharmacy/shared-util — деньги (integer дирамы), даты, i18n RU/TJ
 │   └── ui/             # @pharmacy/ui — общий UI-кит web и admin (сенсорные экраны от 10″)
-├── docker/           # compose.yml (+ compose.backup.yml для test/prod) + образы postgres/, redis/ (ADR-0005); apps/api/Dockerfile
+├── docker/           # compose.yml (+ compose.backup.yml для test/prod) + образы postgres/, redis/, proxy/ (Caddy + статика, ADR-0012); apps/api/Dockerfile
 ├── docs/architecture/, templates/   # архитектура, ADR; шаблоны ai-project-start
 └── nx.json / package.json / tsconfig.base.json / eslint.config.mjs
 ```
@@ -257,22 +258,25 @@ Only these. Financial operations require idempotency and a correlation ID.
 
 ## Environments
 
-| Среда | Env-файл (не в git) | Compose-проект | API | PostgreSQL / Redis наружу |
-|---|---|---|---|---|
-| dev | `.env` ← `.env.example` | `pharmacy-dev` | `127.0.0.1:3000` | `5432` / `6379` на localhost |
-| test | `docker/env/test.env` | `pharmacy-test` | `127.0.0.1:3100` | PostgreSQL `127.0.0.1:5433` (по TCP — только роли API), Redis — нет |
-| prod | `docker/env/prod.env` | `pharmacy-prod` | `127.0.0.1:3200` | нет (только сеть compose, C4) |
+| Среда | Env-файл (не в git) | Compose-проект | Вход (proxy) | API напрямую | PostgreSQL / Redis наружу |
+|---|---|---|---|---|---|
+| dev | `.env` ← `.env.example` | `pharmacy-dev` | нет — `next dev` на 4200/4300 | `127.0.0.1:3000` | `5432` / `6379` на localhost |
+| test | `docker/env/test.env` | `pharmacy-test` | `https://pharmacy-test.localhost:8443`, `https://admin.pharmacy-test.localhost:8443` | `127.0.0.1:3100` (диагностика) | PostgreSQL `127.0.0.1:5433` (по TCP — только роли API), Redis — нет |
+| prod | `docker/env/prod.env` | `pharmacy-prod` | `https://app.nurmed.online`, `https://admin.nurmed.online` (VPS, ADR-0020) | нет | нет (только сеть compose, C4) |
 
 ```
 npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs> [service…] [--skip-checks]
 npm run stack -- <test|prod> <backup|backup-status|backup-verify <копия>|restore <копия> [--replace-database]>
 npm run stack -- test init     # env-файл из примера со случайными паролями (один раз)
-npm run test-env:build         # lint + test + static web/admin + образы с тегом <git sha>
+npm run test-env:build         # lint + test + образы с тегом <git sha> (web/admin собирает образ proxy)
 npm run test-env:up            # запуск и ожидание healthy;  test-env:down — остановка
 npm run prod:build / prod:up / prod:down
 ```
 
-- Скрипт: `tools/scripts/stack.mjs`; compose: `docker/compose.yml` + `docker/compose.<env>.yml`.
+- Скрипт: `tools/scripts/stack.mjs`; compose: `docker/compose.yml` + `docker/compose.<env>.yml` (+ `compose.backup.yml`
+  в test и prod — без него compose отказывает: `backup` в `compose.<env>.yml` только дополняется). Образы `pharmacy/*`
+  собираются локально и никогда не скачиваются (`pull_policy: never`): неверный `IMAGE_TAG` — ошибка, а не чужой
+  образ с Docker Hub.
 - `build` — ручной quality gate, пока workflow-файлы CI не созданы (ADR-0009): lint + test всех
   проектов, затем сборка. Для prod `--skip-checks` запрещён, а сборка — только из чистого дерева
   git (тег образа = короткий sha; у test с незакоммиченными изменениями — `<sha>-dirty`).
@@ -289,8 +293,20 @@ npm run prod:build / prod:up / prod:down
   ломают URL — `stack init` генерирует безопасные (base64url).
   Роли создаёт initdb только на пустом томе: существующие тома (`pharmacy-<env>_pg-data`) после появления
   новых ролей нужно пересоздать (`docker volume rm`, данные теряются — только для test/dev).
-- web/admin в test/prod пока только собираются в `apps/*/out`; раздача — с reverse proxy (ADR-0012, proposed).
-- Сейчас обе среды запускаются локально; хостинг — открытый вопрос № 1 stack.md.
+- Вход в test/prod — только через proxy (Caddy, ADR-0012); `PROXY_PROFILE` (`cloud` | `local` | `offline`) и
+  `TLS_MODE` (`acme` | `internal` | `files` | `off`) выбирают схему, адреса — `WEB_ADDR`, `ADMIN_ADDR`, `APEX_ADDR`.
+  `WEB_ORIGIN`/`ADMIN_ORIGIN` (проверка `Origin` в API) должны совпадать с адресами proxy, `TRUST_PROXY=1`.
+  `OPERATOR_ALLOW` обязателен: в test — `private_ranges` (локально клиенты приходят из сети Docker; на общем стенде —
+  адреса тестировщиков), в prod — публичные IP офисов операторов или VPN.
+  В env-файле, созданном до proxy, `stack init` допишет новые переменные (и `TRUST_PROXY=1` — закомментированная строка
+  не считается), но старые `WEB_ORIGIN`/`ADMIN_ORIGIN` нужно поправить вручную.
+- test локально: HTTPS на `*.localhost` с локальным УЦ Caddy (`tls internal`). Корневой сертификат тома
+  `pharmacy-test_proxy-data` доверить один раз (иначе браузер не примет cookie `__Host-*`):
+  `docker compose --project-name pharmacy-test --env-file docker/env/test.env -f docker/compose.yml -f docker/compose.test.yml -f docker/compose.backup.yml cp proxy:/data/caddy/pki/authorities/local/root.crt caddy-test-root.crt`,
+  затем `certutil -addstore -user Root caddy-test-root.crt` (Windows, текущий пользователь); файл после этого удалить.
+- prod — VPS Contabo по ADR-0020: DNS A-записи `app.`, `admin.` и apex `nurmed.online` на IP сервера и открытый 80-й
+  порт до первого старта (Let's Encrypt), `ACME_EMAIL` обязателен; том `pharmacy-prod_proxy-data` хранит ключ
+  ACME-аккаунта и сертификаты. Выкладка до ADR о CD — `docs/guides/deploy-vps.md`.
 - **Бэкапы** (ADR-0019, спецификация `docs/superpowers/specs/2026-10-21-db-backups-design.md`) — только test и prod:
   - сервис `backup` (`docker/compose.backup.yml`, `stack.mjs` добавляет его сам) каждую ночь в `BACKUP_TIME`
     (02:00, Душанбе) делает `pg_dump` и проверяет копию восстановлением во временный экземпляр; непроверенная копия
@@ -314,7 +330,8 @@ npm run prod:build / prod:up / prod:down
   - в окне копии не выкладывать и не запускать миграции вручную: `pg_dump` держит блокировки до конца, а
     `lock_timeout` есть не у всех миграций. `stack up` с новым тегом перезапускает `postgres` и обрывает копию — новый
     `backup` сделает её сразу после `migrate`;
-  - копия за пределы хоста и шифрование копий — вместе с хостингом (вопрос № 1), до prod.
+  - копия за пределы хоста и шифрование копий — по ADR-0020 (`age` + `rclone` в Object Storage другого региона), до
+    prod; ещё не сделаны.
 
 ## Containers (ADR-0005)
 
@@ -340,7 +357,7 @@ npm run prod:build / prod:up / prod:down
     `POSTGRES_SUPERUSER_PASSWORD` env-файла. Поэтому перед первой выкладкой этих правил на существующий кластер его
     нужно проверить (ответ `1`):
     `docker compose --project-name pharmacy-<env> --env-file docker/env/<env>.env -f docker/compose.yml -f
-    docker/compose.<env>.yml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$(hostname -i)" -U
+    docker/compose.<env>.yml -f docker/compose.backup.yml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$(hostname -i)" -U
     "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select 1"'`.
   - Если пароль разошёлся и `up` уже упал:
     1. в контейнере `postgres` выполнить
@@ -357,9 +374,18 @@ npm run prod:build / prod:up / prod:down
   SQL-миграции ролью `pharmacy_owner` до старта API (`api` ждёт `service_completed_successfully`). Скрипт и
   `migrations/` попадают в образ через assets webpack. Если API не стартует из-за миграции —
   `npm run stack -- <env> logs migrate`.
-- web/admin контейнеризуются вместе с reverse proxy после принятия ADR-0012 (proposed); до этого — `npx nx dev`.
-- `TRUST_PROXY` (число reverse proxy перед API, 0–5, по умолчанию 0 = выключено; в `prod.env.example` — 1 для
-  Caddy) — обязательная часть выкладки за reverse proxy ADR-0012: без него `req.ip` — адрес
+- Proxy: `docker/proxy/Dockerfile` (стадия node собирает web и admin без моков и предсжимает их
+  `tools/scripts/precompress.mjs`, `*.map` удаляются; стадия `caddy:2.11.7-alpine` по digest), `Caddyfile` и профили
+  `docker/proxy/profiles/`. На `app.` — статика web и весь `/api`, кроме `/api/v1/operator/*` (404); на `admin.` — статика
+  admin и только `/api/v1/operator/*` — и то лишь адресам `OPERATOR_ALLOW` (CIDR через пробел: офисы операторов, VPN;
+  по адресу соединения, без `X-Forwarded-For`), остальным 403 (ревью безопасности 2026-10-22, A1; поправка ADR-0012
+  2026-10-23). Лимиты тела (MiB, как в API): `/api` 1, `/api/v1/sync/*` 4, загрузки `*-imports` 10; сжатое тело
+  (`Content-Encoding`) вне sync — 415; ответы `/api` — `Cache-Control: no-store` (эшелоны к A3 и P1 в API).
+  Без SPA-fallback: маршрут — свой HTML, неизвестный путь — `404.html` со статусом 404. HSTS ставит только proxy
+  (`acme`/`files`), helmet API его не шлёт. В dev proxy не запускается (compose-профиль `proxy`). Образ сначала собирает
+  декларации библиотек (`typecheck`): `next build` проверяет типы по `libs/*/dist`, а в контексте сборки их нет.
+- `TRUST_PROXY` (число reverse proxy перед API, 0–5, по умолчанию 0 = выключено; в env-примерах test и prod — 1)
+  — обязательная часть выкладки за reverse proxy ADR-0012: без него `req.ip` — адрес
   прокси, и лимиты по IP (гостевой, входа, активации) становятся одним общим лимитом платформы, а адрес в
   аудите входа — адресом прокси. Значение должно равняться реальному числу прокси: завышенное позволяет
   клиенту подделать `X-Forwarded-For`. Не новая технология, ADR не нужен (stack.md, вопрос № 13).
@@ -378,7 +404,7 @@ npm run prod:build / prod:up / prod:down
   `ACTIVATION_CODE_TTL_HOURS`, по умолчанию 72 ч). Стек должен быть поднят (`npm run stack -- <env> up`):
 
   ```
-  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose --project-name pharmacy-<test|prod>     --env-file docker/env/<test|prod>.env -f docker/compose.yml -f docker/compose.<test|prod>.yml     run --rm --no-deps api node scripts/create-activation-code.mjs --login <логин|телефон|e-mail>
+  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose --project-name pharmacy-<test|prod>     --env-file docker/env/<test|prod>.env -f docker/compose.yml -f docker/compose.<test|prod>.yml -f docker/compose.backup.yml     run --rm --no-deps api node scripts/create-activation-code.mjs --login <логин|телефон|e-mail>
   ```
 
   `IMAGE_TAG` — тег образа, собранного `build` (короткий sha; у test с незакоммиченными изменениями —
@@ -448,7 +474,7 @@ npm run prod:build / prod:up / prod:down
   **web-e2e** (Playwright + axe). Nightly: `npm audit`, Trivy, Dependabot. Actions — только по SHA,
   `permissions: contents: read`, секретов в CI нет, Nx Cloud не подключается.
 - Пока workflow-файлы не созданы — перед каждым PR вручную `npm run check`.
-- Деплой (CD) — после выбора хостинга, отдельным ADR.
+- Деплой (CD) — отдельным ADR; до него — ручная выкладка образов на VPS (ADR-0020, `docs/guides/deploy-vps.md`).
 
 ## Security constraints
 

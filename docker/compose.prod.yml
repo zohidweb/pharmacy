@@ -1,6 +1,6 @@
-# prod: PostgreSQL and Redis are NOT published — reachable only inside the compose network
-# (C4 deployment: private network). The API port is bound to localhost; public access goes
-# through the reverse proxy (future ADR-0012).
+# prod (ADR-0020: one VPS). PostgreSQL, Redis and the API are NOT published — reachable only inside the
+# compose network (C4 deployment: private network). The proxy is the single public entry point
+# (ADR-0012): 80/tcp for ACME and the HTTPS redirect, 443/tcp, 443/udp for HTTP/3.
 services:
   postgres:
     # Over TCP only the runtime roles of the API sign in (docker/postgres/pg_hba.conf; security review 2026-10-22, Z6).
@@ -24,3 +24,24 @@ services:
     deploy:
       resources:
         limits: { cpus: '1', memory: 1g }
+  proxy:
+    restart: unless-stopped
+    environment:
+      PROXY_PROFILE: ${PROXY_PROFILE:?set in the env file}
+      TLS_MODE: ${TLS_MODE:?set in the env file}
+      ACME_EMAIL: ${ACME_EMAIL:?set in the env file (Let's Encrypt account)}
+      WEB_ADDR: ${WEB_ADDR:?set in the env file}
+      ADMIN_ADDR: ${ADMIN_ADDR:?set in the env file}
+      # The addresses that reach the admin host (security review 2026-10-22, A1): CIDR, space-separated.
+      OPERATOR_ALLOW: ${OPERATOR_ALLOW:?set in the env file}
+      APEX_ADDR: ${APEX_ADDR:?set in the env file}
+      WEB_ORIGIN: ${WEB_ORIGIN:?set in the env file}
+      PROXY_HTTP_PORT: ${PROXY_HTTP_PORT:-80}
+      PROXY_HTTPS_PORT: ${PROXY_HTTPS_PORT:-443}
+    ports:
+      - '${PROXY_BIND_ADDR:-0.0.0.0}:${PROXY_HTTP_PORT:-80}:${PROXY_HTTP_PORT:-80}'
+      - '${PROXY_BIND_ADDR:-0.0.0.0}:${PROXY_HTTPS_PORT:-443}:${PROXY_HTTPS_PORT:-443}'
+      - '${PROXY_BIND_ADDR:-0.0.0.0}:${PROXY_HTTPS_PORT:-443}:${PROXY_HTTPS_PORT:-443}/udp'
+    deploy:
+      resources:
+        limits: { cpus: '1', memory: 256m }

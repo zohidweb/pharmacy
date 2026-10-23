@@ -20,7 +20,11 @@ import { AuditService } from '../audit/audit.service';
 import { EmployeeAuthRepository } from './employee-auth.repository';
 import { LoginLimiter } from './login-limiter';
 import { dbLanguage, roleDisplayName } from './session-profile';
-import { passwordChangeLimiterKey, SignInLocks } from './sign-in-locks';
+import {
+  passwordChangeLimiterKey,
+  placedLock,
+  SignInLocks,
+} from './sign-in-locks';
 
 /** The rotated session of a password change: the JWT for the cookie, never in a body or a log. */
 export interface PasswordChangeResult {
@@ -112,21 +116,37 @@ export class MeService {
       throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
     // The account budget is shared with the sign-in and the confirmation (security review A2).
     const account = await this.locks.reserveAccount(tenantId, employeeId);
-    if (!account.allowed)
+    if (!account.allowed) {
+      await this.locks.record(
+        employeeId,
+        placedLock(attempt, 'password-change'),
+      );
       throw new LockedException(429, 'login_locked', account.retryAfterSeconds);
+    }
+    // The locks this attempt placed are written when it ends without a verified password (P2).
+    const locks = [
+      ...placedLock(attempt, 'password-change'),
+      ...placedLock(account, 'account'),
+    ];
+    const failed = async (error: Error): Promise<never> => {
+      await this.locks.record(employeeId, locks);
+      throw error;
+    };
 
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
     );
     // A blocked employee whose session has not ended yet does not change the password.
     if (credentials === null || credentials.status !== 'active') {
-      throw unauthenticated();
+      return failed(unauthenticated());
     }
     const { passwordHash: phc, passwordPepperVersion: pepperVersion } =
       credentials;
-    if (phc === null || pepperVersion === null) throw invalidCurrentPassword();
+    if (phc === null || pepperVersion === null) {
+      return failed(invalidCurrentPassword());
+    }
     if (!(await this.hasher.verify(currentPassword, phc, pepperVersion))) {
-      throw invalidCurrentPassword();
+      return failed(invalidCurrentPassword());
     }
     await this.limiter.reset(limiterKey);
     await this.locks.resetAccount(tenantId, employeeId);

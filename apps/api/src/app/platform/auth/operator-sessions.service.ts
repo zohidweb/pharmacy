@@ -149,6 +149,8 @@ export class OperatorSessionsService {
     const key = `operator:${sha256Hex(login)}`;
     const attempt = await this.limiter.tryAcquire(key);
     if (!attempt.allowed) throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
+    // A lock this attempt placed goes to the journal if the attempt fails (security review P2).
+    const { lockSeconds } = attempt;
 
     const found = await this.db.platformTransaction(SIGN_IN_JOB, (trx) =>
       this.repository.findByLogin(trx, login),
@@ -161,10 +163,10 @@ export class OperatorSessionsService {
     } else {
       await this.hasher.verifyDummy(password);
     }
-    if (found === null) return this.fail(null, 'unknown_login', ip);
-    if (found.passwordHash === null) return this.fail(found.id, 'no_password', ip);
-    if (!ok) return this.fail(found.id, 'invalid_password', ip);
-    if (found.status !== 'active') return this.fail(found.id, 'operator_blocked', ip);
+    if (found === null) return this.fail(null, 'unknown_login', ip, lockSeconds);
+    if (found.passwordHash === null) return this.fail(found.id, 'no_password', ip, lockSeconds);
+    if (!ok) return this.fail(found.id, 'invalid_password', ip, lockSeconds);
+    if (found.status !== 'active') return this.fail(found.id, 'operator_blocked', ip, lockSeconds);
 
     const operatorId = found.id;
     const verifiedPhc = found.passwordHash;
@@ -229,12 +231,12 @@ export class OperatorSessionsService {
       // holds its token, so it is removed rather than left to expire.
       if (stored.session) await this.discard(sessionId);
       // The operator of the verified password is gone: the same answer as an unknown login.
-      if (error instanceof OperatorGoneError) return this.fail(operatorId, 'unknown_login', ip);
+      if (error instanceof OperatorGoneError) return this.fail(operatorId, 'unknown_login', ip, lockSeconds);
       if (error instanceof OperatorBlockedError) {
-        return this.fail(operatorId, 'operator_blocked', ip);
+        return this.fail(operatorId, 'operator_blocked', ip, lockSeconds);
       }
       if (error instanceof PasswordChangedError) {
-        return this.fail(operatorId, 'password_changed', ip);
+        return this.fail(operatorId, 'password_changed', ip, lockSeconds);
       }
       throw error;
     }
@@ -257,11 +259,13 @@ export class OperatorSessionsService {
     }
   }
 
-  // A failed sign-in (already counted by tryAcquire): audited on the platform, answered as 401.
+  // A failed sign-in (already counted by tryAcquire): audited on the platform with the lock the
+  // attempt placed, if any (security review P2), answered as 401.
   private async fail(
     operatorId: string | null,
     reason: FailureReason,
     ip: string,
+    lockSeconds: number | undefined,
   ): Promise<never> {
     // An unknown login goes to the application log only, without the value: platform_audit_log is
     // append-only, and rotating unknown e-mails would otherwise fill it without bound. Failures of
@@ -270,17 +274,30 @@ export class OperatorSessionsService {
       this.logger.warn(
         `Operator sign-in failed: unknown login [correlationId=${getRequestContext()?.correlationId}]`,
       );
+      if (lockSeconds !== undefined) {
+        this.logger.warn(
+          `Operator sign-in locked: unknown login [correlationId=${getRequestContext()?.correlationId}]`,
+        );
+      }
       throw invalidCredentials();
     }
     try {
-      await this.db.platformTransaction(SIGN_IN_JOB, (trx) =>
-        this.audit.append(trx, {
+      await this.db.platformTransaction(SIGN_IN_JOB, async (trx) => {
+        await this.audit.append(trx, {
           action: 'auth.operator-login-failed',
           entityType: 'operator',
           entityId: operatorId,
           details: { reason, ip },
-        }),
-      );
+        });
+        if (lockSeconds !== undefined) {
+          await this.audit.append(trx, {
+            action: 'auth.operator-login-locked',
+            entityType: 'operator',
+            entityId: operatorId,
+            details: { ip, lockSeconds },
+          });
+        }
+      });
     } catch (error) {
       // The answer must stay the same 401; logged by error name only, not swallowed silently.
       this.logger.error(

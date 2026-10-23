@@ -1094,6 +1094,7 @@
       "tenant_unblocked": "Компания разблокирована",
       "auth_operator-login-succeeded": "Вход в админку",
       "auth_operator-login-failed": "Неудачная попытка входа",
+      "auth_operator-login-locked": "Вход заблокирован после неверных паролей",
       "auth_operator-password-changed": "Изменён пароль",
       "auth_operator-password-change-failed": "Неверный текущий пароль при смене пароля",
       "operator_activated": "Задан первый пароль",

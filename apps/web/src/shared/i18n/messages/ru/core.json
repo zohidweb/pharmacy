@@ -454,6 +454,7 @@
     "auth_pin_succeeded": "Вход по PIN",
     "auth_pin_failed": "Неверный PIN",
     "auth_pin_locked": "PIN заблокирован",
+    "auth_login_locked": "Вход заблокирован после неверных паролей",
     "auth_reconfirmed": "Пароль подтверждён",
     "auth_reconfirm_failed": "Пароль не подтверждён",
     "auth_activated": "Первый вход",

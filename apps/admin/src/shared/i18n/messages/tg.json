@@ -1094,6 +1094,7 @@
       "tenant_unblocked": "Ширкат кушода шуд",
       "auth_operator-login-succeeded": "Вуруд ба админка",
       "auth_operator-login-failed": "Кӯшиши ноком барои вуруд",
+      "auth_operator-login-locked": "Вуруд пас аз паролҳои нодуруст баста шуд",
       "auth_operator-password-changed": "Парол иваз карда шуд",
       "auth_operator-password-change-failed": "Пароли ҷорӣ ҳангоми иваз кардани парол нодуруст аст",
       "operator_activated": "Пароли аввал муқаррар шуд",

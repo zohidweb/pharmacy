@@ -37,7 +37,12 @@ import {
   SessionIssuer,
 } from './session-issuer';
 import { buildEmployeeSession, type SessionView } from './session-profile';
-import { reconfirmLimiterKey, SignInLocks } from './sign-in-locks';
+import {
+  type PlacedLock,
+  placedLock,
+  reconfirmLimiterKey,
+  SignInLocks,
+} from './sign-in-locks';
 
 export interface LoginResult {
   /** Session JWT for the cookie; never in a response body or a log. */
@@ -163,19 +168,26 @@ export class SessionsService {
       identifier.kind,
       identifier.value,
     );
+    // The lock this attempt placed on the identifier, written if the attempt fails (P2).
+    const locks = placedLock(attempt, 'identifier', identifier.kind);
     if (resolved === null) {
       await this.hasher.verifyDummy(password);
       // No tenant, so no audit_log: the application log only, without the identifier.
       this.logger.warn(
         `Sign-in failed: unknown ${identifier.kind} [correlationId=${correlationId}]`,
       );
+      if (locks.length > 0) {
+        this.logger.warn(
+          `Sign-in locked: unknown ${identifier.kind} [correlationId=${correlationId}]`,
+        );
+      }
       throw invalidCredentials();
     }
 
     // Steps 5-7 run in the tenant of the identifier, so the audit and the transactions see it.
     return runWithContext(
       { correlationId, tenantId: resolved.tenantId, principal: null },
-      () => this.loginInTenant(resolved, password, ip, key),
+      () => this.loginInTenant(resolved, password, ip, key, locks),
     );
   }
 
@@ -233,8 +245,14 @@ export class SessionsService {
       throw new LockedException(429, 'login_locked', attempt.retryAfterSeconds);
     // The account budget is shared with the sign-in and the password change (security review A2).
     const account = await this.locks.reserveAccount(tenantId, employeeId);
-    if (!account.allowed)
+    if (!account.allowed) {
+      await this.locks.record(employeeId, placedLock(attempt, 'reconfirm'));
       throw new LockedException(429, 'login_locked', account.retryAfterSeconds);
+    }
+    const locks = [
+      ...placedLock(attempt, 'reconfirm'),
+      ...placedLock(account, 'account'),
+    ];
 
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
@@ -253,6 +271,7 @@ export class SessionsService {
           entityId: employeeId,
         }),
       );
+      await this.locks.record(employeeId, locks);
       throw new FieldProblemException(422, 'invalid_current_password', [
         { field: 'password', code: 'invalid_current_password' },
       ]);
@@ -276,14 +295,18 @@ export class SessionsService {
     password: string,
     ip: string,
     key: string,
+    identifierLocks: readonly PlacedLock[],
   ): Promise<LoginResult> {
     const { tenantId, employeeId } = resolved;
     // The account budget (security review A2): every identifier of the employee spends it, so the
     // three of them do not triple the guesses. Reserved before any hashing.
     const account = await this.locks.reserveAccount(tenantId, employeeId);
     if (!account.allowed) {
+      // A lock this attempt placed on the identifier stands: it ends here, without a success.
+      await this.locks.record(employeeId, identifierLocks, ip);
       throw new LockedException(429, 'login_locked', account.retryAfterSeconds);
     }
+    const locks = [...identifierLocks, ...placedLock(account, 'account')];
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
     );
@@ -292,16 +315,16 @@ export class SessionsService {
     // timing does not tell a blocked network or employee apart. No transaction is held open
     // during scrypt.
     const verified = await this.checkPassword(credentials, password);
-    if (!verified.ok) return this.fail(employeeId, verified.reason, ip);
+    if (!verified.ok) return this.fail(employeeId, verified.reason, ip, locks);
     if (resolved.tenantStatus !== 'active')
-      return this.fail(employeeId, 'tenant_blocked', ip);
+      return this.fail(employeeId, 'tenant_blocked', ip, locks);
     if (verified.status !== 'active')
-      return this.fail(employeeId, 'employee_inactive', ip);
+      return this.fail(employeeId, 'employee_inactive', ip, locks);
 
     // Snapshot of the role's permissions (the owner role: the whole catalog), scope and version.
     const snapshot = await this.loader.reload(tenantId, employeeId);
     if (snapshot === null || snapshot.status !== 'active') {
-      return this.fail(employeeId, 'employee_inactive', ip);
+      return this.fail(employeeId, 'employee_inactive', ip, locks);
     }
 
     const rehash = this.hasher.needsRehash(verified.phc, verified.pepperVersion)
@@ -353,10 +376,10 @@ export class SessionsService {
         await this.issuer.discard(stored.sessionId);
       }
       if (error instanceof EmployeeGoneError) {
-        return this.fail(employeeId, 'unknown_employee', ip);
+        return this.fail(employeeId, 'unknown_employee', ip, locks);
       }
       if (error instanceof PasswordChangedError) {
-        return this.fail(employeeId, 'password_changed', ip);
+        return this.fail(employeeId, 'password_changed', ip, locks);
       }
       throw error;
     }
@@ -405,12 +428,13 @@ export class SessionsService {
       : { ok: false, reason: 'invalid_password' };
   }
 
-  // A failed sign-in of a known identifier (already counted by tryAcquire): audited in the tenant,
-  // answered as 401.
+  // A failed sign-in of a known identifier (already counted by tryAcquire): audited in the tenant
+  // with the locks the attempt placed (P2), answered as 401.
   private async fail(
     employeeId: string,
     reason: FailureReason,
     ip: string,
+    locks: readonly PlacedLock[],
   ): Promise<never> {
     try {
       await this.db.tenantTransaction((trx) =>
@@ -429,6 +453,7 @@ export class SessionsService {
         `Could not write the auth.login-failed audit (${name}) [correlationId=${getRequestContext()?.correlationId}]`,
       );
     }
+    await this.locks.record(employeeId, locks, ip);
     throw invalidCredentials();
   }
 

@@ -454,6 +454,7 @@
     "auth_pin_succeeded": "Вуруд бо PIN",
     "auth_pin_failed": "PIN-и нодуруст",
     "auth_pin_locked": "PIN баста шуд",
+    "auth_login_locked": "Вуруд пас аз паролҳои нодуруст баста шуд",
     "auth_reconfirmed": "Парол тасдиқ шуд",
     "auth_reconfirm_failed": "Парол тасдиқ нашуд",
     "auth_activated": "Вуруди аввал",

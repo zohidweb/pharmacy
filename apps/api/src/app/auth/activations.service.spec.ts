@@ -185,7 +185,7 @@ const activate = (
   password = PASSWORD,
 ) =>
   runWithContext({ correlationId: 'corr-activation-1', principal: null }, () =>
-    t.service.activate(login, code, password),
+    t.service.activate(login, code, password, ''),
   );
 
 async function problemOf(promise: Promise<unknown>): Promise<ProblemException> {

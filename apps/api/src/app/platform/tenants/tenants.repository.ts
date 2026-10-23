@@ -11,6 +11,7 @@ import {
   type DB,
   escapeLike,
   PLATFORM_TIME_ZONE,
+  platformDate,
   platformToday,
 } from '../../../core/database';
 
@@ -101,11 +102,12 @@ interface StoreRegistryRow {
   address: string;
   mode: string;
   status: string;
-  closedAt: Date | string | null;
+  /** The day of the platform (Asia/Dushanbe) the store closed. */
+  closedOn: string | null;
 }
 
-// The registry columns only (ADR-0013 §5; the address — amendment 2026-10-23); the offline figures come with the
-// offline part of the admin.
+// The registry columns only (ADR-0013 §5; the address — amendment 2026-10-23); the month comes from the marts (the
+// service), the offline figures with the offline part of the admin.
 function toStoreSummary(row: StoreRegistryRow): StoreSummary {
   return {
     id: row.id,
@@ -114,12 +116,17 @@ function toStoreSummary(row: StoreRegistryRow): StoreSummary {
     address: row.address,
     mode: row.mode === 'online' ? 'cloud' : 'offline',
     status: row.status === 'closed' ? 'closed' : 'active',
-    closedOn: row.closedAt === null ? null : dateOnly(row.closedAt),
+    closedOn: row.closedOn,
     licenseValidUntil: null,
     lastSyncAt: null,
     monthSalesMinor: 0,
   };
 }
+
+// The registry columns of a store with its days in the time zone of the platform (a store created at 02:00 in
+// Dushanbe is created that day, not the day before in UTC).
+const STORE_CLOSED_ON = sql<string | null>`${platformDate(sql.ref('stores.closed_at'))}::text`;
+const STORE_CREATED_ON = sql<string>`${platformDate(sql.ref('stores.created_at'))}::text`;
 
 export interface StoreCardRow {
   summary: StoreSummary;
@@ -294,7 +301,15 @@ export class TenantsRepository {
   async stores(trx: Transaction<DB>, tenantId: string): Promise<StoreSummary[]> {
     const rows = await trx
       .selectFrom('stores')
-      .select(['id', 'tenantId', 'name', 'address', 'mode', 'status', 'closedAt'])
+      .select([
+        'id',
+        'tenantId',
+        'name',
+        'address',
+        'mode',
+        'status',
+        STORE_CLOSED_ON.as('closedOn'),
+      ])
       .where('tenantId', '=', tenantId)
       .orderBy('name')
       .orderBy('id')
@@ -314,8 +329,8 @@ export class TenantsRepository {
         'stores.address',
         'stores.mode',
         'stores.status',
-        'stores.closedAt',
-        'stores.createdAt',
+        STORE_CLOSED_ON.as('closedOn'),
+        STORE_CREATED_ON.as('connectedOn'),
         'tenants.name as tenantName',
       ])
       .where('stores.id', '=', storeId)
@@ -325,7 +340,7 @@ export class TenantsRepository {
       : {
           summary: toStoreSummary(row),
           tenantName: row.tenantName,
-          connectedOn: dateOnly(row.createdAt),
+          connectedOn: row.connectedOn,
         };
   }
 

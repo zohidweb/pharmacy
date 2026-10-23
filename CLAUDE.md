@@ -112,7 +112,8 @@ pharmacy/
   `StoreUsage` (активность точек за месяц для счетов, в контексте сети).
   Дашборд и статистика админки — `app/platform/stats`: `pos` отдаёт ему `StoreSalesExport` (пересчёт витрин
   статистики сети в её контексте), `platform/billing` — `BillingOverview` (просроченные счета, последний
-  выставленный месяц, заявки без решения).
+  выставленный месяц, заявки без решения). Продажи точек за месяц для списка точек сети и карточки точки
+  `platform/tenants` берёт у `platform/stats` (`StoreMonthSales`; спецификация 2026-10-23-admin-store-card-tenant-log).
   Уведомления оператора и счётчики меню админки — `app/platform/notifications`: состояния берёт у `platform/stats`
   (`OperatorQueue` — общий источник с очередью дашборда), число заявок — у `platform/billing` (`BillingOverview`).
   Синхронизация офлайн-точек (ADR-0014): `pos`, `returns`, `terminals`, `audit`, `catalog`, `pricing`, `inventory`

@@ -106,11 +106,17 @@ export class TenantsService {
     return details;
   }
 
+  /** The stores of a network with their month from the marts, as on their cards (spec 2026-10-23, A3). */
   async stores(tenantId: string): Promise<StoreSummary[]> {
-    return this.db.platformTransaction(this.actor(), async (trx) => {
+    const stores = await this.db.platformTransaction(this.actor(), async (trx) => {
       if ((await this.repository.status(trx, tenantId)) === null) throw notFound();
       return this.repository.stores(trx, tenantId);
     });
+    const month = await this.storeSales.ofNetwork(tenantId);
+    return stores.map((store) => ({
+      ...store,
+      monthSalesMinor: month.stores.get(store.id)?.salesMinor ?? 0,
+    }));
   }
 
   /**

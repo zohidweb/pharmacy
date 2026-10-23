@@ -19,7 +19,7 @@ import { StoreSalesExport } from '../../pos/store-sales-export';
 import { BillingOverview } from '../billing/billing-overview';
 import { OperatorQueue } from './operator-queue';
 import { StatsRepository, type UsageStoreFigures } from './stats.repository';
-import type { StoreMonthFigures } from './store-month-sales';
+import type { NetworkMonthFigures } from './store-month-sales';
 
 /** The first period of the statistics (spec 2026-10-19-admin-dashboard-stats, 6). */
 const FIRST_PERIOD = '2026-01';
@@ -264,11 +264,8 @@ export class StatsService {
     });
   }
 
-  /** A store this month (`StoreMonthSales`): zero for a warehouse or a closed store without receipts. */
-  async storeMonth(
-    tenantId: string,
-    storeId: string,
-  ): Promise<StoreMonthFigures> {
+  /** The stores of a network this month (`StoreMonthSales`); `tenantId` in lower case. */
+  async storesMonth(tenantId: string): Promise<NetworkMonthFigures> {
     await this.refresh([tenantId]);
     return this.db.platformTransaction(this.actor(), async (trx) => {
       const today = await this.repository.today(trx);
@@ -277,10 +274,13 @@ export class StatsService {
         `${today.slice(0, 7)}-01`,
         tenantId,
       );
-      const store = stores.find((item) => item.storeId === storeId);
       return {
-        receipts: store?.receipts ?? 0,
-        salesMinor: store?.salesMinor ?? 0,
+        stores: new Map(
+          stores.map((store) => [
+            store.storeId,
+            { receipts: store.receipts, salesMinor: store.salesMinor },
+          ]),
+        ),
         asOf: await this.repository.asOf(trx, [tenantId]),
       };
     });

@@ -6,7 +6,7 @@
 //   env:      dev | test | prod
 //   commands: init    create the env file from its example with random passwords and keys (test, prod);
 //                     on an existing file, append the variables the example gained since
-//             build   quality gate (lint, test, build) + static web/admin + Docker images
+//             build   quality gate (lint, test) + Docker images (the proxy image builds web/admin, ADR-0012)
 //             up      start containers (detached) and wait until they are healthy
 //             down    stop containers (data volumes are kept)
 //             ps      container status
@@ -25,7 +25,6 @@ import { randomBytes } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { frontendBuildProblem } from './frontend-mocks.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -228,17 +227,10 @@ function build(envName, env, skipChecks) {
   } else {
     console.log('\n⚠ Quality gate skipped (--skip-checks).');
   }
-  // Static export of the frontends: apps/web/out, apps/admin/out (served after the reverse-proxy ADR, future ADR-0012).
-  // Never with the API mocks (security review 2026-10-22, F1): the flag is pinned off, it is an input of the Nx build
-  // (a cached mock build is not restored; `out` is a cached output of both apps), and a missing export or a bundle
-  // that still carries the mocks stops the build.
-  run('npx', [...nx, 'run-many', '-t', 'build', '-p', 'web', 'admin', '--outputStyle=static'], {
-    env: { ...process.env, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', NEXT_PUBLIC_API_MOCKS: 'false' },
-  });
-  const problem = frontendBuildProblem(root);
-  if (problem) fail(`${problem}.`);
+  // The static exports of web/admin are built inside the proxy image (docker/proxy/Dockerfile, ADR-0012), never with
+  // the API mocks: the flag is pinned off there and a bundle that still carries them stops the build (F1).
   run('docker', [...composeArgs(envName, env), 'build']);
-  console.log(`\n✔ ${envName}: images tagged ${process.env.IMAGE_TAG}; static web/admin in apps/*/out`);
+  console.log(`\n✔ ${envName}: images tagged ${process.env.IMAGE_TAG} (api, postgres, redis, proxy with web/admin)`);
 }
 
 const [envName, command, ...rest] = process.argv.slice(2);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'use-intl';
-import { ApiError, type ApiFieldError } from './client';
+import { ApiError, isUnreachable, type ApiFieldError } from './client';
 import { isFreshAuthCancelled } from './fresh-auth';
 
 /** Problem codes with their own localized message (`apiErrors.<code>`). */
@@ -91,8 +91,7 @@ export function useApiErrorMessage(error: unknown): string | null {
   // a cancelled password confirmation is the employee's choice, not an error
   if (!error || isFreshAuthCancelled(error)) return null;
   if (error instanceof ApiError) {
-    if (error.code === 'network' || error.code === 'timeout')
-      return t('errors.network');
+    if (isUnreachable(error)) return t('errors.network');
     if (isKnown(error.code)) return t(`apiErrors.${error.code}`);
     return t('errors.unexpected', { correlationId: error.correlationId });
   }

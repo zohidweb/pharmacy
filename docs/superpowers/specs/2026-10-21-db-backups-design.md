@@ -58,10 +58,15 @@
 
 `docker/compose.backup.yml` (подключается после `compose.<env>.yml` для test и prod):
 - `image: pharmacy/postgres:${IMAGE_TAG}`, `user: postgres`, `command: ['pharmacy-backup', 'daemon']`;
-- окружение: `PGHOST=postgres`, `PGUSER=pharmacy_backup`, `PGPASSWORD=${PHARMACY_BACKUP_PASSWORD:?}`,
+- окружение: `PGHOST=/var/run/postgresql` (общий локальный сокет; до ревью безопасности 2026-10-22 — `postgres` по
+  TCP), `PGUSER=pharmacy_backup`, `PGPASSWORD=${PHARMACY_BACKUP_PASSWORD:?}`,
   `PGDATABASE=${POSTGRES_DB:-pharmacy}`, `BACKUP_TIME=${BACKUP_TIME:-02:00}`,
   `BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}`, `TZ=Asia/Dushanbe`, `IMAGE_TAG` (пишется в манифест);
-- тома: `${BACKUP_DIR:?}:/backups`, `backup-scratch:/scratch`; у `postgres` — `${BACKUP_DIR}:/backups:ro`;
+- тома: `${BACKUP_DIR:?}:/backups`, `backup-scratch:/scratch`, `pg-socket:/var/run/postgresql`; у `postgres` —
+  `${BACKUP_DIR}:/backups:ro`;
+- ревью безопасности 2026-10-22 (Z6, S3): в test и prod `pharmacy_backup` входит только по сокету — `pg_hba.conf`
+  образа пускает по TCP одни роли API; контейнер работает только для чтения (`/tmp` — tmpfs), без capabilities, с
+  `no-new-privileges`;
 - `depends_on: postgres (service_healthy)` и `migrate (service_completed_successfully)` — копия при старте не идёт
   рядом с миграциями того же `up` (B12; поправка при реализации), `healthcheck: pharmacy-backup health` (B8);
 - пароль `PHARMACY_BACKUP_PASSWORD` передаётся и сервису `postgres`: из него создаётся роль (B3).

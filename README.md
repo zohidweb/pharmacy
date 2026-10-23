@@ -32,7 +32,7 @@ npm run dev                          # api + web + admin с hot reload
 | Среда | Env-файл (не в git) | Compose-проект | API | PostgreSQL / Redis наружу |
 |---|---|---|---|---|
 | dev | `.env` ← `.env.example` | `pharmacy-dev` | `127.0.0.1:3000` | `5432` / `6379` на localhost |
-| test | `docker/env/test.env` | `pharmacy-test` | `127.0.0.1:3100` | PostgreSQL `127.0.0.1:5433`, Redis — нет |
+| test | `docker/env/test.env` | `pharmacy-test` | `127.0.0.1:3100` | PostgreSQL `127.0.0.1:5433` (по TCP — только роли API; суперпользователь — `docker compose exec postgres psql`), Redis — нет |
 | prod | `docker/env/prod.env` | `pharmacy-prod` | `127.0.0.1:3200` | нет (только сеть compose) |
 
 ```

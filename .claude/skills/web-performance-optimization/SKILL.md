@@ -175,7 +175,7 @@ JS, поведение длинных списков и печати на сла
 - **`import type`** для типов из `libs/shared/dto`/`libs/shared/domain` в web/admin
 - **Мемоизация по данным** — `React.memo`/`useMemo`/`useCallback` добавлять, когда Profiler показал лишние рендеры дорогого компонента; стабильные `key` (id товара/партии, не индекс)
 - **Нативные API вместо библиотек** — `Intl.NumberFormat`/`Intl.DateTimeFormat` (через `libs/shared/util`), `structuredClone`, `Set`
-- **Кэш статики на proxy** — хешированные `/_next/static/*`: `Cache-Control: public, max-age=31536000, immutable`; HTML — `no-cache` (настраивается в reverse proxy, согласовать с владельцем развёртывания)
+- **Кэш статики на proxy** — хешированные `/_next/static/*`: `Cache-Control: public, max-age=31536000, immutable`; HTML — `no-cache` (задано в `docker/proxy/Caddyfile`, ADR-0012; там же предсжатые `.br`/`.gz` из `tools/scripts/precompress.mjs`)
 - **Размеры медиа** — `width`/`height` или `aspect-ratio` у каждого изображения; скелетоны правильной высоты
 
 ### Do Not Do This

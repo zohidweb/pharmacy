@@ -1,0 +1,8 @@
+# Local test/prod (ADR-0012 «Принятие», 5): the cloud scheme on *.localhost, without the apex redirect.
+{$WEB_ADDR} {
+	import web-site
+}
+
+{$ADMIN_ADDR} {
+	import admin-site
+}

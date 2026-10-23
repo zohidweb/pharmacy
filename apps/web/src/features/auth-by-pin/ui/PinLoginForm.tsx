@@ -5,7 +5,7 @@ import type { BoundTerminal, EmployeeSession } from '@pharmacy/shared-dto';
 import { Alert, Button, Keypad, RadioCardGroup, TextField } from '@pharmacy/ui';
 import { useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { ApiError } from '@/shared/api';
+import { ApiError, isUnreachable } from '@/shared/api';
 import { usePinLogin } from '../api/pin-login';
 import { isPinComplete, onlyDigits } from '../model/pin';
 
@@ -37,9 +37,7 @@ export function PinLoginForm({ terminal, onSuccess }: PinLoginFormProps) {
       if (error.code === 'invalid_pin') return t('invalid');
       if (error.code === 'pin_locked') return t('locked');
       if (error.code === 'terminal_locked') return t('terminalLocked');
-      if (error.code === 'network' || error.code === 'timeout') {
-        return tErrors('network');
-      }
+      if (isUnreachable(error)) return tErrors('network');
     }
     return tErrors('unexpected', {
       correlationId: error instanceof ApiError ? error.correlationId : '—',

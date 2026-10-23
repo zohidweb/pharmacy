@@ -24,11 +24,7 @@ import { useForm } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
 import { z } from 'zod';
 import { useSession } from '@/entities/session';
-import {
-  apiRequest,
-  isApiRouteAvailable,
-  useApiErrorMessage,
-} from '@/shared/api';
+import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { ActivationCodeCard, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
@@ -421,11 +417,6 @@ function IssueOperatorCode({
   );
 }
 
-// Partial mode: the actions are not offered where their routes do not answer.
-const canAddOperators = isApiRouteAvailable('operators.create');
-const canIssueCodes = isApiRouteAvailable('operators.issueCode');
-const canDisableOperators = isApiRouteAvailable('operators.disable');
-
 function TeamCard() {
   const t = useTranslations('settings.team');
   const tCommon = useTranslations('common');
@@ -460,15 +451,13 @@ function TeamCard() {
         titleId="team-title"
         description={t('hint')}
         actions={
-          canAddOperators && (
-            <Button
-              variant="secondary"
-              iconStart="user-plus"
-              onClick={() => setAdding(true)}
-            >
-              {t('addAction')}
-            </Button>
-          )
+          <Button
+            variant="secondary"
+            iconStart="user-plus"
+            onClick={() => setAdding(true)}
+          >
+            {t('addAction')}
+          </Button>
         }
       />
       <QueryState query={operators}>
@@ -504,26 +493,22 @@ function TeamCard() {
                   // Not for oneself: the own password is changed in the profile.
                   operator.id !== session?.operator.id && (
                     <>
-                      {canIssueCodes && (
-                        <Button
-                          variant="tertiary"
-                          aria-label={t('codeFor', { name: operator.fullName })}
-                          onClick={() => setIssuing(operator)}
-                        >
-                          {t('codeAction')}
-                        </Button>
-                      )}
-                      {canDisableOperators && (
-                        <Button
-                          variant="tertiary"
-                          aria-label={t('disableFor', {
-                            name: operator.fullName,
-                          })}
-                          onClick={() => setDisabling(operator)}
-                        >
-                          <span className="text-danger">{t('disable')}</span>
-                        </Button>
-                      )}
+                      <Button
+                        variant="tertiary"
+                        aria-label={t('codeFor', { name: operator.fullName })}
+                        onClick={() => setIssuing(operator)}
+                      >
+                        {t('codeAction')}
+                      </Button>
+                      <Button
+                        variant="tertiary"
+                        aria-label={t('disableFor', {
+                          name: operator.fullName,
+                        })}
+                        onClick={() => setDisabling(operator)}
+                      >
+                        <span className="text-danger">{t('disable')}</span>
+                      </Button>
                     </>
                   )
                 )}

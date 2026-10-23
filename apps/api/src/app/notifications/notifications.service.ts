@@ -11,6 +11,7 @@ import {
   type EmployeePrincipal,
   requirePrincipal,
 } from '../../common/context/request-context';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
 import {
   EVENT_KINDS,
@@ -87,7 +88,7 @@ export class NotificationsService {
     offset?: number;
   }): Promise<TenantNotificationListResponse> {
     const principal = requirePrincipal();
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.tenantTransaction(async (trx) => {
       const { filter, today } = await this.prepare(trx, principal);

@@ -9,6 +9,7 @@ import type {
 import { type Expression, type SqlBool, sql, type Transaction } from 'kysely';
 import {
   type DB,
+  escapeLike,
   PLATFORM_TIME_ZONE,
   platformToday,
 } from '../../../core/database';
@@ -87,7 +88,7 @@ const CURRENT_DISCOUNT = sql`from pharmacy.tenant_discounts d
 
 // `%`, `_` and the escape character itself are literal in a search term.
 function likePattern(q: string): string {
-  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  return `%${escapeLike(q)}%`;
 }
 
 const dateOnly = (value: Date | string): string =>

@@ -7,6 +7,7 @@ import type {
   NotificationTopic,
 } from '@pharmacy/shared-dto';
 import { requireOperator } from '../../../common/context/request-context';
+import { DEFAULT_PAGE_LIMIT } from '../../../common/pagination';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { BillingOverview } from '../billing/billing-overview';
 import {
@@ -17,8 +18,6 @@ import {
 } from './notification-topics';
 import { PlatformNotificationsRefresh } from './notifications-refresh';
 import { PlatformNotificationsRepository } from './notifications.repository';
-
-const DEFAULT_LIMIT = 20;
 
 // The notifications of an operator, the bell preferences and the menu counters (spec
 // 2026-10-19-operator-notifications, N2, N6–N9). Every read refreshes the notifications first when the
@@ -49,7 +48,7 @@ export class PlatformNotificationsService {
   async list(query: NotificationListQuery): Promise<NotificationListResponse> {
     await this.refreshIfStale();
     const operatorId = this.operatorId();
-    const limit = query.limit ?? DEFAULT_LIMIT;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.platformTransaction(this.actor(), async (trx) => {
       const muted = query.bell

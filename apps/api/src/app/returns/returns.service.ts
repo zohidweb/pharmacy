@@ -16,6 +16,7 @@ import {
   type FieldError,
   FieldProblemException,
 } from '../../common/errors/validation-failed.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import { TenantDatabase } from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 import { ProductsReader } from '../catalog/products-reader';
@@ -35,8 +36,6 @@ import {
   unitPieces,
 } from './returnable.service';
 import { ReturnsRepository } from './returns.repository';
-
-const PAGE = 20;
 
 const invalid = (errors: FieldError[]) =>
   new FieldProblemException(400, 'validation_failed', errors);
@@ -355,7 +354,7 @@ export class ReturnsService {
   /** The journal of the stores of the scope (a PIN session — its own store), the newest first. */
   list(query: ReturnListQueryDto): Promise<ReturnListResponse> {
     const principal = requirePrincipal();
-    const limit = query.limit ?? PAGE;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     let storeIds: readonly string[] | null;
     if (query.storeId) {

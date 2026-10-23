@@ -64,16 +64,6 @@ export const PIN_MAX_FAILED_ATTEMPTS = 3;
 // last_seen_at is written at most once per this interval (auth design, section 8).
 const LAST_SEEN_INTERVAL = '5 minutes';
 
-// PostgreSQL unique_violation.
-const UNIQUE_VIOLATION = '23505';
-
-export function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { code?: unknown }).code === UNIQUE_VIOLATION
-  );
-}
 
 // Data access of terminals and PIN sign-in. Every query runs in the caller's tenant transaction and
 // filters by tenant_id; RLS is the second line.

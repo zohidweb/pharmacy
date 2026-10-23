@@ -30,6 +30,12 @@ async function waitForWorker(page: Page) {
   ).toBeVisible();
 }
 
+/** Polled: `waitForFunction` does not await a promise, so an async predicate would pass at once. */
+const hasWaitingWorker = (page: Page) =>
+  page.evaluate(async () =>
+    Boolean((await navigator.serviceWorker.getRegistration())?.waiting),
+  );
+
 test('opens the POS without any network after the first visit', async ({
   page,
   context,
@@ -84,20 +90,11 @@ test('activates a new version only when the receipt is empty', async ({
     const registration = await navigator.serviceWorker.getRegistration();
     await registration?.update();
   });
-  await page.waitForFunction(async () => {
-    const registration = await navigator.serviceWorker.getRegistration();
-    return Boolean(registration?.waiting);
-  });
+  await expect.poll(() => hasWaitingWorker(page)).toBe(true);
 
   // a sale is in progress: the new version keeps waiting
   await page.clock.fastForward(31_000);
-  await expect
-    .poll(() =>
-      page.evaluate(async () =>
-        Boolean((await navigator.serviceWorker.getRegistration())?.waiting),
-      ),
-    )
-    .toBe(true);
+  await expect.poll(() => hasWaitingWorker(page)).toBe(true);
   await expect(
     receipt(page).getByText('Парацетамол 500 мг, таб. №10'),
   ).toBeVisible();
@@ -112,11 +109,5 @@ test('activates a new version only when the receipt is empty', async ({
   const reloaded = page.waitForEvent('load');
   await page.clock.fastForward(31_000);
   await reloaded;
-  await expect
-    .poll(() =>
-      page.evaluate(async () =>
-        Boolean((await navigator.serviceWorker.getRegistration())?.waiting),
-      ),
-    )
-    .toBe(false);
+  await expect.poll(() => hasWaitingWorker(page)).toBe(false);
 });

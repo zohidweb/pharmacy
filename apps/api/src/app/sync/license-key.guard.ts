@@ -49,7 +49,7 @@ export class LicenseKeyGuard implements CanActivate {
     if (!key || !matches) throw new ProblemException(401, 'license_invalid');
 
     const settings = await this.db.withTenant(key.tenantId, (trx) =>
-      readSettings(trx),
+      readSyncSettings(trx),
     );
     const license = licenseState(key, new Date(), settings.revokedKeyGraceDays);
     res.setHeader(LICENSE_STATUS_HEADER, license.status);
@@ -72,7 +72,10 @@ export class LicenseKeyGuard implements CanActivate {
   }
 }
 
-async function readSettings(trx: TenantTransaction): Promise<SyncSettings> {
+/** The platform settings of the sync contour (E13); the values of the migration without the row. */
+export async function readSyncSettings(
+  trx: TenantTransaction,
+): Promise<SyncSettings> {
   const { rows } = await sql<SyncSettings>`
     select feed_window_days, revoked_key_grace_days, min_supported_protocol, recommended_protocol
     from pharmacy.platform_settings where id = 1`.execute(trx);

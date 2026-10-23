@@ -123,7 +123,8 @@ pharmacy/
   транзакции (у `catalog`, `pricing` — в репозиториях), а текущее состояние сущностей отдают их источники в реестре
   ядра `SyncFeedSources` (`CatalogFeed`, `PricingFeed`); модуль `sync` нумерует и выдаёт ленту (`GET /sync/changes`).
   Очистка данных рецептов по сроку (касса PR 3, ADR-0013, поправка 2026-10-21) — `app/platform/retention`: раз в час
-  «по тенанту в цикле» вызывает `PrescriptionRetention` (экспорт `pos`) и `InboxRetention` (экспорт `sync`); кто держал
+  «по тенанту в цикле» вызывает `PrescriptionRetention` (экспорт `pos`), `InboxRetention` и `FeedRetention` (экспорты
+  `sync`; окно ленты `sync_changes` без читающих точек, раздел 13 спецификации offline-sync); кто держал
   терминал в момент операции под терминалом, `pos` узнаёт у `audit` (`PinSignIns`).
   Загрузка данных из файла (спецификация 2026-10-20-data-import): каталог, начальные остатки и поставщиков загружают
   их модули (`catalog`, `inventory`, `purchasing`); общий журнал загрузок `ImportJobs` (`core/imports`, глобальный) —

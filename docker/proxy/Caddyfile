@@ -3,7 +3,8 @@
 #   PROXY_PROFILE  cloud (web, admin, apex redirect) | local (web, admin) | offline (http://localhost, web only)
 #   TLS_MODE       acme (Let's Encrypt, ACME_EMAIL) | internal (Caddy's local CA, *.localhost) |
 #                  files (/certs/cert.pem, /certs/key.pem) | off (plain http:// addresses)
-#   WEB_ADDR, ADMIN_ADDR, APEX_ADDR, WEB_ORIGIN, PROXY_HTTP_PORT, PROXY_HTTPS_PORT, API_UPSTREAM
+#   WEB_ADDR, ADMIN_ADDR, APEX_ADDR, WEB_ORIGIN, PROXY_HTTP_PORT, PROXY_HTTPS_PORT, API_UPSTREAM,
+#   OPERATOR_ALLOW (addresses that reach the admin host, CIDR, space-separated)
 # {$VAR} is substituted before the file is parsed.
 {
 	# configuration changes = new image or restart (ADR-0012)
@@ -53,7 +54,15 @@
 			dial_timeout 5s
 			response_header_timeout {args[0]}
 		}
+		# No API answer is stored by the browser, whatever the API sends (security review 2026-10-22, P1 and 7.2).
+		header_down Cache-Control "no-store"
 	}
+}
+
+# A compressed request body only on the sync contour (security review 2026-10-22, A3 and 7.2); the API refuses it too.
+(plain-body) {
+	@encoded header Content-Encoding *
+	respond @encoded 415
 }
 
 # The API of tenant employees and offline stores. The operator contour lives on the admin host only
@@ -74,6 +83,7 @@
 	# data import from a file (spec 2026-10-20-data-import, F19)
 	@imports path_regexp ^/api/v1/(catalog|opening-balance|supplier)-imports(/checks)?/?$
 	handle @imports {
+		import plain-body
 		request_body {
 			max_size 10MB
 		}
@@ -81,6 +91,7 @@
 		import upstream 120s
 	}
 	handle /api/* {
+		import plain-body
 		request_body {
 			max_size 1MB
 		}
@@ -93,6 +104,7 @@
 (api-operator) {
 	@operator path /api/v1/operator /api/v1/operator/*
 	handle @operator {
+		import plain-body
 		request_body {
 			max_size 1MB
 		}
@@ -106,7 +118,7 @@
 
 # Static export of Next.js: every route is its own HTML, no SPA fallback (ADR-0012).
 # Inline scripts are allowed until build-time hashes (RSC payload of Next, ADR-0012 «Принятие», 4).
-(static) {
+(static-files) {
 	handle {
 		header {
 			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
@@ -125,10 +137,19 @@
 			precompressed br gzip
 		}
 	}
+}
+
+# handle_errors belongs to the site block itself: apart from the files, so the admin site can nest those in a handle.
+(static-errors) {
 	handle_errors 404 {
 		rewrite * /404.html
 		file_server
 	}
+}
+
+(static) {
+	import static-files
+	import static-errors
 }
 
 (web-site) {
@@ -139,12 +160,22 @@
 	import static
 }
 
+# Operators only (security review 2026-10-22, A1 and decision 7.2): the admin and /api/v1/operator/* answer the
+# addresses of OPERATOR_ALLOW (CIDR, space-separated: the operator offices, the VPN), others get 403 — a leaked operator
+# password is not enough from anywhere else.
 (admin-site) {
 	import tls-{$TLS_MODE}
 	import access-log
 	root * /srv/admin
-	import api-operator
-	import static
+	@outsider not remote_ip {$OPERATOR_ALLOW}
+	handle @outsider {
+		respond 403
+	}
+	handle {
+		import api-operator
+		import static-files
+	}
+	import static-errors
 }
 
 # Container health (Dockerfile HEALTHCHECK); not published.

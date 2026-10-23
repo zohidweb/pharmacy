@@ -13,9 +13,12 @@ WORKDIR /workspace
 ENV NX_DAEMON=false NX_NO_CLOUD=true NX_SKIP_NX_CACHE=true CI=true NEXT_TELEMETRY_DISABLED=1
 COPY . .
 RUN npm ci --no-audit --no-fund
-# Static exports of both frontends against the real API, then .br/.gz next to them, maps removed. Never with the API
-# mocks (security review 2026-10-22, F1): the flag is pinned off, and an export that still carries them stops the build.
-RUN NODE_ENV=production NEXT_PUBLIC_API_MOCKS=false npx nx run-many -t build -p web admin --outputStyle=static \
+# Declarations of the libs first: the type check of next build reads them from libs/*/dist (TS project references),
+# and the build context carries no dist. Then the static exports of both frontends against the real API, .br/.gz next
+# to them, maps removed. Never with the API mocks (security review 2026-10-22, F1): the flag is pinned off, and an
+# export that still carries them stops the build.
+RUN npx nx run-many -t typecheck -p ui shared-dto shared-util shared-domain --outputStyle=static \
+  && NODE_ENV=production NEXT_PUBLIC_API_MOCKS=false npx nx run-many -t build -p web admin --outputStyle=static \
   && node -e "import('./tools/scripts/frontend-mocks.mjs').then(({ frontendBuildProblem }) => { \
        const problem = frontendBuildProblem('.'); if (problem) { console.error(problem); process.exit(1); } })" \
   && node tools/scripts/precompress.mjs apps/web/out apps/admin/out

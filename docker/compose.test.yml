@@ -36,6 +36,8 @@ services:
       TLS_MODE: ${TLS_MODE:?set in the env file}
       WEB_ADDR: ${WEB_ADDR:?set in the env file}
       ADMIN_ADDR: ${ADMIN_ADDR:?set in the env file}
+      # The addresses that reach the admin host (security review 2026-10-22, A1): CIDR, space-separated.
+      OPERATOR_ALLOW: ${OPERATOR_ALLOW:?set in the env file}
       PROXY_HTTP_PORT: ${PROXY_HTTP_PORT:?set in the env file}
       PROXY_HTTPS_PORT: ${PROXY_HTTPS_PORT:?set in the env file}
     ports:

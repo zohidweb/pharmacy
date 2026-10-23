@@ -32,6 +32,8 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:?set in the env file (Let's Encrypt account)}
       WEB_ADDR: ${WEB_ADDR:?set in the env file}
       ADMIN_ADDR: ${ADMIN_ADDR:?set in the env file}
+      # The addresses that reach the admin host (security review 2026-10-22, A1): CIDR, space-separated.
+      OPERATOR_ALLOW: ${OPERATOR_ALLOW:?set in the env file}
       APEX_ADDR: ${APEX_ADDR:?set in the env file}
       WEB_ORIGIN: ${WEB_ORIGIN:?set in the env file}
       PROXY_HTTP_PORT: ${PROXY_HTTP_PORT:-80}

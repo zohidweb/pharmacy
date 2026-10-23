@@ -351,6 +351,11 @@ function checkCrossFields(env: EnvironmentVariables): string[] {
   return problems;
 }
 
+/** A cloud API (not an offline store) by the raw environment, as ConditionalModule sees it before ConfigService exists. */
+export function cloudMode(env: NodeJS.ProcessEnv): boolean {
+  return env.STORE_MODE !== 'offline';
+}
+
 /**
  * The sync contour switch read from the raw environment, as ConditionalModule sees it before ConfigService exists: the
  * same parse as the validated OFFLINE_SYNC_ENABLED (validateEnv refuses any other value, and `true` offline).

@@ -11,6 +11,7 @@ import type {
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import {
   newId,
   TenantDatabase,
@@ -151,7 +152,7 @@ export class SuppliersService {
   }): Promise<SupplierListResponse> {
     const { tenantId, permissions } = requirePrincipal();
     const canSeeCost = hasPermissions(permissions, 'finance:view-cost');
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.tenantTransaction(async (trx) => {
       const today = await this.repository.businessDate(trx, tenantId);

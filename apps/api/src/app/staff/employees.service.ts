@@ -13,6 +13,7 @@ import type {
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import { PasswordHasher } from '../../core/crypto';
 import {
   newId,
@@ -39,7 +40,6 @@ import { MissingPermissionException } from './access-denied-audit.interceptor';
 import { loadEditor } from './roles.service';
 import { type EmployeeRow, type Hash, StaffRepository } from './staff.repository';
 
-const DEFAULT_LIMIT = 20;
 const ACTIVITY_LIMIT = 20;
 
 const notFound = () => new ProblemException(404, 'not_found');
@@ -95,7 +95,7 @@ export class EmployeesService {
 
   async list(query: EmployeeListQuery): Promise<EmployeeListResponse> {
     const principal = requirePrincipal();
-    const limit = query.limit ?? DEFAULT_LIMIT;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.tenantTransaction(async (trx) => {
       const viewer = await loadEditor(this.repository, trx);

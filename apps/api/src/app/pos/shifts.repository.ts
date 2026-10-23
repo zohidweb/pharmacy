@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { HeldReceipt, ReceiptPaymentMethod } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { type TenantTransaction, uniqueConstraint } from '../../core/database';
 
 export interface ShiftRow {
   id: string;
@@ -65,8 +65,7 @@ const SHIFT = sql`
 
 /** A unique violation of the one open shift per terminal (two openings at once). */
 export function isOpenShiftConflict(error: unknown): boolean {
-  const e = error as { code?: string; constraint?: string } | null;
-  return e?.code === '23505' && e.constraint === 'shifts_open_terminal_uq';
+  return uniqueConstraint(error) === 'shifts_open_terminal_uq';
 }
 
 // Shifts of the terminals, their cash operations and the held receipts of a store (data model 04,

@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { networkSettingsDefaults } from '@pharmacy/shared-domain';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import {
+  PLATFORM_TIME_ZONE,
+  type TenantTransaction,
+} from '../../core/database';
 import { SyncChanges } from '../../core/sync';
 
 export interface StoreRef {
@@ -80,8 +84,9 @@ export class PricingRepository {
       .executeTakeFirst();
     return {
       language: row?.defaultLanguage === 'tj' ? 'tj' : 'ru',
-      timezone: row?.timezone ?? 'Asia/Dushanbe',
-      warnBelowCost: row?.warnBelowCost ?? true,
+      timezone: row?.timezone ?? PLATFORM_TIME_ZONE,
+      warnBelowCost:
+        row?.warnBelowCost ?? networkSettingsDefaults.warnBelowCost,
     };
   }
 

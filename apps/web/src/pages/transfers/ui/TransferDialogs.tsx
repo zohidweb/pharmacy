@@ -28,6 +28,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { fefoBatches } from '@/entities/catalog';
 import { TransferStatusPill } from '@/entities/stock-document';
 import {
   ProductSearch,
@@ -50,14 +51,6 @@ interface PickLine {
   batchId: string;
   unit: SaleUnit;
   quantity: number;
-}
-
-/** Batches with stock that have not expired, earliest expiry first (FEFO). */
-function fefoBatches(product: StockProductOption) {
-  const today = toAppDate();
-  return [...product.batches]
-    .filter((b) => b.expiresOn >= today && b.quantityPieces > 0)
-    .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn));
 }
 
 const piecesOf = (
@@ -144,7 +137,7 @@ export function TransferDialog({
           if (!product) return [];
           let need = asked.quantity;
           const picked: PickLine[] = [];
-          for (const batch of fefoBatches(product)) {
+          for (const batch of fefoBatches(product, toAppDate())) {
             if (need === 0) break;
             const take = Math.min(
               need,
@@ -359,7 +352,7 @@ export function TransferDialog({
                 setNotice(t('notRequested', { name: product.name }));
                 return;
               }
-              const batch = fefoBatches(product).find(
+              const batch = fefoBatches(product, toAppDate()).find(
                 (b) => !current.some((l) => l.batchId === b.id),
               );
               if (!batch) {

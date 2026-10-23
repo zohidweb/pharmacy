@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type RawBuilder, type SqlBool, sql, type Transaction } from 'kysely';
-import type { DB } from '../../../core/database';
+import { type DB, platformDate, platformToday } from '../../../core/database';
 
 type Money = bigint | string | number;
 
@@ -59,9 +59,7 @@ export interface StaleStore {
 export class StatsRepository {
   async today(trx: Transaction<DB>): Promise<string> {
     const { rows } = await sql<{ today: string }>`
-      select (now() at time zone 'Asia/Dushanbe')::date::text as today`.execute(
-      trx,
-    );
+      select ${platformToday()}::text as today`.execute(trx);
     return rows[0].today;
   }
 
@@ -247,12 +245,12 @@ export class StatsRepository {
       days: number;
     }>`
       select k.id, k.tenant_id, t.name as tenant_name, s.name as store_name, k.valid_until,
-             (k.valid_until at time zone 'Asia/Dushanbe')::date - ${today}::date as days
+             ${platformDate(sql.ref('k.valid_until'))} - ${today}::date as days
       from pharmacy.license_keys k
       join pharmacy.stores s on s.tenant_id = k.tenant_id and s.id = k.store_id
       join pharmacy.tenants t on t.id = k.tenant_id
       where k.status = 'active' and ${OPEN_STORE} and s.mode <> 'online'
-        and (k.valid_until at time zone 'Asia/Dushanbe')::date - ${today}::date
+        and ${platformDate(sql.ref('k.valid_until'))} - ${today}::date
             <= k.notify_before_days
       order by k.valid_until, k.id`.execute(trx);
     return rows.map((row) => ({
@@ -280,7 +278,7 @@ export class StatsRepository {
       days: number;
     }>`
       select s.id as store_id, s.tenant_id, t.name as tenant_name, s.name as store_name, x.since,
-             ${today}::date - (x.since at time zone 'Asia/Dushanbe')::date as days
+             ${today}::date - ${platformDate(sql.ref('x.since'))} as days
       from pharmacy.stores s
       join pharmacy.tenants t on t.id = s.tenant_id
       left join pharmacy.store_sync_status ss on ss.tenant_id = s.tenant_id and ss.store_id = s.id

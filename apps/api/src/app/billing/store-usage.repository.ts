@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { settingsTimeZone, type TenantTransaction } from '../../core/database';
 
 // The stores an invoice bills (A2) and what it needs of them (A21), shared by the refresh of the
 // activity and the owner's estimate so the two never select differently: cloud pharmacies of the
@@ -16,7 +16,7 @@ const billedStores = sql`
   left join pharmacy.tenant_settings ts on ts.tenant_id = s.tenant_id`;
 const billedWhere = (tenantId: string) =>
   sql`s.tenant_id = ${tenantId} and s.kind = 'pharmacy' and s.mode = 'online'`;
-const closedOn = sql`(s.closed_at at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date`;
+const closedOn = sql`(s.closed_at at time zone ${settingsTimeZone()})::date`;
 
 // The monthly activity of the stores of a network for its invoices (spec
 // 2026-10-15-billing-services, A2, A21; table store_usage_monthly, tenant-export).

@@ -1,3 +1,12 @@
+/** Whether a statement violated a unique constraint (SQLSTATE 23505). */
+export function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === '23505'
+  );
+}
+
 /** The name of the unique constraint a statement violated (SQLSTATE 23505), otherwise null. */
 export function uniqueConstraint(error: unknown): string | null {
   if (typeof error !== 'object' || error === null) return null;

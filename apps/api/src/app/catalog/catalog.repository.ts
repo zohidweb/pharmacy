@@ -1,17 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { CatalogFlag, CatalogStatus } from '@pharmacy/shared-dto';
 import { type Expression, type SqlBool, sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { escapeLike, type TenantTransaction } from '../../core/database';
 import { SyncChanges } from '../../core/sync';
 
 /** Language keys of a name map (data model D6); the UI locale `tg` is the key `tj`. */
 export type NameLanguage = 'ru' | 'tj';
 export type NameMap = Partial<Record<NameLanguage, string>>;
-
-/** `%`, `_` and `\` of user input match themselves in LIKE (the default escape is `\`). */
-export function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
-}
 
 function stringAt(name: unknown, key: NameLanguage): string | null {
   if (typeof name !== 'object' || name === null) return null;

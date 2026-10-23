@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { platformToday, type TenantTransaction } from '../../core/database';
 
 type Money = bigint | string | number;
 
@@ -71,15 +71,13 @@ export interface PendingServiceRow {
 // The billing of a network as its owner sees it (spec 2026-10-15-billing-services, A19, 6.2): its own
 // invoices and their lines, discounts, the advance, the current tariff and the services provided and
 // not invoiced yet. Every query names the network; RLS on these platform-class tables lets the
-// network read its own rows only (ADR-0013). "Today" is the calendar day of Asia/Dushanbe, as for
+// network read its own rows only (ADR-0013). "Today" is the calendar day of the platform, as for
 // the invoices of the platform.
 @Injectable()
 export class OwnerBillingRepository {
   async today(trx: TenantTransaction): Promise<string> {
     const { rows } = await sql<{ today: string }>`
-      select (now() at time zone 'Asia/Dushanbe')::date::text as today`.execute(
-      trx,
-    );
+      select ${platformToday()}::text as today`.execute(trx);
     return rows[0].today;
   }
 
@@ -160,7 +158,7 @@ export class OwnerBillingRepository {
       select id, number, total_dirams - paid_dirams as remaining_dirams, due_on::text as due_on
       from pharmacy.invoices
       where tenant_id = ${tenantId} and paid_dirams < total_dirams
-        and due_on < (now() at time zone 'Asia/Dushanbe')::date
+        and due_on < ${platformToday()}
       order by due_on, id`.execute(trx);
     return rows;
   }

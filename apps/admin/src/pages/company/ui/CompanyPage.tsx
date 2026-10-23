@@ -38,10 +38,7 @@ import {
 
 type Tab = 'stores' | 'billing' | 'services' | 'stats' | 'audit';
 
-// A section is shown where its routes answer: billing and services are on the API (spec
-// 2026-10-15-billing-services), statistics and the tenant audit only in the full mocks.
-const BILLING = isApiRouteAvailable('tenants.invoices');
-const STATS = isApiRouteAvailable('tenants.stats');
+// The tenant audit is shown where its route answers: only in the full mocks.
 const AUDIT = isApiRouteAvailable('tenants.audit');
 
 function CompanyView() {
@@ -100,53 +97,49 @@ function CompanyView() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {BILLING && (
-                    <RecordPayment tenantId={company.id} variant="tertiary" />
-                  )}
+                  <RecordPayment tenantId={company.id} variant="tertiary" />
                   <IssueOwnerCode tenant={company} />
                   <BlockTenant tenant={company} />
                 </div>
               </Card>
-              {BILLING && (
-                <dl className="m-0 grid grid-cols-4 gap-3">
-                  {(
+              <dl className="m-0 grid grid-cols-4 gap-3">
+                {(
+                  [
+                    ['debt', formatMoney(company.debtMinor)],
+                    ['overdueDebt', formatMoney(company.overdueDebtMinor)],
+                    ['advance', formatMoney(company.advanceMinor)],
                     [
-                      ['debt', formatMoney(company.debtMinor)],
-                      ['overdueDebt', formatMoney(company.overdueDebtMinor)],
-                      ['advance', formatMoney(company.advanceMinor)],
-                      [
-                        'discount',
-                        company.discount
-                          ? t('summary.discountValue', {
-                              percent: formatPercentBp(
-                                company.discount.percentBp,
-                              ),
-                              month: formatPeriod(company.discount.toMonth),
-                            })
-                          : t('summary.noDiscount'),
-                      ],
-                    ] as const
-                  ).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex flex-col rounded-md bg-surface p-3"
+                      'discount',
+                      company.discount
+                        ? t('summary.discountValue', {
+                            percent: formatPercentBp(
+                              company.discount.percentBp,
+                            ),
+                            month: formatPeriod(company.discount.toMonth),
+                          })
+                        : t('summary.noDiscount'),
+                    ],
+                  ] as const
+                ).map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="flex flex-col rounded-md bg-surface p-3"
+                  >
+                    <dt className="text-xs text-fg-subtle">
+                      {t(`summary.${key}`)}
+                    </dt>
+                    <dd
+                      className={
+                        key === 'overdueDebt' && company.overdue
+                          ? 'm-0 text-lg font-bold tabular-nums text-danger'
+                          : 'm-0 text-lg font-bold tabular-nums'
+                      }
                     >
-                      <dt className="text-xs text-fg-subtle">
-                        {t(`summary.${key}`)}
-                      </dt>
-                      <dd
-                        className={
-                          key === 'overdueDebt' && company.overdue
-                            ? 'm-0 text-lg font-bold tabular-nums text-danger'
-                            : 'm-0 text-lg font-bold tabular-nums'
-                        }
-                      >
-                        {value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
               {company.block && (
                 <Alert tone="danger" title={t('blockedTitle')}>
                   {t('blockedText', {
@@ -167,34 +160,26 @@ function CompanyView() {
                     count: company.cloudStores + company.offlineStores,
                     panel: <StoresTab tenantId={company.id} />,
                   },
-                  ...(BILLING
-                    ? ([
-                        {
-                          value: 'billing',
-                          label: t('tabs.billing'),
-                          panel: <BillingTab tenantId={company.id} />,
-                        },
-                        {
-                          value: 'services',
-                          label: t('tabs.services'),
-                          panel: (
-                            <ServicesTab
-                              tenantId={company.id}
-                              tenantName={company.name}
-                            />
-                          ),
-                        },
-                      ] satisfies TabItem<Tab>[])
-                    : []),
-                  ...(STATS
-                    ? ([
-                        {
-                          value: 'stats',
-                          label: t('tabs.stats'),
-                          panel: <StatsTab tenantId={company.id} />,
-                        },
-                      ] satisfies TabItem<Tab>[])
-                    : []),
+                  {
+                    value: 'billing',
+                    label: t('tabs.billing'),
+                    panel: <BillingTab tenantId={company.id} />,
+                  },
+                  {
+                    value: 'services',
+                    label: t('tabs.services'),
+                    panel: (
+                      <ServicesTab
+                        tenantId={company.id}
+                        tenantName={company.name}
+                      />
+                    ),
+                  },
+                  {
+                    value: 'stats',
+                    label: t('tabs.stats'),
+                    panel: <StatsTab tenantId={company.id} />,
+                  },
                   ...(AUDIT
                     ? ([
                         {

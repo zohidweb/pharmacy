@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
-import { zoneOf } from './network-zone';
+import { type TenantTransaction, tenantTimeZone } from '../../core/database';
 
 /** The sign-in locks of an employee on one day of the network. */
 export interface LoginLocksOfDay {
@@ -27,7 +26,7 @@ export class LoginLocks {
     tenantId: string,
     after: Date,
   ): Promise<LoginLocksOfDay[]> {
-    const zone = zoneOf(tenantId);
+    const zone = tenantTimeZone(tenantId);
     const result = await sql<LoginLocksOfDay>`
       with affected as (
         select distinct a.entity_id as employee_id, (a.recorded_at at time zone ${zone})::date as day

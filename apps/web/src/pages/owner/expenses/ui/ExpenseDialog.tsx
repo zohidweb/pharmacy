@@ -3,7 +3,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { type ExpenseKind, expenseKinds } from '@pharmacy/shared-domain';
 import type { CreateExpenseRequest, Expense } from '@pharmacy/shared-dto';
-import { parseMoneyToMinor, toAppDate } from '@pharmacy/shared-util';
+import {
+  formatMoney,
+  parseMoneyToMinor,
+  toAppDate,
+} from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -39,9 +43,6 @@ const schema = z.object({
 });
 
 type Values = z.infer<typeof schema>;
-
-const amountText = (minor: number) =>
-  `${Math.floor(minor / 100)},${String(minor % 100).padStart(2, '0')}`;
 
 // the server fields of the form and the message of each (spec 2026-10-14-owner-cabinet, 7)
 const FIELD_MESSAGES: Record<string, { field: keyof Values; message: string }> = {
@@ -83,7 +84,9 @@ export function ExpenseDialog({
         expense?.storeId ??
         (expense || wholeNetwork ? NETWORK : (session?.stores[0]?.id ?? '')),
       kind: expense?.kind ?? 'rent',
-      amount: expense ? amountText(expense.amountMinor) : '',
+      amount: expense
+        ? formatMoney(expense.amountMinor, { withSign: false })
+        : '',
       comment: expense?.comment ?? '',
     },
   });

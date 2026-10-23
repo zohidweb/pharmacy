@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { LegalEntity, LegalEntityInput, StoreKind } from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import { type TenantTransaction, tenantTimeZone } from '../../core/database';
 
 /** A store row with the name of its legal entity. */
 export interface StoreRow {
@@ -64,9 +64,9 @@ export class StoresRepository {
       .select([
         'stores.closingStartedBy',
         'receiver.name as closingReceiverName',
-        sql<string | null>`(stores.closed_at at time zone coalesce(
-          (select ts.timezone from pharmacy.tenant_settings ts where ts.tenant_id = stores.tenant_id),
-          'Asia/Dushanbe'))::date::text`.as('closedOn'),
+        sql<string | null>`(stores.closed_at at time zone ${tenantTimeZone(
+          sql.ref('stores.tenant_id'),
+        )})::date::text`.as('closedOn'),
       ])
       .select([
         'stores.id',

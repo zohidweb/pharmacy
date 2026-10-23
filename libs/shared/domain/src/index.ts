@@ -4,6 +4,7 @@ export * from './lib/catalog';
 export * from './lib/discount';
 export * from './lib/expenses';
 export * from './lib/imports';
+export * from './lib/network-settings';
 export * from './lib/operator-permissions';
 export * from './lib/permissions';
 export * from './lib/password-policy';

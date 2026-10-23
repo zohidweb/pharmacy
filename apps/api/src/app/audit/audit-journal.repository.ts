@@ -5,7 +5,11 @@ import {
   type AuditGroupRule,
 } from '@pharmacy/shared-domain';
 import { type RawBuilder, sql, type SqlBool } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
+import {
+  escapeLike,
+  settingsTimeZone,
+  type TenantTransaction,
+} from '../../core/database';
 
 export interface AuditJournalFilter {
   /** YYYY-MM-DD, both days included, in the time zone of the network. */
@@ -38,8 +42,6 @@ export interface AuditJournalRow {
   objectNames: unknown;
 }
 
-const likeEscaped = (value: string) => value.replace(/[\\%_]/g, '\\$&');
-
 // One rule of a group as SQL (rules in libs/shared/domain): false, never NULL, so a NOT of it keeps
 // the rows of no group.
 function ruleSql(rule: AuditGroupRule): RawBuilder<SqlBool> {
@@ -48,7 +50,7 @@ function ruleSql(rule: AuditGroupRule): RawBuilder<SqlBool> {
     named.push(sql`l.action = any(${sql.val([...rule.actions])}::text[])`);
   }
   for (const prefix of rule.prefixes ?? []) {
-    named.push(sql`l.action like ${`${likeEscaped(prefix)}%`}`);
+    named.push(sql`l.action like ${`${escapeLike(prefix)}%`}`);
   }
   const action = sql`(${sql.join(named, sql` or `)})`;
   const typed = rule.documentTypes
@@ -73,8 +75,8 @@ export class AuditJournalRepository {
     tenantId: string,
   ): Promise<{ today: string; timezone: string }> {
     const result = await sql<{ today: string; timezone: string }>`
-      select (now() at time zone coalesce(ts.timezone, 'Asia/Dushanbe'))::date::text as today,
-             coalesce(ts.timezone, 'Asia/Dushanbe') as timezone
+      select (now() at time zone ${settingsTimeZone()})::date::text as today,
+             ${settingsTimeZone()} as timezone
       from (select 1) one
       left join pharmacy.tenant_settings ts on ts.tenant_id = ${tenantId}`.execute(
       trx,
@@ -139,7 +141,7 @@ export class AuditJournalRepository {
       parts.push(sql`not ${groupSql(group)}`);
     }
     if (filter.q) {
-      const pattern = `%${likeEscaped(filter.q)}%`;
+      const pattern = `%${escapeLike(filter.q)}%`;
       parts.push(sql`(
         l.details ->> 'number' ilike ${pattern} or ee.full_name ilike ${pattern}
         or es.name ilike ${pattern} or sup.name ilike ${pattern}

@@ -2,11 +2,7 @@
 
 import { nextDiscount, type DiscountRule } from '@pharmacy/shared-domain';
 import type { ReceiptPaymentMethod } from '@pharmacy/shared-dto';
-import {
-  formatDateOnly,
-  formatMoney,
-  parseMoneyToMinor,
-} from '@pharmacy/shared-util';
+import { formatDateOnly, formatMoney } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
@@ -14,12 +10,12 @@ import {
   EmptyState,
   Icon,
   IconButton,
-  TextField,
   type IconName,
 } from '@pharmacy/ui';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { PrescriptionBadge } from '@/entities/catalog';
+import { MoneyInput } from '@/shared/ui';
 import {
   lineAmount,
   paymentState,
@@ -58,45 +54,6 @@ export interface CartPanelProps {
 /** Some prescription data of a ПКУ line was given. */
 const filled = (line: DraftLine) =>
   Object.values(line.controlled ?? {}).some((value) => Boolean(value?.trim()));
-
-function MoneyInput({
-  label,
-  valueMinor,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  valueMinor: number | null;
-  onChange: (minor: number | null) => void;
-  disabled?: boolean;
-}) {
-  const [text, setText] = useState(
-    valueMinor === null ? '' : formatMoney(valueMinor, { withSign: false }),
-  );
-  const t = useTranslations('pos');
-  const parsed = text.trim() === '' ? null : parseMoneyToMinor(text);
-  return (
-    <TextField
-      label={label}
-      inputMode="decimal"
-      autoComplete="off"
-      disabled={disabled}
-      value={text}
-      error={
-        text.trim() !== '' && parsed === null ? t('amountFormat') : undefined
-      }
-      onChange={(event) => {
-        setText(event.target.value);
-        const value = event.target.value.trim();
-        if (value === '') onChange(null);
-        else {
-          const minor = parseMoneyToMinor(value);
-          if (minor !== null) onChange(minor);
-        }
-      }}
-    />
-  );
-}
 
 function Line({
   line,
@@ -326,8 +283,11 @@ export function CartPanel(props: CartPanelProps) {
               <MoneyInput
                 key={method}
                 label={t(`methods.${method}`)}
-                valueMinor={draft.nonCash[method] || null}
-                onChange={(minor) => props.onNonCash(method, minor ?? 0)}
+                hideLabel={false}
+                invalidText={t('amountFormat')}
+                empty={0}
+                valueMinor={draft.nonCash[method]}
+                onChange={(minor) => props.onNonCash(method, minor)}
               />
             ))}
           </div>
@@ -342,6 +302,9 @@ export function CartPanel(props: CartPanelProps) {
               label={t('tendered', {
                 amount: formatMoney(payment.cashPartMinor),
               })}
+              hideLabel={false}
+              invalidText={t('amountFormat')}
+              empty={null}
               valueMinor={draft.cashTenderedMinor}
               onChange={props.onTendered}
             />

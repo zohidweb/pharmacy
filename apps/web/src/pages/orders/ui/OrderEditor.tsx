@@ -20,12 +20,9 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
 import { OrderStatusPill } from '@/entities/purchasing';
-import {
-  MoneyInput,
-  ProductSearch,
-  QuantityInput,
-} from '@/features/stock-document';
+import { ProductSearch, QuantityInput } from '@/features/stock-document';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { MoneyInput } from '@/shared/ui';
 
 interface Line {
   key: string;

@@ -8,6 +8,7 @@ import {
 import { runWithContext } from '../../../common/context/request-context';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { PrescriptionRetention } from '../../pos/prescription-retention';
+import { FeedRetention } from '../../sync/feed-retention';
 import { InboxRetention } from '../../sync/inbox-retention';
 import { RetentionRepository } from './retention.repository';
 
@@ -23,8 +24,10 @@ const errorCode = (error: unknown): string =>
 
 // The first periodic task of the cloud (ADR-0013, amendment 2026-10-21; spec 2026-10-21-pos-offline-limits, P3, P5):
 // once an hour, «per tenant in a loop», the prescription data past the retention term of each network is purged —
-// the ПКУ records by `pos`, the envelopes of offline stores by `sync`. A timer of the API process, no scheduler
-// library and no job queue; several API instances do not clash (a try-lock per network, an idempotent update). A
+// the ПКУ records by `pos`, the envelopes of offline stores by `sync`. The same pass keeps the change feed of each
+// network within its window (spec 2026-10-16-offline-sync, section 13, 2026-10-23): without it the feed of a network
+// no offline store reads grows without end. A timer of the API process, no scheduler library and no job queue;
+// several API instances do not clash (a try-lock per network, the advisory lock of the feed, an idempotent update). A
 // failure of one network is logged with its code and the loop goes on; no prescription data is ever logged.
 @Injectable()
 export class PrescriptionPurgeScheduler
@@ -41,6 +44,7 @@ export class PrescriptionPurgeScheduler
     private readonly repository: RetentionRepository,
     private readonly prescriptions: PrescriptionRetention,
     private readonly inbox: InboxRetention,
+    private readonly feed: FeedRetention,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -80,8 +84,10 @@ export class PrescriptionPurgeScheduler
         );
         let records = 0;
         let envelopes = 0;
+        let changes = 0;
         for (const tenantId of tenants) {
           if (this.stopping) break;
+          changes += await this.keepFeedWindow(tenantId, correlationId);
           try {
             const purged = await this.prescriptions.purgeExpired(tenantId);
             if (purged === null) continue;
@@ -110,11 +116,31 @@ export class PrescriptionPurgeScheduler
             `Prescription data purged: ${records} records, ${envelopes} envelopes [correlationId=${correlationId}]`,
           );
         }
+        if (changes > 0) {
+          this.logger.log(
+            `Feed changes past the window dropped: ${changes} [correlationId=${correlationId}]`,
+          );
+        }
       });
     } catch (error) {
       this.logger.warn(
         `The prescription purge pass failed (${errorCode(error)}) [correlationId=${correlationId}]`,
       );
+    }
+  }
+
+  /** The feed step of a network, apart from its prescription data: a failure of one never stops the other. */
+  private async keepFeedWindow(
+    tenantId: string,
+    correlationId: string,
+  ): Promise<number> {
+    try {
+      return await this.feed.keepWindow(tenantId);
+    } catch (error) {
+      this.logger.warn(
+        `The feed window of a network not kept (${errorCode(error)}) [tenantId=${tenantId}] [correlationId=${correlationId}]`,
+      );
+      return 0;
     }
   }
 }

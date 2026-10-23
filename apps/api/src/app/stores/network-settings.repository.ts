@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  networkSettingsDefaults as defaults,
   PRESCRIPTION_RETENTION_DEFAULT_DAYS,
   posBufferDefaults,
 } from '@pharmacy/shared-domain';
@@ -33,10 +34,11 @@ export class NetworkSettingsRepository {
   ): Promise<NetworkSettingsRow> {
     const result = await sql<NetworkSettingsRow>`
       select t.name as network_name,
-             coalesce(ts.cashier_session_idle_min, 15) as pos_session_timeout_minutes,
-             coalesce(ts.pin_min_length, 4) as min_pin_length,
-             coalesce(ts.expiry_reminder_days, 30) as expiry_notice_days,
-             coalesce(ts.warn_below_cost, true) as warn_below_cost,
+             coalesce(ts.cashier_session_idle_min, ${defaults.cashierSessionIdleMinutes})
+               as pos_session_timeout_minutes,
+             coalesce(ts.pin_min_length, ${defaults.pinMinLength}) as min_pin_length,
+             coalesce(ts.expiry_reminder_days, ${defaults.expiryReminderDays}) as expiry_notice_days,
+             coalesce(ts.warn_below_cost, ${defaults.warnBelowCost}) as warn_below_cost,
              coalesce(ts.disabled_notifications, '{}') as disabled_notifications,
              coalesce(ts.prescription_retention_days, ${PRESCRIPTION_RETENTION_DEFAULT_DAYS})
                as prescription_retention_days,

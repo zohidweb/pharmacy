@@ -207,7 +207,7 @@ function CatalogPageView() {
         actions={
           <>
             {/* loading the catalog from a file (spec 2026-10-20-data-import, F20) */}
-            {canCreate && isApiRouteAvailable('catalogImports.apply') && (
+            {canCreate && (
               <Button
                 variant="secondary"
                 iconStart="download"
@@ -227,9 +227,6 @@ function CatalogPageView() {
         }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        {session?.impersonation && (
-          <Alert tone="info">{tDocs('notices.impersonation')}</Alert>
-        )}
         <QueryState query={list}>
           {(data) => (
             <>

@@ -24,7 +24,11 @@ import { DatabaseModule } from '../core/database';
 import { RedisModule } from '../core/redis/redis.module';
 import { REDIS_CLIENT, type RedisClient } from '../core/redis/redis.tokens';
 import { SessionsModule } from '../core/sessions';
-import { offlineSyncEnabled, validateEnv } from './config/env.validation';
+import {
+  cloudMode,
+  offlineSyncEnabled,
+  validateEnv,
+} from './config/env.validation';
 import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
 import { StaffModule } from './staff/staff.module';
@@ -86,92 +90,35 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     TerminalsModule,
     // The operator contour exists in the cloud only: an offline store registers no /operator/*
     // routes (auth design, section 10).
-    ConditionalModule.registerWhen(
-      OperatorAuthModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
-    ConditionalModule.registerWhen(
-      TenantsModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
-    ConditionalModule.registerWhen(
-      OperatorsModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
-    ConditionalModule.registerWhen(
-      OperatorAuditModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
-    ConditionalModule.registerWhen(
-      PlatformBillingModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(OperatorAuthModule, cloudMode),
+    ConditionalModule.registerWhen(TenantsModule, cloudMode),
+    ConditionalModule.registerWhen(OperatorsModule, cloudMode),
+    ConditionalModule.registerWhen(OperatorAuditModule, cloudMode),
+    ConditionalModule.registerWhen(PlatformBillingModule, cloudMode),
     // The operator dashboard and statistics (spec 2026-10-19-admin-dashboard-stats).
-    ConditionalModule.registerWhen(
-      PlatformStatsModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(PlatformStatsModule, cloudMode),
     // The notifications of the operators and the menu counters (spec 2026-10-19-operator-notifications).
-    ConditionalModule.registerWhen(
-      PlatformNotificationsModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(PlatformNotificationsModule, cloudMode),
     // The hourly purge of the prescription data by the retention term (spec 2026-10-21-pos-offline-limits, P3).
-    ConditionalModule.registerWhen(
-      PlatformRetentionModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(PlatformRetentionModule, cloudMode),
     // Stores and legal entities are kept in the cloud only (spec 2026-10-06-owner-stores).
-    ConditionalModule.registerWhen(
-      StoresModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(StoresModule, cloudMode),
     // Employees and roles are kept in the cloud only (spec 2026-10-06-staff-design).
-    ConditionalModule.registerWhen(
-      StaffModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(StaffModule, cloudMode),
     // Catalog and prices are kept in the cloud only (spec 2026-10-07-catalog-pricing).
-    ConditionalModule.registerWhen(
-      CatalogModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
-    ConditionalModule.registerWhen(
-      InventoryModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(CatalogModule, cloudMode),
+    ConditionalModule.registerWhen(InventoryModule, cloudMode),
     // The POS of an offline store comes with the sync (spec 2026-10-13-pos-shift-sale, E19).
-    ConditionalModule.registerWhen(
-      PosModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
-    ConditionalModule.registerWhen(
-      PurchasingModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
-    ConditionalModule.registerWhen(
-      PricingModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(PosModule, cloudMode),
+    ConditionalModule.registerWhen(PurchasingModule, cloudMode),
+    ConditionalModule.registerWhen(PricingModule, cloudMode),
     // Customer returns of a cloud store, as the POS (spec 2026-10-13-customer-returns, E16).
-    ConditionalModule.registerWhen(
-      ReturnsModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(ReturnsModule, cloudMode),
     // The notifications of the owner cabinet read the cloud modules (spec 2026-10-14-owner-cabinet).
-    ConditionalModule.registerWhen(
-      NotificationsModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
-    ConditionalModule.registerWhen(
-      ReportsModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(NotificationsModule, cloudMode),
+    ConditionalModule.registerWhen(ReportsModule, cloudMode),
     // The services the owner orders from the platform (spec 2026-10-15-billing-services, 6.2).
-    ConditionalModule.registerWhen(
-      BillingModule,
-      (env: NodeJS.ProcessEnv) => env.STORE_MODE !== 'offline',
-    ),
+    ConditionalModule.registerWhen(BillingModule, cloudMode),
     // The routes of the offline-store sync: cloud only (a store calls the cloud, never itself, ADR-0014) and only with
     // OFFLINE_SYNC_ENABLED (security review 2026-10-22, decision 7.4). SyncModule itself comes with the retention.
     ConditionalModule.registerWhen(SyncReceiveModule, offlineSyncEnabled),

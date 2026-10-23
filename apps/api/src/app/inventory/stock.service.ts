@@ -16,6 +16,7 @@ import type {
 } from '@pharmacy/shared-dto';
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import { TenantDatabase } from '../../core/database';
 import { ProductsReader, type StockProduct } from '../catalog/products-reader';
 import { StorePriceWriter } from '../pricing/store-price-writer';
@@ -137,7 +138,7 @@ export class StockService {
     if (storeId && scope !== null && !scope.includes(storeId)) {
       throw new ProblemException(403, 'store_not_in_scope');
     }
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.tenantTransaction(async (trx) => {
       const stores = (
@@ -310,7 +311,7 @@ export class StockService {
           : [...own];
         return ranked
           .filter((productId) => own.has(productId))
-          .slice(0, query.limit ?? 20);
+          .slice(0, query.limit ?? DEFAULT_PAGE_LIMIT);
       };
       const ids = query.ids
         ? [...new Set(query.ids.toLowerCase().split(','))]
@@ -343,7 +344,7 @@ export class StockService {
               : (
                   await this.products.listForPricing(trx, tenantId, {
                     q: query.query,
-                    limit: query.limit ?? 20,
+                    limit: query.limit ?? DEFAULT_PAGE_LIMIT,
                     offset: 0,
                   })
                 ).items.map((p) => p.id);

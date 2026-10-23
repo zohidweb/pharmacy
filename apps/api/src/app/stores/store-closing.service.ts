@@ -12,7 +12,11 @@ import { sql } from 'kysely';
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
-import { TenantDatabase, type TenantTransaction } from '../../core/database';
+import {
+  TenantDatabase,
+  type TenantTransaction,
+  tenantToday,
+} from '../../core/database';
 import { AuditService } from '../audit/audit.service';
 import { StoreClosingTransfers } from '../inventory/store-closing-transfers';
 import { TransferAcceptance } from '../inventory/transfer-acceptance';
@@ -303,9 +307,7 @@ export class StoreClosingService implements OnModuleInit {
   /** The business date of the network. */
   private async today(trx: TenantTransaction, tenantId: string): Promise<string> {
     const result = await sql<{ today: string }>`
-      select (now() at time zone coalesce(
-        (select ts.timezone from pharmacy.tenant_settings ts where ts.tenant_id = ${tenantId}),
-        'Asia/Dushanbe'))::date::text as today`.execute(trx);
+      select ${tenantToday(tenantId)}::text as today`.execute(trx);
     return result.rows[0].today;
   }
 

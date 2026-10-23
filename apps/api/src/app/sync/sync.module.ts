@@ -3,6 +3,7 @@ import { SyncCoreModule } from '../../core/sync';
 import { AuditModule } from '../audit/audit.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { CheckpointFacts } from './checkpoint-facts';
+import { FeedRetention } from './feed-retention';
 import { InboxRepository } from './inbox.repository';
 import { InboxRetention } from './inbox-retention';
 import { SyncApplyService } from './sync-apply.service';
@@ -26,9 +27,16 @@ import { SyncRunsService } from './sync-runs.service';
     SyncFeedService,
     CheckpointFacts,
     InboxRetention,
+    FeedRetention,
   ],
   // InboxRetention — the purge of the prescription data in the envelopes (spec 2026-10-21-pos-offline-limits, P5;
   // `sync` → `platform/retention`); the services — to the routes of SyncReceiveModule
-  exports: [InboxRetention, SyncRunsService, SyncApplyService, SyncFeedService],
+  exports: [
+    InboxRetention,
+    FeedRetention,
+    SyncRunsService,
+    SyncApplyService,
+    SyncFeedService,
+  ],
 })
 export class SyncModule {}

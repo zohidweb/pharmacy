@@ -217,7 +217,7 @@ export class ServiceOrdersService {
     return this.one(trx, id);
   }
 
-  /** Not in the future and not before the day of the decision, by the calendar of `Asia/Dushanbe`. */
+  /** Not in the future and not before the day of the decision, by the calendar of the platform. */
   async provide(
     serviceId: string,
     providedOn: string,

@@ -5,10 +5,7 @@ import type {
   OperatorAuditRef,
 } from '@pharmacy/shared-dto';
 import { type RawBuilder, sql, type SqlBool, type Transaction } from 'kysely';
-import type { DB } from '../../../core/database';
-
-/** The calendar of the operator contour: the platform has no tenant time zone. */
-const PLATFORM_TIME_ZONE = 'Asia/Dushanbe';
+import { type DB, PLATFORM_TIME_ZONE } from '../../../core/database';
 
 /**
  * Kinds of events by the prefix of the code. An event of none of them — sign-ins, activation,

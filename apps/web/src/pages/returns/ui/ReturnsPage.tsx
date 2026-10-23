@@ -465,7 +465,6 @@ function ReturnsPageView() {
     <>
       <PageHeader
         title={t('title')}
-        demoRoutes={['returns.list', 'receipts.returnable', 'returns.create']}
         subtitle={
           windowDays === null ? undefined : t('subtitle', { days: windowDays })
         }

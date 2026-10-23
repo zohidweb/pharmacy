@@ -94,7 +94,9 @@ export function batchState(batch: PosBatch, today: string): BatchState {
 }
 
 /** Sellable batches, nearest expiry first (FEFO); expired batches are never sold. */
-export function fefoBatches(product: PosProduct, today: string): PosBatch[] {
+export function fefoBatches<
+  B extends Pick<PosBatch, 'expiresOn' | 'quantityPieces'>,
+>(product: { batches: readonly B[] }, today: string): B[] {
   return product.batches
     .filter((b) => b.expiresOn >= today && b.quantityPieces > 0)
     .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn));

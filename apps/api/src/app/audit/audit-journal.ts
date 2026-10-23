@@ -11,6 +11,7 @@ import {
 } from '../../common/context/request-context';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { ProblemException } from '../../common/errors/problem.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
 import type { AuditJournalQueryDto } from './dto/audit-journal.dto';
 import {
@@ -88,7 +89,7 @@ export class AuditJournal {
     if (query.storeId && scope !== 'all' && !scope.includes(query.storeId)) {
       throw new ProblemException(403, 'store_not_in_scope');
     }
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.tenantTransaction(async (trx) => {
       const { today, timezone } = await this.repository.calendar(

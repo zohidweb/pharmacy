@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'use-intl';
 import { useSession } from '@/entities/session';
-import { apiRequest, isApiRouteAvailable } from '@/shared/api';
+import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { activeRoute, visibleNavigation } from '../config/navigation';
 import { navCountersKey } from '../model/nav-counters';
@@ -34,7 +34,7 @@ export function Sidebar() {
         query: storeId ? { storeId } : {},
         signal,
       }),
-    enabled: !!session && isApiRouteAvailable('navCounters.get'),
+    enabled: !!session,
     // not on the POS screen: there a waiting new version of the app activates between receipts,
     // and with this polling on it stayed waiting in the web-e2e run (cause not established); the
     // sales there go through the outbox, so leaving the POS refreshes the numbers at once

@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
-import type { TenantTransaction } from '../../core/database';
-import { zoneOf } from './network-zone';
+import { type TenantTransaction, tenantTimeZone } from '../../core/database';
 
 /** The sales refused at a store on a business date (YYYY-MM-DD): the ids the POS gave them. */
 export interface RefusedReceiptsOfDay {
@@ -23,7 +22,7 @@ export class ReceiptRefusals {
     after: Date,
   ): Promise<Array<{ storeId: string; businessDate: string }>> {
     const result = await sql<{ storeId: string; businessDate: string }>`
-      select distinct a.store_id, (a.recorded_at at time zone ${zoneOf(tenantId)})::date::text as business_date
+      select distinct a.store_id, (a.recorded_at at time zone ${tenantTimeZone(tenantId)})::date::text as business_date
       from pharmacy.audit_log a
       where a.tenant_id = ${tenantId} and a.recorded_at > ${after}
         and a.action = 'receipt.refused' and a.store_id is not null`.execute(
@@ -42,7 +41,7 @@ export class ReceiptRefusals {
     const dates = days.map((d) => d.businessDate).sort();
     const result = await sql<RefusedReceiptsOfDay>`
       with refused as (
-        select a.store_id, (a.recorded_at at time zone ${zoneOf(tenantId)})::date as business_date, a.entity_id
+        select a.store_id, (a.recorded_at at time zone ${tenantTimeZone(tenantId)})::date as business_date, a.entity_id
         from pharmacy.audit_log a
         where a.tenant_id = ${tenantId} and a.action = 'receipt.refused'
           and a.recorded_at >= ${dates[0]}::date - interval '1 day'

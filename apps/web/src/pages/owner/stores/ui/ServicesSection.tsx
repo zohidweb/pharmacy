@@ -26,7 +26,7 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { canWrite, useSession } from '@/entities/session';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
-import { DemoDataNotice, QueryState } from '@/shared/ui';
+import { QueryState } from '@/shared/ui';
 
 const servicesKey = ['services'] as const;
 
@@ -172,7 +172,6 @@ export function ServicesSection() {
 
   return (
     <div className="flex flex-col gap-4">
-      <DemoDataNotice routes={['services.list']} />
       <QueryState query={services}>
         {(data) => (
           <div className="flex flex-col gap-4">

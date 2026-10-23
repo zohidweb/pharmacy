@@ -7,7 +7,12 @@ import type {
   TenantSortKey,
 } from '@pharmacy/shared-dto';
 import { type Expression, type SqlBool, sql, type Transaction } from 'kysely';
-import type { DB } from '../../../core/database';
+import {
+  type DB,
+  escapeLike,
+  PLATFORM_TIME_ZONE,
+  platformToday,
+} from '../../../core/database';
 
 export interface TenantListParams {
   filter: TenantListFilter;
@@ -67,10 +72,10 @@ type TenantRow = {
 };
 
 // Billing of a network (spec 2026-10-15-billing-services, 5, 6.1; B12): the debt is what its
-// invoices still miss, the overdue debt — of the invoices past their due date (Asia/Dushanbe); the
+// invoices still miss, the overdue debt — of the invoices past their due date (the calendar of the platform); the
 // discount is the one of the current month.
-const TODAY = sql`(now() at time zone 'Asia/Dushanbe')::date`;
-const CURRENT_MONTH = sql`date_trunc('month', now() at time zone 'Asia/Dushanbe')::date`;
+const TODAY = platformToday();
+const CURRENT_MONTH = sql`date_trunc('month', now() at time zone ${sql.lit(PLATFORM_TIME_ZONE)})::date`;
 const DEBT = sql<string>`(select coalesce(sum(i.total_dirams - i.paid_dirams), 0)
   from pharmacy.invoices i where i.tenant_id = tenants.id)`;
 const OVERDUE_DEBT = sql<string>`(select coalesce(sum(i.total_dirams - i.paid_dirams), 0)
@@ -83,7 +88,7 @@ const CURRENT_DISCOUNT = sql`from pharmacy.tenant_discounts d
 
 // `%`, `_` and the escape character itself are literal in a search term.
 function likePattern(q: string): string {
-  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  return `%${escapeLike(q)}%`;
 }
 
 const dateOnly = (value: Date | string): string =>

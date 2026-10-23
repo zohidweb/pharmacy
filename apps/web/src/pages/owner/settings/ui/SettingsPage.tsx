@@ -26,7 +26,7 @@ import { useTranslations } from 'use-intl';
 import { canWrite, sessionQueryKey, useSession } from '@/entities/session';
 import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
-import { DemoDataNotice, QueryState } from '@/shared/ui';
+import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { CategoriesCard } from './CategoriesCard';
 
@@ -150,7 +150,6 @@ function NetworkCard({
     <>
       <Card className="flex flex-col gap-4">
         <CardHeader title={t('network.title')} />
-        <DemoDataNotice routes={['settings.get']} />
         {error && (
           <Alert tone="danger" live="assertive">
             {error}
@@ -198,7 +197,6 @@ function NetworkCard({
           title={t('offline.title')}
           description={t('offline.hint')}
         />
-        <DemoDataNotice routes={['settings.get']} />
         <div className="grid grid-cols-3 gap-4">
           {number('posBufferMaxHours')}
           {number('posBufferMaxOperations')}
@@ -222,7 +220,6 @@ function NetworkCard({
           title={t('notifications.title')}
           description={t('notifications.hint')}
         />
-        <DemoDataNotice routes={['settings.get']} />
         <div className="grid grid-cols-2 gap-4">
           {NOTIFICATIONS.map((kind) => (
             <Switch
@@ -521,7 +518,6 @@ function SettingsPageView() {
     <>
       <PageHeader title={t('title')} />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        {session?.impersonation && <Alert tone="info">{t('readOnly')}</Alert>}
         <QueryState query={settings}>
           {(data) => <NetworkCard settings={data} editable={editable} />}
         </QueryState>

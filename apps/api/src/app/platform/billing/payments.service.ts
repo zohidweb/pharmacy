@@ -8,6 +8,7 @@ import type { Transaction } from 'kysely';
 import { requireOperator } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../../common/pagination';
 import { requestHash } from '../../../common/request-hash';
 import type { DB } from '../../../core/database';
 import { PlatformDatabase } from '../../../core/database/platform';
@@ -191,7 +192,7 @@ export class PaymentsService {
   }
 
   list(query: PaymentListQueryDto): Promise<Page<PaymentListItem>> {
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     return this.db.platformTransaction(this.actor(), async (trx) => {
       const page = await this.payments.list(

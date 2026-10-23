@@ -6,7 +6,7 @@ import type {
 } from '@pharmacy/shared-dto';
 import type { ComposedLine } from '@pharmacy/shared-domain';
 import { type RawBuilder, type SqlBool, sql, type Transaction } from 'kysely';
-import { type DB, newId } from '../../../core/database';
+import { type DB, newId, platformToday } from '../../../core/database';
 import { textOf } from './billing.repository';
 
 type Money = bigint | string | number;
@@ -102,14 +102,12 @@ export const monthOf = (period: string) => `${period}-01`;
 // Invoices of networks on the platform path (spec 2026-10-15-billing-services, 4, 5, 6.1): reads the
 // activity of stores (store_usage_monthly, platform_read), the registry columns of stores and the
 // platform tables; writes invoices and their lines. Lines are never deleted (B18): a removed line
-// carries removed_at. "Today" is the calendar day of Asia/Dushanbe.
+// carries removed_at. "Today" is the calendar day of the platform.
 @Injectable()
 export class InvoicesRepository {
   async today(trx: Transaction<DB>): Promise<string> {
     const { rows } = await sql<{ today: string }>`
-      select (now() at time zone 'Asia/Dushanbe')::date::text as today`.execute(
-      trx,
-    );
+      select ${platformToday()}::text as today`.execute(trx);
     return rows[0].today;
   }
 
@@ -304,10 +302,7 @@ export class InvoicesRepository {
         totalDirams: BigInt(values.totalMinor),
         // an invoice of 0 is paid at once; the allocation sets the day
         paidDirams: 0n,
-        paidOn:
-          values.totalMinor === 0
-            ? sql<string>`(now() at time zone 'Asia/Dushanbe')::date`
-            : null,
+        paidOn: values.totalMinor === 0 ? platformToday() : null,
         tenantName: values.tenantName,
         tenantInn: values.tenantInn,
         supplierName: values.supplier.name,
@@ -399,10 +394,7 @@ export class InvoicesRepository {
         totalDirams: BigInt(sums.totalMinor),
         // the allocation that follows sets what is paid; a lower total must not stay overpaid
         paidDirams: 0n,
-        paidOn:
-          sums.totalMinor === 0
-            ? sql<string>`(now() at time zone 'Asia/Dushanbe')::date`
-            : null,
+        paidOn: sums.totalMinor === 0 ? platformToday() : null,
         ...(recalculated && { recalculatedAt: sql`now()` }),
       })
       .where('id', '=', invoiceId)

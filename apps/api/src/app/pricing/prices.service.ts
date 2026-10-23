@@ -10,6 +10,7 @@ import type {
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
+import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
 import {
   type PricingProduct,
@@ -50,7 +51,7 @@ export class PricesService {
 
   async list(query: PriceListQuery): Promise<PriceListResponse> {
     const { tenantId, storeScope, permissions } = requirePrincipal();
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? 0;
     const scope = scopeIds(storeScope);
     const storeId = query.storeId?.toLowerCase();

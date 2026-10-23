@@ -9,13 +9,7 @@ export const tenantKeys = {
   tab: (
     id: string,
     tab:
-      | 'stores'
-      | 'invoices'
-      | 'payments'
-      | 'discounts'
-      | 'services'
-      | 'stats'
-      | 'audit',
+      'stores' | 'invoices' | 'payments' | 'discounts' | 'services' | 'stats',
     extra?: unknown,
   ) => ['tenants', 'detail', id, tab, extra] as const,
 };
@@ -74,17 +68,5 @@ export function useTenantStats(id: string) {
     queryKey: tenantKeys.tab(id, 'stats'),
     queryFn: ({ signal }) =>
       apiRequest('tenants.stats', { params: { id }, signal }),
-  });
-}
-
-export function useTenantAudit(
-  id: string,
-  page: { limit: number; offset: number },
-) {
-  return useQuery({
-    queryKey: tenantKeys.tab(id, 'audit', page),
-    queryFn: ({ signal }) =>
-      apiRequest('tenants.audit', { params: { id }, query: page, signal }),
-    placeholderData: keepPreviousData,
   });
 }

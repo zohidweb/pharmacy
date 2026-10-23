@@ -1,7 +1,6 @@
 export {
   tenantKeys,
   useTenant,
-  useTenantAudit,
   useTenantInvoices,
   useTenantList,
   useTenantPayments,

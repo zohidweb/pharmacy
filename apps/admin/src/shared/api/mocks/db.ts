@@ -3,7 +3,6 @@
  * (no real client data, CLAUDE.md). Resets on page reload.
  */
 import type {
-  AuditEntry,
   StoreDetails,
   TenantDetails,
   TenantStats,
@@ -26,13 +25,11 @@ function store(
     licenseValidUntil: null,
     lastSyncAt: null,
     monthSalesMinor: 0,
-    managerName: 'Заведующая Демо',
-    managerPhone: '+992 00 000 00 10',
-    cashiers: 2,
     connectedOn: '2026-03-01',
     installedVersion: partial.mode === 'offline' ? LATEST_VERSION : null,
     latestVersion: LATEST_VERSION,
     monthReceipts: 0,
+    asOf: null,
     license: null,
     syncHistory: [],
     syncQueue: [],
@@ -45,7 +42,6 @@ export interface MockDb {
   stores: StoreDetails[];
   billing: BillingDb;
   system: SystemDb;
-  audit: Record<string, AuditEntry[]>;
 }
 
 function seed(): MockDb {
@@ -84,7 +80,6 @@ function seed(): MockDb {
       monthSalesMinor: 7_890_000,
       monthReceipts: 1_870,
       installedVersion: '2.3.1',
-      cashiers: 3,
       license: {
         code: 'DMO-0001-TEST-2026',
         validUntil: '2026-10-08',
@@ -271,34 +266,6 @@ function seed(): MockDb {
     stores,
     billing: seedBilling(),
     system: seedSystem(),
-    audit: {
-      't-1': [
-        {
-          id: 'a-1',
-          at: '2026-09-30T06:42:00Z',
-          actorName: 'Владелец Демо',
-          actorIsPlatformOperator: false,
-          storeName: 'Демо Фарм №1',
-          action: 'Изменена цена позиции в прайс-листе',
-        },
-        {
-          id: 'a-2',
-          at: '2026-09-29T09:10:00Z',
-          actorName: 'Демо Оператор',
-          actorIsPlatformOperator: true,
-          storeName: null,
-          action: 'Зафиксирован платёж по счёту СЧ-2026-09-001',
-        },
-        {
-          id: 'a-3',
-          at: '2026-09-28T12:05:00Z',
-          actorName: 'Заведующая Демо',
-          actorIsPlatformOperator: false,
-          storeName: 'Демо Фарм №3',
-          action: 'Принята накладная поставщика',
-        },
-      ],
-    },
   };
 }
 
@@ -324,7 +291,8 @@ export function mockStats(tenantId: string): TenantStats {
     receipts,
     salesMinor,
     averageReceiptMinor: receipts > 0 ? Math.round(salesMinor / receipts) : 0,
-    activeCashiers: stores.reduce((sum, s) => sum + s.cashiers, 0),
+    // synthetic: the marts count cashiers by network, two per active store here
+    activeCashiers: stores.length * 2,
     daily: pattern.map((value, i) => ({
       date: `2026-09-${String(17 + i - 3).padStart(2, '0')}`,
       salesMinor: Math.round((salesMinor / 30) * (value / 90)),

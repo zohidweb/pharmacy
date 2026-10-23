@@ -237,13 +237,13 @@ export const systemHandlers: Pick<
       });
     const receipts = rows.reduce((sum, row) => sum + row.receipts, 0);
     const salesMinor = rows.reduce((sum, row) => sum + row.salesMinor, 0);
-    const cashiers = mockDb()
-      .stores.filter(
+    const cashiers =
+      // synthetic, as mockStats: two cashiers per active store
+      mockDb().stores.filter(
         (store) =>
           store.status === 'active' &&
           (!query.tenantId || store.tenantId === query.tenantId),
-      )
-      .reduce((sum, store) => sum + store.cashiers, 0);
+      ).length * 2;
     return {
       period: query.period,
       kpi: {

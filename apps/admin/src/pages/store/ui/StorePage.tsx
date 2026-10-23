@@ -28,12 +28,17 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useFormatter, useTranslations } from 'use-intl';
 import { StoreModePill, StoreStatusPill, useStore } from '@/entities/store';
-import { useApiErrorMessage } from '@/shared/api';
+import { isApiRouteAvailable, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
-import { QueryState } from '@/shared/ui';
+import { AsOfNote, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { useMigrateToCloud, useRequestSync } from '../api/store-mutations';
-import { LicenseSettingsForm, StoreParamsForm } from './StoreForms';
+import { LicenseSettingsForm, StoreParams } from './StoreForms';
+
+// Offline stores are not in the pilot: their actions are shown where their routes answer (the full mocks).
+const offlineActions =
+  isApiRouteAvailable('stores.requestSync') &&
+  isApiRouteAvailable('stores.migrateToCloud');
 
 const syncTone = {
   ok: 'success',
@@ -260,14 +265,10 @@ function StoreView() {
                       <StoreStatusPill store={data} />
                     </div>
                     <p className="text-sm text-fg-muted">
-                      {t('meta', {
-                        manager: data.managerName || '—',
-                        cashiers: data.cashiers,
-                        since: formatDateOnly(data.connectedOn),
-                      })}
+                      {t('meta', { since: formatDateOnly(data.connectedOn) })}
                     </p>
                   </div>
-                  {offline && data.status === 'active' && (
+                  {offline && offlineActions && data.status === 'active' && (
                     <div className="flex flex-wrap gap-2">
                       <RequestSync store={data} />
                       <MigrateToCloud store={data} />
@@ -275,7 +276,13 @@ function StoreView() {
                   )}
                 </Card>
 
-                <div className="grid grid-cols-4 gap-4">
+                <div
+                  className={
+                    offline
+                      ? 'grid grid-cols-4 gap-4'
+                      : 'grid grid-cols-2 gap-4'
+                  }
+                >
                   {offline ? (
                     <>
                       <KpiTile
@@ -306,33 +313,29 @@ function StoreView() {
                         label={t('kpi.version')}
                         value={data.installedVersion ?? '—'}
                         hint={
-                          data.installedVersion === data.latestVersion
-                            ? t('kpi.versionCurrent')
-                            : t('kpi.versionAvailable', {
-                                version: data.latestVersion,
-                              })
+                          data.latestVersion === null
+                            ? undefined
+                            : data.installedVersion === data.latestVersion
+                              ? t('kpi.versionCurrent')
+                              : t('kpi.versionAvailable', {
+                                  version: data.latestVersion,
+                                })
                         }
                         tone={
-                          data.installedVersion === data.latestVersion
-                            ? 'default'
-                            : 'warning'
+                          data.latestVersion !== null &&
+                          data.installedVersion !== data.latestVersion
+                            ? 'warning'
+                            : 'default'
                         }
                         icon="monitor"
                       />
                     </>
                   ) : (
-                    <>
-                      <KpiTile
-                        label={t('kpi.receipts')}
-                        value={data.monthReceipts}
-                        icon="receipt"
-                      />
-                      <KpiTile
-                        label={t('kpi.cashiers')}
-                        value={data.cashiers}
-                        icon="user-check"
-                      />
-                    </>
+                    <KpiTile
+                      label={t('kpi.receipts')}
+                      value={data.monthReceipts}
+                      icon="receipt"
+                    />
                   )}
                   <KpiTile
                     label={t('kpi.sales')}
@@ -341,9 +344,10 @@ function StoreView() {
                     icon="chart-column"
                   />
                 </div>
+                <AsOfNote at={data.asOf} />
 
                 <div className="grid grid-cols-2 items-start gap-4">
-                  <StoreParamsForm store={data} />
+                  <StoreParams store={data} />
                   {offline ? (
                     <LicenseSettingsForm store={data} />
                   ) : (

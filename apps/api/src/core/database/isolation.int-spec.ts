@@ -144,16 +144,17 @@ describe('tenant isolation (ADR-0013 p. 8)', () => {
     });
   });
 
-  it('platform: store registry columns are readable, address is not', async () => {
+  // The address joined the registry columns (ADR-0013, amendment 2026-10-23); the legal entity did not.
+  it('platform: store registry columns are readable, the rest is not', async () => {
     const { rows } = await platformPool().query<{ id: string }>(
-      'select id, name, mode from stores',
+      'select id, name, mode, address from stores',
     );
     expect(rows.map((row) => row.id)).toEqual(
       expect.arrayContaining([a.storeId, b.storeId]),
     );
 
     await expect(
-      platformPool().query('select address from stores'),
+      platformPool().query('select legal_entity_id from stores'),
     ).rejects.toMatchObject({ code: '42501' });
   });
 

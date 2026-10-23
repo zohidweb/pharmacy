@@ -7,39 +7,23 @@ import {
   formatPercentBp,
   formatPeriod,
 } from '@pharmacy/shared-util';
-import {
-  Alert,
-  Avatar,
-  Card,
-  Icon,
-  Spinner,
-  type TabItem,
-  Tabs,
-} from '@pharmacy/ui';
+import { Alert, Avatar, Card, Icon, Spinner, Tabs } from '@pharmacy/ui';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { TenantStatusPill, useTenant } from '@/entities/tenant';
 import { RecordPayment } from '@/features/record-payment';
-import { isApiRouteAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { BlockTenant } from './BlockTenant';
 import { IssueOwnerCode } from './IssueOwnerCode';
-import {
-  AuditTab,
-  BillingTab,
-  ServicesTab,
-  StatsTab,
-  StoresTab,
-} from './CompanyTabs';
+import { BillingTab, ServicesTab, StatsTab, StoresTab } from './CompanyTabs';
 
-type Tab = 'stores' | 'billing' | 'services' | 'stats' | 'audit';
-
-// The tenant audit is shown where its route answers: only in the full mocks.
-const AUDIT = isApiRouteAvailable('tenants.audit');
+// No log tab: the actions of the employees of the network stay with its owner (ADR-0013 §5); the operators' actions
+// on it open from the link «Действия операторов» above (spec 2026-10-23-admin-store-card-tenant-log, A7).
+type Tab = 'stores' | 'billing' | 'services' | 'stats';
 
 function CompanyView() {
   const t = useTranslations('company');
@@ -180,15 +164,6 @@ function CompanyView() {
                     label: t('tabs.stats'),
                     panel: <StatsTab tenantId={company.id} />,
                   },
-                  ...(AUDIT
-                    ? ([
-                        {
-                          value: 'audit',
-                          label: t('tabs.audit'),
-                          panel: <AuditTab tenantId={company.id} />,
-                        },
-                      ] satisfies TabItem<Tab>[])
-                    : []),
                 ]}
               />
             </>

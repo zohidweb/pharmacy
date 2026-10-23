@@ -11,6 +11,7 @@ import {
   type DB,
   escapeLike,
   PLATFORM_TIME_ZONE,
+  platformDate,
   platformToday,
 } from '../../../core/database';
 
@@ -93,6 +94,46 @@ function likePattern(q: string): string {
 
 const dateOnly = (value: Date | string): string =>
   new Date(value).toISOString().slice(0, 10);
+
+interface StoreRegistryRow {
+  id: string;
+  tenantId: string;
+  name: string;
+  address: string;
+  mode: string;
+  status: string;
+  /** The day of the platform (Asia/Dushanbe) the store closed. */
+  closedOn: string | null;
+}
+
+// The registry columns only (ADR-0013 §5; the address — amendment 2026-10-23); the month comes from the marts (the
+// service), the offline figures with the offline part of the admin.
+function toStoreSummary(row: StoreRegistryRow): StoreSummary {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    name: row.name,
+    address: row.address,
+    mode: row.mode === 'online' ? 'cloud' : 'offline',
+    status: row.status === 'closed' ? 'closed' : 'active',
+    closedOn: row.closedOn,
+    licenseValidUntil: null,
+    lastSyncAt: null,
+    monthSalesMinor: 0,
+  };
+}
+
+// The registry columns of a store with its days in the time zone of the platform (a store created at 02:00 in
+// Dushanbe is created that day, not the day before in UTC).
+const STORE_CLOSED_ON = sql<string | null>`${platformDate(sql.ref('stores.closed_at'))}::text`;
+const STORE_CREATED_ON = sql<string>`${platformDate(sql.ref('stores.created_at'))}::text`;
+
+export interface StoreCardRow {
+  summary: StoreSummary;
+  tenantName: string;
+  /** Date-only. */
+  connectedOn: string;
+}
 
 function toListItem(row: TenantRow): TenantListItem {
   const overdueDebtMinor = Number(row.overdueDirams);
@@ -256,27 +297,51 @@ export class TenantsRepository {
     return row?.status ?? null;
   }
 
-  // The store registry: the columns granted to pharmacy_platform (no address — tenant data).
+  // The store registry: the columns granted to pharmacy_platform.
   async stores(trx: Transaction<DB>, tenantId: string): Promise<StoreSummary[]> {
     const rows = await trx
       .selectFrom('stores')
-      .select(['id', 'tenantId', 'name', 'mode', 'status', 'closedAt'])
+      .select([
+        'id',
+        'tenantId',
+        'name',
+        'address',
+        'mode',
+        'status',
+        STORE_CLOSED_ON.as('closedOn'),
+      ])
       .where('tenantId', '=', tenantId)
       .orderBy('name')
       .orderBy('id')
       .execute();
-    return rows.map((row) => ({
-      id: row.id,
-      tenantId: row.tenantId,
-      name: row.name,
-      address: '',
-      mode: row.mode === 'online' ? 'cloud' : 'offline',
-      status: row.status === 'closed' ? 'closed' : 'active',
-      closedOn: row.closedAt === null ? null : dateOnly(row.closedAt),
-      licenseValidUntil: null,
-      lastSyncAt: null,
-      monthSalesMinor: 0,
-    }));
+    return rows.map(toStoreSummary);
+  }
+
+  /** A store of the registry with the name of its network; null — no such store. */
+  async storeCard(trx: Transaction<DB>, storeId: string): Promise<StoreCardRow | null> {
+    const row = await trx
+      .selectFrom('stores')
+      .innerJoin('tenants', 'tenants.id', 'stores.tenantId')
+      .select([
+        'stores.id',
+        'stores.tenantId',
+        'stores.name',
+        'stores.address',
+        'stores.mode',
+        'stores.status',
+        STORE_CLOSED_ON.as('closedOn'),
+        STORE_CREATED_ON.as('connectedOn'),
+        'tenants.name as tenantName',
+      ])
+      .where('stores.id', '=', storeId)
+      .executeTakeFirst();
+    return row === undefined
+      ? null
+      : {
+          summary: toStoreSummary(row),
+          tenantName: row.tenantName,
+          connectedOn: row.connectedOn,
+        };
   }
 
   async provision(trx: Transaction<DB>, input: ProvisionInput): Promise<void> {

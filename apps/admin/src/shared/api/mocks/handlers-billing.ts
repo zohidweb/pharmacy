@@ -39,7 +39,7 @@ import {
 } from './db-billing';
 import { mockDb } from './db';
 import { demoOperator } from './fixtures';
-import { audit, findStore, findTenant, notFound } from './helpers';
+import { findStore, findTenant, notFound } from './helpers';
 import { logAction } from './log-action';
 import type { MockHandlers } from './types';
 
@@ -854,7 +854,6 @@ export const billingHandlers: Pick<
       syncSchedule: body.syncSchedule,
     };
     store.licenseValidUntil = validUntil;
-    audit(store.tenantId, 'Выдан лицензионный ключ', store.name);
     return license;
   },
   'licenses.renew': ({ params, body, correlationId }) => {
@@ -869,11 +868,6 @@ export const billingHandlers: Pick<
     store.licenseValidUntil = license.validUntil;
     if (store.license)
       Object.assign(store.license, { validUntil: license.validUntil });
-    audit(
-      license.tenantId,
-      `Ключ продлён до ${license.validUntil}`,
-      license.storeName,
-    );
     return license;
   },
   'licenses.revoke': ({ params, body, correlationId }) => {
@@ -881,11 +875,6 @@ export const billingHandlers: Pick<
     if (!license) throw notFound(correlationId);
     license.state = 'revoked';
     license.revokeReason = body.reason;
-    audit(
-      license.tenantId,
-      `Ключ отозван. Причина: ${body.reason}`,
-      license.storeName,
-    );
     return license;
   },
   'stores.offlineOptions': () =>
@@ -936,12 +925,7 @@ export const billingHandlers: Pick<
       ]);
     }
     installation.plannedUpdateAt = body.scheduledAt;
-    const store = findStore(params.storeId, correlationId);
-    audit(
-      store.tenantId,
-      `Запланировано обновление до ${body.targetVersion}`,
-      store.name,
-    );
+    findStore(params.storeId, correlationId);
     return installation;
   },
   'releases.list': () => billing().releases,

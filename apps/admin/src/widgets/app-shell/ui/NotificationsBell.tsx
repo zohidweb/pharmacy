@@ -75,27 +75,39 @@ export function NotificationsBell() {
             <ul className="m-0 flex list-none flex-col p-0">
               {items.map((item) => {
                 const { title, detail } = text(item.kind, item.params);
+                const href = eventHref(item.target);
+                const row = 'flex gap-3 px-4 py-3 text-sm';
+                const content = (
+                  <>
+                    <span className="mt-0.5 text-fg-muted">
+                      <Icon name={eventIcon[item.kind]} size="sm" />
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="font-medium text-fg">{title}</span>
+                      <span className="text-xs text-fg-subtle">{detail}</span>
+                      <span className="text-2xs text-fg-subtle">
+                        {formatDateTime(item.createdAt)}
+                      </span>
+                    </span>
+                  </>
+                );
                 return (
                   <li
                     key={item.id}
                     className="border-b border-border last:border-b-0"
                   >
-                    <Link
-                      href={eventHref(item.target)}
-                      onClick={close}
-                      className="flex gap-3 px-4 py-3 text-sm hover:bg-surface-sunken"
-                    >
-                      <span className="mt-0.5 text-fg-muted">
-                        <Icon name={eventIcon[item.kind]} size="sm" />
-                      </span>
-                      <span className="flex min-w-0 flex-col">
-                        <span className="font-medium text-fg">{title}</span>
-                        <span className="text-xs text-fg-subtle">{detail}</span>
-                        <span className="text-2xs text-fg-subtle">
-                          {formatDateTime(item.createdAt)}
-                        </span>
-                      </span>
-                    </Link>
+                    {/* no link where the screen has no API in this build */}
+                    {href ? (
+                      <Link
+                        href={href}
+                        onClick={close}
+                        className={`${row} hover:bg-surface-sunken`}
+                      >
+                        {content}
+                      </Link>
+                    ) : (
+                      <div className={row}>{content}</div>
+                    )}
                   </li>
                 );
               })}

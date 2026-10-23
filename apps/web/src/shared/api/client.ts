@@ -139,8 +139,7 @@ const fetchTransport: ApiTransport = async (route, options, correlationId) => {
 
 /**
  * Routes apps/api already serves (spec 2026-10-06-owner-stores, section 6): in the `partial` mocks
- * mode they go to the API, every other route to the mocks;
- * binding a terminal has no route in this client.
+ * mode they go to the API, every other route to the mocks.
  */
 export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'sessions.create',
@@ -153,6 +152,7 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'me.changePassword',
   'me.changePin',
   'me.terminals',
+  'terminals.bind',
   'terminals.current',
   'terminals.unbind',
   'terminalSessions.create',

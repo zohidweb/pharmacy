@@ -2,6 +2,7 @@ import type { Permission } from '@pharmacy/shared-domain';
 import type { EmployeeSession, NavCounters } from '@pharmacy/shared-dto';
 import type { IconName } from '@pharmacy/ui';
 import { can } from '@/entities/session';
+import { isApiRouteAvailable, type ApiRouteKey } from '@/shared/api';
 import { routes, type StaticRouteName } from '@/shared/config';
 
 export type NavSectionKey =
@@ -27,6 +28,8 @@ export interface NavItem {
   permission: Permission;
   /** False for screens of the next stages: shown, but not a link yet. */
   ready: boolean;
+  /** The route the screen loads; the item is hidden in a build where it does not answer. */
+  api?: ApiRouteKey;
   /**
    * Number of waiting work next to the item (spec 2026-10-15-nav-counters, E10): a positive number
    * turns the item into a link to the screen filtered by that work at the working store.
@@ -231,19 +234,25 @@ export const navigation: NavSection[] = [
         icon: 'refresh-cw',
         permission: 'sync:view',
         ready: true,
+        // offline stores are not in the pilot: apps/api has no owner's sync screen yet
+        api: 'sync.stores',
       },
     ],
   },
 ];
 
-/** Sections and items the session may open; empty sections are dropped. */
+/** Sections and items the session may open in this build; empty sections are dropped. */
 export function visibleNavigation(
   session: EmployeeSession | null | undefined,
 ): NavSection[] {
   return navigation
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => can(session, item.permission)),
+      items: section.items.filter(
+        (item) =>
+          can(session, item.permission) &&
+          (!item.api || isApiRouteAvailable(item.api)),
+      ),
     }))
     .filter((section) => section.items.length > 0);
 }

@@ -125,6 +125,7 @@ import type {
   WriteOffInput,
   WriteOffListQuery,
   WriteOffListResponse,
+  BindTerminalRequest,
   BoundTerminal,
   CashMovementRequest,
   CatalogSnapshot,
@@ -218,6 +219,10 @@ export const apiRoutes = {
     () => '/activations',
   ),
 
+  'terminals.bind': route<BoundTerminal, BindTerminalRequest>(
+    'POST',
+    () => '/terminals',
+  ),
   'terminals.current': route<BoundTerminal>('GET', () => '/terminals/current'),
   'terminals.unbind': route<void, undefined, { id: string }>(
     'DELETE',

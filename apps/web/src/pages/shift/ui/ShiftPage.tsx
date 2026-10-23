@@ -42,6 +42,7 @@ import {
   useOutboxCounts,
   useTerminalRuntime,
 } from '@/entities/terminal';
+import { BindTerminalButton } from '@/features/bind-terminal';
 import { apiRequest, useApiCodeMessage } from '@/shared/api';
 import type {
   PosOutboxRecord,
@@ -615,6 +616,7 @@ function ShiftPageView() {
             icon="lock"
             title={t('noTerminal')}
             description={t('noTerminalHint')}
+            action={<BindTerminalButton variant="primary" unboundOnly />}
           />
         </div>
       </>

@@ -346,6 +346,7 @@ export function NotificationsPage() {
                 <ul className="m-0 flex list-none flex-col p-0">
                   {data.items.map((item) => {
                     const { title, detail } = text(item.kind, item.params);
+                    const href = eventHref(item.target);
                     return (
                       <li
                         key={item.id}
@@ -378,12 +379,14 @@ export function NotificationsPage() {
                             {formatDateTime(item.createdAt)}
                           </span>
                         </div>
-                        <Link
-                          href={eventHref(item.target)}
-                          className="text-sm text-primary hover:text-primary-hover"
-                        >
-                          {t('open')}
-                        </Link>
+                        {href && (
+                          <Link
+                            href={href}
+                            className="text-sm text-primary hover:text-primary-hover"
+                          >
+                            {t('open')}
+                          </Link>
+                        )}
                       </li>
                     );
                   })}

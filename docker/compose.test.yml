@@ -19,6 +19,8 @@ services:
         limits: { cpus: '0.5', memory: 384m }
   api:
     restart: unless-stopped
+    # Diagnostics only, on 127.0.0.1; with TRUST_PROXY=1 a local client of this port sets its own req.ip through
+    # X-Forwarded-For — the way in for testers is the proxy.
     ports:
       - '127.0.0.1:${API_PORT:?set in the env file}:3000'
     deploy:

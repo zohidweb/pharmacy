@@ -35,11 +35,14 @@
 6. Каталог копий БД (ADR-0019) — `BACKUP_DIR` env-файла, владелец uid 70 (postgres в образе):
    `install -d -o 70 -g 70 -m 700 /srv/pharmacy-backups/prod`. На VPS один диск: копии на нём не переживут потерю
    сервера — до выгрузки копий вне хоста (`age` + `rclone`, ADR-0020, ещё не сделана) реальные данные не вносить.
-7. Команды compose пользователя `deploy` — одни на все шаги ниже (`~/.bashrc`):
+7. Команды compose пользователя `deploy` — одни на все шаги ниже (`~/.bashrc`). Тег образов — `IMAGE_TAG` сессии, иначе
+   тег работающей выкладки из `/opt/pharmacy/image-tag` (шаг 4); без тега `dc` не запускается: compose взял бы тег
+   `local`, которого на хосте нет (образы не скачиваются — `pull_policy: never`).
 
    ```bash
-   dc() { (cd /opt/pharmacy && docker compose --project-name pharmacy-prod --env-file docker/env/prod.env \
-     -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml "$@"); }
+   dc() ( export IMAGE_TAG="${IMAGE_TAG:-$(cat /opt/pharmacy/image-tag 2>/dev/null)}"; : "${IMAGE_TAG:?export IMAGE_TAG=<sha>}"
+     cd /opt/pharmacy && docker compose --project-name pharmacy-prod --env-file docker/env/prod.env \
+       -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml "$@" )
    pb() { dc exec -T -u postgres -e TZ=Asia/Dushanbe postgres pharmacy-backup "$@"; }
    ```
 
@@ -91,12 +94,12 @@ ssh deploy@<IP>
 export IMAGE_TAG=<sha>
 dc up -d --no-build --wait postgres
 dc exec -T postgres psql -q -v ON_ERROR_STOP=1 -U postgres -d pharmacy -f /docker-entrypoint-initdb.d/04-backup-role.sql
-dc up -d --no-build --wait
+dc up -d --no-build --wait && echo "$IMAGE_TAG" > /opt/pharmacy/image-tag
 dc ps
 ```
 
 Второй шаг `npm run stack -- prod up` делает сам: создаёт или обновляет роль `pharmacy_backup` по паролю из env-файла
-(ADR-0019).
+(ADR-0019). `image-tag` — тег работающей выкладки для `dc` в следующих сессиях.
 
 Первый старт proxy выпускает сертификаты Let's Encrypt: нужны DNS из шага 1.2 и открытый 80-й порт. Ошибка выпуска —
 в `dc logs proxy`. Том `pharmacy-prod_proxy-data` хранит ключ ACME-аккаунта и сертификаты — не удалять.
@@ -121,7 +124,14 @@ curl -s -o /dev/null -w '%{http_code}\n' https://admin.nurmed.online/       # 40
 
 ## 7. Откат
 
-Предыдущий тег: `export IMAGE_TAG=<прежний sha>` и `dc up -d --no-build --wait`. Если новая версия применила миграции —
+Прежний тег — вместе с compose-файлами его коммита: новые файлы могут требовать сервис или образ, которого у прежнего
+тега нет. На своей машине:
+
+```bash
+for f in compose.yml compose.prod.yml compose.backup.yml; do git show <прежний sha>:docker/$f | ssh deploy@<IP> "cat > /opt/pharmacy/docker/$f"; done
+```
+
+Затем на хосте `export IMAGE_TAG=<прежний sha>` и `dc up -d --no-build --wait && echo "$IMAGE_TAG" > /opt/pharmacy/image-tag`. Если новая версия применила миграции —
 откат кода без отката БД возможен не всегда: восстановить снимок диска из шага 4.
 
 ## Ежедневно, пока нет мониторинга

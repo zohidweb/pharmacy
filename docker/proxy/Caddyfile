@@ -12,11 +12,13 @@
 	http_port {$PROXY_HTTP_PORT:80}
 	https_port {$PROXY_HTTPS_PORT:443}
 	servers {
-		# Caddy has no server timeouts by default: slow clients would hold connections forever.
+		# Caddy has no server timeouts by default: slow clients would hold connections forever. read_body fits a 10 MiB
+		# import over a ~1 Mbit/s uplink; write counts from the request headers, so it covers the body, the 120 s answer
+		# of sync and imports and the response (ADR-0012, amendment 2026-10-23).
 		timeouts {
 			read_header 10s
-			read_body 60s
-			write 120s
+			read_body 120s
+			write 300s
 			idle 2m
 		}
 	}
@@ -72,20 +74,21 @@
 	handle @operator {
 		respond 404
 	}
-	# offline store batches: up to 2 MB of JSON after gzip, checked by the API body parser (ADR-0014)
+	# Sizes in MiB, as the API counts them (a cap below the API's would answer an empty 413 instead of its problem).
+	# offline store batches: up to 2 MiB of JSON after gzip, checked by the API body parser (ADR-0014)
 	handle /api/v1/sync/* {
 		request_body {
-			max_size 4MB
+			max_size 4MiB
 		}
 		encode zstd gzip
 		import upstream 120s
 	}
-	# data import from a file (spec 2026-10-20-data-import, F19)
+	# data import from a file (spec 2026-10-20-data-import, F19); before /api/*, which would cap it at 1 MiB
 	@imports path_regexp ^/api/v1/(catalog|opening-balance|supplier)-imports(/checks)?/?$
 	handle @imports {
 		import plain-body
 		request_body {
-			max_size 10MB
+			max_size 10MiB
 		}
 		encode zstd gzip
 		import upstream 120s
@@ -93,7 +96,7 @@
 	handle /api/* {
 		import plain-body
 		request_body {
-			max_size 1MB
+			max_size 1MiB
 		}
 		encode zstd gzip
 		import upstream 30s
@@ -106,7 +109,7 @@
 	handle @operator {
 		import plain-body
 		request_body {
-			max_size 1MB
+			max_size 1MiB
 		}
 		encode zstd gzip
 		import upstream 30s
@@ -129,8 +132,9 @@
 		}
 		header /_next/static/* Cache-Control "public, max-age=31536000, immutable"
 		header ?Cache-Control "no-cache"
-		# trailingSlash is false in the export: /stock/ → /stock instead of a 404
-		@trailing path_regexp trailing ^(.+)/$
+		# trailingSlash is false in the export: /stock/ → /stock instead of a 404. Only plain route segments: the decoded
+		# path may hold a backslash or a tab, and /%5Cevil.com/ would redirect to /\evil.com — another site for a browser.
+		@trailing path_regexp trailing ^((?:/[A-Za-z0-9._~-]+)+)/$
 		redir @trailing {re.trailing.1}{?query} 308
 		try_files {path} {path}.html {path}/index.html
 		file_server {
@@ -142,6 +146,8 @@
 # handle_errors belongs to the site block itself: apart from the files, so the admin site can nest those in a handle.
 (static-errors) {
 	handle_errors 404 {
+		# not the immutable of /_next/static/*: a missing file must not stay missing in the browser for a year
+		header Cache-Control "no-cache"
 		rewrite * /404.html
 		file_server
 	}

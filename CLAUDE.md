@@ -273,7 +273,10 @@ npm run test-env:up            # запуск и ожидание healthy;  test
 npm run prod:build / prod:up / prod:down
 ```
 
-- Скрипт: `tools/scripts/stack.mjs`; compose: `docker/compose.yml` + `docker/compose.<env>.yml`.
+- Скрипт: `tools/scripts/stack.mjs`; compose: `docker/compose.yml` + `docker/compose.<env>.yml` (+ `compose.backup.yml`
+  в test и prod — без него compose отказывает: `backup` в `compose.<env>.yml` только дополняется). Образы `pharmacy/*`
+  собираются локально и никогда не скачиваются (`pull_policy: never`): неверный `IMAGE_TAG` — ошибка, а не чужой
+  образ с Docker Hub.
 - `build` — ручной quality gate, пока workflow-файлы CI не созданы (ADR-0009): lint + test всех
   проектов, затем сборка. Для prod `--skip-checks` запрещён, а сборка — только из чистого дерева
   git (тег образа = короткий sha; у test с незакоммиченными изменениями — `<sha>-dirty`).
@@ -295,11 +298,11 @@ npm run prod:build / prod:up / prod:down
   `WEB_ORIGIN`/`ADMIN_ORIGIN` (проверка `Origin` в API) должны совпадать с адресами proxy, `TRUST_PROXY=1`.
   `OPERATOR_ALLOW` обязателен: в test — `private_ranges` (локально клиенты приходят из сети Docker; на общем стенде —
   адреса тестировщиков), в prod — публичные IP офисов операторов или VPN.
-  В env-файле, созданном до proxy, `stack init` допишет новые переменные, но старые `WEB_ORIGIN`/`ADMIN_ORIGIN` и
-  закомментированный `TRUST_PROXY` нужно поправить вручную.
+  В env-файле, созданном до proxy, `stack init` допишет новые переменные (и `TRUST_PROXY=1` — закомментированная строка
+  не считается), но старые `WEB_ORIGIN`/`ADMIN_ORIGIN` нужно поправить вручную.
 - test локально: HTTPS на `*.localhost` с локальным УЦ Caddy (`tls internal`). Корневой сертификат тома
   `pharmacy-test_proxy-data` доверить один раз (иначе браузер не примет cookie `__Host-*`):
-  `docker compose --project-name pharmacy-test --env-file docker/env/test.env -f docker/compose.yml -f docker/compose.test.yml cp proxy:/data/caddy/pki/authorities/local/root.crt caddy-test-root.crt`,
+  `docker compose --project-name pharmacy-test --env-file docker/env/test.env -f docker/compose.yml -f docker/compose.test.yml -f docker/compose.backup.yml cp proxy:/data/caddy/pki/authorities/local/root.crt caddy-test-root.crt`,
   затем `certutil -addstore -user Root caddy-test-root.crt` (Windows, текущий пользователь); файл после этого удалить.
 - prod — VPS Contabo по ADR-0020: DNS A-записи `app.`, `admin.` и apex `nurmed.online` на IP сервера и открытый 80-й
   порт до первого старта (Let's Encrypt), `ACME_EMAIL` обязателен; том `pharmacy-prod_proxy-data` хранит ключ
@@ -354,7 +357,7 @@ npm run prod:build / prod:up / prod:down
     `POSTGRES_SUPERUSER_PASSWORD` env-файла. Поэтому перед первой выкладкой этих правил на существующий кластер его
     нужно проверить (ответ `1`):
     `docker compose --project-name pharmacy-<env> --env-file docker/env/<env>.env -f docker/compose.yml -f
-    docker/compose.<env>.yml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$(hostname -i)" -U
+    docker/compose.<env>.yml -f docker/compose.backup.yml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$(hostname -i)" -U
     "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select 1"'`.
   - Если пароль разошёлся и `up` уже упал:
     1. в контейнере `postgres` выполнить
@@ -376,7 +379,7 @@ npm run prod:build / prod:up / prod:down
   `docker/proxy/profiles/`. На `app.` — статика web и весь `/api`, кроме `/api/v1/operator/*` (404); на `admin.` — статика
   admin и только `/api/v1/operator/*` — и то лишь адресам `OPERATOR_ALLOW` (CIDR через пробел: офисы операторов, VPN;
   по адресу соединения, без `X-Forwarded-For`), остальным 403 (ревью безопасности 2026-10-22, A1; поправка ADR-0012
-  2026-10-23). Лимиты тела: `/api` 1 MB, `/api/v1/sync/*` 4 MB, загрузки `*-imports` 10 MB; сжатое тело
+  2026-10-23). Лимиты тела (MiB, как в API): `/api` 1, `/api/v1/sync/*` 4, загрузки `*-imports` 10; сжатое тело
   (`Content-Encoding`) вне sync — 415; ответы `/api` — `Cache-Control: no-store` (эшелоны к A3 и P1 в API).
   Без SPA-fallback: маршрут — свой HTML, неизвестный путь — `404.html` со статусом 404. HSTS ставит только proxy
   (`acme`/`files`), helmet API его не шлёт. В dev proxy не запускается (compose-профиль `proxy`). Образ сначала собирает
@@ -401,7 +404,7 @@ npm run prod:build / prod:up / prod:down
   `ACTIVATION_CODE_TTL_HOURS`, по умолчанию 72 ч). Стек должен быть поднят (`npm run stack -- <env> up`):
 
   ```
-  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose --project-name pharmacy-<test|prod>     --env-file docker/env/<test|prod>.env -f docker/compose.yml -f docker/compose.<test|prod>.yml     run --rm --no-deps api node scripts/create-activation-code.mjs --login <логин|телефон|e-mail>
+  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose --project-name pharmacy-<test|prod>     --env-file docker/env/<test|prod>.env -f docker/compose.yml -f docker/compose.<test|prod>.yml -f docker/compose.backup.yml     run --rm --no-deps api node scripts/create-activation-code.mjs --login <логин|телефон|e-mail>
   ```
 
   `IMAGE_TAG` — тег образа, собранного `build` (короткий sha; у test с незакоммиченными изменениями —

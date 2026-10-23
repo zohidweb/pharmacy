@@ -5,7 +5,11 @@ import {
   piecePriceMinor,
 } from '@pharmacy/shared-domain';
 import type { ControlledSaleData, CreatedReceipt } from '@pharmacy/shared-dto';
-import { requireTenantId } from '../../common/context/request-context';
+import {
+  getPrincipal,
+  getTerminal,
+  requireTenantId,
+} from '../../common/context/request-context';
 import {
   type FieldError,
   FieldProblemException,
@@ -24,6 +28,7 @@ import { PosIdempotency } from './idempotency';
 import {
   ONLINE_WITHIN_MS,
   PosContext,
+  type PosOperation,
   terminalAuthor,
   terminalVia,
 } from './pos-context';
@@ -33,6 +38,12 @@ import {
   checkArithmetic,
   discountShares,
 } from './receipt-pricing';
+import {
+  discountError,
+  mayAcceptDiscrepancy,
+  priceErrors,
+  PriceRulesViolated,
+} from './receipt-rules';
 import {
   type DiscrepancyKind,
   type ReceiptLineValues,
@@ -48,6 +59,8 @@ const NOTE_FIELDS: Array<keyof ControlledSaleData> = [
   'buyerName',
   'buyerDocument',
 ];
+
+const HOUR_MS = 3_600_000;
 
 const invalid = (errors: FieldError[]) =>
   new FieldProblemException(400, 'validation_failed', errors);
@@ -66,7 +79,9 @@ function noteOf(data: ControlledSaleData | null): Record<string, string> | null 
 // The sale of a cloud store (spec 2026-10-13-pos-shift-sale, 4.5; ADR-0015 «продажа — факт»): the
 // receipt, its lines (one batch each), payments, ПКУ records and `sale` movements in one
 // transaction under its idempotency key. Only what cannot be a fact even after the sale is refused
-// (E6); stock, price, discount, catalog, author and closed-period differences are marks (E5).
+// (E6); stock, price, discount, catalog, author and closed-period differences are marks (E5). A price or a discount
+// that was never the store's is refused, unless a manager accepts it (security review 2026-10-22, I2; ADR-0015,
+// amendment 2026-10-23).
 @Injectable()
 export class ReceiptsService {
   constructor(
@@ -87,6 +102,7 @@ export class ReceiptsService {
     body: CreateReceiptDto,
     key: string | undefined,
     sentAt?: string,
+    acceptDiscrepancy = false,
   ): Promise<CreatedReceipt> {
     this.idempotency.checkHeader(key, body.id);
     this.context.requireStore(body.storeId);
@@ -103,6 +119,38 @@ export class ReceiptsService {
     const op = await this.context.operation(body, 'pos:create', sentAt, {
       shiftId: body.shiftId.toLowerCase(),
     });
+    try {
+      return await this.accept(body, id, op, acceptDiscrepancy);
+    } catch (error) {
+      // a refused receipt leaves only this trace for the owner's journal (I2): nothing of the sale is written
+      if (error instanceof PriceRulesViolated) {
+        await this.db.tenantTransaction((trx) =>
+          this.audit.append(trx, {
+            action: 'receipt.refused',
+            entityType: 'receipt',
+            entityId: id,
+            storeId: op.storeId,
+            ...terminalAuthor(op),
+            details: {
+              ...terminalVia(op),
+              shiftId: body.shiftId.toLowerCase(),
+              authorId: op.author.id,
+              totalMinor: body.totalMinor,
+              errors: error.errors,
+            },
+          }),
+        );
+      }
+      throw error;
+    }
+  }
+
+  private accept(
+    body: CreateReceiptDto,
+    id: string,
+    op: PosOperation,
+    acceptDiscrepancy: boolean,
+  ): Promise<CreatedReceipt> {
     const { tenantId, storeId } = op;
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, tenantId, 'receipt', id, body, 201, async () => {
@@ -192,6 +240,78 @@ export class ReceiptsService {
           kinds.add('closed_period');
         }
 
+        // the price and the discount by the rules of the store (I2): the current ones, or those of the moment of the
+        // POS snapshot when it is not older than the buffer of the network allows (ADR-0015, amendment 2026-10-23)
+        const snapshotAt = new Date(
+          Math.min(body.priceListVersion, op.receivedAt.getTime()),
+        );
+        const snapshotUsable =
+          snapshotAt.getTime() >=
+          soldAt.getTime() - settings.bufferLimits.maxHours * HOUR_MS;
+        const then = snapshotUsable
+          ? await this.prices.packPricesAt(
+              trx,
+              tenantId,
+              storeId,
+              productIds,
+              snapshotAt,
+            )
+          : new Map<string, number>();
+        const snapshotDate = snapshotUsable
+          ? await this.repository.businessDate(trx, tenantId, snapshotAt)
+          : businessDate;
+        const snapshotTiers =
+          snapshotDate === businessDate
+            ? []
+            : await this.prices.activeTiers(trx, tenantId, storeId, snapshotDate);
+        const unitPriceOf = (
+          line: CreateReceiptDto['lines'][number],
+          packDirams: number | undefined,
+        ): number | null => {
+          const product = products.get(
+            line.productId.toLowerCase(),
+          ) as PosCatalogProduct;
+          if (packDirams === undefined) return null;
+          if (line.unit === 'pack') return packDirams;
+          return product.divisible && product.piecesPerPack > 1
+            ? piecePriceMinor(
+                packDirams,
+                product.piecesPerPack,
+                current.get(product.id)?.ownPieceDirams ?? null,
+                settings.pieceStepDirams,
+              )
+            : null;
+        };
+        const nowPrices = body.lines.map((line) =>
+          unitPriceOf(line, current.get(line.productId.toLowerCase())?.packDirams),
+        );
+        const ruleErrors = priceErrors(
+          body.lines.map((line, i) => ({
+            unitPriceMinor: line.unitPriceMinor,
+            allowed: [
+              nowPrices[i],
+              unitPriceOf(line, then.get(line.productId.toLowerCase())),
+            ],
+          })),
+        );
+        const discountRefused = discountError(body, [...tiers, ...snapshotTiers]);
+        if (discountRefused) ruleErrors.push(discountRefused);
+        let acceptedBy: string | null = null;
+        if (ruleErrors.length > 0) {
+          // «Принять расхождение»: the employee of the request, never the author, with the rights on the store; under
+          // the terminal — the session the request came with
+          const principal =
+            getPrincipal() ?? getTerminal()?.sessionPrincipal ?? null;
+          if (
+            !acceptDiscrepancy ||
+            principal === null ||
+            !mayAcceptDiscrepancy(principal, storeId, ruleErrors)
+          ) {
+            throw new PriceRulesViolated(ruleErrors);
+          }
+          acceptedBy = principal.employeeId;
+        }
+
         const number = await this.numbering.next(
           trx,
           tenantId,
@@ -220,20 +340,7 @@ export class ReceiptsService {
           left.set(batch.id, after);
           const shortfall = after < 0 ? Math.min(pieces, -after) : 0;
           if (shortfall > 0) kinds.add('stock');
-          const price = current.get(product.id);
-          const now =
-            price === undefined
-              ? null
-              : line.unit === 'pack'
-                ? price.packDirams
-                : product.divisible && product.piecesPerPack > 1
-                  ? piecePriceMinor(
-                      price.packDirams,
-                      product.piecesPerPack,
-                      price.ownPieceDirams,
-                      settings.pieceStepDirams,
-                    )
-                  : null;
+          const now = nowPrices[i];
           const priceDiffers = now !== line.unitPriceMinor;
           if (priceDiffers) kinds.add('price');
           const controlled = line.controlled !== null;
@@ -360,6 +467,9 @@ export class ReceiptsService {
             authorId: author.id,
             totalMinor: body.totalMinor,
             discrepancyKinds,
+            ...(acceptedBy === null
+              ? {}
+              : { acceptedBy, acceptedErrors: ruleErrors }),
           },
         });
         return {

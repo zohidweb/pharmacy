@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import type { TenantTransaction } from '../../core/database';
+import { PriceChanges } from '../audit/price-changes';
 import { PricingRepository } from './pricing.repository';
+
+/**
+ * A snapshot read while a price change was being written may still show the old price: the history is asked a moment
+ * earlier than the version of the snapshot.
+ */
+const PRICE_HISTORY_SKEW_MS = 5_000;
 
 /** The price of a product at a store: a pack, and the own piece price if set. */
 export interface StorePrice {
@@ -21,7 +28,10 @@ export interface ActiveTier {
 // store only through it. Runs in the caller's transaction.
 @Injectable()
 export class StorePricesReader {
-  constructor(private readonly repository: PricingRepository) {}
+  constructor(
+    private readonly repository: PricingRepository,
+    private readonly changes: PriceChanges,
+  ) {}
 
   /** Prices of the store that have a pack price: of the products, or every one (null). */
   async pricesOfStore(
@@ -47,6 +57,40 @@ export class StorePricesReader {
         },
       ]),
     );
+  }
+
+  /**
+   * The pack prices of the store at a moment — of a POS catalog snapshot (security review 2026-10-22, I2): the price
+   * before the first change after it, else the current one. A product absent from the map had no price then.
+   */
+  async packPricesAt(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    productIds: readonly string[],
+    at: Date,
+  ): Promise<Map<string, number>> {
+    const current = await this.pricesOfStore(
+      trx,
+      tenantId,
+      storeId,
+      productIds,
+    );
+    const before = await this.changes.oldPricesAfter(
+      trx,
+      tenantId,
+      storeId,
+      productIds,
+      new Date(at.getTime() - PRICE_HISTORY_SKEW_MS),
+    );
+    const prices = new Map<string, number>();
+    for (const productId of productIds) {
+      const price = before.has(productId)
+        ? before.get(productId)
+        : current.get(productId)?.packDirams;
+      if (price !== undefined && price !== null) prices.set(productId, price);
+    }
+    return prices;
   }
 
   /** Products whose price at the store changed after a moment. */

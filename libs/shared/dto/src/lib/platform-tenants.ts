@@ -126,27 +126,25 @@ export interface SyncHistoryEntry {
 export type SyncQueueKind =
   'sales' | 'returns' | 'stock_movements' | 'price_changes';
 
+/**
+ * GET /operator/stores/{id} (`tenants:view`; spec 2026-10-23-admin-store-card-tenant-log): what the platform may see —
+ * the store registry, the statistics marts and the platform tables (ADR-0013 §5). No employees of the store; the
+ * owner of the network edits the store, the operator does not. 404 `not_found`.
+ */
 export interface StoreDetails extends StoreSummary {
   tenantName: string;
-  managerName: string;
-  managerPhone: string;
-  cashiers: number;
-  /** Date-only. */
+  /** Date-only: when the store was created. */
   connectedOn: string;
-  installedVersion: string | null;
-  latestVersion: string;
+  /** Receipts of the current month (Asia/Dushanbe) from the marts; `monthSalesMinor` — their sum. */
   monthReceipts: number;
+  /** The time of the last refresh of the marts of the network; null — never refreshed. */
+  asOf: string | null;
+  /** The offline part of the admin is not in the pilot: null and empty until it is (A5). */
+  installedVersion: string | null;
+  latestVersion: string | null;
   license: StoreLicense | null;
   syncHistory: SyncHistoryEntry[];
   syncQueue: Array<{ kind: SyncQueueKind; operations: number }>;
-}
-
-/** PATCH /operator/stores/{id} */
-export interface UpdateStoreRequest {
-  name: string;
-  address: string;
-  managerName: string;
-  managerPhone: string;
 }
 
 /** PATCH /operator/stores/{id}/license-settings */
@@ -219,15 +217,6 @@ export interface TenantStats {
   daily: TenantDailySales[];
   /** The time of the last refresh of the marts of the network; null — never refreshed. */
   asOf: string | null;
-}
-
-export interface AuditEntry {
-  id: string;
-  at: string;
-  actorName: string;
-  actorIsPlatformOperator: boolean;
-  storeName: string | null;
-  action: string;
 }
 
 // ── Create tenant (wizard) ────────────────────────────────────────────────────────────────

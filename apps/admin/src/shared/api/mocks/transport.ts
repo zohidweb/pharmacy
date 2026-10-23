@@ -17,7 +17,7 @@ import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { billingHandlers } from './handlers-billing';
 import { systemHandlers } from './handlers-system';
-import { audit, findStore, findTenant } from './helpers';
+import { findStore, findTenant } from './helpers';
 import type { MockHandlers, MockRequest } from './types';
 import { tenantBilling } from './billing-ledger';
 import { mockDb, mockStats } from './db';
@@ -238,7 +238,6 @@ const handlers: MockHandlers = {
       advanceMinor: 0,
       discount: null,
     });
-    audit(id, 'Компания создана оператором платформы');
     // Synthetic value: the real code is 128 bits of randomBytes (ADR-0008, amendment 2026-10-02).
     return {
       id,
@@ -251,7 +250,6 @@ const handlers: MockHandlers = {
     if (tenant.status === 'blocked') {
       throw new ApiError(409, 'tenant_blocked', correlationId);
     }
-    audit(tenant.id, 'Оператор выдал владельцу новый код активации');
     return {
       activationCode: 'MOCKNEWOWNERCODE0000000000',
       activationCodeExpiresAt: mockCodeExpiresAt(),
@@ -272,7 +270,6 @@ const handlers: MockHandlers = {
       blockedBy: demoOperator.fullName,
       reason: body.reason,
     };
-    audit(tenant.id, `Компания заблокирована. Причина: ${body.reason}`);
     return tenant;
   },
   'tenants.unblock': ({ params, correlationId }) => {
@@ -282,7 +279,6 @@ const handlers: MockHandlers = {
     }
     tenant.status = 'active';
     tenant.block = null;
-    audit(tenant.id, 'Компания разблокирована');
     return tenant;
   },
   'tenants.stores': ({ params, correlationId }) => {
@@ -301,42 +297,19 @@ const handlers: MockHandlers = {
     findTenant(params.id, correlationId);
     return mockStats(params.id);
   },
-  'tenants.audit': ({ params, query }) => {
-    const items = mockDb().audit[params.id] ?? [];
-    const limit = query?.limit ?? 20;
-    const offset = query?.offset ?? 0;
-    return {
-      items: items.slice(offset, offset + limit),
-      total: items.length,
-      limit,
-      offset,
-    };
-  },
 
   'stores.get': ({ params, correlationId }) =>
     findStore(params.id, correlationId),
-  'stores.update': ({ params, body, correlationId }) => {
-    const target = findStore(params.id, correlationId);
-    Object.assign(target, body);
-    audit(target.tenantId, 'Изменены параметры точки', target.name);
-    return target;
-  },
   'stores.updateLicenseSettings': ({ params, body, correlationId }) => {
     const target = findStore(params.id, correlationId);
     if (!target.license) throw new ApiError(409, 'not_offline', correlationId);
     target.license = { ...target.license, ...body };
-    audit(
-      target.tenantId,
-      'Изменены параметры лицензии и синхронизации',
-      target.name,
-    );
     return target;
   },
   'stores.requestSync': ({ params, correlationId }) => {
     const target = findStore(params.id, correlationId);
     if (target.mode !== 'offline')
       throw new ApiError(409, 'not_offline', correlationId);
-    audit(target.tenantId, 'Запрошена внеочередная синхронизация', target.name);
   },
   'stores.migrateToCloud': ({ params, body, correlationId }) => {
     const target = findStore(params.id, correlationId);
@@ -350,7 +323,6 @@ const handlers: MockHandlers = {
       license: null,
       licenseValidUntil: null,
     });
-    audit(target.tenantId, 'Точка переведена в облако', target.name);
     return target;
   },
 };

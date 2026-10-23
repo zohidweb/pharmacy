@@ -5,6 +5,7 @@ import type {
   CreateTenantRequest,
   CreateTenantResponse,
   IssueOwnerCodeResponse,
+  StoreDetails,
   StoreSummary,
   TenantDetails,
   TenantListResponse,
@@ -25,6 +26,7 @@ import {
 } from '../../auth/activation-code';
 import { normalizeIdentifier } from '../../auth/identifier';
 import { PlatformAuditService } from '../audit/platform-audit.service';
+import { StoreMonthSales } from '../stats/store-month-sales';
 import { type TenantListParams, TenantsRepository } from './tenants.repository';
 
 // The owner role of every new network (ADR-0018: the system role «Владелец», the whole catalog).
@@ -78,6 +80,7 @@ export class TenantsService {
     private readonly repository: TenantsRepository,
     private readonly sessions: SessionStore,
     private readonly audit: PlatformAuditService,
+    private readonly storeSales: StoreMonthSales,
     config: ConfigService,
   ) {
     this.codeTtlHours = config.getOrThrow<number>('ACTIVATION_CODE_TTL_HOURS');
@@ -108,6 +111,31 @@ export class TenantsService {
       if ((await this.repository.status(trx, tenantId)) === null) throw notFound();
       return this.repository.stores(trx, tenantId);
     });
+  }
+
+  /**
+   * The card of a store (spec 2026-10-23-admin-store-card-tenant-log, A1–A5): the registry, the month from the
+   * marts (refreshed first when stale) and nothing of the employees; the offline part stays empty.
+   */
+  async store(storeId: string): Promise<StoreDetails> {
+    const card = await this.db.platformTransaction(this.actor(), (trx) =>
+      this.repository.storeCard(trx, storeId),
+    );
+    if (card === null) throw notFound();
+    const month = await this.storeSales.of(card.summary.tenantId, card.summary.id);
+    return {
+      ...card.summary,
+      monthSalesMinor: month.salesMinor,
+      tenantName: card.tenantName,
+      connectedOn: card.connectedOn,
+      monthReceipts: month.receipts,
+      asOf: month.asOf,
+      installedVersion: null,
+      latestVersion: null,
+      license: null,
+      syncHistory: [],
+      syncQueue: [],
+    };
   }
 
   async create(request: CreateTenantRequest): Promise<CreateTenantResponse> {

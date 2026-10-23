@@ -1,7 +1,6 @@
 'use client';
 
 import type {
-  AuditEntry,
   StoreSummary,
   TenantInvoiceItem,
   TenantServiceItem,
@@ -19,17 +18,13 @@ import {
   DataTable,
   EmptyState,
   KpiTile,
-  Pagination,
-  StatusPill,
   type DataTableColumn,
 } from '@pharmacy/ui';
 import Link from 'next/link';
-import { useState } from 'react';
 import { useFormatter, useTranslations } from 'use-intl';
 import { InvoiceStatusPill } from '@/entities/invoice';
 import { StoreModePill, StoreStatusPill } from '@/entities/store';
 import {
-  useTenantAudit,
   useTenantInvoices,
   useTenantPayments,
   useTenantServices,
@@ -42,11 +37,8 @@ import {
   TenantServiceActions,
   TenantServiceStatusPill,
 } from '@/features/tenant-service-actions';
-import { isApiRouteAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { AsOfNote, QueryState } from '@/shared/ui';
-
-const storeCardAvailable = isApiRouteAvailable('stores.get');
 
 export function StoresTab({ tenantId }: { tenantId: string }) {
   const t = useTranslations('company.stores');
@@ -57,17 +49,12 @@ export function StoresTab({ tenantId }: { tenantId: string }) {
       header: t('columns.store'),
       cell: (store) => (
         <div className="flex flex-col">
-          {/* the store card has no API yet: no link where its route does not answer */}
-          {storeCardAvailable ? (
-            <Link
-              href={routes.store(store.id)}
-              className="font-medium text-fg hover:text-primary"
-            >
-              {store.name}
-            </Link>
-          ) : (
-            <span className="font-medium text-fg">{store.name}</span>
-          )}
+          <Link
+            href={routes.store(store.id)}
+            className="font-medium text-fg hover:text-primary"
+          >
+            {store.name}
+          </Link>
           <span className="text-xs text-fg-subtle">{store.address}</span>
         </div>
       ),
@@ -373,75 +360,6 @@ export function StatsTab({ tenantId }: { tenantId: string }) {
             />
           </Card>
         </div>
-      )}
-    </QueryState>
-  );
-}
-
-const AUDIT_PAGE = 20;
-
-export function AuditTab({ tenantId }: { tenantId: string }) {
-  const t = useTranslations('company.audit');
-  const tTable = useTranslations('table');
-  const [offset, setOffset] = useState(0);
-  const columns: DataTableColumn<AuditEntry>[] = [
-    {
-      key: 'at',
-      header: t('columns.at'),
-      nowrap: true,
-      cell: (entry) => formatDateTime(entry.at),
-    },
-    {
-      key: 'actor',
-      header: t('columns.actor'),
-      cell: (entry) => (
-        <div className="flex flex-col items-start gap-1">
-          <span>{entry.actorName}</span>
-          {entry.actorIsPlatformOperator && (
-            <StatusPill tone="attention">{t('operatorTag')}</StatusPill>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'store',
-      header: t('columns.store'),
-      cell: (entry) => entry.storeName ?? '—',
-    },
-    {
-      key: 'action',
-      header: t('columns.action'),
-      cell: (entry) => entry.action,
-    },
-  ];
-  return (
-    <QueryState query={useTenantAudit(tenantId, { limit: AUDIT_PAGE, offset })}>
-      {(page) => (
-        <Card padding="none">
-          <CardHeader title={t('title')} description={t('retention')} inset />
-          <DataTable
-            caption={t('title')}
-            columns={columns}
-            rows={page.items}
-            rowKey={(entry) => entry.id}
-            empty={<EmptyState icon="scroll-text" title={t('empty')} />}
-          />
-          {page.total > AUDIT_PAGE && (
-            <Pagination
-              className="p-4"
-              offset={offset}
-              limit={AUDIT_PAGE}
-              total={page.total}
-              onOffsetChange={setOffset}
-              labels={{
-                nav: t('pagesLabel'),
-                previous: tTable('previous'),
-                next: tTable('next'),
-                range: (range) => tTable('range', range),
-              }}
-            />
-          )}
-        </Card>
       )}
     </QueryState>
   );

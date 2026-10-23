@@ -5,7 +5,8 @@ import type { TenantTransaction } from '../../core/database';
 // The history of the prices of a store (security review 2026-10-22, I2; ADR-0015, amendment 2026-10-23): a price of a
 // store changes only through StorePriceWriter, which records `price.changed` with the old and the new price in the
 // same transaction. The POS asks what a product cost at the moment of its catalog snapshot. Read in the caller's
-// transaction, by audit_log_entity_idx; the cloud changes only (an offline store keeps its own prices).
+// transaction, by audit_log_entity_idx; the cloud changes only (an offline store keeps its own prices). The pack price
+// only: the own piece price of a store changes in the cloud only by a copy to a store without a price (no old one).
 @Injectable()
 export class PriceChanges {
   /**

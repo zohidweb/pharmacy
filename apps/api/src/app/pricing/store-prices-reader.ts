@@ -4,10 +4,11 @@ import { PriceChanges } from '../audit/price-changes';
 import { PricingRepository } from './pricing.repository';
 
 /**
- * A snapshot read while a price change was being written may still show the old price: the history is asked a moment
- * earlier than the version of the snapshot.
+ * A snapshot read while a price change was being written may still show the old price — a posting of a goods receipt
+ * with many lines writes its prices for a while, and the journal stamps them with the start of its transaction: the
+ * history is asked a minute earlier than the version of the snapshot.
  */
-const PRICE_HISTORY_SKEW_MS = 5_000;
+const PRICE_HISTORY_SKEW_MS = 60_000;
 
 /** The price of a product at a store: a pack, and the own piece price if set. */
 export interface StorePrice {

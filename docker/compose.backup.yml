@@ -16,11 +16,19 @@ services:
   backup:
     image: pharmacy/postgres:${IMAGE_TAG:-local}
     user: postgres
+    # Read-only, without capabilities and privilege escalation, as api and migrate (security review 2026-10-22, S3):
+    # it writes only /backups, /scratch and the tmpfs /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
     # docker-init as PID 1 delivers SIGTERM to the daemon while it sleeps.
     init: true
     command: ['pharmacy-backup', 'daemon']
     environment:
-      PGHOST: postgres
+      # Over the local socket shared with postgres (pg-socket): pharmacy_backup does not sign in over TCP (Z6).
+      PGHOST: /var/run/postgresql
       PGPORT: 5432
       PGUSER: pharmacy_backup
       PGPASSWORD: ${PHARMACY_BACKUP_PASSWORD:?set in the env file}
@@ -32,6 +40,9 @@ services:
     volumes:
       - ${BACKUP_DIR:?set in the env file}:/backups
       - backup-scratch:/scratch
+      # Read-only: this container runs as the uid of the server (postgres) and would otherwise own the directory and
+      # could put its own socket in place of the server's (pg-socket of postgres).
+      - pg-socket:/var/run/postgresql:ro
     shm_size: 256mb
     depends_on:
       postgres:

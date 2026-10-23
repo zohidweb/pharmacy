@@ -260,7 +260,7 @@ Only these. Financial operations require idempotency and a correlation ID.
 | Среда | Env-файл (не в git) | Compose-проект | API | PostgreSQL / Redis наружу |
 |---|---|---|---|---|
 | dev | `.env` ← `.env.example` | `pharmacy-dev` | `127.0.0.1:3000` | `5432` / `6379` на localhost |
-| test | `docker/env/test.env` | `pharmacy-test` | `127.0.0.1:3100` | PostgreSQL `127.0.0.1:5433`, Redis — нет |
+| test | `docker/env/test.env` | `pharmacy-test` | `127.0.0.1:3100` | PostgreSQL `127.0.0.1:5433` (по TCP — только роли API), Redis — нет |
 | prod | `docker/env/prod.env` | `pharmacy-prod` | `127.0.0.1:3200` | нет (только сеть compose, C4) |
 
 ```
@@ -318,7 +318,8 @@ npm run prod:build / prod:up / prod:down
 
 ## Containers (ADR-0005)
 
-- Образы: `apps/api/Dockerfile` (multi-stage, `nx run api:prune`, non-root), `docker/postgres`
+- Образы: `apps/api/Dockerfile` (multi-stage, `nx run api:prune`, non-root; код принадлежит root, без source map и
+  npm), `docker/postgres`
   (роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver` / `pharmacy_provisioner`, схема
   `pharmacy`, `pg_trgm`; скрипт копий `pharmacy-backup`, ADR-0019), `docker/redis` (без персистентности). Контекст сборки — корень репозитория
   (`.dockerignore`).
@@ -329,6 +330,25 @@ npm run prod:build / prod:up / prod:down
   `issue_owner_code`, ADR-0013, поправка 2026-10-05). На кластере, созданном до поправки, роль добавляется
   один раз суперпользователем: `docker/postgres/initdb/03-provisioner-role.sql` (команда — в его шапке).
   `pharmacy_owner` используется только сервисом `migrate`; `PHARMACY_OWNER_PASSWORD` не передаётся в `api`.
+  В test и prod PostgreSQL берёт правила входа из `docker/postgres/pg_hba.conf` (ревью безопасности 2026-10-22, Z6):
+  по TCP входят только `pharmacy_app` и `pharmacy_platform`. Суперпользователь, `pharmacy_owner` (`migrate`) и
+  `pharmacy_backup` (`backup`) — только через локальный сокет: том `pg-socket` общий у `postgres`, `migrate` и
+  `backup`, но не у `api`; `migrate` и `backup` подключают его только для чтения: `backup` работает с uid сервера и
+  иначе мог бы подменить сокет. Вход по сокету тоже с паролем; в контейнере `postgres` его даёт `PGPASSWORD`, поэтому
+  `docker compose exec postgres psql -U <суперпользователь>` работает без ввода. В dev правила образа прежние.
+  - Раньше суперпользователь входил по сокету без пароля, и его пароль в базе мог разойтись с
+    `POSTGRES_SUPERUSER_PASSWORD` env-файла. Поэтому перед первой выкладкой этих правил на существующий кластер его
+    нужно проверить (ответ `1`):
+    `docker compose --project-name pharmacy-<env> --env-file docker/env/<env>.env -f docker/compose.yml -f
+    docker/compose.<env>.yml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$(hostname -i)" -U
+    "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select 1"'`.
+  - Если пароль разошёлся и `up` уже упал:
+    1. в контейнере `postgres` выполнить
+       `sed -i '1i local all <суперпользователь> trust' /etc/pharmacy/pg_hba.conf && kill -HUP 1`;
+    2. задать пароль через `alter role … password …`;
+    3. вернуть файл образа: `up -d --force-recreate postgres`.
+  - Пароль `pharmacy_backup` остаётся в окружении `postgres` для `04-backup-role.sql` (вторая половина Z6 не
+    сделана). Тот же контейнер и так держит пароль суперпользователя.
   `pharmacy_backup` (ADR-0019) — LOGIN, BYPASSRLS, член `pg_read_all_data`, не суперпользователь: только сервис
   `backup` (test, prod), пароль `PHARMACY_BACKUP_PASSWORD`. Роль создаёт или обновляет идемпотентный
   `docker/postgres/initdb/04-backup-role.sql` — при initdb и при каждом `stack <test|prod> up` до старта остальных
@@ -395,6 +415,11 @@ npm run prod:build / prod:up / prod:down
   скрипт только печатает ключи точки); `reapply-quarantine.mjs --store <id>`
   возвращает операции из карантина в очередь — облако переприменит их в конце следующего батча точки.
 - Порты в compose публикуются только на `127.0.0.1`.
+- Контейнеры `api`, `migrate` и `backup` работают только для чтения (`/tmp` — tmpfs), без Linux capabilities и с
+  `no-new-privileges` (ревью безопасности 2026-10-22, S3). Скрипты базы через `run --rm api node scripts/…` (код
+  активации, оператор, ключи точки, карантин) работают так же: они только читают файлы образа и подключаются к базе.
+  `generate-store-secrets.mjs` пишет в env-файл и запускается на ПК точки, а не в контейнере. Dev-серверы web и admin
+  слушают только `127.0.0.1` (S4).
 
 ## Local development secrets
 

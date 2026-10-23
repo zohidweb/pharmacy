@@ -1,7 +1,10 @@
 # test: acceptance environment (customer test database, backlog W2-05). Same topology as prod,
-# smaller resources (C4 deployment). PostgreSQL is published on localhost only, for diagnostics.
+# smaller resources (C4 deployment). PostgreSQL is published on localhost only, for diagnostics: over TCP only
+# pharmacy_app and pharmacy_platform sign in; the superuser — `docker compose exec postgres psql`.
 services:
   postgres:
+    # Over TCP only the runtime roles of the API sign in (docker/postgres/pg_hba.conf; security review 2026-10-22, Z6).
+    command: ['postgres', '-c', 'hba_file=/etc/pharmacy/pg_hba.conf']
     restart: unless-stopped
     ports:
       - '127.0.0.1:${POSTGRES_PORT:-5433}:5432'

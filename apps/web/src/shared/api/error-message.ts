@@ -24,6 +24,7 @@ const knownCodes = [
   'no_open_shift',
   'shift_closed',
   'wrong_terminal',
+  'price_rules_violated',
   'idempotency_conflict',
   'author_not_allowed',
   'author_session_missing',

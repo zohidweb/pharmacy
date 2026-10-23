@@ -249,13 +249,20 @@ const kindKey = {
   'shift.close': 'shift_close',
 } as const;
 
-/** Operations that the server refused: kept for the manager, retried with the same key (ADR-0015). */
+/**
+ * Operations that the server refused: kept for the manager, retried with the same key (ADR-0015). A receipt refused by
+ * the price rules can be accepted as it is by someone who may set the prices or the discount rules (ADR-0015, amendment
+ * 2026-10-23); the server checks the rights again.
+ */
 function Quarantine({
   records,
   onRetry,
+  onAccept,
 }: {
   records: PosOutboxRecord[];
   onRetry: (id: string) => void;
+  /** Absent — the session may not accept a discrepancy. */
+  onAccept?: (id: string) => void;
 }) {
   const t = useTranslations('shift.quarantine');
   const known = useApiCodeMessage();
@@ -304,9 +311,16 @@ function Quarantine({
             header: <span className="ph-visually-hidden">{t('actions')}</span>,
             align: 'end',
             cell: (r) => (
-              <Button variant="secondary" onClick={() => onRetry(r.id)}>
-                {t('retry')}
-              </Button>
+              <span className="flex flex-wrap justify-end gap-2">
+                {onAccept && r.lastError?.code === 'price_rules_violated' && (
+                  <Button variant="secondary" onClick={() => onAccept(r.id)}>
+                    {t('accept')}
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => onRetry(r.id)}>
+                  {t('retry')}
+                </Button>
+              </span>
             ),
           },
         ]}
@@ -616,6 +630,17 @@ function ShiftPageView() {
               <Quarantine
                 records={quarantined}
                 onRetry={(id) => void runtime?.queue.retry(id)}
+                onAccept={
+                  canWrite(session, 'pricing:update-store') ||
+                  canWrite(session, 'pricing:update-network') ||
+                  canWrite(session, 'discounts:manage-store') ||
+                  canWrite(session, 'discounts:manage-network')
+                    ? (id) =>
+                        void runtime?.queue.retry(id, {
+                          acceptDiscrepancy: true,
+                        })
+                    : undefined
+                }
               />
               {current ? (
                 <>

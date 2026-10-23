@@ -93,7 +93,9 @@ export async function sendPosOperation(
       return apiRequest('receipts.create', {
         body: await openReceipt(db, operation.payload),
         idempotencyKey,
-        headers,
+        headers: record.acceptDiscrepancy
+          ? { ...headers, 'X-Accept-Discrepancy': 'true' }
+          : headers,
       });
     case 'shift.open':
       return apiRequest('shifts.open', {

@@ -270,6 +270,7 @@
       "error": "Ответ сервера",
       "errorText": "{status} {code} · код {correlationId}",
       "actions": "Действия",
+      "accept": "Принять расхождение",
       "retry": "Отправить снова"
     },
     "z": {

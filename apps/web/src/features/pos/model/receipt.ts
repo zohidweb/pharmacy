@@ -38,6 +38,11 @@ export interface DraftLine {
    * absent in a draft stored before it.
    */
   piecesPerPack?: number;
+  /**
+   * Version of the snapshot the line was priced by: the server accepts the price of the store at that moment (ADR-0015,
+   * amendment 2026-10-23); absent in a draft stored before it.
+   */
+  priceVersion?: number;
 }
 
 export type NonCashMethod = Exclude<ReceiptPaymentMethod, 'cash'>;
@@ -61,6 +66,8 @@ export interface AddOptions {
   batch?: PosBatch;
   controlled?: ControlledSaleData | null;
   quantity?: number;
+  /** Version of the snapshot the product comes from: kept by a new line. */
+  priceVersion?: number;
 }
 
 export function emptyDraft(): ReceiptDraft {
@@ -109,6 +116,7 @@ function toLine(
   quantity: number,
   manualBatch: boolean,
   controlled: ControlledSaleData | null,
+  priceVersion: number | undefined,
 ): DraftLine {
   return {
     key: lineKey(product.id, batch.id, unit),
@@ -124,6 +132,7 @@ function toLine(
     controlled,
     manualBatch,
     piecesPerPack: product.piecesPerPack,
+    priceVersion,
   };
 }
 
@@ -159,6 +168,8 @@ export function addProduct(
               ...line,
               quantity: line.quantity + quantity,
               controlled: options.controlled ?? line.controlled,
+              // the line keeps its price, so the version it was priced by
+              priceVersion: line.priceVersion ?? options.priceVersion,
             }
           : line,
       )
@@ -171,6 +182,7 @@ export function addProduct(
           quantity,
           Boolean(options.batch),
           options.controlled ?? null,
+          options.priceVersion,
         ),
       ];
   return { draft: { ...draft, lines }, error: null };
@@ -216,6 +228,7 @@ export function changeBatch(
   product: PosProduct,
   batch: PosBatch,
   today: string,
+  priceVersion?: number,
 ): { draft: ReceiptDraft; error: AddError | null } {
   const line = draft.lines.find((l) => l.key === key);
   if (!line) return { draft, error: null };
@@ -226,6 +239,7 @@ export function changeBatch(
     batch,
     today,
     controlled: line.controlled,
+    priceVersion,
   });
   return result.error ? { draft, error: result.error } : result;
 }

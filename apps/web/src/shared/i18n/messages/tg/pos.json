@@ -270,6 +270,7 @@
       "error": "Ҷавоби сервер",
       "errorText": "{status} {code} · рамз {correlationId}",
       "actions": "Амалҳо",
+      "accept": "Фарқиятро қабул кардан",
       "retry": "Аз нав фиристодан"
     },
     "z": {

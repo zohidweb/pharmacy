@@ -188,6 +188,7 @@ function PosPageView() {
         batch: pending.batch,
         today,
         controlled: controlledData,
+        priceVersion: snapshot?.version,
       });
       failed = result.error;
       return result.draft;
@@ -300,6 +301,7 @@ function PosPageView() {
         quantity: line.quantity,
         batch: batch && batch.expiresOn >= today ? batch : undefined,
         today,
+        priceVersion: snapshot?.version,
       });
       next = result.draft;
     }
@@ -614,6 +616,7 @@ function PosPageView() {
               product,
               batch,
               today,
+              snapshot?.version,
             );
             failed = result.error;
             return result.draft;

@@ -157,8 +157,14 @@ export class OfflineQueue {
     return this.db.getAllFromIndex('outbox', 'byCreatedAt');
   }
 
-  /** Back to the queue with the same key (the manager fixed the cause). */
-  async retry(id: string): Promise<void> {
+  /**
+   * Back to the queue with the same key (the manager fixed the cause); `acceptDiscrepancy` — a receipt refused by the
+   * price rules goes as it is, accepted by the manager.
+   */
+  async retry(
+    id: string,
+    options: { acceptDiscrepancy?: boolean } = {},
+  ): Promise<void> {
     const record = await this.db.get('outbox', id);
     if (!record) return;
     await this.db.put('outbox', {
@@ -166,6 +172,7 @@ export class OfflineQueue {
       status: 'pending',
       attempts: 0,
       nextAttemptAt: 0,
+      ...(options.acceptDiscrepancy ? { acceptDiscrepancy: true } : {}),
     });
     await this.refreshCounts();
     void this.flush();

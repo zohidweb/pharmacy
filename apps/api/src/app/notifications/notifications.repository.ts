@@ -236,7 +236,8 @@ export class NotificationsRepository {
   }
 
   // open states and the events of 30 days, of the kinds and the stores of the employee (E10, E12);
-  // a notification of the whole network (no store, service_decided) reaches every scope
+  // a notification of the whole network (no store, service_decided) reaches every scope; the
+  // kinds of NETWORK_SCOPE_KINDS the service leaves out of a store scope
   private visible(
     tenantId: string,
     filter: VisibleFilter,

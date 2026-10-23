@@ -120,21 +120,37 @@ const COMMON_WORDS: ReadonlySet<string> = new Set([
   'нурмед',
 ]);
 
+/** The look-alike characters of a word as letters; `1` may stand for `i` or for `l`. */
+const asLetters = (word: string, one: 'i' | 'l'): string =>
+  word
+    .replace(/[@4]/g, 'a')
+    .replace(/0/g, 'o')
+    .replace(/1/g, one)
+    .replace(/[!|]/g, 'i')
+    .replace(/3/g, 'e')
+    .replace(/[$5]/g, 's')
+    .replace(/7/g, 't');
+
+const NOT_LETTERS_AROUND = /^[^\p{L}]+|[^\p{L}]+$/gu;
+
 /**
- * The password starts with a keyboard run, or its core is a common word or one repeated character.
- * The core: NFKC, lower case, without the non-letters around the word, with the look-alike
- * characters replaced (`@4` → a, `0` → o, `1!|` → i, `3` → e, `$5` → s, `7` → t).
+ * The password starts with a keyboard run, or its core is a common word or one character repeated
+ * three times or more. The core: NFKC and lower case, look-alike characters read as letters
+ * (`@4` → a, `0` → o, `1` → i or l, `!|` → i, `3` → e, `$5` → s, `7` → t), the non-letters around
+ * the word dropped — the digits and symbols after the word are dropped before the look-alikes are
+ * read too, so `4dmin2024` and `$ecret!` are cores `admin` and `secret`.
  */
 export function isCommonPassword(value: string): boolean {
   const lowered = value.normalize('NFKC').toLowerCase();
   if (COMMON_PREFIXES.some((prefix) => lowered.startsWith(prefix))) return true;
-  const core = lowered
-    .replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '')
-    .replace(/[@4]/g, 'a')
-    .replace(/0/g, 'o')
-    .replace(/[1!|]/g, 'i')
-    .replace(/3/g, 'e')
-    .replace(/[$5]/g, 's')
-    .replace(/7/g, 't');
-  return COMMON_WORDS.has(core) || /^(.)\1*$/u.test(core);
+  const word = lowered.replace(/[^\p{L}]+$/u, '');
+  const cores = (['i', 'l'] as const).flatMap((one) =>
+    [word, lowered].map((text) =>
+      asLetters(text, one).replace(NOT_LETTERS_AROUND, ''),
+    ),
+  );
+  return cores.some(
+    (core) =>
+      COMMON_WORDS.has(core) || (core.length >= 3 && /^(.)\1*$/u.test(core)),
+  );
 }

@@ -26,6 +26,14 @@ export const EVENT_KINDS: readonly NotificationKind[] = [
   'service_decided',
 ];
 
+/**
+ * Kinds seen only by an employee whose scope is the whole network: a sign-in lock names an employee
+ * of any store, the owner included (final review of security review A2, I3).
+ */
+export const NETWORK_SCOPE_KINDS: readonly NotificationKind[] = [
+  'login_locked',
+];
+
 /** The permission of the area of a kind, besides `notifications:view` (E10). */
 export const KIND_PERMISSION: Readonly<Record<NotificationKind, Permission>> = {
   batch_expiring: 'inventory:view',

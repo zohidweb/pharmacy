@@ -2,11 +2,12 @@ import { LoginLimiter, type LoginLimiterOptions } from './login-limiter';
 
 // The budget of password attempts of one account (security review 2026-10-22, A2; ADR-0008,
 // amendment 2026-10-23): the identifier limit holds per login, phone and e-mail, so without it an
-// account had three budgets. About 50 attempts a day: 10 in an hour, then 1 h locked, a repeat
-// within a day 6 h. Constants, not environment variables.
+// account had three budgets. A daily ceiling of about 50 attempts: 10 within a day, then 1 h
+// locked, a repeat within a day 6 h; the window is a day, so a slow guesser meets the lock (and the
+// owner's notification) too. Constants, not environment variables.
 export const ACCOUNT_LIMITER_OPTIONS: Readonly<LoginLimiterOptions> = {
   maxFailures: 10,
-  windowSeconds: 3600,
+  windowSeconds: 86400,
   lockSeconds: 3600,
   repeatLockSeconds: 21600,
   repeatWindowSeconds: 86400,

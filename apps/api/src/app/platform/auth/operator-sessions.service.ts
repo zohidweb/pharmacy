@@ -301,7 +301,7 @@ export class OperatorSessionsService {
     } catch (error) {
       // The answer must stay the same 401; logged by error name only, not swallowed silently.
       this.logger.error(
-        `Could not write the auth.operator-login-failed audit (${error instanceof Error ? error.name : typeof error}) [correlationId=${getRequestContext()?.correlationId}]`,
+        `Could not write the auth.operator-login-failed/-locked audit (${error instanceof Error ? error.name : typeof error}) [correlationId=${getRequestContext()?.correlationId}]`,
       );
     }
     throw invalidCredentials();

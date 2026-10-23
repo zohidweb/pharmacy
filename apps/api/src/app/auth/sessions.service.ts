@@ -171,6 +171,16 @@ export class SessionsService {
     // The lock this attempt placed on the identifier, written if the attempt fails (P2).
     const locks = placedLock(attempt, 'identifier', identifier.kind);
     if (resolved === null) {
+      // The same account budget as a known identifier has, so its 429 tells nothing (A2).
+      const shadow = await this.locks.reserveUnknown(key);
+      if (!shadow.allowed) {
+        throw new LockedException(
+          429,
+          'login_locked',
+          shadow.retryAfterSeconds,
+        );
+      }
+      locks.push(...placedLock(shadow, 'account'));
       await this.hasher.verifyDummy(password);
       // No tenant, so no audit_log: the application log only, without the identifier.
       this.logger.warn(
@@ -254,24 +264,34 @@ export class SessionsService {
       ...placedLock(account, 'account'),
     ];
 
-    const credentials = await this.db.tenantTransaction((trx) =>
-      this.repository.findCredentials(trx, tenantId, employeeId),
-    );
-    const phc = credentials?.passwordHash ?? null;
-    const pepperVersion = credentials?.passwordPepperVersion ?? null;
-    const verified =
-      phc !== null && pepperVersion !== null
-        ? await this.hasher.verify(password, phc, pepperVersion)
-        : await this.hasher.verifyDummy(password);
-    if (!verified) {
-      await this.db.tenantTransaction((trx) =>
-        this.audit.append(trx, {
-          action: 'auth.reconfirm-failed',
-          entityType: 'employee',
-          entityId: employeeId,
-        }),
+    let verified: boolean;
+    try {
+      const credentials = await this.db.tenantTransaction((trx) =>
+        this.repository.findCredentials(trx, tenantId, employeeId),
       );
+      const phc = credentials?.passwordHash ?? null;
+      const pepperVersion = credentials?.passwordPepperVersion ?? null;
+      verified =
+        phc !== null && pepperVersion !== null
+          ? await this.hasher.verify(password, phc, pepperVersion)
+          : await this.hasher.verifyDummy(password);
+    } catch (error) {
+      // an unexpected error must not lose a lock this attempt placed (P2)
       await this.locks.record(employeeId, locks);
+      throw error;
+    }
+    if (!verified) {
+      try {
+        await this.db.tenantTransaction((trx) =>
+          this.audit.append(trx, {
+            action: 'auth.reconfirm-failed',
+            entityType: 'employee',
+            entityId: employeeId,
+          }),
+        );
+      } finally {
+        await this.locks.record(employeeId, locks);
+      }
       throw new FieldProblemException(422, 'invalid_current_password', [
         { field: 'password', code: 'invalid_current_password' },
       ]);
@@ -307,6 +327,26 @@ export class SessionsService {
       throw new LockedException(429, 'login_locked', account.retryAfterSeconds);
     }
     const locks = [...identifierLocks, ...placedLock(account, 'account')];
+    try {
+      return await this.verifyAndSignIn(resolved, password, ip, key, locks);
+    } catch (error) {
+      // fail() wrote the locks of a refused attempt; an unexpected error must not lose them (P2)
+      if (!(error instanceof ProblemException)) {
+        await this.locks.record(employeeId, locks, ip);
+      }
+      throw error;
+    }
+  }
+
+  // Steps 5-7 once the attempt is reserved on the identifier and the account.
+  private async verifyAndSignIn(
+    resolved: ResolvedLogin,
+    password: string,
+    ip: string,
+    key: string,
+    locks: readonly PlacedLock[],
+  ): Promise<LoginResult> {
+    const { tenantId, employeeId } = resolved;
     const credentials = await this.db.tenantTransaction((trx) =>
       this.repository.findCredentials(trx, tenantId, employeeId),
     );

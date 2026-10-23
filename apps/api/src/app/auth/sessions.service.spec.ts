@@ -243,6 +243,7 @@ function setup() {
   // The account budget, the journal and the lifting of sign-in locks (security review A2, P2).
   const locks = {
     reserveAccount: jest.fn(async () => ({ allowed: true }) as const),
+    reserveUnknown: jest.fn(async () => ({ allowed: true }) as const),
     resetAccount: jest.fn(async () => undefined),
     record: jest.fn(async () => undefined),
     unlock: jest.fn(async () => undefined),

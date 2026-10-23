@@ -69,6 +69,14 @@ export class SignInLocks {
     return this.accounts.tryAcquire(accountLimiterKey(tenantId, employeeId));
   }
 
+  /**
+   * An identifier that matches nobody spends a budget of its own, keyed by the identifier, so a 429
+   * of the account budget does not tell a known identifier from an unknown one (final review I2).
+   */
+  reserveUnknown(identifierKey: string): Promise<LoginAttempt> {
+    return this.accounts.tryAcquire(`account:unknown:${identifierKey}`);
+  }
+
   /** The password was verified: the account budget starts again. */
   resetAccount(tenantId: string, employeeId: string): Promise<void> {
     return this.accounts.reset(accountLimiterKey(tenantId, employeeId));

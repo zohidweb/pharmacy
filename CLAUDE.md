@@ -100,6 +100,8 @@ pharmacy/
   заполняет `returns`.
   `pos`, `returns`, `inventory`, `purchasing` ← `notifications` ← `reports` (`SalesFigures`, `PosAlerts`,
   `ReturnFigures`, `StockAlerts`, `SupplierDues`, `Reminders`); `audit` ← все (`AuditService`, журнал `AuditJournal`);
+  блокировки входа (ADR-0008, поправка 2026-10-23): `auth` ← `staff` (`SignInLocks` — новый пароль снимает блокировки),
+  `audit` ← `notifications` (`LoginLocks` — блокировки для уведомления `login_locked`);
   цену последнего прихода `pricing` получает через порт `PurchasePrices`, который заполняет `inventory`, а
   остатки точек (проблема «нет цены») — через порт `StockedProducts`, который тоже заполняет `inventory`;
   `inventory`, `pricing` ← `reports` (счётчики меню: `StockAlerts`, `PriceProblems`).

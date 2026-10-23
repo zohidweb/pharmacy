@@ -109,9 +109,9 @@ export class ActivationsService {
       // The same scrypt cost as a known login, so the timing does not tell them apart.
       await this.hasher.verifyDummy(newPassword);
       if (locks.length > 0) {
-        // No tenant journal to write to: the application log, without the identifier.
+        // No tenant journal is written for these: the application log, without the identifier.
         this.logger.warn(
-          `Activation locked: unknown ${identifier.kind} [correlationId=${getRequestContext()?.correlationId}]`,
+          `Activation locked: unknown ${identifier.kind} or an inactive network [correlationId=${getRequestContext()?.correlationId}]`,
         );
       }
       throw invalidCode();
@@ -133,13 +133,43 @@ export class ActivationsService {
     ip: string,
   ): Promise<void> {
     const { tenantId, employeeId } = resolved;
+    // A wrong code ends the attempt: a lock it placed goes to the journal, also when an unexpected
+    // error ends it (P2).
+    const consumed = await this.consume(resolved, code, newPassword).catch(
+      async (error: unknown) => {
+        await this.locks.record(employeeId, locks, ip);
+        throw error;
+      },
+    );
+    if (!consumed) {
+      await this.locks.record(employeeId, locks, ip);
+      throw invalidCode();
+    }
+
+    // After the commit: sessions opened with the old password end, the attempts are forgotten. The
+    // password is set and the code is spent, so a retry would only meet 401 invalid_code: a failure
+    // here is logged, not answered.
+    await afterCommitBestEffort(this.logger, 'Ending the sessions of an activated employee', () =>
+      this.sessions.destroyAllFor(tenantId, employeeId),
+    );
+    await afterCommitBestEffort(this.logger, 'Resetting the activation attempts', () =>
+      this.limiter.reset(key),
+    );
+    // The new password lifts the sign-in locks of the owner (security review A2): best effort.
+    await this.locks.unlock(tenantId, employeeId);
+  }
+
+  // Check, consume, set the password and audit commit together or not at all; false — a wrong code.
+  private async consume(
+    resolved: ResolvedLogin,
+    code: string,
+    newPassword: string,
+  ): Promise<boolean> {
+    const { tenantId, employeeId } = resolved;
     // No transaction is held open during scrypt.
     const next = await this.hasher.hash(newPassword);
     const codeHash = hashActivationCode(code);
-
-    // Check, consume, set the password and audit commit together or not at all. A wrong code ends
-    // the attempt: a lock it placed goes to the journal.
-    const consumed = await this.db.tenantTransaction(async (trx) => {
+    return this.db.tenantTransaction(async (trx) => {
       if (
         !(await this.repository.consumeActivationCode(
           trx,
@@ -158,21 +188,5 @@ export class ActivationsService {
       });
       return true;
     });
-    if (!consumed) {
-      await this.locks.record(employeeId, locks, ip);
-      throw invalidCode();
-    }
-
-    // After the commit: sessions opened with the old password end, the attempts are forgotten. The
-    // password is set and the code is spent, so a retry would only meet 401 invalid_code: a failure
-    // here is logged, not answered.
-    await afterCommitBestEffort(this.logger, 'Ending the sessions of an activated employee', () =>
-      this.sessions.destroyAllFor(tenantId, employeeId),
-    );
-    await afterCommitBestEffort(this.logger, 'Resetting the activation attempts', () =>
-      this.limiter.reset(key),
-    );
-    // The new password lifts the sign-in locks of the owner (security review A2): best effort.
-    await this.locks.unlock(tenantId, employeeId);
   }
 }

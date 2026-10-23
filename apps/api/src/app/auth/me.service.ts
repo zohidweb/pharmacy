@@ -123,19 +123,22 @@ export class MeService {
       );
       throw new LockedException(429, 'login_locked', account.retryAfterSeconds);
     }
-    // The locks this attempt placed are written when it ends without a verified password (P2).
+    // The locks this attempt placed are written when it ends without a verified password, an
+    // unexpected error included (P2).
     const locks = [
       ...placedLock(attempt, 'password-change'),
       ...placedLock(account, 'account'),
     ];
-    const failed = async (error: Error): Promise<never> => {
+    const failed = async (error: unknown): Promise<never> => {
       await this.locks.record(employeeId, locks);
       throw error;
     };
 
-    const credentials = await this.db.tenantTransaction((trx) =>
-      this.repository.findCredentials(trx, tenantId, employeeId),
-    );
+    const credentials = await this.db
+      .tenantTransaction((trx) =>
+        this.repository.findCredentials(trx, tenantId, employeeId),
+      )
+      .catch(failed);
     // A blocked employee whose session has not ended yet does not change the password.
     if (credentials === null || credentials.status !== 'active') {
       return failed(unauthenticated());
@@ -145,9 +148,10 @@ export class MeService {
     if (phc === null || pepperVersion === null) {
       return failed(invalidCurrentPassword());
     }
-    if (!(await this.hasher.verify(currentPassword, phc, pepperVersion))) {
-      return failed(invalidCurrentPassword());
-    }
+    const verified = await this.hasher
+      .verify(currentPassword, phc, pepperVersion)
+      .catch(failed);
+    if (!verified) return failed(invalidCurrentPassword());
     await this.limiter.reset(limiterKey);
     await this.locks.resetAccount(tenantId, employeeId);
 

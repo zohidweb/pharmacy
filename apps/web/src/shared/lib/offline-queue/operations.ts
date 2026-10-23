@@ -19,6 +19,7 @@ import {
   type SealedControlled,
 } from './controlled-crypto';
 import type { OutboxRecord, PosDb } from './db';
+import type { SendOptions } from './queue';
 
 /** A sale as the buffer keeps it: the prescription data of its lines sealed. */
 export type StoredReceiptRequest = Omit<CreateReceiptRequest, 'lines'> & {
@@ -83,6 +84,7 @@ async function openReceipt(
 export async function sendPosOperation(
   record: OutboxRecord,
   db: PosDb,
+  options: SendOptions = { acceptDiscrepancy: false },
 ): Promise<unknown> {
   const operation = record as PosOutboxRecord;
   const idempotencyKey = operation.id;
@@ -93,7 +95,7 @@ export async function sendPosOperation(
       return apiRequest('receipts.create', {
         body: await openReceipt(db, operation.payload),
         idempotencyKey,
-        headers: record.acceptDiscrepancy
+        headers: options.acceptDiscrepancy
           ? { ...headers, 'X-Accept-Discrepancy': 'true' }
           : headers,
       });

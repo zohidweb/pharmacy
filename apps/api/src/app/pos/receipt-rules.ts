@@ -42,8 +42,9 @@ export function priceErrors(
 }
 
 /**
- * No discount, or a step of a rule acting at the store: the same rule, threshold and percent. A step that is not the
- * best one for the subtotal is allowed — a smaller discount is no loss of the pharmacy — and only marked.
+ * No discount, or a step of a rule acting at the store: the same rule and threshold, a percent not above the step's. A
+ * smaller discount is no loss of the pharmacy — a step that is not the best one, a percent raised after the snapshot —
+ * it is allowed and only marked.
  */
 export function discountError(
   body: Pick<
@@ -60,7 +61,7 @@ export function discountError(
       (tier) =>
         tier.ruleId === ruleId &&
         tier.minSubtotalDirams === body.discountMinSubtotalMinor &&
-        tier.percent === body.discountPercent,
+        body.discountPercent <= tier.percent,
     );
   return allowed
     ? null

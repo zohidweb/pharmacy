@@ -59,8 +59,8 @@ export type NotificationKind =
   | 'shift_discrepancy'
   | 'negative_stock'
   /**
-   * Receipts with a price, discount or author mark — a store × business date (event; security review 2026-10-22, I2):
-   * `positions` holds the count of receipts.
+   * Receipts with a price, discount or author mark and sales refused by the price rules — a store × business date
+   * (event; security review 2026-10-22, I2): `positions` holds their count.
    */
   | 'receipt_discrepancy'
   | 'sync_conflict'

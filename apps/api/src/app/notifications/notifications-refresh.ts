@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { NotificationKind } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
+import { ReceiptRefusals } from '../audit/receipt-refusals';
 import { OverdueInvoices } from '../billing/overdue-invoices';
 import { ServiceDecisions } from '../billing/service-decisions';
 import { StockAlerts } from '../inventory/stock-alerts';
@@ -39,6 +40,7 @@ export class NotificationsRefresh {
     private readonly pos: PosAlerts,
     private readonly services: ServiceDecisions,
     private readonly invoices: OverdueInvoices,
+    private readonly refusals: ReceiptRefusals,
   ) {}
 
   async run(trx: TenantTransaction, tenantId: string): Promise<void> {
@@ -203,27 +205,42 @@ export class NotificationsRefresh {
       );
     }
     if (enabled('receipt_discrepancy')) {
-      // receipts sold at a price or a discount off the current rules, or by an author without the right (I2)
-      const days = await this.pos.discrepanciesByDay(
-        trx,
-        tenantId,
-        new Date(eventsFrom),
-      );
-      await this.repository.upsert(
-        trx,
-        tenantId,
-        days.map((day) => ({
+      // the receipts of a day sold at a price or a discount off the rules or by an author without the right, and the
+      // sales those rules refused — one count per store × day, a refused and later accepted sale once (I2)
+      const after = new Date(eventsFrom);
+      const days = [
+        ...(await this.pos.discrepancyDays(trx, tenantId, after)),
+        ...(await this.refusals.days(trx, tenantId, after)),
+      ];
+      const receipts = new Map<
+        string,
+        { storeId: string; businessDate: string; ids: Set<string> }
+      >();
+      for (const day of [
+        ...(await this.pos.discrepancyReceipts(trx, tenantId, days)),
+        ...(await this.refusals.receipts(trx, tenantId, days)),
+      ]) {
+        const key = `${day.storeId}:${day.businessDate}`;
+        const entry = receipts.get(key) ?? { ...day, ids: new Set<string>() };
+        day.receiptIds.forEach((id) => entry.ids.add(id));
+        receipts.set(key, entry);
+      }
+      const items: NewNotification[] = [...receipts.entries()].map(
+        ([key, day]) => ({
           kind: 'receipt_discrepancy',
           storeId: day.storeId,
-          dedupeKey: `receipt_discrepancy:${day.storeId}:${day.businessDate}`,
+          dedupeKey: `receipt_discrepancy:${key}`,
           entityType: 'store',
           entityId: day.storeId,
           params: {
-            positions: day.receipts,
+            positions: day.ids.size,
             storeName: storeName(day.storeId),
           },
-        })),
+        }),
       );
+      // a count grown after the notice was read comes back unread: a sale forged later that day must not stay silent
+      await this.repository.reopenGrown(trx, tenantId, items);
+      await this.repository.upsert(trx, tenantId, items);
     }
     if (enabled('service_decided')) {
       // the operator's decisions on the services of the network (spec 2026-10-15-billing-services,

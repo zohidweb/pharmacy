@@ -270,6 +270,9 @@
       "error": "Ответ сервера",
       "errorText": "{status} {code} · код {correlationId}",
       "actions": "Действия",
+      "refusedTotal": "Чек на {total}",
+      "refusedPrice": "Цена не по правилам: {line}",
+      "refusedDiscount": "Скидка не по правилам",
       "accept": "Принять расхождение",
       "retry": "Отправить снова"
     },

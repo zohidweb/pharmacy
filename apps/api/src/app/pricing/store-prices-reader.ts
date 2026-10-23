@@ -6,7 +6,7 @@ import { PricingRepository } from './pricing.repository';
 /**
  * A snapshot read while a price change was being written may still show the old price — a posting of a goods receipt
  * with many lines writes its prices for a while, and the journal stamps them with the start of its transaction: the
- * history is asked a minute earlier than the version of the snapshot.
+ * prices a minute before the version of the snapshot count too, with every price of that minute.
  */
 const PRICE_HISTORY_SKEW_MS = 60_000;
 
@@ -61,35 +61,41 @@ export class StorePricesReader {
   }
 
   /**
-   * The pack prices of the store at a moment — of a POS catalog snapshot (security review 2026-10-22, I2): the price
-   * before the first change after it, else the current one. A product absent from the map had no price then.
+   * The pack prices the store had around a moment — of a POS catalog snapshot (security review 2026-10-22, I2): every
+   * price in effect from PRICE_HISTORY_SKEW_MS before it to the moment itself, by the price changes after the start of
+   * that window (none — the current price). `current` — the prices of the store the caller has read. A product absent
+   * from the map had no price then.
    */
-  async packPricesAt(
+  async packPricesAround(
     trx: TenantTransaction,
     tenantId: string,
     storeId: string,
+    current: ReadonlyMap<string, StorePrice>,
     productIds: readonly string[],
     at: Date,
-  ): Promise<Map<string, number>> {
-    const current = await this.pricesOfStore(
+  ): Promise<Map<string, number[]>> {
+    const from = new Date(at.getTime() - PRICE_HISTORY_SKEW_MS);
+    const changes = await this.changes.changesAfter(
       trx,
       tenantId,
       storeId,
       productIds,
+      from,
     );
-    const before = await this.changes.oldPricesAfter(
-      trx,
-      tenantId,
-      storeId,
-      productIds,
-      new Date(at.getTime() - PRICE_HISTORY_SKEW_MS),
-    );
-    const prices = new Map<string, number>();
+    const prices = new Map<string, number[]>();
     for (const productId of productIds) {
-      const price = before.has(productId)
-        ? before.get(productId)
-        : current.get(productId)?.packDirams;
-      if (price !== undefined && price !== null) prices.set(productId, price);
+      const list = changes.get(productId) ?? [];
+      const atStart =
+        list.length > 0
+          ? list[0].oldPriceMinor
+          : (current.get(productId)?.packDirams ?? null);
+      const inWindow = list
+        .filter((change) => change.at.getTime() <= at.getTime())
+        .map((change) => change.newPriceMinor);
+      const all = [
+        ...new Set([...(atStart === null ? [] : [atStart]), ...inWindow]),
+      ];
+      if (all.length > 0) prices.set(productId, all);
     }
     return prices;
   }

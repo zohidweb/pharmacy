@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   bestDiscount,
   hasPermissions,
@@ -84,6 +84,8 @@ function noteOf(data: ControlledSaleData | null): Record<string, string> | null 
 // amendment 2026-10-23).
 @Injectable()
 export class ReceiptsService {
+  private readonly logger = new Logger(ReceiptsService.name);
+
   constructor(
     private readonly db: TenantDatabase,
     private readonly context: PosContext,
@@ -124,22 +126,30 @@ export class ReceiptsService {
     } catch (error) {
       // a refused receipt leaves only this trace for the owner's journal (I2): nothing of the sale is written
       if (error instanceof PriceRulesViolated) {
-        await this.db.tenantTransaction((trx) =>
-          this.audit.append(trx, {
-            action: 'receipt.refused',
-            entityType: 'receipt',
-            entityId: id,
-            storeId: op.storeId,
-            ...terminalAuthor(op),
-            details: {
-              ...terminalVia(op),
-              shiftId: body.shiftId.toLowerCase(),
-              authorId: op.author.id,
-              totalMinor: body.totalMinor,
-              errors: error.errors,
-            },
-          }),
-        );
+        // the trace never replaces the answer: the POS must get the 422 and quarantine the sale
+        await this.db
+          .tenantTransaction((trx) =>
+            this.audit.append(trx, {
+              action: 'receipt.refused',
+              entityType: 'receipt',
+              entityId: id,
+              storeId: op.storeId,
+              ...terminalAuthor(op),
+              details: {
+                ...terminalVia(op),
+                shiftId: body.shiftId.toLowerCase(),
+                authorId: op.author.id,
+                totalMinor: body.totalMinor,
+                errors: error.errors,
+              },
+            }),
+          )
+          .catch((failure: unknown) =>
+            this.logger.error(
+              `the refusal of a receipt was not journaled [correlationId=${op.correlationId}]`,
+              failure instanceof Error ? failure.stack : undefined,
+            ),
+          );
       }
       throw error;
     }
@@ -249,14 +259,15 @@ export class ReceiptsService {
           snapshotAt.getTime() >=
           soldAt.getTime() - settings.bufferLimits.maxHours * HOUR_MS;
         const then = snapshotUsable
-          ? await this.prices.packPricesAt(
+          ? await this.prices.packPricesAround(
               trx,
               tenantId,
               storeId,
+              current,
               productIds,
               snapshotAt,
             )
-          : new Map<string, number>();
+          : new Map<string, number[]>();
         const snapshotDate = snapshotUsable
           ? await this.repository.businessDate(trx, tenantId, snapshotAt)
           : businessDate;
@@ -290,7 +301,9 @@ export class ReceiptsService {
             unitPriceMinor: line.unitPriceMinor,
             allowed: [
               nowPrices[i],
-              unitPriceOf(line, then.get(line.productId.toLowerCase())),
+              ...(then.get(line.productId.toLowerCase()) ?? []).map((pack) =>
+                unitPriceOf(line, pack),
+              ),
             ],
           })),
         );

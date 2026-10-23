@@ -18,13 +18,18 @@ export interface ShortfallsOfDay {
   lines: number;
 }
 
-export interface ReceiptDiscrepanciesOfDay {
+/** A store × business date (YYYY-MM-DD). */
+export interface StoreDay {
   storeId: string;
-  /** YYYY-MM-DD — the business date of the sales. */
   businessDate: string;
-  /** Receipts of the day with a price, discount or author mark. */
-  receipts: number;
 }
+
+/** The receipts of a store × business date with a price, discount or author mark. */
+export interface MarkedReceiptsOfDay extends StoreDay {
+  receiptIds: string[];
+}
+
+const DISCREPANCY_MARKS = sql`array['price', 'discount', 'author']::text[]`;
 
 // The POS events of the notifications (spec 2026-10-14-owner-cabinet, 5.4): shifts closed with a
 // cash discrepancy and sales into minus. The notifications module reads them after a moment and
@@ -76,26 +81,37 @@ export class PosAlerts {
   }
 
   /**
-   * The days with receipts marked for the price, the discount or the author among the receipts received after `after`
-   * (security review 2026-10-22, I2): for each store × business date, every such receipt of that day.
+   * The days of the receipts received after `after` with a price, discount or author mark (security review 2026-10-22,
+   * I2); `created_at` is the moment of receiving, by receipts_created_idx.
    */
-  async discrepanciesByDay(
+  async discrepancyDays(
     trx: TenantTransaction,
     tenantId: string,
     after: Date,
-  ): Promise<ReceiptDiscrepanciesOfDay[]> {
-    const marks = sql`array['price', 'discount', 'author']::text[]`;
-    const result = await sql<ReceiptDiscrepanciesOfDay>`
-      with affected as (
-        select distinct store_id, business_date
-        from pharmacy.receipts
-        where tenant_id = ${tenantId} and received_at > ${after}
-          and discrepancy_kinds && ${marks}
-      )
-      select r.store_id, r.business_date::text as business_date, count(*)::integer as receipts
+  ): Promise<StoreDay[]> {
+    const result = await sql<StoreDay>`
+      select distinct store_id, business_date::text as business_date
+      from pharmacy.receipts
+      where tenant_id = ${tenantId} and created_at > ${after}
+        and discrepancy_kinds && ${DISCREPANCY_MARKS}`.execute(trx);
+    return result.rows;
+  }
+
+  /** Every receipt of those days with a price, discount or author mark. */
+  async discrepancyReceipts(
+    trx: TenantTransaction,
+    tenantId: string,
+    days: readonly StoreDay[],
+  ): Promise<MarkedReceiptsOfDay[]> {
+    if (days.length === 0) return [];
+    const result = await sql<MarkedReceiptsOfDay>`
+      select r.store_id, r.business_date::text as business_date,
+             array_agg(r.id::text order by r.id) as receipt_ids
       from pharmacy.receipts r
-      join affected a on a.store_id = r.store_id and a.business_date = r.business_date
-      where r.tenant_id = ${tenantId} and r.discrepancy_kinds && ${marks}
+      join unnest(${sql.val(days.map((d) => d.storeId))}::uuid[],
+                  ${sql.val(days.map((d) => d.businessDate))}::date[]) as d(store_id, business_date)
+        on d.store_id = r.store_id and d.business_date = r.business_date
+      where r.tenant_id = ${tenantId} and r.discrepancy_kinds && ${DISCREPANCY_MARKS}
       group by r.store_id, r.business_date`.execute(trx);
     return result.rows;
   }

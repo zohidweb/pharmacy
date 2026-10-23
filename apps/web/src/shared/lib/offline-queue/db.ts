@@ -15,6 +15,8 @@ export interface OutboxError {
   status: number;
   code: string;
   correlationId: string;
+  /** The refused fields of the body (errors[] of the problem), e.g. the lines off the price rules of the store. */
+  errors?: Array<{ field: string; code: string }>;
 }
 
 export interface OutboxRecord<Kind extends string = string, Payload = unknown> {
@@ -34,11 +36,6 @@ export interface OutboxRecord<Kind extends string = string, Payload = unknown> {
    * Optional: records written before it have none, and a new field needs no new version of the database.
    */
   controlled?: boolean;
-  /**
-   * A receipt refused by the price rules that a manager accepts as it is: sent again with `X-Accept-Discrepancy`
-   * (ADR-0015, amendment 2026-10-23). Optional, like `controlled`.
-   */
-  acceptDiscrepancy?: boolean;
 }
 
 interface PosDbSchema extends DBSchema {

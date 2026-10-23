@@ -1,6 +1,9 @@
 -- Up Migration
 -- Receipts with price, discount or author marks notify the owner (security review 2026-10-22, I2; ADR-0015,
 -- amendment 2026-10-23): a new notification kind, the CHECKs of the billing-services migration are rebuilt with it.
+-- tenant_settings is read by every POS request: do not queue them behind a long lock.
+set local lock_timeout = '5s';
+
 alter table pharmacy.notifications
   drop constraint notifications_kind_check,
   add constraint notifications_kind_check check (kind in ('batch_expiring', 'low_stock',

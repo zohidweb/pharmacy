@@ -270,6 +270,9 @@
       "error": "Ҷавоби сервер",
       "errorText": "{status} {code} · рамз {correlationId}",
       "actions": "Амалҳо",
+      "refusedTotal": "Чек ба маблағи {total}",
+      "refusedPrice": "Нарх мувофиқи қоидаҳо нест: {line}",
+      "refusedDiscount": "Тахфиф мувофиқи қоидаҳо нест",
       "accept": "Фарқро қабул кардан",
       "retry": "Аз нав фиристодан"
     },

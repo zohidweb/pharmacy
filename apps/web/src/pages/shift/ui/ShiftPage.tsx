@@ -249,6 +249,46 @@ const kindKey = {
   'shift.close': 'shift_close',
 } as const;
 
+/** The rights on the store the session has to accept a sale refused by the price rules (ADR-0015, amendment 2026-10-23). */
+interface AcceptRights {
+  prices: boolean;
+  discounts: boolean;
+}
+
+/**
+ * What a refusal by the price rules names: the refused lines (product, unit price) and the discount — so the manager
+ * sees what is accepted — and whether the session may accept it: a price needs the right on the prices, a discount the
+ * right on the discount rules (the server checks them again). An older record without `errors` asks for either right.
+ */
+function priceRefusal(
+  record: PosOutboxRecord,
+  rights: AcceptRights,
+  nameOf: (productId: string) => string,
+): { lines: string[]; discount: boolean; mayAccept: boolean } | null {
+  if (
+    record.kind !== 'receipt' ||
+    record.lastError?.code !== 'price_rules_violated'
+  ) {
+    return null;
+  }
+  const errors = record.lastError.errors ?? [];
+  const lines = errors
+    .map((e) => /^lines\.(\d+)\.unitPriceMinor$/.exec(e.field))
+    .map((m) => (m ? record.payload.lines[Number(m[1])] : undefined))
+    .filter((line) => line !== undefined)
+    .map(
+      (line) =>
+        `${nameOf(line.productId)} — ${formatMoney(line.unitPriceMinor)}`,
+    );
+  const discount = errors.some((e) => e.code === 'discount_not_allowed');
+  const mayAccept =
+    errors.length === 0
+      ? rights.prices || rights.discounts
+      : (lines.length === 0 || rights.prices) &&
+        (!discount || rights.discounts);
+  return { lines, discount, mayAccept };
+}
+
 /**
  * Operations that the server refused: kept for the manager, retried with the same key (ADR-0015). A receipt refused by
  * the price rules can be accepted as it is by someone who may set the prices or the discount rules (ADR-0015, amendment
@@ -258,11 +298,14 @@ function Quarantine({
   records,
   onRetry,
   onAccept,
+  rights,
+  nameOf,
 }: {
   records: PosOutboxRecord[];
   onRetry: (id: string) => void;
-  /** Absent — the session may not accept a discrepancy. */
-  onAccept?: (id: string) => void;
+  onAccept: (id: string) => void;
+  rights: AcceptRights;
+  nameOf: (productId: string) => string;
 }) {
   const t = useTranslations('shift.quarantine');
   const known = useApiCodeMessage();
@@ -294,6 +337,27 @@ function Quarantine({
               r.lastError ? (
                 <span className="flex flex-col">
                   {known(r.lastError.code)}
+                  {(() => {
+                    const refusal = priceRefusal(r, rights, nameOf);
+                    if (!refusal) return null;
+                    return (
+                      <span className="text-sm">
+                        {t('refusedTotal', {
+                          total: formatMoney(
+                            (r.payload as { totalMinor: number }).totalMinor,
+                          ),
+                        })}
+                        {refusal.lines.map((line) => (
+                          <span key={line} className="block">
+                            {t('refusedPrice', { line })}
+                          </span>
+                        ))}
+                        {refusal.discount && (
+                          <span className="block">{t('refusedDiscount')}</span>
+                        )}
+                      </span>
+                    );
+                  })()}
                   <span className="text-xs text-fg-subtle">
                     {t('errorText', {
                       status: r.lastError.status,
@@ -312,7 +376,7 @@ function Quarantine({
             align: 'end',
             cell: (r) => (
               <span className="flex flex-wrap justify-end gap-2">
-                {onAccept && r.lastError?.code === 'price_rules_violated' && (
+                {priceRefusal(r, rights, nameOf)?.mayAccept && (
                   <Button variant="secondary" onClick={() => onAccept(r.id)}>
                     {t('accept')}
                   </Button>
@@ -352,7 +416,8 @@ function ShiftPageView() {
   // the shift belongs to the terminal: only a PIN session of a bound one has it (K6)
   const onTerminal = session?.terminalId != null;
   const shift = useCurrentShift(storeId, onTerminal);
-  const settings = useCatalog(runtime, storeId).data?.snapshot.settings;
+  const catalog = useCatalog(runtime, storeId);
+  const settings = catalog.data?.snapshot.settings;
   const [dialog, setDialog] = useState<
     'open' | 'close' | CashMovementKind | null
   >(null);
@@ -630,16 +695,19 @@ function ShiftPageView() {
               <Quarantine
                 records={quarantined}
                 onRetry={(id) => void runtime?.queue.retry(id)}
-                onAccept={
-                  canWrite(session, 'pricing:update-store') ||
-                  canWrite(session, 'pricing:update-network') ||
-                  canWrite(session, 'discounts:manage-store') ||
-                  canWrite(session, 'discounts:manage-network')
-                    ? (id) =>
-                        void runtime?.queue.retry(id, {
-                          acceptDiscrepancy: true,
-                        })
-                    : undefined
+                onAccept={(id) =>
+                  void runtime?.queue.retry(id, { acceptDiscrepancy: true })
+                }
+                rights={{
+                  prices:
+                    canWrite(session, 'pricing:update-store') ||
+                    canWrite(session, 'pricing:update-network'),
+                  discounts:
+                    canWrite(session, 'discounts:manage-store') ||
+                    canWrite(session, 'discounts:manage-network'),
+                }}
+                nameOf={(productId) =>
+                  catalog.index?.byId.get(productId)?.name ?? productId
                 }
               />
               {current ? (

@@ -6,6 +6,7 @@ import { AuditJournalRepository } from './audit-journal.repository';
 import { AuditService } from './audit.service';
 import { PinSignIns } from './pin-sign-ins';
 import { PriceChanges } from './price-changes';
+import { ReceiptRefusals } from './receipt-refusals';
 import { SyncCoreModule } from '../../core/sync';
 
 // Domain module boundary (ADR-0002). Other modules use only what is listed in `exports`. The
@@ -17,6 +18,7 @@ import { SyncCoreModule } from '../../core/sync';
   // AuditFacts — the journal rows of offline stores without a domain operation (spec 2026-10-16-offline-sync)
   // PinSignIns — who held a terminal at the moment of a POS operation sent under it (spec 2026-10-21-pos-offline-limits)
   // PriceChanges — the price of a store at the moment of a POS snapshot (security review 2026-10-22, I2)
+  // ReceiptRefusals — the sales the price rules refused, for the owner's notification (I2)
   providers: [
     AuditService,
     AuditJournalRepository,
@@ -24,7 +26,14 @@ import { SyncCoreModule } from '../../core/sync';
     AuditFacts,
     PinSignIns,
     PriceChanges,
+    ReceiptRefusals,
   ],
-  exports: [AuditService, AuditJournal, PinSignIns, PriceChanges],
+  exports: [
+    AuditService,
+    AuditJournal,
+    PinSignIns,
+    PriceChanges,
+    ReceiptRefusals,
+  ],
 })
 export class AuditModule {}

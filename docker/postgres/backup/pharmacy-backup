@@ -40,7 +40,9 @@ BACKUP_TIME=${BACKUP_TIME:-02:00}
 RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
 DB_NAME=${PGDATABASE:-pharmacy}
 STATE="$BACKUP_ROOT/.state"
-LOCK=/tmp/pharmacy-backup.lock
+# On the shared volume, not in /tmp: fetch and verify-offsite run in their own container (`compose run`) beside the
+# daemon, and both use $SCRATCH; flock on one file of a volume holds across the containers of the host.
+LOCK="$SCRATCH/.pharmacy-backup.lock"
 STARTED=/tmp/pharmacy-backup.started
 TMP_BLOCKED=/tmp/pharmacy-backup.blocked
 SCRATCH_PORT=5499

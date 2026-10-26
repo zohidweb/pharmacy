@@ -14,6 +14,11 @@
 #                          container `postgres`, superuser over the local socket: restore the copy beside the working
 #                          database and swap the names; --check only validates and prints the plan
 #   push                   upload the verified copies not yet off the host (`run` and the daemon do it themselves)
+#   list-offsite           the copies and the env files in the bucket for APP_ENV
+#   fetch <name>           the server is lost: download the copy, decrypt it with the private key of a keeper read from
+#                          stdin (never stored) and put it into BACKUP_ROOT for `restore`
+#   verify-offsite <name>  the monthly drill: download, decrypt (key on stdin), restore into a scratch instance, compare
+#   env-push               the env file of the environment from stdin, encrypted for the keepers, into the bucket
 #
 # Copies off the host (ADR-0020, docs/superpowers/specs/2026-10-23-offsite-backups-design.md): a verified copy is
 # encrypted with age for BACKUP_AGE_RECIPIENTS and uploaded with rclone (remote `offsite`, RCLONE_CONFIG_OFFSITE_*) as
@@ -364,6 +369,110 @@ cmd_push() {
   offsite_push
 }
 
+cmd_list_offsite() {
+  offsite_enabled || die "copies off the host are not configured (BACKUP_OFFSITE_BUCKET is empty)"
+  printf 'copies in %s:\n' "${BACKUP_OFFSITE_BUCKET}/${APP_ENV:-unknown}"
+  rclone lsf --files-only "$(offsite_prefix)/" 2>/dev/null | sed -n 's/\.tar\.age$//p' | sort | sed 's/^/  /'
+  printf 'env files:\n'
+  rclone lsf --files-only "$(offsite_prefix)/env/" 2>/dev/null | sort | sed 's/^/  /'
+}
+
+# offsite_download <name> <dir> — the object of the copy, decrypted with the private key of a keeper from stdin, into
+# <dir>. Anyone with the bucket key can put an object encrypted for the public keys there, so the archive is opened
+# only when it holds exactly the three files of a copy, and its manifest names this copy and says it was verified.
+# f_error for the caller; nothing is left behind on failure.
+offsite_download() {
+  enc="$SCRATCH/$1.tar.age"
+  plain="$SCRATCH/$1.tar"
+  err=/tmp/pharmacy-backup.offsite.err
+  f_error=''
+  rm -rf "$2" "$enc" "$plain"
+  if ! rclone copyto "$(offsite_object "$1")" "$enc" 2>"$err"; then
+    f_error="download failed: $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"
+  elif ! age -d -i /dev/stdin -o "$plain" "$enc" 2>"$err"; then
+    f_error="decryption failed (the private key of a keeper?): $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"
+  elif [ "$(tar -tf "$plain" 2>/dev/null | sort | tr '\n' ' ')" != 'globals.sql manifest.json pharmacy.dump ' ]; then
+    f_error="the archive does not hold exactly pharmacy.dump, globals.sql and manifest.json"
+  elif ! mkdir -p "$2" || ! tar -C "$2" -xf "$plain" pharmacy.dump globals.sql manifest.json 2>"$err"; then
+    f_error="unpacking failed: $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"
+  elif [ "$(manifest_get "$2/manifest.json" name)" != "$1" ] ||
+    [ "$(manifest_get "$2/manifest.json" verified)" != true ]; then
+    f_error="the archive is not the verified copy $1"
+  fi
+  rm -f "$enc" "$plain"
+  [ -z "$f_error" ] && return 0
+  rm -rf "$2"
+  return 1
+}
+
+# fetch_check <name> — the arguments and the state shared by fetch and verify-offsite.
+fetch_check() {
+  is_name "$1" || die "usage: pharmacy-backup $2 <copy> — the private key of a keeper on stdin"
+  offsite_enabled || die "copies off the host are not configured (BACKUP_OFFSITE_BUCKET is empty)"
+  [ -t 0 ] && die "$2 $1: the private key of a keeper goes on stdin, it is never stored on this host"
+  exec 9>"$LOCK"
+  flock -n 9 || { log "a copy is already running"; exit 3; }
+}
+
+# fetch <name> — the server is lost: the copy comes back from the bucket into BACKUP_ROOT, ready for `restore`.
+cmd_fetch() {
+  name=${1:-}
+  fetch_check "$name" fetch
+  [ -e "$BACKUP_ROOT/$name" ] && die "copy $name is already in $BACKUP_ROOT: nothing to fetch"
+  mkdir -p "$STATE" 2>/dev/null || die "BACKUP_ROOT $BACKUP_ROOT is not writable by uid $(id -u)"
+  part="$BACKUP_ROOT/$name.partial"
+  offsite_download "$name" "$part" || die "fetch $name: $f_error"
+  now=$(date +%s)
+  {
+    printf '{\n'
+    printf '  "object": "%s",\n' "$(sanitize "$(offsite_object "$name" | sed 's/^offsite://')")"
+    printf '  "fetchedAt": "%s"\n' "$(date -u -d "@$now" +%Y-%m-%dT%H:%M:%SZ)"
+    printf '}\n'
+  } >"$part/offsite.json"
+  mv "$part" "$BACKUP_ROOT/$name" || die "cannot rename $part"
+  log "fetch $name: done, $(manifest_get "$BACKUP_ROOT/$name/manifest.json" tenants) networks — restore it with: restore $name --replace-database"
+}
+
+# verify-offsite <name> — the monthly drill (spec O12): download, decrypt and restore into a scratch instance, compare
+# with the manifest of the copy; nothing stays on the host.
+cmd_verify_offsite() {
+  name=${1:-}
+  fetch_check "$name" verify-offsite
+  dir="$SCRATCH/$name.check"
+  trap 'scratch_stop; rm -rf "$dir"' EXIT
+  t0=$(date +%s)
+  offsite_download "$name" "$dir" || die "verify-offsite $name: $f_error"
+  scratch_start || die "verify-offsite $name: the scratch instance did not start: $s_error"
+  apply_globals "$SCRATCH_CONN" "$dir/globals.sql" || die "verify-offsite $name: the roles of the copy cannot be applied"
+  restore_into "$SCRATCH_CONN" "$DB_NAME" "$dir/pharmacy.dump" || die "verify-offsite $name: pg_restore failed"
+  check_restored "$SCRATCH_CONN" "$DB_NAME" "$(manifest_get "$dir/manifest.json" tables)" \
+    "$(manifest_get "$dir/manifest.json" lastMigration)" || die "verify-offsite $name: $c_error"
+  log "verify-offsite $name: ok — downloaded, decrypted and restored in $(($(date +%s) - t0)) s, $c_tenants networks"
+}
+
+# env-push — the env file of the environment from stdin (keys of JWT, peppers, passwords; ADR-0008), encrypted for the
+# keepers and uploaded as <APP_ENV>/env/<time>.env.age (spec O13). The plain text stays in memory.
+cmd_env_push() {
+  offsite_enabled || die "copies off the host are not configured (BACKUP_OFFSITE_BUCKET is empty)"
+  [ -t 0 ] && die "env-push: the env file goes on stdin"
+  recipients=$(age_recipients) || die "env-push: BACKUP_AGE_RECIPIENTS must hold public keys age1…, space-separated"
+  envfile=$(cat)
+  [ -n "$envfile" ] || die "env-push: stdin is empty"
+  name=$(date -u +%Y%m%dT%H%M%SZ)
+  obj="$(offsite_prefix)/env/$name.env.age"
+  enc="/tmp/pharmacy-env-$name.age"
+  err=/tmp/pharmacy-backup.offsite.err
+  # shellcheck disable=SC2086
+  printf '%s\n' "$envfile" | age $recipients -o "$enc" 2>"$err" ||
+    { rm -f "$enc"; die "env-push: encryption failed: $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"; }
+  bytes=$(stat -c %s "$enc")
+  rclone copyto "$enc" "$obj" 2>"$err" ||
+    { rm -f "$enc"; die "env-push: upload failed: $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"; }
+  rm -f "$enc"
+  [ "$(offsite_size "$obj")" = "$bytes" ] || die "env-push: the object of $name has another size after the upload"
+  log "env-push: uploaded as ${obj#offsite:}"
+}
+
 # fail <reason> — the copy in progress becomes <name>.failed with the reason and the tail of its log. Its dump is
 # deleted: a failure that repeats hourly would otherwise fill BACKUP_DIR, and retention runs only after a success.
 fail() {
@@ -643,5 +752,9 @@ status) cmd_status ;;
 health) cmd_health ;;
 restore) cmd_restore "${2:-}" "${3:-}" ;;
 push) cmd_push ;;
-*) die "usage: pharmacy-backup daemon | run | push | verify <copy> | status | health | restore <copy> [--check]" ;;
+list-offsite) cmd_list_offsite ;;
+fetch) cmd_fetch "${2:-}" ;;
+verify-offsite) cmd_verify_offsite "${2:-}" ;;
+env-push) cmd_env_push ;;
+*) die "usage: pharmacy-backup daemon | run | push | verify <copy> | status | health | restore <copy> [--check] | list-offsite | fetch <copy> | verify-offsite <copy> | env-push" ;;
 esac

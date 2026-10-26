@@ -275,7 +275,8 @@ Only these. Financial operations require idempotency and a correlation ID.
 ```
 npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs> [service…] [--skip-checks]
 npm run stack -- <test|prod> <backup|backup-status|backup-verify <копия>|restore <копия> [--replace-database]>
-npm run stack -- <test|prod> <offsite-list|offsite-fetch <копия> --identity <ключ>|offsite-verify <копия> --identity <ключ>|env-push>
+npm run stack -- <test|prod> <offsite-list|offsite-fetch <копия> --identity <ключ>|offsite-verify <копия> --identity <ключ>> [--at <время UTC>]
+npm run stack -- <test|prod> env-push
 npm run stack -- test init     # env-файл из примера со случайными паролями (один раз)
 npm run test-env:build         # lint + test + образы с тегом <git sha> (web/admin собирает образ proxy)
 npm run test-env:up            # запуск и ожидание healthy;  test-env:down — остановка
@@ -343,14 +344,17 @@ npm run prod:build / prod:up / prod:down
     проверенная копия шифруется `age` открытыми ключами двух хранителей (`BACKUP_AGE_RECIPIENTS`; закрытых ключей на
     сервере нет) и выгружается `rclone` (удалённое хранилище `offsite` из переменных `RCLONE_CONFIG_OFFSITE_*`) как
     `<BACKUP_OFFSITE_BUCKET>/<APP_ENV>/<копия>.tar.age` — сразу после копии, а при неудаче раз в час. Бакет Contabo
-    Object Storage в US Central или Singapore создаётся с Object Lock (COMPLIANCE, 30 дней) и правилом истечения через
-    31 день: сервер во внешнем хранилище ничего не удаляет. Без `BACKUP_OFFSITE_BUCKET` копии остаются только на хосте;
-    в prod тогда `backup` unhealthy (решение 7.1: реальных данных до копий вне хоста нет). При включённой выгрузке
-    `backup` unhealthy, если свежайшая выгрузка старше 26 ч; `backup-status` показывает выгрузку у каждой копии;
+    Object Storage в US Central или Singapore создаётся с Object Lock (COMPLIANCE, 30 дней) и правилами lifecycle
+    (текущая версия — 31 день, прежние версии — через день после): сервер во внешнем хранилище ничего не удаляет и бакет
+    не создаёт. Без `BACKUP_OFFSITE_BUCKET` копии остаются только на хосте; в prod тогда `backup` unhealthy через 2 ч после
+    старта (решение 7.1: реальных данных до копий вне хоста нет). При включённой выгрузке `backup` unhealthy, если
+    свежайшая выгрузка старше 26 ч; `backup-status` показывает выгрузку у каждой копии;
   - восстановление после потери сервера: env-файл — из его копии (`env-push`, ниже), `up postgres`, `offsite-list`,
     `offsite-fetch <копия> --identity <файл ключа>` (ключ уходит в контейнер только через stdin, на диск сервера не
-    пишется), затем `restore <копия> --replace-database`. Архив открывается, только если в нём ровно три файла копии,
-    а её манифест называет эту копию проверенной;
+    пишется), затем `restore <копия> --replace-database`. Архив открывается, только если в нём ровно три обычных файла
+    копии, а её манифест называет эту копию проверенной. Захвативший сервер может положить поверх копии новую версию
+    (Object Lock хранит прежнюю): `offsite-list` показывает прежние версии, а после взлома копию и env-файл берут «как
+    были» до него — `--at <время UTC>` (`docs/guides/deploy-vps.md`, «После взлома сервера»);
   - раз в месяц хранитель ключа делает учебное восстановление: `offsite-verify <копия> --identity <файл ключа>`
     (скачать, расшифровать, восстановить во временный экземпляр, сверить с манифестом);
   - копия env-файла (ключи JWT, pepper, пароли): после каждого его изменения `npm run stack -- prod env-push` на машине

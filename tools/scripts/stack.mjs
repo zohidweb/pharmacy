@@ -19,13 +19,15 @@
 //                                          without the flag: what would happen; with it: restore the copy beside
 //                                          the working database, swap the names, reset sessions, start everything
 //   copies off the host (test, prod; ADR-0020 — BACKUP_OFFSITE_BUCKET and the rclone variables of the env file):
-//             offsite-list                 the copies and the env files in the bucket
+//             offsite-list                 the copies and the env files in the bucket, with their older versions
 //             offsite-fetch <copy> --identity <key file>
 //                                          the server is lost: the copy back from the bucket into BACKUP_DIR (the
 //                                          private key of a keeper goes on stdin), then `restore <copy>`
 //             offsite-verify <copy> --identity <key file>
 //                                          the monthly drill: download, decrypt and restore into a scratch instance
 //             env-push                     the env file of the environment, encrypted for the keepers, into the bucket
+//             --at <UTC time>              offsite-list, -fetch, -verify: the bucket as it was then (after a break-in,
+//                                          a time before it), e.g. --at 2026-10-20T21:00:00Z
 //
 // Checks run manually until CI/CD is chosen by an ADR (CLAUDE.md, "CI/CD").
 import { spawnSync } from 'node:child_process';
@@ -57,6 +59,8 @@ const BACKUP_ENVS = ['test', 'prod'];
 const BACKUP_VARIABLES = ['PHARMACY_BACKUP_PASSWORD', 'BACKUP_DIR'];
 // A copy is named by its UTC start time; the strict pattern also keeps the argument safe for cmd.exe (shell: true).
 const COPY_NAME = /^\d{8}T\d{6}Z$/;
+// --at of the commands off the host, as strict for the same reason.
+const AT_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 // Commands that build or start the stack refuse the placeholders of the example in a test or prod env file (security
 // review 2026-10-22, S2): a hand-copied example would run PostgreSQL, the roles and Redis with the password `change-me`.
 const STARTING_COMMANDS = ['build', 'up', 'restore'];
@@ -224,15 +228,24 @@ function requireOffsite(envName, env, command) {
   }
 }
 
+// --at <UTC time> as arguments of pharmacy-backup, or none.
+function atArgs(at) {
+  if (at === undefined) return [];
+  if (!AT_TIME.test(at)) fail('--at takes a UTC time such as 2026-10-20T21:00:00Z.');
+  return ['--at', at];
+}
+
 // fetch | verify-offsite <copy>: the private key of a keeper reaches the container on stdin only (spec O11) — never on
 // a command line, in a log or on the disk of the host.
-function offsiteWithKey(envName, env, command, name, identity) {
+function offsiteWithKey(envName, env, command, name, identity, at) {
   const label = `offsite-${command === 'fetch' ? 'fetch' : 'verify'}`;
   requireOffsite(envName, env, label);
   if (!identity || !existsSync(identity)) {
     fail(`${label}: --identity <file of the private key of a keeper> is required.`);
   }
-  const args = [...composeArgs(envName, env), 'run', '--rm', '--no-deps', '-T', 'backup', 'pharmacy-backup', command, name];
+  const args = [
+    ...composeArgs(envName, env), 'run', '--rm', '--no-deps', '-T', 'backup', 'pharmacy-backup', command, name, ...atArgs(at),
+  ];
   console.log(`\n$ docker ${args.join(' ')} < <private key>`);
   const result = spawnSync('docker', args, {
     cwd: root,
@@ -249,10 +262,14 @@ function offsiteWithKey(envName, env, command, name, identity) {
 function envPush(envName, env) {
   requireOffsite(envName, env, 'env-push');
   const values = Object.fromEntries(OFFSITE_VARIABLES.map((name) => [name, envValue(env, name, '')]));
+  // APP_ENV is the prefix of the object: an APP_ENV of the shell must not send prod's file under dev/.
+  values.APP_ENV = envName;
   const args = [
     'run', '--rm', '-i', '--pull=never', '--user', 'postgres',
     ...OFFSITE_VARIABLES.flatMap((name) => ['-e', name]),
+    // The fixed values of docker/compose.backup.yml.
     '-e', 'RCLONE_CONFIG=/tmp/rclone.conf', '-e', 'RCLONE_CACHE_DIR=/tmp/rclone-cache',
+    '-e', 'RCLONE_CONFIG_OFFSITE_NO_CHECK_BUCKET=true', '-e', 'RCLONE_CONFIG_OFFSITE_UPLOAD_CUTOFF=5G',
     `pharmacy/postgres:${process.env.IMAGE_TAG}`, 'pharmacy-backup', 'env-push',
   ];
   console.log(`\n$ docker ${args.join(' ')} < ${env.envFile}`);
@@ -357,11 +374,13 @@ if (BACKUP_ENVS.includes(envName) && STARTING_COMMANDS.includes(command)) {
 if (envName === 'prod' && STARTING_COMMANDS.includes(command) && !envValue(env, 'BACKUP_OFFSITE_BUCKET', '')) {
   console.warn(
     `\n⚠ ${env.envFile} has no BACKUP_OFFSITE_BUCKET: the copies of the database stay on this host only — no real data ` +
-      'before the copies go off the host (decision 7.1 of the security review, ADR-0020); the backup service is unhealthy.',
+      'before the copies go off the host (decision 7.1 of the security review, ADR-0020); the backup service turns ' +
+      'unhealthy 2 h after its start.',
   );
 }
-const identityAt = rest.indexOf('--identity');
-const identity = identityAt >= 0 ? rest[identityAt + 1] : undefined;
+const option = (name) => (rest.includes(name) ? (rest[rest.indexOf(name) + 1] ?? '') : undefined);
+const identity = option('--identity');
+const at = option('--at');
 
 process.env.IMAGE_TAG = imageTag(envName);
 
@@ -380,7 +399,9 @@ switch (command) {
     break;
   case 'offsite-list':
     requireOffsite(envName, env, command);
-    run('docker', [...composeArgs(envName, env), 'run', '--rm', '--no-deps', '-T', 'backup', 'pharmacy-backup', 'list-offsite']);
+    run('docker', [
+      ...composeArgs(envName, env), 'run', '--rm', '--no-deps', '-T', 'backup', 'pharmacy-backup', 'list-offsite', ...atArgs(at),
+    ]);
     break;
   case 'offsite-fetch':
   case 'offsite-verify':
@@ -388,8 +409,9 @@ switch (command) {
       envName,
       env,
       command === 'offsite-fetch' ? 'fetch' : 'verify-offsite',
-      copyName(services[0], `npm run stack -- ${envName} ${command} <copy> --identity <key file>`),
+      copyName(services[0], `npm run stack -- ${envName} ${command} <copy> --identity <key file> [--at <UTC time>]`),
       identity,
+      at,
     );
     break;
   case 'env-push':

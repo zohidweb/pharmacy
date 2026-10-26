@@ -75,12 +75,26 @@ ssh deploy@<IP> chmod 600 /opt/pharmacy/docker/env/prod.env
    не в git, не в чаты и не на сервер; открытые ключи `age1…` обоих — в `BACKUP_AGE_RECIPIENTS` через пробел.
 2. В панели Contabo — Object Storage в регионе **US Central** или **Singapore** (не EU, где VPS).
 3. Бакет — с Object Lock (создаётся только так, включить потом нельзя), режим **COMPLIANCE**, срок по умолчанию
-   **30 дней**; правило lifecycle — истечение объектов через **31 день**. Например, `aws` CLI c endpoint региона:
-   `s3api create-bucket --bucket <имя> --object-lock-enabled-for-bucket`, затем
-   `s3api put-object-lock-configuration` (COMPLIANCE, Days 30) и `s3api put-bucket-lifecycle-configuration`
-   (Expiration Days 31).
-4. По возможности — отдельный пользователь Contabo с политикой только на этот бакет; иначе ключи S3 аккаунта
-   (поправка ADR-0020 2026-10-23: от удаления защищает Object Lock).
+   **30 дней**. Object Lock включает версии: запись того же имени или удаление кладут поверх новую версию или метку
+   удаления, а прежняя версия остаётся до конца срока. Поэтому lifecycle — из трёх частей: текущая версия истекает через
+   **31 день**, прежние версии удаляются через день после этого (под блокировкой — не раньше её срока), одинокие метки
+   удаления и брошенные multipart-загрузки убираются. Без удаления прежних версий копии не исчезают никогда.
+   Например, `aws` CLI (`--endpoint-url https://usc1.contabostorage.com` или `sin1` у каждой команды):
+
+   ```bash
+   aws s3api create-bucket --bucket <имя> --object-lock-enabled-for-bucket
+   aws s3api put-object-lock-configuration --bucket <имя> --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"COMPLIANCE","Days":30}}}'
+   aws s3api put-bucket-lifecycle-configuration --bucket <имя> --lifecycle-configuration '{"Rules":[{"ID":"copies","Status":"Enabled","Filter":{"Prefix":""},"Expiration":{"Days":31},"NoncurrentVersionExpiration":{"NoncurrentDays":1},"AbortIncompleteMultipartUpload":{"DaysAfterInitiation":1}},{"ID":"delete-markers","Status":"Enabled","Filter":{"Prefix":""},"Expiration":{"ExpiredObjectDeleteMarker":true}}]}'
+   aws s3api get-bucket-lifecycle-configuration --bucket <имя>
+   ```
+
+   Последняя команда должна вернуть оба правила. Если Contabo отклоняет часть — не продолжать без решения архитектора.
+4. Ключ сервера. По возможности — отдельный пользователь Contabo с политикой только на этот бакет: `s3:PutObject`,
+   `s3:GetObject`, `s3:GetObjectVersion`, `s3:ListBucket`, `s3:ListBucketVersions` и ничего больше — ни `s3:Delete*`,
+   ни прав на сроки блокировки и legal hold, ни `s3:PutBucket*`. Чтение нужно: rclone сверяет выгруженный объект, а
+   `fetch` на новом сервере работает тем же ключом; в бакете только шифротекст. Если ограничить ключ нельзя — ключи S3
+   аккаунта (поправка ADR-0020 2026-10-23: от удаления защищает Object Lock). Бакет rclone не создаёт: ошибка в имени —
+   ошибка выгрузки в `pb status`, а не новый бакет без Object Lock.
 5. В `docker/env/prod.env`: `BACKUP_OFFSITE_BUCKET`, `BACKUP_AGE_RECIPIENTS`, `RCLONE_CONFIG_OFFSITE_ENDPOINT`
    (`https://usc1.contabostorage.com` или `https://sin1.contabostorage.com`), `RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID`,
    `RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY`. Ключи S3 — ещё и в менеджер паролей хранителей: при потере сервера
@@ -141,6 +155,16 @@ curl -s -o /dev/null -w '%{http_code}\n' https://admin.nurmed.online/       # 40
 `app.nurmed.online`. Первая копия БД — сразу, не ночью: `dc exec -T backup pharmacy-backup run`; в `pb status` у неё
 `offsite yes`, а `dc exec -T backup pharmacy-backup list-offsite` показывает её в бакете.
 
+Один раз — проверка бакета на этой копии (`aws` CLI, как в разделе 2.1):
+
+- `aws s3api get-object-retention --bucket <имя> --key prod/<копия>.tar.age` — `COMPLIANCE`, срок через 30 дней;
+- `aws s3api list-object-versions --bucket <имя> --prefix prod/<копия>` — одна версия; удаление этой версии
+  `aws s3api delete-object --bucket <имя> --key prod/<копия>.tar.age --version-id <VersionId>` — отказ (AccessDenied);
+- `list-offsite --at <время UTC до копии>` — без копий, `list-offsite` — с ней (чтение по версиям);
+- учебное восстановление этой копии (раздел «Ежедневно…», `verify-offsite`).
+
+Если любая проверка не проходит — реальных данных на сервер не заводить (решение 7.1).
+
 ## 6. Первый оператор и сеть
 
 Как в CLAUDE.md, раздел «Containers»: `create-operator.mjs`, затем `create-activation-code.mjs` — командой
@@ -195,9 +219,11 @@ dc restart redis        # все входят заново
    `docker run --rm -i --pull=never -v "$PWD:/w" pharmacy/postgres:<sha> age -d -i /dev/stdin -o /w/prod.env /w/<время>.env.age < key.txt`;
    положить на хост как в разделе 2.
 3. Раздел 3 — образы и compose-файлы того коммита, что работал (или новее).
-4. Только PostgreSQL: `export IMAGE_TAG=<sha>; dc up -d --no-build --wait postgres` (полный `up` не нужен: защита пустой
-   базы не даст копировать пустую базу поверх истории копий, B15).
-5. Имя последней копии и сама копия — из бакета; закрытый ключ идёт по ssh в stdin и на диск сервера не попадает:
+4. Только PostgreSQL: `export IMAGE_TAG=<sha>; dc up -d --no-build --wait postgres`. Не полный `up`: на новом хосте
+   `BACKUP_DIR` пуст, защите пустой базы (B15) не с чем сравнить, и `backup` сразу скопировал бы пустую базу и выгрузил
+   её как самую свежую копию вне хоста.
+5. Имя последней копии и сама копия — из бакета; закрытый ключ идёт по ssh в stdin и на диск сервера не попадает
+   (после взлома — с `--at`, раздел ниже):
 
    ```bash
    ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=<sha> docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml run --rm --no-deps -T backup pharmacy-backup list-offsite'
@@ -205,3 +231,20 @@ dc restart redis        # все входят заново
    ```
 
 6. Дальше — раздел «Восстановление из копии» выше и шаг 4 целиком.
+
+## После взлома сервера
+
+Захвативший сервер знает ключ бакета и открытые ключи `age`. Удалить или изменить выгруженные версии он не может
+(Object Lock), но может положить поверх новую версию — подделанную копию или env-файл — или метку удаления. Текущим
+объектам бакета после взлома не верить; `list-offsite` показывает прежние версии (`…-v<время>…`).
+
+1. Время взлома (UTC) — раньше первых его следов. Дальше бакет читается «как был» на это время: по времени записи
+   версий хранилищем, а не по именам объектов.
+2. Env-файл: `aws s3api list-object-versions --bucket <имя> --prefix prod/env/` — последняя версия с `LastModified`
+   раньше взлома, затем
+   `aws s3api get-object --bucket <имя> --key prod/env/<время>.env.age --version-id <VersionId> <время>.env.age` и
+   расшифровка, как в шаге 2 раздела выше.
+3. Копия: команды шага 5 раздела выше с `--at <время UTC>` в конце: `list-offsite --at 2026-10-20T21:00:00Z`, затем
+   `fetch <копия> --at 2026-10-20T21:00:00Z`.
+4. Ключи S3 и все секреты env-файла считать раскрытыми: новые ключи S3 (старые отозвать), ключи JWT и пароли ролей.
+   Новый pepper обесценивает все пароли и PIN — решение архитектора.

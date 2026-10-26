@@ -34,7 +34,8 @@
 5. Каталог `/opt/pharmacy` (владелец `deploy`) с подкаталогами `docker/` и `docker/env/` (`chmod 700`).
 6. Каталог копий БД (ADR-0019) — `BACKUP_DIR` env-файла, владелец uid 70 (postgres в образе):
    `install -d -o 70 -g 70 -m 700 /srv/pharmacy-backups/prod`. На VPS один диск: копии на нём не переживут потерю
-   сервера — до выгрузки копий вне хоста (`age` + `rclone`, ADR-0020, ещё не сделана) реальные данные не вносить.
+   сервера, поэтому каждая копия уходит во внешнее хранилище (раздел 2.1); пока оно не настроено, реальные данные не
+   вносить (решение 7.1, `backup` в prod без него unhealthy).
 7. Команды compose пользователя `deploy` — одни на все шаги ниже (`~/.bashrc`). Тег образов — `IMAGE_TAG` сессии, иначе
    тег работающей выкладки из `/opt/pharmacy/image-tag` (шаг 4); без тега `dc` не запускается: compose взял бы тег
    `local`, которого на хосте нет (образы не скачиваются — `pull_policy: never`).
@@ -64,6 +65,28 @@ ssh deploy@<IP> chmod 600 /opt/pharmacy/docker/env/prod.env
 
 Локальную копию — не в git и не в чаты. В нём pepper паролей и ключи JWT (ADR-0008): его копия хранится отдельно от
 копий БД, зашифрованной `age` (ADR-0020). Потеря pepper = все пароли и PIN недействительны.
+
+## 2.1. Хранилище копий вне хоста (один раз, ADR-0020)
+
+Спецификация `docs/superpowers/specs/2026-10-23-offsite-backups-design.md`, раздел 5.
+
+1. Ключи `age` у двух хранителей — каждый на своей машине: `age-keygen -o key.txt` (официальный бинарник age или
+   `docker run --rm --pull=never pharmacy/postgres:<sha> age-keygen`). Закрытый ключ — в менеджер паролей хранителя,
+   не в git, не в чаты и не на сервер; открытые ключи `age1…` обоих — в `BACKUP_AGE_RECIPIENTS` через пробел.
+2. В панели Contabo — Object Storage в регионе **US Central** или **Singapore** (не EU, где VPS).
+3. Бакет — с Object Lock (создаётся только так, включить потом нельзя), режим **COMPLIANCE**, срок по умолчанию
+   **30 дней**; правило lifecycle — истечение объектов через **31 день**. Например, `aws` CLI c endpoint региона:
+   `s3api create-bucket --bucket <имя> --object-lock-enabled-for-bucket`, затем
+   `s3api put-object-lock-configuration` (COMPLIANCE, Days 30) и `s3api put-bucket-lifecycle-configuration`
+   (Expiration Days 31).
+4. По возможности — отдельный пользователь Contabo с политикой только на этот бакет; иначе ключи S3 аккаунта
+   (поправка ADR-0020 2026-10-23: от удаления защищает Object Lock).
+5. В `docker/env/prod.env`: `BACKUP_OFFSITE_BUCKET`, `BACKUP_AGE_RECIPIENTS`, `RCLONE_CONFIG_OFFSITE_ENDPOINT`
+   (`https://usc1.contabostorage.com` или `https://sin1.contabostorage.com`), `RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID`,
+   `RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY`. Ключи S3 — ещё и в менеджер паролей хранителей: при потере сервера
+   env-файл достают из бакета ими же.
+6. После сборки образов (раздел 3) — копия env-файла в бакет: `npm run stack -- prod env-push`; и после каждого
+   изменения env-файла.
 
 ## 3. Сборка и перенос образов (каждая выкладка)
 
@@ -115,7 +138,8 @@ curl -s -o /dev/null -w '%{http_code}\n' https://admin.nurmed.online/       # 40
 ```
 
 Затем в браузере: вход оператора на `admin.nurmed.online` (с адреса из `OPERATOR_ALLOW`), вход сотрудника и касса на
-`app.nurmed.online`. Первая копия БД — сразу, не ночью: `dc exec -T backup pharmacy-backup run`.
+`app.nurmed.online`. Первая копия БД — сразу, не ночью: `dc exec -T backup pharmacy-backup run`; в `pb status` у неё
+`offsite yes`, а `dc exec -T backup pharmacy-backup list-offsite` показывает её в бакете.
 
 ## 6. Первый оператор и сеть
 
@@ -136,8 +160,16 @@ for f in compose.yml compose.prod.yml compose.backup.yml; do git show <преж�
 
 ## Ежедневно, пока нет мониторинга
 
-`dc ps` — все сервисы `healthy` (`backup` unhealthy — проверенной копии нет 26 ч); место на диске `df -h`; копии и
-причина блокировки — `pb status`; после выгрузки копий вне хоста (ADR-0020) — свежая копия во внешнем хранилище.
+`dc ps` — все сервисы `healthy` (`backup` unhealthy — проверенной копии нет 26 ч, свежая копия не ушла из хоста 26 ч
+или внешнее хранилище не настроено); место на диске `df -h`; копии, колонка `offsite`, строка «off the host» и причина
+блокировки — `pb status`.
+
+Раз в месяц хранитель ключа — учебное восстановление последней копии из бакета (временный экземпляр в контейнере
+`backup`, рабочая база не трогается; в спокойное время — грузит CPU):
+
+```bash
+ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=$(cat image-tag) docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml run --rm --no-deps -T backup pharmacy-backup verify-offsite <копия>' < key.txt
+```
 
 ## Восстановление из копии
 
@@ -154,3 +186,22 @@ dc restart redis        # все входят заново
 `pharmacy_before_<копия>` (без подключений) и удаляется вручную:
 `dc exec -T postgres psql -U postgres -d postgres -c "drop database pharmacy_before_<копия>"`. Пароли и PIN
 восстановленной базы работают только с pepper её env-файла (ADR-0008).
+
+## Новый сервер вместо потерянного
+
+1. Раздел 1 — новый VPS; DNS — на его IP.
+2. Env-файл — из бакета: последний объект `prod/env/<время>.env.age` (панель Contabo или `aws s3 cp` ключами S3 из
+   менеджера паролей), расшифровать закрытым ключом хранителя, например
+   `docker run --rm -i --pull=never -v "$PWD:/w" pharmacy/postgres:<sha> age -d -i /dev/stdin -o /w/prod.env /w/<время>.env.age < key.txt`;
+   положить на хост как в разделе 2.
+3. Раздел 3 — образы и compose-файлы того коммита, что работал (или новее).
+4. Только PostgreSQL: `export IMAGE_TAG=<sha>; dc up -d --no-build --wait postgres` (полный `up` не нужен: защита пустой
+   базы не даст копировать пустую базу поверх истории копий, B15).
+5. Имя последней копии и сама копия — из бакета; закрытый ключ идёт по ssh в stdin и на диск сервера не попадает:
+
+   ```bash
+   ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=<sha> docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml run --rm --no-deps -T backup pharmacy-backup list-offsite'
+   ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=<sha> docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml run --rm --no-deps -T backup pharmacy-backup fetch <копия>' < key.txt
+   ```
+
+6. Дальше — раздел «Восстановление из копии» выше и шаг 4 целиком.

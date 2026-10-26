@@ -1,6 +1,9 @@
 # PostgreSQL image for the cloud stack and the offline-store distribution (ADR-0005).
 # Pinned by version + digest; update deliberately (ADR-0005: base image updates).
 FROM postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+# Copies off the host (ADR-0020): `age` encrypts a verified copy, `rclone` uploads it — packages of the Alpine release of
+# the base image, updated together with it.
+RUN apk add --no-cache age rclone
 COPY initdb/ /docker-entrypoint-initdb.d/
 # Client authentication of test and prod (security review 2026-10-22, Z6); dev keeps the default of the image.
 COPY pg_hba.conf /etc/pharmacy/pg_hba.conf

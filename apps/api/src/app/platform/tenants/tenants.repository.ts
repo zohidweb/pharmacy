@@ -377,6 +377,39 @@ export class TenantsRepository {
     return rows[0]?.ok === true;
   }
 
+  /** The name, city and INN of a network; null — no such network (spec 2026-10-26-pilot-small-gaps, P9). */
+  async requisites(
+    trx: Transaction<DB>,
+    tenantId: string,
+  ): Promise<{ name: string; city: string; inn: string } | null> {
+    const row = await trx
+      .selectFrom('tenants')
+      .select(['name', 'city', 'billingTaxId'])
+      .where('id', '=', tenantId)
+      .forNoKeyUpdate()
+      .executeTakeFirst();
+    return row
+      ? { name: row.name, city: row.city, inn: row.billingTaxId ?? '' }
+      : null;
+  }
+
+  async updateRequisites(
+    trx: Transaction<DB>,
+    tenantId: string,
+    next: { name: string; city: string; inn: string },
+  ): Promise<void> {
+    await trx
+      .updateTable('tenants')
+      .set({
+        name: next.name,
+        city: next.city,
+        billingTaxId: next.inn,
+        updatedAt: sql<Date>`now()`,
+      })
+      .where('id', '=', tenantId)
+      .execute();
+  }
+
   /** Blocks an active tenant; false when it is not active (or does not exist). */
   async block(
     trx: Transaction<DB>,

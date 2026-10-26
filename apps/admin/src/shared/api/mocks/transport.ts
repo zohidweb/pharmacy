@@ -259,6 +259,23 @@ const handlers: MockHandlers = {
     const tenant = findTenant(params.id, correlationId);
     return { ...tenant, ...tenantBilling(tenant.id) };
   },
+  'tenants.update': ({ params, body, correlationId }) => {
+    const tenant = findTenant(params.id, correlationId);
+    const inn = body.inn.trim();
+    if (
+      mockDb().tenants.some(
+        (other) => other.id !== tenant.id && other.inn === inn,
+      )
+    ) {
+      throw new ApiError(409, 'inn_taken', correlationId, [
+        { field: 'inn', code: 'inn_taken' },
+      ]);
+    }
+    tenant.name = body.name.trim();
+    tenant.city = body.city.trim();
+    tenant.inn = inn;
+    return { ...tenant, ...tenantBilling(tenant.id) };
+  },
   'tenants.block': ({ params, body, correlationId }) => {
     const tenant = findTenant(params.id, correlationId);
     if (tenant.status === 'blocked') {

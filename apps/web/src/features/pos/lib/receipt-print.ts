@@ -127,6 +127,9 @@ export function saleReceiptLines(
   }
   out.push(receiptRule(cols));
   out.push(...receiptCenter(labels.fiscalPlaceholder, cols));
-  out.push(...receiptWrap(settings.receiptFooter, cols));
+  // the owner's line breaks are kept: each typed line is wrapped on its own
+  for (const line of settings.receiptFooter.split(/\r?\n/)) {
+    out.push(...receiptWrap(line, cols));
+  }
   return out;
 }

@@ -17,6 +17,9 @@ export interface OrderRow {
   createdAt: Date;
   confirmedBy: string | null;
   confirmedAt: Date | null;
+  /** Closed by hand (spec 2026-10-26-pilot-small-gaps, P4): a recount of the status keeps it closed. */
+  closedManuallyBy: string | null;
+  closedManuallyAt: Date | null;
   comment: string | null;
 }
 
@@ -49,7 +52,8 @@ export interface OrderStore {
 
 const HEADER = sql`o.id, o.store_id, s.name as store_name, o.supplier_id, sp.name as supplier_name,
   o.number, o.order_date::text as order_date, o.expected_date::text as expected_date, o.status,
-  o.created_by, o.created_at, o.confirmed_by, o.confirmed_at, o.comment`;
+  o.created_by, o.created_at, o.confirmed_by, o.confirmed_at, o.closed_manually_by, o.closed_manually_at,
+  o.comment`;
 const FROM = sql`pharmacy.purchase_orders o
   join pharmacy.stores s on s.tenant_id = o.tenant_id and s.id = o.store_id
   join pharmacy.suppliers sp on sp.tenant_id = o.tenant_id and sp.id = o.supplier_id`;
@@ -305,6 +309,28 @@ export class PurchaseOrdersRepository {
       .where('tenantId', '=', tenantId)
       .where('id', '=', id)
       .execute();
+  }
+
+  /** A confirmed or partially received order closed by hand; false — it was not open (P3). */
+  async closeManually(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    employeeId: string,
+  ): Promise<boolean> {
+    const result = await trx
+      .updateTable('purchaseOrders')
+      .set({
+        status: 'closed',
+        closedManuallyBy: employeeId,
+        closedManuallyAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .where('status', 'in', ['confirmed', 'partially_received'])
+      .executeTakeFirst();
+    return result.numUpdatedRows > 0n;
   }
 
   async setStatus(

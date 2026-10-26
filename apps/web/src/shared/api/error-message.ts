@@ -67,6 +67,8 @@ const knownCodes = [
   'service_decided',
   'terminal_name_taken',
   'store_not_pharmacy',
+  'order_not_editable',
+  'order_not_open',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

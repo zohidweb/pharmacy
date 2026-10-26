@@ -110,7 +110,14 @@ export class OrderReceiving {
     orderId: string,
   ): Promise<void> {
     const order = await this.repository.find(trx, tenantId, orderId, true);
-    if (order === null || order.status === 'draft') return;
+    // a draft has nothing received; an order closed by hand stays closed (spec 2026-10-26-pilot-small-gaps, P4)
+    if (
+      order === null ||
+      order.status === 'draft' ||
+      order.closedManuallyAt !== null
+    ) {
+      return;
+    }
     const lines = await this.repository.lines(trx, tenantId, [order.id]);
     const received = await this.repository.receivedPieces(trx, tenantId, [
       order.id,

@@ -5,6 +5,7 @@ import type {
   TenantListQuery,
   TenantOwner,
   TenantSortKey,
+  UpdateTenantRequest,
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -103,6 +104,25 @@ export class CreateTenantDto implements CreateTenantRequest {
   @ValidateNested()
   @Type(() => TenantOwnerDto)
   owner!: TenantOwnerDto;
+}
+
+/** PATCH /api/v1/operator/tenants/{id} (spec 2026-10-26-pilot-small-gaps, P9): the rules of the creation. */
+export class UpdateTenantDto implements UpdateTenantRequest {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 120)
+  name!: string;
+
+  @Transform(trim)
+  @IsString()
+  @Length(1, 120)
+  city!: string;
+
+  // INN of Tajikistan: 9 digits.
+  @Transform(trim)
+  @IsString()
+  @Matches(/^\d{9}$/)
+  inn!: string;
 }
 
 /** POST /api/v1/operator/tenants/{id}/block. */

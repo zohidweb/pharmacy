@@ -12,7 +12,11 @@ import {
   Dialog,
   EmptyState,
   IconButton,
+  InvoiceSheet,
+  type InvoiceSheetProps,
+  printDocument,
   Select,
+  SheetPrint,
   TextField,
 } from '@pharmacy/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -43,6 +47,53 @@ export interface OrderAccess {
   canCreate: boolean;
   canUpdate: boolean;
   canConfirm: boolean;
+}
+
+/**
+ * The order as an A4 sheet for the supplier (spec 2026-10-26-pilot-small-gaps, P5): the saved order, not the
+ * unsaved edits; a draft is marked so.
+ */
+function orderSheet(
+  order: PurchaseOrder,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): InvoiceSheetProps {
+  const money = (minor: number) => formatMoney(minor, { withSign: false });
+  const date = formatDateOnly(order.date);
+  return {
+    title: t(order.status === 'draft' ? 'draftTitle' : 'title', {
+      number: order.number,
+      date,
+    }),
+    parties: [
+      { label: t('buyer'), lines: [order.storeName] },
+      { label: t('supplier'), lines: [order.supplierName] },
+    ],
+    columns: {
+      line: t('columns.line'),
+      detail: t('columns.detail'),
+      amount: t('columns.amount'),
+    },
+    rows: order.lines.map((line) => ({
+      line: line.productName,
+      detail: t('detail', {
+        quantity: line.quantity,
+        price: money(line.priceMinor),
+      }),
+      amount: money(line.quantity * line.priceMinor),
+    })),
+    totals: [
+      { label: t('total'), value: money(order.totalMinor), strong: true },
+    ],
+    notes: [
+      {
+        label: t('expectedOn'),
+        value: order.expectedOn
+          ? formatDateOnly(order.expectedOn)
+          : t('notAgreed'),
+      },
+      ...(order.comment ? [{ label: t('comment'), value: order.comment }] : []),
+    ],
+  };
 }
 
 const plusDays = (days: number) =>
@@ -77,6 +128,7 @@ export function OrderEditor({
   const t = useTranslations('orders.editor');
   const tOrders = useTranslations('orders');
   const tDocs = useTranslations('stockDocs');
+  const tSheet = useTranslations('orders.sheet');
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const [doc, setDoc] = useState<PurchaseOrder | null>(order);
@@ -93,6 +145,7 @@ export function OrderEditor({
   );
   const [touched, setTouched] = useState(false);
   const [deficitNotice, setDeficitNotice] = useState<number | null>(null);
+  const [confirmingClose, setConfirmingClose] = useState(false);
   const editable =
     (!doc || doc.status === 'draft') &&
     (doc ? access.canUpdate : access.canCreate);
@@ -136,6 +189,23 @@ export function OrderEditor({
       void invalidate();
     },
   });
+  // the rest of a confirmed order is not awaited any more (spec 2026-10-26-pilot-small-gaps, P3)
+  const close = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest('purchaseOrders.close', { params: { id } }),
+    onSuccess: (closed) => {
+      setDoc(closed);
+      void invalidate();
+    },
+    // closed or received in another tab meanwhile: show the order as it is now; the close error stays on screen,
+    // a failed re-read leaves the order as it was
+    onError: (_error, id) => {
+      void invalidate();
+      void apiRequest('purchaseOrders.get', { params: { id } })
+        .then(setDoc)
+        .catch(() => undefined);
+    },
+  });
   const deficit = useMutation({
     mutationFn: () =>
       apiRequest('purchaseOrders.deficit', {
@@ -170,7 +240,7 @@ export function OrderEditor({
     },
   });
   const error = useApiErrorMessage(
-    save.error ?? confirm.error ?? deficit.error,
+    save.error ?? confirm.error ?? close.error ?? deficit.error,
   );
 
   const addProduct = (product: StockProductOption) => {
@@ -218,12 +288,17 @@ export function OrderEditor({
       onClose={onClose}
       title={doc ? t('title', { number: doc.number }) : t('newTitle')}
       description={
-        doc?.confirmedBy
-          ? t('confirmedBy', {
-              name: doc.confirmedBy.name,
-              date: formatDateOnly(doc.confirmedBy.at.slice(0, 10)),
+        doc?.closedBy
+          ? t('closedBy', {
+              name: doc.closedBy.name,
+              date: formatDateOnly(doc.closedBy.at.slice(0, 10)),
             })
-          : undefined
+          : doc?.confirmedBy
+            ? t('confirmedBy', {
+                name: doc.confirmedBy.name,
+                date: formatDateOnly(doc.confirmedBy.at.slice(0, 10)),
+              })
+            : undefined
       }
       closeLabel={tDocs('close')}
       size="xl"
@@ -255,6 +330,24 @@ export function OrderEditor({
               }}
             >
               {t('confirm')}
+            </Button>
+          )}
+          {doc && (
+            <Button
+              variant="secondary"
+              iconStart="printer"
+              onClick={() => void printDocument()}
+            >
+              {t('print')}
+            </Button>
+          )}
+          {doc && receivable && access.canConfirm && (
+            <Button
+              variant="secondary"
+              loading={close.isPending}
+              onClick={() => setConfirmingClose(true)}
+            >
+              {t('close')}
             </Button>
           )}
           {doc && receivable && (
@@ -492,6 +585,49 @@ export function OrderEditor({
           }
         />
         <p className="text-xs text-fg-subtle">{t('sendHint')}</p>
+        {confirmingClose && doc && (
+          <Dialog
+            open
+            onClose={() => setConfirmingClose(false)}
+            title={t('closeTitle', { number: doc.number })}
+            closeLabel={tDocs('close')}
+            icon="triangle-alert"
+            tone="danger"
+            footer={
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => setConfirmingClose(false)}
+                >
+                  {tDocs('cancel')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  loading={close.isPending}
+                  onClick={() => {
+                    // an older save or confirm error must not hide this one
+                    save.reset();
+                    confirm.reset();
+                    close.mutate(doc.id, {
+                      onSettled: () => setConfirmingClose(false),
+                    });
+                  }}
+                >
+                  {t('closeConfirm')}
+                </Button>
+              </>
+            }
+          >
+            <p className="text-sm">{t('closeDescription')}</p>
+          </Dialog>
+        )}
+        {doc && (
+          <SheetPrint>
+            <InvoiceSheet
+              {...orderSheet(doc, (key, values) => tSheet(key, values))}
+            />
+          </SheetPrint>
+        )}
       </div>
     </Dialog>
   );

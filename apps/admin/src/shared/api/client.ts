@@ -186,6 +186,7 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'tenants.create',
   'tenants.ownerCode',
   'tenants.block',
+  'tenants.update',
   'tenants.unblock',
   // the store card (spec 2026-10-23-admin-store-card-tenant-log)
   'stores.get',

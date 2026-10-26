@@ -41,6 +41,8 @@ export interface PurchaseOrder {
   receivedPercent: number;
   createdBy: DocumentAuthor;
   confirmedBy: DocumentAuthor | null;
+  /** Closed by hand before everything came (spec 2026-10-26-pilot-small-gaps, P3); null — not closed so. */
+  closedBy: DocumentAuthor | null;
 }
 
 /** POST /api/v1/purchase-orders, PUT /api/v1/purchase-orders/{id} — only a draft is edited. */

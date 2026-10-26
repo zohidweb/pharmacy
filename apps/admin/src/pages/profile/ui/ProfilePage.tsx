@@ -21,7 +21,11 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { useOperatorAuditText } from '@/entities/operator-audit';
 import { resetSession, sessionQueryKey } from '@/entities/session';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiRequest,
+  isOfflineSectionAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { routes } from '@/shared/config';
 import { setLocale, type Locale } from '@/shared/i18n';
 import { DemoDataNotice, QueryState } from '@/shared/ui';
@@ -330,21 +334,26 @@ export function ProfilePage() {
                           'services',
                           'settings',
                         ] as const
-                      ).map((key) => (
-                        <li key={key} className="flex gap-2 text-sm">
-                          <span className="mt-0.5 text-success">
-                            <Icon name="circle-check" size="sm" />
-                          </span>
-                          <span className="flex flex-col">
-                            <span className="font-medium">
-                              {t(`permissions.items.${key}.title`)}
+                      )
+                        .filter(
+                          (key) =>
+                            key !== 'licenses' || isOfflineSectionAvailable(),
+                        )
+                        .map((key) => (
+                          <li key={key} className="flex gap-2 text-sm">
+                            <span className="mt-0.5 text-success">
+                              <Icon name="circle-check" size="sm" />
                             </span>
-                            <span className="text-xs text-fg-subtle">
-                              {t(`permissions.items.${key}.detail`)}
+                            <span className="flex flex-col">
+                              <span className="font-medium">
+                                {t(`permissions.items.${key}.title`)}
+                              </span>
+                              <span className="text-xs text-fg-subtle">
+                                {t(`permissions.items.${key}.detail`)}
+                              </span>
                             </span>
-                          </span>
-                        </li>
-                      ))}
+                          </li>
+                        ))}
                     </ul>
                   </Card>
                   <Card as="section" aria-labelledby="activity-title">

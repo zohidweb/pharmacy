@@ -82,6 +82,7 @@ import type {
   TenantServiceItem,
   TenantStats,
   UpdateStoreLicenseSettingsRequest,
+  UpdateTenantRequest,
 } from '@pharmacy/shared-dto';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -141,6 +142,10 @@ export const apiRoutes = {
   ),
   'tenants.get': route<TenantDetails, undefined, { id: string }>(
     'GET',
+    (p) => `/operator/tenants/${id(p)}`,
+  ),
+  'tenants.update': route<TenantDetails, UpdateTenantRequest, { id: string }>(
+    'PATCH',
     (p) => `/operator/tenants/${id(p)}`,
   ),
   'tenants.block': route<TenantDetails, BlockTenantRequest, { id: string }>(

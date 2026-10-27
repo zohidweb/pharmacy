@@ -314,6 +314,89 @@ export interface ZReport {
   terminalDiff: Record<Exclude<ReceiptPaymentMethod, 'cash'>, number>;
   /** A discrepancy without a reason: the closing is a fact and is accepted (E24). */
   discrepancyReasonMissing: boolean;
+  /**
+   * Closed from another computer (plan 2026-10-27-shift-history, S3): who closed it and why. The late operations of
+   * its till are not in the report — it is the snapshot of the closing.
+   */
+  forced?: { byName: string; reason: string };
+}
+
+/** GET /api/v1/shifts — the shift history of the scope (`reports:view`; plan 2026-10-27-shift-history, S1). */
+export interface ShiftListQuery {
+  storeId?: string;
+  /** YYYY-MM-DD — business dates of the opening, in the time zone of the network; by default the last 7 days. */
+  from?: string;
+  to?: string;
+  status?: ShiftStatus;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ShiftListItem {
+  id: string;
+  number: string;
+  storeId: string;
+  storeName: string;
+  terminalName: string;
+  status: ShiftStatus;
+  openedAt: string;
+  openedByName: string;
+  closedAt: string | null;
+  closedByName: string | null;
+  /** Closed from another computer (S3). */
+  forced: boolean;
+  receipts: number;
+  revenueMinor: number;
+  /** Counted − expected cash of a closed shift; null while open. */
+  discrepancyMinor: number | null;
+  discrepancyReceipts: number;
+  reasonMissing: boolean;
+  /** Receipts accepted after a closing from another computer (S4). */
+  afterClosingReceipts: number;
+}
+
+export interface ShiftListResponse {
+  items: ShiftListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** The operations of a till accepted after its shift was closed from another computer (S4): not in the Z-report. */
+export interface ShiftAfterClosing {
+  receipts: number;
+  revenueMinor: number;
+  cashInMinor: number;
+  cashOutMinor: number;
+}
+
+/** GET /api/v1/shifts/{id} — a shift of the scope (`reports:view`; S2); 404 `not_found` outside it. */
+export interface ShiftDetails {
+  /** An open shift — now; a closed one — as in its Z-report. */
+  shift: Shift;
+  storeName: string;
+  terminalName: string;
+  closedByName: string | null;
+  zReport: ZReport | null;
+  afterClosing: ShiftAfterClosing;
+  /** The last receipt or cash operation of the shift received from its till. */
+  lastActivityAt: string | null;
+  /** The header of a printed Z-report, as in the POS snapshot. */
+  print: { storeName: string; storeAddress: string; taxId: string };
+}
+
+/**
+ * POST /api/v1/shifts/{id}/forced-closure — a manager closes the open shift of another till (`shifts:force-close`,
+ * a fresh sign-in, `Idempotency-Key` = `id`; S3). Online only. 404 `not_found` outside the scope, 409 `shift_closed`,
+ * `idempotency_conflict`.
+ */
+export interface ForceCloseShiftRequest {
+  /** UUIDv7 of the operation, the idempotency key. */
+  id: string;
+  actualCashMinor: number;
+  terminalTotals: Record<Exclude<ReceiptPaymentMethod, 'cash'>, number>;
+  /** Why the shift is closed from another computer: required, up to 500 characters. */
+  reason: string;
 }
 
 export type ReturnReason = 'customer' | 'defect';

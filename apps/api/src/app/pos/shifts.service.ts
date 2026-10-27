@@ -2,9 +2,13 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import type {
   ReceiptPaymentMethod,
   Shift,
+  ShiftDetails,
+  ShiftListItem,
+  ShiftListResponse,
   ZReport,
 } from '@pharmacy/shared-dto';
 import {
+  type EmployeePrincipal,
   requirePrincipal,
   requireTenantId,
 } from '../../common/context/request-context';
@@ -15,7 +19,12 @@ import { AuditService } from '../audit/audit.service';
 import { Numbering } from '../inventory/numbering';
 import { TerminalRevocationChecks } from '../terminals/terminal-revocation-checks';
 import { TerminalsService } from '../terminals/terminals.service';
-import type { CashMovementDto, CloseShiftDto, OpenShiftDto } from './dto/pos.dto';
+import type {
+  CashMovementDto,
+  CloseShiftDto,
+  OpenShiftDto,
+  ShiftListQueryDto,
+} from './dto/pos.dto';
 import { PosIdempotency } from './idempotency';
 import {
   boundedMoment,
@@ -33,8 +42,17 @@ import {
 } from './shifts.repository';
 
 const IN_REASONS = new Set(['change_fund', 'other']);
+const DEFAULT_LIMIT = 20;
 const OUT_REASONS = new Set(['collection', 'expense']);
 const BANK: Array<Exclude<ReceiptPaymentMethod, 'cash'>> = ['card', 'qr', 'nfc'];
+
+/** The stores whose shifts an employee sees: a PIN session — the store of its terminal only. */
+function viewScope(principal: EmployeePrincipal): 'all' | readonly string[] {
+  if (principal.auth === 'pin') {
+    return principal.currentStoreId ? [principal.currentStoreId] : [];
+  }
+  return principal.storeScope;
+}
 
 /** A buffered operation is never older than this (a broken clock of the PC, M8). */
 /** The moment of an operation (E4), see `boundedMoment`. */
@@ -358,6 +376,85 @@ export class ShiftsService implements OnModuleInit {
         return report;
       }),
     );
+  }
+
+  /**
+   * GET /shifts — the shift history of the stores of the scope (plan 2026-10-27-shift-history, S1): a closed shift
+   * reads its totals from its Z-report, an open one is counted as on the shift screen. 403 `store_not_in_scope`.
+   */
+  async list(query: ShiftListQueryDto): Promise<ShiftListResponse> {
+    const principal = requirePrincipal();
+    const scope = viewScope(principal);
+    const storeId = query.storeId?.toLowerCase();
+    if (storeId && scope !== 'all' && !scope.includes(storeId)) {
+      throw new ProblemException(403, 'store_not_in_scope');
+    }
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const offset = query.offset ?? 0;
+    return this.db.tenantTransaction(async (trx) => {
+      const { rows, total } = await this.shifts.list(
+        trx,
+        principal.tenantId,
+        scope,
+        { storeId, from: query.from, to: query.to, status: query.status, limit, offset },
+      );
+      const items: ShiftListItem[] = [];
+      for (const row of rows) {
+        const z = row.status === 'closed' ? (row.zReport as ZReport | null) : null;
+        // an open shift is counted now; there are as many as tills (S1)
+        const totals = z?.shift ?? (await this.mapper.view(trx, principal.tenantId, row));
+        items.push({
+          id: row.id,
+          number: row.number,
+          storeId: row.storeId,
+          storeName: row.storeName,
+          terminalName: row.terminalName,
+          status: row.status,
+          openedAt: row.openedAt.toISOString(),
+          openedByName: row.openedByName,
+          closedAt: row.closedAt?.toISOString() ?? null,
+          closedByName: row.closedByName,
+          forced: row.forced,
+          receipts: totals.receipts,
+          revenueMinor: totals.revenueMinor,
+          discrepancyMinor: z ? z.discrepancyMinor : null,
+          discrepancyReceipts: totals.discrepancyReceipts,
+          reasonMissing: z?.discrepancyReasonMissing ?? false,
+          afterClosingReceipts: row.afterClosingReceipts,
+        });
+      }
+      return { items, total, limit, offset };
+    });
+  }
+
+  /**
+   * GET /shifts/{id} — the card of a shift of the scope (S2): an open one now, a closed one as in its Z-report, the
+   * late operations of a forced closing, when its till was last heard from. 404 outside the scope.
+   */
+  async details(shiftId: string): Promise<ShiftDetails> {
+    const principal = requirePrincipal();
+    const scope = viewScope(principal);
+    return this.db.tenantTransaction(async (trx) => {
+      const { tenantId } = principal;
+      const row = await this.shifts.findShift(trx, tenantId, shiftId.toLowerCase());
+      if (row === null || (scope !== 'all' && !scope.includes(row.storeId))) {
+        throw new ProblemException(404, 'not_found');
+      }
+      const store = await this.repository.store(trx, tenantId, row.storeId);
+      if (store === null) throw new ProblemException(404, 'not_found');
+      const zReport = row.status === 'closed' ? (row.zReport as ZReport | null) : null;
+      const lastActivity = await this.shifts.lastActivityAt(trx, tenantId, row.id);
+      return {
+        shift: zReport?.shift ?? (await this.mapper.view(trx, tenantId, row)),
+        storeName: store.name,
+        terminalName: await this.shifts.terminalName(trx, tenantId, row.terminalId),
+        closedByName: row.closedByName,
+        zReport,
+        afterClosing: await this.shifts.afterClosing(trx, tenantId, row.id),
+        lastActivityAt: lastActivity?.toISOString() ?? null,
+        print: { storeName: store.name, storeAddress: store.address, taxId: store.taxId },
+      };
+    });
   }
 
   /** GET /shifts/{id}/z-report — the Z-report saved at the closing of a shift of the scope. */

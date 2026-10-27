@@ -10,6 +10,8 @@ import type {
   OpenShiftRequest,
   PosOperationContext,
   SaleUnit,
+  ShiftListQuery,
+  ShiftStatus,
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -31,6 +33,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 
 // Limits of spec 2026-10-13-pos-shift-sale, sections 4.4–4.6; the shift, the terminal, the author,
 // the products and the batches are checked by the services.
@@ -130,6 +133,40 @@ export class TerminalTotalsDto {
   @Min(-MAX_MONEY_MINOR)
   @Max(MAX_MONEY_MINOR)
   nfc!: number;
+}
+
+const SHIFT_STATUSES: ShiftStatus[] = ['open', 'closed'];
+
+/** GET /api/v1/shifts — the shift history (plan 2026-10-27-shift-history, S1). */
+export class ShiftListQueryDto implements ShiftListQuery {
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
+
+  @IsOptional()
+  @IsCalendarDate()
+  from?: string;
+
+  @IsOptional()
+  @IsCalendarDate()
+  to?: string;
+
+  @IsOptional()
+  @IsIn(SHIFT_STATUSES)
+  status?: ShiftStatus;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
 }
 
 /** POST /api/v1/shifts/{id}/closure */

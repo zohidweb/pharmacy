@@ -769,6 +769,7 @@ export interface Sessions {
 }
 
 export interface ShiftCashOperations {
+  afterClosing: Generated<boolean>;
   amountDirams: bigint;
   authorFlagged: Generated<boolean>;
   comment: string | null;
@@ -792,6 +793,8 @@ export interface Shifts {
   discrepancyDirams: bigint | null;
   discrepancyReason: string | null;
   expectedCashDirams: bigint | null;
+  forced: Generated<boolean>;
+  forcedReason: string | null;
   id: string;
   number: string;
   openedAt: Timestamp;

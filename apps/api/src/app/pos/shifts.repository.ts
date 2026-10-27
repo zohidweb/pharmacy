@@ -1,7 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import type { HeldReceipt, ReceiptPaymentMethod } from '@pharmacy/shared-dto';
+import type {
+  HeldReceipt,
+  ReceiptPaymentMethod,
+  ShiftAfterClosing,
+} from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
-import { type TenantTransaction, uniqueConstraint } from '../../core/database';
+import {
+  type TenantTransaction,
+  tenantTimeZone,
+  tenantToday,
+  uniqueConstraint,
+} from '../../core/database';
 
 export interface ShiftRow {
   id: string;
@@ -20,6 +29,26 @@ export interface ShiftRow {
   countedCashDirams: bigint | null;
   closedAuthorFlagged: boolean;
   zReport: unknown;
+  /** Closed from another computer, and why (plan 2026-10-27-shift-history, S3). */
+  forced: boolean;
+  forcedReason: string | null;
+}
+
+/** A shift of the history with its store, its till and the receipts accepted after a forced closing (S1). */
+export interface ShiftListRow extends ShiftRow {
+  storeName: string;
+  terminalName: string;
+  afterClosingReceipts: number;
+}
+
+export interface ShiftListFilter {
+  storeId?: string;
+  /** YYYY-MM-DD business dates of the opening, inclusive; by default `to` is today, `from` six days before `to`. */
+  from?: string;
+  to?: string;
+  status?: 'open' | 'closed';
+  limit: number;
+  offset: number;
 }
 
 export interface ShiftTotals {
@@ -58,7 +87,7 @@ const SHIFT = sql`
   select s.id, s.store_id, s.terminal_id, s.number, s.status, s.opened_by,
          eo.full_name as opened_by_name, s.opened_at, s.opening_cash_dirams,
          s.opened_author_flagged, s.closed_by, ec.full_name as closed_by_name, s.closed_at,
-         s.counted_cash_dirams, s.closed_author_flagged, s.z_report
+         s.counted_cash_dirams, s.closed_author_flagged, s.z_report, s.forced, s.forced_reason
   from pharmacy.shifts s
   join pharmacy.employees eo on eo.tenant_id = s.tenant_id and eo.id = s.opened_by
   left join pharmacy.employees ec on ec.tenant_id = s.tenant_id and ec.id = s.closed_by`;
@@ -119,6 +148,104 @@ export class ShiftsRepository {
       where s.tenant_id = ${tenantId} and s.id = ${shiftId}
       ${mode === 'share' ? sql`for share of s` : sql`for update of s`}`.execute(trx);
     return result.rows[0] ?? null;
+  }
+
+  /**
+   * The shift history of the scope (S1): opened within the business dates, newest first. `scope` — the stores the
+   * employee may see; `'all'` — the whole network.
+   */
+  async list(
+    trx: TenantTransaction,
+    tenantId: string,
+    scope: 'all' | readonly string[],
+    filter: ShiftListFilter,
+  ): Promise<{ rows: ShiftListRow[]; total: number }> {
+    const zone = tenantTimeZone(tenantId);
+    const to = sql`coalesce(${filter.to ?? null}::date, ${tenantToday(tenantId)})`;
+    const from = sql`coalesce(${filter.from ?? null}::date, ${to} - 6)`;
+    const where = sql`s.tenant_id = ${tenantId}
+      ${scope === 'all' ? sql`` : sql`and s.store_id = any(${sql.val([...scope])}::uuid[])`}
+      ${filter.storeId ? sql`and s.store_id = ${filter.storeId}` : sql``}
+      ${filter.status ? sql`and s.status = ${filter.status}` : sql``}
+      and (s.opened_at at time zone ${zone})::date between ${from} and ${to}`;
+    const count = await sql<{ total: number }>`
+      select count(*)::integer as total from pharmacy.shifts s where ${where}`.execute(trx);
+    const result = await sql<ShiftListRow>`
+      with base as (${SHIFT} where ${where})
+      select b.*, st.name as store_name, t.name as terminal_name,
+             (select count(*)::integer from pharmacy.receipts r
+              where r.tenant_id = ${tenantId} and r.shift_id = b.id
+                and 'after_closing' = any(r.discrepancy_kinds)) as after_closing_receipts
+      from base b
+      join pharmacy.stores st on st.tenant_id = ${tenantId} and st.id = b.store_id
+      join pharmacy.terminals t on t.tenant_id = ${tenantId} and t.id = b.terminal_id
+      order by b.opened_at desc, b.id desc
+      limit ${filter.limit} offset ${filter.offset}`.execute(trx);
+    return { rows: result.rows, total: count.rows[0].total };
+  }
+
+  /** The receipts and cash operations of a till accepted after its shift was closed from another computer (S4). */
+  async afterClosing(
+    trx: TenantTransaction,
+    tenantId: string,
+    shiftId: string,
+  ): Promise<ShiftAfterClosing> {
+    const result = await sql<{
+      receipts: number;
+      revenue: string;
+      cashIn: string;
+      cashOut: string;
+    }>`
+      select
+        (select count(*)::integer from pharmacy.receipts r
+         where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
+           and 'after_closing' = any(r.discrepancy_kinds)) as receipts,
+        (select coalesce(sum(r.total_dirams), 0)::text from pharmacy.receipts r
+         where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
+           and 'after_closing' = any(r.discrepancy_kinds)) as revenue,
+        (select coalesce(sum(o.amount_dirams), 0)::text from pharmacy.shift_cash_operations o
+         where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId}
+           and o.after_closing and o.kind = 'deposit') as cash_in,
+        (select coalesce(sum(o.amount_dirams), 0)::text from pharmacy.shift_cash_operations o
+         where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId}
+           and o.after_closing and o.kind = 'withdrawal') as cash_out`.execute(trx);
+    const row = result.rows[0];
+    return {
+      receipts: row.receipts,
+      revenueMinor: Number(row.revenue),
+      cashInMinor: Number(row.cashIn),
+      cashOutMinor: Number(row.cashOut),
+    };
+  }
+
+  /** The name of a till of the network (the card of a shift, S2). */
+  async terminalName(
+    trx: TenantTransaction,
+    tenantId: string,
+    terminalId: string,
+  ): Promise<string> {
+    const row = await trx
+      .selectFrom('terminals')
+      .select('name')
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', terminalId)
+      .executeTakeFirst();
+    return row?.name ?? '';
+  }
+
+  /** When the till of the shift was last heard from: its last receipt or cash operation received (S2). */
+  async lastActivityAt(
+    trx: TenantTransaction,
+    tenantId: string,
+    shiftId: string,
+  ): Promise<Date | null> {
+    const result = await sql<{ at: Date | null }>`
+      select greatest(
+        (select max(r.received_at) from pharmacy.receipts r
+         where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}),
+        (select max(o.received_at) from pharmacy.shift_cash_operations o
+         where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId})) as at`.execute(trx);
+    return result.rows[0]?.at ?? null;
   }
 
   async findShift(

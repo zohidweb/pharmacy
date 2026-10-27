@@ -36,7 +36,12 @@ import {
   ensureSession,
   useSession,
 } from '@/entities/session';
-import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
+import {
+  shiftQueryKey,
+  useCurrentShift,
+  useZReportLabels,
+  zReportLines,
+} from '@/entities/shift';
 import {
   useBufferState,
   useOutboxCounts,
@@ -51,7 +56,6 @@ import type {
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { withPending } from '../lib/pending';
-import { zReportLines, type ZReportLabels } from '../lib/z-report';
 import {
   CashMovementDialog,
   CloseShiftDialog,
@@ -59,39 +63,6 @@ import {
 } from './ShiftDialogs';
 import { WithMessages } from '@/shared/i18n';
 import { rememberShift } from '@/shared/lib/terminal-cache';
-
-function useZLabels(): ZReportLabels {
-  const t = useTranslations('shift.z');
-  const tShift = useTranslations('shift');
-  return {
-    title: t('title'),
-    shift: t('shift'),
-    cashier: t('cashier'),
-    opened: t('opened'),
-    closed: t('closed'),
-    receipts: t('receipts'),
-    method: {
-      cash: tShift('methods.cash'),
-      card: tShift('methods.card'),
-      qr: tShift('methods.qr'),
-      nfc: tShift('methods.nfc'),
-    },
-    returns: (count) => t('returns', { count }),
-    revenue: t('revenue'),
-    opening: tShift('openingCash'),
-    cashIn: tShift('cashIn'),
-    cashOut: tShift('cashOut'),
-    expected: tShift('expected'),
-    actual: tShift('actual'),
-    discrepancy: tShift('discrepancy'),
-    byTerminal: (method) => t('byTerminal', { method }),
-    fiscalPlaceholder: t('fiscalPlaceholder'),
-    taxId: t('taxId'),
-    discrepancyReceipts: t('discrepancyReceipts'),
-    reasonMissing: t('reasonMissing'),
-    preliminary: t('preliminary'),
-  };
-}
 
 function Totals({ shift }: { shift: Shift }) {
   const t = useTranslations('shift');
@@ -400,7 +371,7 @@ function ShiftPageView() {
   const tPos = useTranslations('pos');
   const toast = useToast();
   const queryClient = useQueryClient();
-  const zLabels = useZLabels();
+  const zLabels = useZReportLabels();
   const { data: session } = useSession();
   const store = currentStoreOf(session);
   const storeId = store?.id ?? null;

@@ -18,6 +18,7 @@ import type {
   PrescriptionKind,
   ReceiptPaymentMethod,
   Shift,
+  ShiftListItem,
   ZReport,
 } from '@pharmacy/shared-dto';
 import { daysBetween, toAppDate } from '@pharmacy/shared-util';
@@ -48,6 +49,9 @@ type PosRoute = Extract<
   | 'shifts.cashMovement'
   | 'shifts.close'
   | 'shifts.zReport'
+  | 'shifts.list'
+  | 'shifts.details'
+  | 'shifts.forceClose'
   | 'receipts.returnable'
   | 'returns.salesSearch'
   | 'returns.create'
@@ -106,6 +110,87 @@ function posNumber(
 ): string {
   const code = storeId.replace(/\D/g, '').padStart(2, '0');
   return `${prefix}-${code}-${new Date().getFullYear()}-${String(n).padStart(6, '0')}`;
+}
+
+/** The closing of a mock shift and its Z-report (E24): by its till, or from another computer (S3). */
+function closeMockShift(
+  shift: MockShift,
+  input: {
+    id: string;
+    at: string;
+    by: string;
+    actualCashMinor: number;
+    terminalTotals: Record<Exclude<ReceiptPaymentMethod, 'cash'>, number>;
+    reason: string;
+    forced: boolean;
+  },
+): ZReport {
+  shift.status = 'closed';
+  shift.closedAt = input.at;
+  shift.events.unshift({
+    id: `e-${input.id}`,
+    at: input.at,
+    kind: 'closed',
+    reference: null,
+    employeeName: input.by,
+    amountMinor: input.actualCashMinor,
+    flagged: false,
+  });
+  // held receipts live until the shift closes (ТЗ)
+  pos().held[shift.storeId] = [];
+  const methods: Array<Exclude<ReceiptPaymentMethod, 'cash'>> = [
+    'card',
+    'qr',
+    'nfc',
+  ];
+  const discrepancyMinor = input.actualCashMinor - shift.cash.expectedMinor;
+  const report: ZReport = {
+    shift,
+    actualCashMinor: input.actualCashMinor,
+    discrepancyMinor,
+    terminalDiff: Object.fromEntries(
+      methods.map((m) => [
+        m,
+        input.terminalTotals[m] -
+          (shift.byMethod[m].amountMinor - shift.returnsByMethod[m].amountMinor),
+      ]),
+    ) as ZReport['terminalDiff'],
+    // the closing is a fact: a discrepancy without a reason is accepted and marked (E24)
+    discrepancyReasonMissing:
+      !input.forced && discrepancyMinor !== 0 && input.reason.trim() === '',
+    ...(input.forced && { forced: { byName: input.by, reason: input.reason } }),
+  };
+  pos().zReports[shift.id] = report;
+  return report;
+}
+
+function terminalNameOf(terminalId: string | null): string {
+  return (
+    mockDb().owner.terminals.find((t) => t.id === terminalId)?.name ?? '—'
+  );
+}
+
+function shiftListItem(shift: MockShift): ShiftListItem {
+  const z = pos().zReports[shift.id];
+  return {
+    id: shift.id,
+    number: shift.number,
+    storeId: shift.storeId,
+    storeName: stores.find((s) => s.id === shift.storeId)?.name ?? '—',
+    terminalName: terminalNameOf(shift.terminalId),
+    status: shift.status,
+    openedAt: shift.openedAt,
+    openedByName: shift.openedBy,
+    closedAt: shift.closedAt,
+    closedByName: z?.forced?.byName ?? (z ? shift.openedBy : null),
+    forced: Boolean(z?.forced),
+    receipts: shift.receipts,
+    revenueMinor: shift.revenueMinor,
+    discrepancyMinor: z ? z.discrepancyMinor : null,
+    discrepancyReceipts: shift.discrepancyReceipts,
+    reasonMissing: z?.discrepancyReasonMissing ?? false,
+    afterClosingReceipts: 0,
+  };
 }
 
 function requireShift(id: string, correlationId: string): MockShift {
@@ -507,45 +592,82 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
     const { session } = authorize(correlationId, 'shifts:update', {
       write: true,
     });
-    return idempotent(body.id, body, correlationId, (): ZReport => {
-      const shift = requireShift(params.id, correlationId);
-      shift.status = 'closed';
-      shift.closedAt = body.occurredAt;
-      shift.events.unshift({
-        id: `e-${body.id}`,
+    return idempotent(body.id, body, correlationId, (): ZReport =>
+      closeMockShift(requireShift(params.id, correlationId), {
+        id: body.id,
         at: body.occurredAt,
-        kind: 'closed',
-        reference: null,
-        employeeName: shortNameOf(session.employee.id),
-        amountMinor: body.actualCashMinor,
-        flagged: false,
-      });
-      // held receipts live until the shift closes (ТЗ)
-      pos().held[shift.storeId] = [];
-      const methods: Array<Exclude<ReceiptPaymentMethod, 'cash'>> = [
-        'card',
-        'qr',
-        'nfc',
-      ];
-      const discrepancyMinor = body.actualCashMinor - shift.cash.expectedMinor;
-      const report: ZReport = {
-        shift,
+        by: shortNameOf(session.employee.id),
         actualCashMinor: body.actualCashMinor,
-        discrepancyMinor,
-        terminalDiff: Object.fromEntries(
-          methods.map((m) => [
-            m,
-            body.terminalTotals[m] -
-              (shift.byMethod[m].amountMinor -
-                shift.returnsByMethod[m].amountMinor),
-          ]),
-        ) as ZReport['terminalDiff'],
-        // the closing is a fact: a discrepancy without a reason is accepted and marked (E24)
-        discrepancyReasonMissing:
-          discrepancyMinor !== 0 && body.discrepancyReason.trim() === '',
-      };
-      pos().zReports[shift.id] = report;
-      return report;
+        terminalTotals: body.terminalTotals,
+        reason: body.discrepancyReason,
+        forced: false,
+      }),
+    );
+  },
+  // the shift history and the closing from another computer, as apps/api (plan 2026-10-27-shift-history, S1–S3)
+  'shifts.list': ({ query, correlationId }) => {
+    const { session } = authorize(correlationId, 'reports:view');
+    const visible = pos()
+      .shifts.filter((s) => session.stores.some((st) => st.id === s.storeId))
+      .filter((s) => !query.storeId || s.storeId === query.storeId)
+      .filter((s) => !query.status || s.status === query.status)
+      .sort((a, b) => b.openedAt.localeCompare(a.openedAt));
+    const limit = query.limit ?? 20;
+    const offset = query.offset ?? 0;
+    return {
+      items: visible.slice(offset, offset + limit).map(shiftListItem),
+      total: visible.length,
+      limit,
+      offset,
+    };
+  },
+  'shifts.details': ({ params, correlationId }) => {
+    const { session } = authorize(correlationId, 'reports:view');
+    const shift = pos().shifts.find(
+      (s) =>
+        s.id === params.id && session.stores.some((st) => st.id === s.storeId),
+    );
+    if (!shift) throw new ApiError(404, 'not_found', correlationId);
+    const store = stores.find((s) => s.id === shift.storeId);
+    const zReport = pos().zReports[shift.id] ?? null;
+    return {
+      shift: zReport?.shift ?? shift,
+      storeName: store?.name ?? '—',
+      terminalName: terminalNameOf(shift.terminalId),
+      closedByName: zReport?.forced?.byName ?? null,
+      zReport,
+      afterClosing: { receipts: 0, revenueMinor: 0, cashInMinor: 0, cashOutMinor: 0 },
+      lastActivityAt: shift.events[0]?.at ?? null,
+      print: {
+        storeName: store?.name ?? '—',
+        storeAddress: store?.address ?? '—',
+        taxId: storeSettings('', '').taxId,
+      },
+    };
+  },
+  'shifts.forceClose': ({ params, body, correlationId }) => {
+    const { session } = authorize(correlationId, 'shifts:force-close', {
+      write: true,
+    });
+    return idempotent(body.id, body, correlationId, (): ZReport => {
+      const shift = pos().shifts.find(
+        (s) =>
+          s.id === params.id &&
+          session.stores.some((st) => st.id === s.storeId),
+      );
+      if (!shift) throw new ApiError(404, 'not_found', correlationId);
+      if (shift.status !== 'open') {
+        throw new ApiError(409, 'shift_closed', correlationId);
+      }
+      return closeMockShift(shift, {
+        id: body.id,
+        at: new Date().toISOString(),
+        by: shortNameOf(session.employee.id),
+        actualCashMinor: body.actualCashMinor,
+        terminalTotals: body.terminalTotals,
+        reason: body.reason,
+        forced: true,
+      });
     });
   },
   'shifts.zReport': ({ params, correlationId }) => {

@@ -144,6 +144,10 @@ import type {
   ReturnReason,
   SaleSearchItem,
   Shift,
+  ShiftDetails,
+  ShiftListQuery,
+  ShiftListResponse,
+  ForceCloseShiftRequest,
   ZReport,
   ChangePasswordRequest,
   ChangePinRequest,
@@ -307,6 +311,21 @@ export const apiRoutes = {
   'shifts.zReport': route<ZReport, never, { id: string }>(
     'GET',
     (p) => `/shifts/${id(p)}/z-report`,
+  ),
+  /** The shift history of the scope (plan 2026-10-27-shift-history, S1). */
+  'shifts.list': route<ShiftListResponse, undefined, undefined, ShiftListQuery>(
+    'GET',
+    () => '/shifts',
+  ),
+  /** The card of a shift of the scope (S2). */
+  'shifts.details': route<ShiftDetails, undefined, { id: string }>(
+    'GET',
+    (p) => `/shifts/${id(p)}`,
+  ),
+  /** A manager closes the shift of another till from another computer (S3). */
+  'shifts.forceClose': route<ZReport, ForceCloseShiftRequest, { id: string }>(
+    'POST',
+    (p) => `/shifts/${id(p)}/forced-closure`,
   ),
 
   'receipts.returnable': route<

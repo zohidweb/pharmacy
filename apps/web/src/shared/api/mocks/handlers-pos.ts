@@ -21,7 +21,7 @@ import type {
   ShiftListItem,
   ZReport,
 } from '@pharmacy/shared-dto';
-import { daysBetween, toAppDate } from '@pharmacy/shared-util';
+import { addDays, daysBetween, toAppDate } from '@pharmacy/shared-util';
 import { ApiError } from '../client';
 import type { ApiRouteKey } from '../routes';
 import { mockDb } from './db';
@@ -170,6 +170,11 @@ function terminalNameOf(terminalId: string | null): string {
   );
 }
 
+/** Who closed a mock shift: the author of its closing event. */
+function closerOf(shift: MockShift): string | null {
+  return shift.events.find((e) => e.kind === 'closed')?.employeeName ?? null;
+}
+
 function shiftListItem(shift: MockShift): ShiftListItem {
   const z = pos().zReports[shift.id];
   return {
@@ -182,7 +187,7 @@ function shiftListItem(shift: MockShift): ShiftListItem {
     openedAt: shift.openedAt,
     openedByName: shift.openedBy,
     closedAt: shift.closedAt,
-    closedByName: z?.forced?.byName ?? (z ? shift.openedBy : null),
+    closedByName: closerOf(shift),
     forced: Boolean(z?.forced),
     receipts: shift.receipts,
     revenueMinor: shift.revenueMinor,
@@ -609,9 +614,16 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
   // the shift history and the closing from another computer, as apps/api (plan 2026-10-27-shift-history, S1–S3)
   'shifts.list': ({ query, correlationId }) => {
     const { session } = authorize(correlationId, 'reports:view');
+    // business dates of the opening; by default the last seven days (S1)
+    const to = query.to ?? toAppDate();
+    const from = query.from ?? addDays(to, -6);
     const visible = pos()
       .shifts.filter((s) => session.stores.some((st) => st.id === s.storeId))
       .filter((s) => !query.storeId || s.storeId === query.storeId)
+      .filter((s) => {
+        const day = toAppDate(new Date(s.openedAt));
+        return day >= from && day <= to;
+      })
       .filter((s) => !query.status || s.status === query.status)
       .sort((a, b) => b.openedAt.localeCompare(a.openedAt));
     const limit = query.limit ?? 20;
@@ -636,9 +648,17 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       shift: zReport?.shift ?? shift,
       storeName: store?.name ?? '—',
       terminalName: terminalNameOf(shift.terminalId),
-      closedByName: zReport?.forced?.byName ?? null,
+      closedByName: closerOf(shift),
       zReport,
-      afterClosing: { receipts: 0, revenueMinor: 0, cashInMinor: 0, cashOutMinor: 0 },
+      // the mocks have no till that sends after a closing
+      afterClosing: {
+        receipts: 0,
+        revenueMinor: 0,
+        cashMinor: 0,
+        cashInMinor: 0,
+        cashOutMinor: 0,
+        events: [],
+      },
       lastActivityAt: shift.events[0]?.at ?? null,
       print: {
         storeName: store?.name ?? '—',

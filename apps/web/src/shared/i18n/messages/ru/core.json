@@ -441,6 +441,8 @@
     "shift_cash_in": "Внесение наличных",
     "shift_cash_out": "Изъятие наличных",
     "shift_closed": "Смена закрыта",
+    "shift_force_closed": "Смена закрыта с другого компьютера",
+    "shift_close_superseded": "Закрытие кассы после закрытия с другого компьютера",
     "document_created": "Документ создан",
     "document_updated": "Документ изменён",
     "document_posted": "Документ проведён",

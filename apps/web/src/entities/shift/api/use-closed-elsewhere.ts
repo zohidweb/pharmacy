@@ -4,6 +4,7 @@ import type { Shift, ZReport } from '@pharmacy/shared-dto';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/shared/api';
 import { rememberedLastShift } from '@/shared/lib/terminal-cache';
+import { lastShiftQueryKey } from './use-current-shift';
 
 /**
  * The Z-report of the last shift of this till when a manager closed it from another computer (plan
@@ -16,7 +17,7 @@ export function useClosedElsewhere(
 ): ZReport | null {
   const none = shift === null && Boolean(storeId);
   const last = useQuery({
-    queryKey: ['shift', 'last', storeId],
+    queryKey: lastShiftQueryKey(storeId),
     queryFn: async () => (await rememberedLastShift(storeId ?? '')) ?? null,
     enabled: none,
   });

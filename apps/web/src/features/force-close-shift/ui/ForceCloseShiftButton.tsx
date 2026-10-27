@@ -12,11 +12,16 @@ import {
   uuidv7,
 } from '@pharmacy/shared-util';
 import { Alert, Button, Dialog, TextareaField, TextField } from '@pharmacy/ui';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, useSession } from '@/entities/session';
-import { apiRequest, useApiErrorMessage, withFreshAuth } from '@/shared/api';
+import {
+  ApiError,
+  apiRequest,
+  useApiErrorMessage,
+  withFreshAuth,
+} from '@/shared/api';
 
 type BankMethod = Exclude<ReceiptPaymentMethod, 'cash'>;
 const BANK: readonly BankMethod[] = ['card', 'qr', 'nfc'];
@@ -33,7 +38,8 @@ function parseSigned(text: string): number | null {
 /**
  * «Закрыть с другого компьютера» (plan 2026-10-27-shift-history, S3): a manager closes the open shift of a broken or
  * unreachable till — the counted cash, the bank terminal and a required reason, under a fresh password. Shown for an
- * open shift to a session with `shifts:force-close`.
+ * open shift to a session with `shifts:force-close`; a PIN session gets no fresh sign-in (ADR-0008), so it is told to
+ * sign in by password instead.
  */
 export function ForceCloseShiftButton({
   details,
@@ -45,18 +51,25 @@ export function ForceCloseShiftButton({
   const t = useTranslations('shiftHistory.forceClose');
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
-  if (details.shift.status !== 'open' || !can(session, 'shifts:force-close')) {
+  const shiftOpen = details.shift.status === 'open';
+  // the dialog outlives the shift it closes: a refusal because it is already closed stays on screen
+  if (!can(session, 'shifts:force-close') || (!shiftOpen && !open)) {
     return null;
   }
   return (
     <>
-      <Button
-        variant="destructive"
-        iconStart="lock"
-        onClick={() => setOpen(true)}
-      >
-        {t('action')}
-      </Button>
+      {shiftOpen && session?.auth === 'pin' && (
+        <p className="text-sm text-fg-subtle">{t('passwordOnly')}</p>
+      )}
+      {shiftOpen && session?.auth === 'password' && (
+        <Button
+          variant="destructive"
+          iconStart="lock"
+          onClick={() => setOpen(true)}
+        >
+          {t('action')}
+        </Button>
+      )}
       {open && (
         <ForceCloseDialog
           details={details}
@@ -82,6 +95,7 @@ function ForceCloseDialog({
 }) {
   const t = useTranslations('shiftHistory.forceClose');
   const tMethods = useTranslations('shift.methods');
+  const queryClient = useQueryClient();
   const { shift } = details;
   // one key for every retry of this closing (Idempotency-Key, S3)
   const [key] = useState(() => uuidv7());
@@ -128,6 +142,12 @@ function ForceCloseDialog({
         }),
       ),
     onSuccess: onClosed,
+    onError: (failure) => {
+      // closed meanwhile (by its till or another manager): the card behind the dialog shows how
+      if (failure instanceof ApiError && failure.code === 'shift_closed') {
+        void queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      }
+    },
   });
   const error = useApiErrorMessage(close.error);
 

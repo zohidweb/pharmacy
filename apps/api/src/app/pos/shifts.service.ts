@@ -413,6 +413,13 @@ export class ShiftsService implements OnModuleInit {
         if (shift.status !== 'open') {
           throw new ProblemException(409, 'shift_closed');
         }
+        // the shifts of an offline store are its own facts (ADR-0014); a store being closed still gets the shift of
+        // its broken till closed — the store closing waits for it (E7)
+        const store = await this.repository.store(trx, tenantId, shift.storeId);
+        if (store === null) throw new ProblemException(404, 'not_found');
+        if (store.mode !== 'online') {
+          throw new ProblemException(409, 'offline_store_read_only');
+        }
         const closer = await trx
           .selectFrom('employees')
           .select('fullName')
@@ -542,9 +549,9 @@ export class ShiftsService implements OnModuleInit {
       );
       const items: ShiftListItem[] = [];
       for (const row of rows) {
-        const z = row.status === 'closed' ? (row.zReport as ZReport | null) : null;
+        const z = row.status === 'closed' ? row.zTotals : null;
         // an open shift is counted now; there are as many as tills (S1)
-        const totals = z?.shift ?? (await this.mapper.view(trx, principal.tenantId, row));
+        const totals = z ?? (await this.mapper.view(trx, principal.tenantId, row));
         items.push({
           id: row.id,
           number: row.number,
@@ -592,7 +599,7 @@ export class ShiftsService implements OnModuleInit {
         terminalName: await this.shifts.terminalName(trx, tenantId, row.terminalId),
         closedByName: row.closedByName,
         zReport,
-        afterClosing: await this.shifts.afterClosing(trx, tenantId, row.id),
+        afterClosing: await this.mapper.afterClosing(trx, tenantId, row.id),
         lastActivityAt: lastActivity?.toISOString() ?? null,
         print: { storeName: store.name, storeAddress: store.address, taxId: store.taxId },
       };

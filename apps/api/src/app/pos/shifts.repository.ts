@@ -34,12 +34,25 @@ export interface ShiftRow {
   forcedReason: string | null;
 }
 
-/** A shift of the history with its store, its till and the receipts accepted after a forced closing (S1). */
-export interface ShiftListRow extends ShiftRow {
+/**
+ * A shift of the history with its store, its till and the receipts accepted after a forced closing (S1). A closed
+ * shift brings the five figures of its Z-report the list shows, not the whole report (it holds every sale).
+ */
+export interface ShiftListRow extends Omit<ShiftRow, 'zReport'> {
   storeName: string;
   terminalName: string;
   afterClosingReceipts: number;
+  zTotals: {
+    receipts: number;
+    revenueMinor: number;
+    discrepancyReceipts: number;
+    discrepancyMinor: number;
+    discrepancyReasonMissing: boolean;
+  } | null;
 }
+
+/** The figures of the late operations of a shift; their list is `events(…, 'after-closing')`. */
+export type ShiftAfterClosingFigures = Omit<ShiftAfterClosing, 'events'>;
 
 export interface ShiftListFilter {
   storeId?: string;
@@ -163,36 +176,54 @@ export class ShiftsRepository {
     const zone = tenantTimeZone(tenantId);
     const to = sql`coalesce(${filter.to ?? null}::date, ${tenantToday(tenantId)})`;
     const from = sql`coalesce(${filter.from ?? null}::date, ${to} - 6)`;
+    // the business days as a range of moments, so that shifts_store_opened_idx serves it
     const where = sql`s.tenant_id = ${tenantId}
       ${scope === 'all' ? sql`` : sql`and s.store_id = any(${sql.val([...scope])}::uuid[])`}
       ${filter.storeId ? sql`and s.store_id = ${filter.storeId}` : sql``}
       ${filter.status ? sql`and s.status = ${filter.status}` : sql``}
-      and (s.opened_at at time zone ${zone})::date between ${from} and ${to}`;
+      and s.opened_at >= ((${from})::timestamp at time zone ${zone})
+      and s.opened_at < (((${to}) + 1)::timestamp at time zone ${zone})`;
     const count = await sql<{ total: number }>`
       select count(*)::integer as total from pharmacy.shifts s where ${where}`.execute(trx);
     const result = await sql<ShiftListRow>`
-      with base as (${SHIFT} where ${where})
-      select b.*, st.name as store_name, t.name as terminal_name,
+      select s.id, s.store_id, s.terminal_id, s.number, s.status, s.opened_by,
+             eo.full_name as opened_by_name, s.opened_at, s.opening_cash_dirams,
+             s.opened_author_flagged, s.closed_by, ec.full_name as closed_by_name, s.closed_at,
+             s.counted_cash_dirams, s.closed_author_flagged, s.forced, s.forced_reason,
+             case when s.z_report is not null then jsonb_build_object(
+               'receipts', s.z_report->'shift'->'receipts',
+               'revenueMinor', s.z_report->'shift'->'revenueMinor',
+               'discrepancyReceipts', s.z_report->'shift'->'discrepancyReceipts',
+               'discrepancyMinor', s.z_report->'discrepancyMinor',
+               'discrepancyReasonMissing', s.z_report->'discrepancyReasonMissing') end as z_totals,
+             st.name as store_name, t.name as terminal_name,
              (select count(*)::integer from pharmacy.receipts r
-              where r.tenant_id = ${tenantId} and r.shift_id = b.id
+              where r.tenant_id = ${tenantId} and r.shift_id = s.id
                 and 'after_closing' = any(r.discrepancy_kinds)) as after_closing_receipts
-      from base b
-      join pharmacy.stores st on st.tenant_id = ${tenantId} and st.id = b.store_id
-      join pharmacy.terminals t on t.tenant_id = ${tenantId} and t.id = b.terminal_id
-      order by b.opened_at desc, b.id desc
+      from pharmacy.shifts s
+      join pharmacy.employees eo on eo.tenant_id = s.tenant_id and eo.id = s.opened_by
+      left join pharmacy.employees ec on ec.tenant_id = s.tenant_id and ec.id = s.closed_by
+      join pharmacy.stores st on st.tenant_id = s.tenant_id and st.id = s.store_id
+      join pharmacy.terminals t on t.tenant_id = s.tenant_id and t.id = s.terminal_id
+      where ${where}
+      order by s.opened_at desc, s.id desc
       limit ${filter.limit} offset ${filter.offset}`.execute(trx);
     return { rows: result.rows, total: count.rows[0].total };
   }
 
-  /** The receipts and cash operations of a till accepted after its shift was closed from another computer (S4). */
+  /**
+   * The receipts and cash operations of a till accepted after its shift was closed from another computer (S4). The
+   * cash part of the receipts is the cash handed over less the change, as in the totals of a shift.
+   */
   async afterClosing(
     trx: TenantTransaction,
     tenantId: string,
     shiftId: string,
-  ): Promise<ShiftAfterClosing> {
+  ): Promise<ShiftAfterClosingFigures> {
     const result = await sql<{
       receipts: number;
       revenue: string;
+      cash: string;
       cashIn: string;
       cashOut: string;
     }>`
@@ -203,6 +234,13 @@ export class ShiftsRepository {
         (select coalesce(sum(r.total_dirams), 0)::text from pharmacy.receipts r
          where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
            and 'after_closing' = any(r.discrepancy_kinds)) as revenue,
+        ((select coalesce(sum(p.amount_dirams), 0) from pharmacy.payments p
+          join pharmacy.receipts r on r.tenant_id = p.tenant_id and r.id = p.receipt_id
+          where p.tenant_id = ${tenantId} and r.shift_id = ${shiftId} and p.kind = 'cash'
+            and 'after_closing' = any(r.discrepancy_kinds))
+         - (select coalesce(sum(r.change_dirams), 0) from pharmacy.receipts r
+            where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
+              and 'after_closing' = any(r.discrepancy_kinds)))::text as cash,
         (select coalesce(sum(o.amount_dirams), 0)::text from pharmacy.shift_cash_operations o
          where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId}
            and o.after_closing and o.kind = 'deposit') as cash_in,
@@ -213,6 +251,7 @@ export class ShiftsRepository {
     return {
       receipts: row.receipts,
       revenueMinor: Number(row.revenue),
+      cashMinor: Number(row.cash),
       cashInMinor: Number(row.cashIn),
       cashOutMinor: Number(row.cashOut),
     };
@@ -233,7 +272,7 @@ export class ShiftsRepository {
     return row?.name ?? '';
   }
 
-  /** When the till of the shift was last heard from: its last receipt or cash operation received (S2). */
+  /** When the till of the shift was last heard from: the opening, its last receipt or cash operation received (S2). */
   async lastActivityAt(
     trx: TenantTransaction,
     tenantId: string,
@@ -241,6 +280,8 @@ export class ShiftsRepository {
   ): Promise<Date | null> {
     const result = await sql<{ at: Date | null }>`
       select greatest(
+        (select s.received_at from pharmacy.shifts s
+         where s.tenant_id = ${tenantId} and s.id = ${shiftId}),
         (select max(r.received_at) from pharmacy.receipts r
          where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}),
         (select max(o.received_at) from pharmacy.shift_cash_operations o
@@ -409,12 +450,17 @@ export class ShiftsRepository {
     };
   }
 
-  /** Sales and cash operations of a shift for its log. */
+  /**
+   * Sales and cash operations of a shift for its log; `after-closing` — only those accepted after its closing from
+   * another computer (S4), which the log of the shift leaves out.
+   */
   async events(
     trx: TenantTransaction,
     tenantId: string,
     shiftId: string,
+    part: 'shift' | 'after-closing' = 'shift',
   ): Promise<ShiftEventRow[]> {
+    const late = part === 'after-closing';
     const result = await sql<ShiftEventRow & { amountDirams: string }>`
       select r.id, r.sold_at as at, 'sale' as kind, r.number as reference,
              e.full_name as employee_name, r.total_dirams::text as amount_dirams,
@@ -422,7 +468,7 @@ export class ShiftsRepository {
       from pharmacy.receipts r
       join pharmacy.employees e on e.tenant_id = r.tenant_id and e.id = r.cashier_id
       where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
-        and not ('after_closing' = any(r.discrepancy_kinds))
+        and ('after_closing' = any(r.discrepancy_kinds)) = ${late}
       union all
       select o.id, o.occurred_at, case o.kind when 'deposit' then 'cash_in' else 'cash_out' end,
              o.reason, e.full_name,
@@ -430,7 +476,7 @@ export class ShiftsRepository {
              o.author_flagged
       from pharmacy.shift_cash_operations o
       join pharmacy.employees e on e.tenant_id = o.tenant_id and e.id = o.employee_id
-      where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId} and not o.after_closing`.execute(trx);
+      where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId} and o.after_closing = ${late}`.execute(trx);
     return result.rows.map((row) => ({
       ...row,
       amountDirams: Number(row.amountDirams),

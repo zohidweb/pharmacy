@@ -1,28 +1,31 @@
 'use client';
 
-import type { ShiftEvent, ZReport } from '@pharmacy/shared-dto';
+import type { ZReport } from '@pharmacy/shared-dto';
 import { formatDateTime, formatMoney } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
   Card,
   CardHeader,
-  DataTable,
-  EmptyState,
   printReceipt,
   RECEIPT_COLUMNS,
   ReceiptPreview,
   ReceiptPrint,
   SegmentedControl,
   StatusPill,
-  type DataTableColumn,
 } from '@pharmacy/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
-import { useZReportLabels, zReportLines } from '@/entities/shift';
+import {
+  ShiftDrawer,
+  ShiftEventLog,
+  ShiftTotals,
+  useZReportLabels,
+  zReportLines,
+} from '@/entities/shift';
 import { ForceCloseShiftButton } from '@/features/force-close-shift';
 import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
@@ -33,9 +36,9 @@ import { PageHeader } from '@/widgets/app-shell';
 type Paper = '80' | '58';
 
 /**
- * The card of a shift (plan 2026-10-27-shift-history, S2, S8): its totals and journal, the Z-report of a closed shift
- * with its print, the operations of its till accepted after a closing from another computer, and for an open shift
- * the closing from another computer.
+ * The card of a shift (plan 2026-10-27-shift-history, S2, S8): its totals, drawer and journal, the Z-report of a
+ * closed shift with its print, the operations of its till accepted after a closing from another computer, and for an
+ * open shift the closing from another computer.
  */
 function ShiftCardView() {
   const t = useTranslations('shiftHistory');
@@ -50,33 +53,6 @@ function ShiftCardView() {
       apiRequest('shifts.details', { params: { id }, signal }),
     enabled: id !== '',
   });
-
-  const eventColumns: DataTableColumn<ShiftEvent>[] = [
-    {
-      key: 'at',
-      header: t('events.at'),
-      nowrap: true,
-      cell: (row) => formatDateTime(row.at),
-    },
-    {
-      key: 'kind',
-      header: t('events.kind'),
-      cell: (row) =>
-        tShift(`events.${row.kind}`, { reference: row.reference ?? '' }),
-    },
-    {
-      key: 'employee',
-      header: t('events.employee'),
-      cell: (row) => row.employeeName,
-    },
-    {
-      key: 'amount',
-      header: t('events.amount'),
-      align: 'end',
-      nowrap: true,
-      cell: (row) => formatMoney(row.amountMinor),
-    },
-  ];
 
   return (
     <>
@@ -161,16 +137,6 @@ function ShiftCardView() {
                         ? formatDateTime(details.lastActivityAt)
                         : '—'}
                     </dd>
-                    <dt className="text-fg-subtle">{t('columns.receipts')}</dt>
-                    <dd className="tabular-nums">{shift.receipts}</dd>
-                    <dt className="text-fg-subtle">{t('columns.revenue')}</dt>
-                    <dd className="tabular-nums">
-                      {formatMoney(shift.revenueMinor)}
-                    </dd>
-                    <dt className="text-fg-subtle">{tShift('expected')}</dt>
-                    <dd className="tabular-nums">
-                      {formatMoney(shift.cash.expectedMinor)}
-                    </dd>
                     {zReport && (
                       <>
                         <dt className="text-fg-subtle">{tShift('actual')}</dt>
@@ -190,28 +156,28 @@ function ShiftCardView() {
                     </Alert>
                   )}
                 </Card>
+                <div className="grid items-start gap-4 md:grid-cols-2">
+                  <ShiftTotals shift={shift} />
+                  <ShiftDrawer shift={shift} />
+                </div>
                 {late && (
-                  <Alert tone="warning" title={t('afterClosingTitle')}>
-                    {t('afterClosingText', {
-                      receipts: afterClosing.receipts,
-                      amount: formatMoney(afterClosing.revenueMinor),
-                      in: formatMoney(afterClosing.cashInMinor),
-                      out: formatMoney(afterClosing.cashOutMinor),
-                    })}
-                  </Alert>
+                  <>
+                    <Alert tone="warning" title={t('afterClosingTitle')}>
+                      {t('afterClosingText', {
+                        receipts: afterClosing.receipts,
+                        amount: formatMoney(afterClosing.revenueMinor),
+                        cash: formatMoney(afterClosing.cashMinor),
+                        in: formatMoney(afterClosing.cashInMinor),
+                        out: formatMoney(afterClosing.cashOutMinor),
+                      })}
+                    </Alert>
+                    <ShiftEventLog
+                      events={afterClosing.events}
+                      title={t('afterClosingLog')}
+                    />
+                  </>
                 )}
-                <Card padding="none">
-                  <DataTable
-                    caption={t('events.title')}
-                    showCaption
-                    rowKey={(row) => row.id}
-                    rows={shift.events}
-                    columns={eventColumns}
-                    empty={
-                      <EmptyState icon="clock" title={t('events.empty')} />
-                    }
-                  />
-                </Card>
+                <ShiftEventLog events={shift.events} title={t('log')} />
                 {zReport && (
                   <Card>
                     <CardHeader

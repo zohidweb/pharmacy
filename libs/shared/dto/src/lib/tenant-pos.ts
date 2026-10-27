@@ -366,8 +366,12 @@ export interface ShiftListResponse {
 export interface ShiftAfterClosing {
   receipts: number;
   revenueMinor: number;
+  /** The cash part of those receipts: cash handed over less the change — what reached the drawer after the count. */
+  cashMinor: number;
   cashInMinor: number;
   cashOutMinor: number;
+  /** The late receipts and cash operations, the newest first. */
+  events: ShiftEvent[];
 }
 
 /** GET /api/v1/shifts/{id} — a shift of the scope (`reports:view`; S2); 404 `not_found` outside it. */

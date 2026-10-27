@@ -16,7 +16,7 @@
 >   `comment`; у операций и смены — пометка автора (`author_flagged`, `opened_author_flagged`,
 >   `closed_author_flagged`);
 > - **продажа — факт** (ADR-0015): нехватка остатка, изменённая цена, скидка или карточка товара не отклоняют чек —
->   `receipts.discrepancy_kinds` (`stock`, `price`, `discount`, `catalog`, `author`, `closed_period`),
+>   `receipts.discrepancy_kinds` (`stock`, `price`, `discount`, `catalog`, `author`, `closed_period`, `after_closing`),
 >   `receipt_lines.shortfall_pieces` и `current_price_dirams`; чек несёт значения снимка кассы
 >   (`receipt_lines.pieces_per_pack`, `receipts.discount_min_total_dirams`);
 > - **права автора** проверяются по текущему состоянию: неактивен, вне охвата или без права — пометка `author`, не
@@ -80,7 +80,7 @@ erDiagram
 
 | Колонка | Тип | Правило |
 |---|---|---|
-| `store_id`, `terminal_id`, `shift_id` | uuid | Смена обязательна и открыта (БЛ 6.2) |
+| `store_id`, `terminal_id`, `shift_id` | uuid | Смена обязательна и открыта (БЛ 6.2); чек кассы, чью смену закрыли с другого компьютера, принимается в эту смену с пометкой `after_closing` (поправка спецификации кассы 2026-10-27) |
 | `cashier_id` | uuid | Сотрудник PIN-сессии |
 | `number` | text | Уникален в `(tenant_id, store_id, number)`; счётчик `receipt` |
 | `local_number` | integer null 1…999999 (проверка добавлена `NOT VALID` и проверена отдельной миграцией `pos-offline-limits-validate`) | Номер чека терминала в смене (спецификация `2026-10-21-pos-offline-limits`, P12): касса присваивает его при «Оплатить»; не уникален — после очистки данных браузера касса продолжает счёт сервера. Чек без номера ЧК печатается с ним и кодом — последними 8 символами `id` (P13), по коду кассир находит чек для возврата (P14) |

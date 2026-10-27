@@ -441,6 +441,8 @@
     "shift_cash_in": "Ворид кардани нақд",
     "shift_cash_out": "Гирифтани нақд",
     "shift_closed": "Баст пӯшида шуд",
+    "shift_force_closed": "Баст аз компютери дигар пӯшида шуд",
+    "shift_close_superseded": "Пӯшидани хазина пас аз пӯшидан аз компютери дигар",
     "document_created": "Ҳуҷҷат сохта шуд",
     "document_updated": "Ҳуҷҷат тағйир ёфт",
     "document_posted": "Ҳуҷҷат гузаронида шуд",

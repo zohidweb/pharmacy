@@ -106,8 +106,9 @@ PIN недействительны (ADR-0008).
    Секретный ключ S3 — не сюда, а в файл `offsite_secret_access_key` на сервере (раздел 4, первый запуск). Ключи S3 —
    ещё и в менеджер паролей хранителей: при потере сервера архив env-файла и секретов достают из бакета ими же.
 6. После первого запуска (раздел 4) — копия env-файла и секретов в бакет, на сервере:
-   `tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push`;
-   и после каждого изменения env-файла или секрета. Архив шифруется потоком, открытый текст не ложится на диск; объект —
+   `( set -o pipefail; tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push )`;
+   и после каждого изменения env-файла или секрета. `pipefail`: архив, который `tar` не дочитал, не уходит в бакет как
+   целый. Архив шифруется потоком, открытый текст не ложится на диск; объект —
    `prod/env/<время UTC>.tar.age`.
 
 ## 3. Сборка и перенос образов (каждая выкладка)
@@ -243,16 +244,19 @@ dc restart redis        # все входят заново
 1. Раздел 1 — новый VPS; DNS — на его IP.
 2. Раздел 3 — образы и compose-файлы того коммита, что работал (или новее).
 3. Env-файл и секреты — из бакета: последний объект `prod/env/<время>.tar.age` (панель Contabo или `aws s3 cp` ключами
-   S3 из менеджера паролей) скопировать на сервер в `/opt/pharmacy/docker/` (это шифротекст) и расшифровать там образом
-   `pharmacy/postgres` от пользователя `deploy`; закрытый ключ хранителя идёт по ssh в stdin и на диск сервера не
-   попадает:
+   S3 из менеджера паролей) скопировать на сервер (это шифротекст) и открыть там командой `pharmacy-backup env-open`
+   образа `pharmacy/postgres` от пользователя `deploy`. Закрытый ключ хранителя идёт по ssh в stdin и на диск сервера не
+   попадает. Архив мог положить и захвативший сервер (ключ бакета был на нём), поэтому `env-open` открывает его, только
+   если в нём ровно `env/prod.env` и файлы секретов как обычные файлы, без ссылок и чужих путей; пишет только их,
+   ничего существующего не перезаписывает и ставит права 600/700/444:
 
    ```bash
-   scp <время>.tar.age deploy@<IP>:/opt/pharmacy/docker/
-   ssh deploy@<IP> 'cd /opt/pharmacy/docker && docker run --rm -i --pull=never --network none --user "$(id -u):$(id -g)" -v "$PWD:/w" pharmacy/postgres:<sha> sh -c "age -d -i /dev/stdin /w/<время>.tar.age | tar -x -C /w" && rm <время>.tar.age && chmod 600 env/prod.env && chmod 700 secrets/prod && chmod 444 secrets/prod/*' < key.txt
+   scp <время>.tar.age deploy@<IP>:/opt/pharmacy/
+   ssh deploy@<IP> 'docker run --rm -i --pull=never --network none --user "$(id -u):$(id -g)" -v /opt/pharmacy:/w pharmacy/postgres:<sha> pharmacy-backup env-open /w/<время>.tar.age /w/docker && rm /opt/pharmacy/<время>.tar.age' < key.txt
+   ssh deploy@<IP>
+   export IMAGE_TAG=<sha>
+   dc --profile tools run --rm secrets check
    ```
-
-   Затем `dc --profile tools run --rm secrets check`.
 4. Только PostgreSQL: `export IMAGE_TAG=<sha>; dc up -d --no-build --wait postgres`. Не полный `up`: на новом хосте
    `BACKUP_DIR` пуст, защите пустой базы (B15) не с чем сравнить, и `backup` сразу скопировал бы пустую базу и выгрузил
    её как самую свежую копию вне хоста.
@@ -277,7 +281,7 @@ dc restart redis        # все входят заново
 2. Env-файл и секреты: `aws s3api list-object-versions --bucket <имя> --prefix prod/env/` — последняя версия с
    `LastModified` раньше взлома, затем
    `aws s3api get-object --bucket <имя> --key prod/env/<время>.tar.age --version-id <VersionId> <время>.tar.age` и
-   расшифровка, как в шаге 3 раздела выше.
+   `env-open`, как в шаге 3 раздела выше.
 3. Копия: команды шага 5 раздела выше с `--at <время UTC>` в конце: `list-offsite --at 2026-10-20T21:00:00Z`, затем
    `fetch <копия> --at 2026-10-20T21:00:00Z`.
 4. Ключи S3 и все секреты считать раскрытыми: новые ключи S3 (старые отозвать), ключи JWT и пароли ролей и Redis —
@@ -333,7 +337,9 @@ ADR-0021, п. 6.
 - root и группа `docker` на VPS — только у архитектора и второго хранителя ключа `age`; вход только по SSH-ключам
   (раздел 1). Группа `docker` равна root: она читает и каталог секретов, и тома.
 - Файлы `secrets/` не открываются (`cat`, `less`, редактор) ни при диагностике, ни AI-ассистентами, не копируются в
-  чаты и тикеты; меняются только по разделу «Ротация секретов». `docker inspect`, `dc config`, `dc ps` и `dc logs`
-  секретов не показывают — их можно запускать при диагностике.
+  чаты и тикеты; меняются только по разделу «Ротация секретов». `docker inspect`, `dc config` и `dc ps` секретов не
+  показывают — их можно запускать при диагностике. `dc logs` — тоже, с одним исключением: неудачный
+  `ALTER ROLE … PASSWORD` попадает в журнал PostgreSQL вместе с паролем, поэтому вывод `dc logs postgres` после ошибки
+  ротации в чаты не копировать, а пароль этой ротации считать раскрытым.
 - Открытые значения секретов prod есть только в каталоге секретов на сервере и в зашифрованном архиве `env-push`; на
   машине архитектора — только `prod.env` без секретов.

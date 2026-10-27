@@ -73,6 +73,15 @@ const SECRET_VARIABLES = {
   PASSWORD_PEPPERS: 'password_peppers',
   RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY: 'offsite_secret_access_key',
 };
+// The secret files that must match an existing database (role passwords, the pepper of its password hashes);
+// pharmacy_backup gets its password from its file on every `up`.
+const DATABASE_SECRETS = [
+  'postgres_superuser_password',
+  'pharmacy_owner_password',
+  'pharmacy_app_password',
+  'pharmacy_platform_password',
+  'password_peppers',
+];
 // A copy is named by its UTC start time; the strict pattern also keeps the argument safe for cmd.exe (shell: true).
 const COPY_NAME = /^\d{8}T\d{6}Z$/;
 // --at of the commands off the host, as strict for the same reason.
@@ -90,6 +99,11 @@ function run(cmd, args, options = {}) {
   const result = spawnSync(cmd, args, { cwd: root, stdio: 'inherit', shell: process.platform === 'win32', ...options });
   if (result.status !== 0) fail(`Command failed (exit ${result.status}): ${cmd} ${args.join(' ')}`);
   return result;
+}
+
+// A command whose output is not wanted; its exit status.
+function runQuiet(cmd, args) {
+  return spawnSync(cmd, args, { cwd: root, stdio: 'ignore', shell: process.platform === 'win32' }).status;
 }
 
 // Like run, but returns the exit status instead of failing.
@@ -127,9 +141,22 @@ function fileSecrets(env) {
   return Object.keys(SECRET_VARIABLES).filter((name) => fileValue(env, name));
 }
 
-// The secret directory of the env file: SECRETS_DIR is relative to docker/, as compose resolves it.
+// The secret directory of the env file: SECRETS_DIR is relative to docker/, as compose resolves it. In the repository
+// git ignores docker/secrets/ only, so any other directory of it is refused.
 function secretsDir(env) {
-  return resolve(root, 'docker', envValue(env, 'SECRETS_DIR', ''));
+  const value = envValue(env, 'SECRETS_DIR', '');
+  const dir = resolve(root, 'docker', value);
+  const within = (parent) => {
+    const path = relative(parent, dir);
+    return path !== '' && !path.startsWith('..') && !isAbsolute(path);
+  };
+  if (value === '' || dir === root || (within(root) && !within(join(root, 'docker', 'secrets')))) {
+    fail(
+      `SECRETS_DIR of ${env.envFile} must be a directory under docker/secrets/ (such as ./secrets/test) or outside the ` +
+        'repository: git would not ignore the secret files anywhere else (ADR-0021).',
+    );
+  }
+  return dir;
 }
 
 function capture(cmd, args) {
@@ -163,7 +190,21 @@ function composeArgs(envName, env) {
 // root — then `secrets init` creates the missing files (never overwrites one) and `secrets check` stops a broken set
 // before any service starts.
 function ensureSecrets(envName, env) {
-  mkdirSync(secretsDir(env), { recursive: true, mode: 0o700 });
+  const dir = secretsDir(env);
+  // A database that exists has its passwords and its pepper already: new values would lock the stack out of it and void
+  // every password and PIN, so missing files of these are restored, never made anew.
+  const missing = DATABASE_SECRETS.filter((file) => !existsSync(join(dir, file)));
+  const volume = `${env.project}_pg-data`;
+  if (missing.length > 0 && runQuiet('docker', ['volume', 'inspect', volume]) === 0) {
+    fail(
+      `The database volume ${volume} exists, but ${envValue(env, 'SECRETS_DIR', '')} lacks ${missing.join(', ')}: new ` +
+        'values would not match the database, and a new pepper voids every password and PIN. Restore the secret files ' +
+        `(an env-push archive — pharmacy-backup env-open, docs/guides/deploy-vps.md — or \`npm run stack -- ${envName} ` +
+        'init` from an env file that still holds them). A stand whose data may go: `npm run stack -- ' +
+        `${envName} down\`, then \`docker volume rm ${volume}\`.`,
+    );
+  }
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
   const tool = [...composeArgs(envName, env), '--profile', 'tools', 'run', '--rm', 'secrets'];
   run('docker', [...tool, 'init']);
   run('docker', [...tool, 'check']);
@@ -284,7 +325,12 @@ function envPush(envName, env) {
     shell: process.platform === 'win32',
   });
   if (tar.status !== 0) fail(`env-push: tar failed (exit ${tar.status}): ${String(tar.stderr).trim()}`);
-  const args = [...composeArgs(envName, env), 'run', '--rm', '--no-deps', '-T', 'backup', 'pharmacy-backup', 'env-push'];
+  // APP_ENV is the prefix of the object: an APP_ENV of the shell, which compose would prefer, must not send the archive
+  // of test under another environment.
+  const args = [
+    ...composeArgs(envName, env), 'run', '--rm', '--no-deps', '-T', '-e', `APP_ENV=${envName}`,
+    'backup', 'pharmacy-backup', 'env-push',
+  ];
   console.log(`\n$ tar -C docker -cf - ${envFile} ${secrets} | docker ${args.join(' ')}`);
   const result = spawnSync('docker', args, {
     cwd: root,
@@ -346,23 +392,24 @@ function moveSecrets(env) {
   const dir = secretsDir(env);
   const setting = envValue(env, 'SECRETS_DIR', '');
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const written = [];
-  for (const name of names) {
-    const value = fileValue(env, name);
-    const file = join(dir, SECRET_VARIABLES[name]);
-    // An empty variable (an S3 key never set) has nothing to move; `secrets init` makes its file.
-    if (value === '') continue;
-    if (existsSync(file)) {
-      if (readFileSync(file, 'utf8') !== value) {
-        fail(`${name} of ${env.envFile} differs from ${setting}/${SECRET_VARIABLES[name]}; nothing was moved. Keep the ` +
-          'right value in one place only: the file is used from now on (ADR-0021).');
-      }
-    } else {
-      // 0444 as the files of `secrets init`; on Windows that is the read-only attribute, which the container can
-      // still replace.
-      writeFileSync(file, value, { mode: 0o444, flag: 'wx' });
-      written.push(SECRET_VARIABLES[name]);
+  // An empty variable (an S3 key never set) has nothing to move; `secrets init` makes its file.
+  const moving = names
+    .map((name) => ({ name, value: fileValue(env, name), file: join(dir, SECRET_VARIABLES[name]) }))
+    .filter(({ value }) => value !== '');
+  // Every existing file is compared before any is written.
+  for (const { name, value, file } of moving) {
+    if (existsSync(file) && readFileSync(file, 'utf8') !== value) {
+      fail(`${name} of ${env.envFile} differs from ${setting}/${SECRET_VARIABLES[name]}; nothing was moved. Keep the ` +
+        'right value in one place only: the file is used from now on (ADR-0021).');
     }
+  }
+  const written = [];
+  for (const { name, value, file } of moving) {
+    if (existsSync(file)) continue;
+    // 0444 as the files of `secrets init`; on Windows that is the read-only attribute, which the container can still
+    // replace.
+    writeFileSync(file, value, { mode: 0o444, flag: 'wx' });
+    written.push(SECRET_VARIABLES[name]);
   }
   for (const name of names) {
     const value = fileValue(env, name);
@@ -417,7 +464,7 @@ if (BACKUP_COMMANDS.includes(command) && !BACKUP_ENVS.includes(envName)) {
 if (envName === 'prod' && command === 'env-push') {
   fail(
     'env-push of prod runs on the VPS, where its secret files are (ADR-0021, docs/guides/deploy-vps.md):\n' +
-      '    tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push',
+      '    ( set -o pipefail; tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push )',
   );
 }
 if (BACKUP_ENVS.includes(envName)) {

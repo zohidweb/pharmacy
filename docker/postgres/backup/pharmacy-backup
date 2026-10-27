@@ -23,6 +23,9 @@
 #                          the monthly drill: download, decrypt (key on stdin), restore into a scratch instance, compare
 #   env-push               the tar of the env file and the secret files of the environment from stdin, encrypted for
 #                          the keepers, into the bucket
+#   env-open <archive> <dir>
+#                          the server is lost: an archive of env-push, decrypted with the private key of a keeper read
+#                          from stdin, into <dir> — only the env file and the secret files, checked first
 #
 # Copies off the host (ADR-0020, docs/superpowers/specs/2026-10-23-offsite-backups-design.md): a verified copy is
 # encrypted with age for BACKUP_AGE_RECIPIENTS and uploaded with rclone (remote `offsite`, RCLONE_CONFIG_OFFSITE_*) as
@@ -512,7 +515,8 @@ cmd_verify_offsite() {
 # env-push — the tar of the env file and the secret files of the environment from stdin (keys of JWT, peppers,
 # passwords; ADR-0008, ADR-0021), encrypted for the keepers and uploaded as <APP_ENV>/env/<time>.tar.age (spec
 # 2026-10-23-offsite-backups O13, spec 2026-10-27-secret-store K10):
-#   tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push
+#   ( set -o pipefail; tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod |
+#     dc run --rm --no-deps -T backup pharmacy-backup env-push )
 # The archive streams into age: the plain text is held neither in a variable (a tar holds NUL bytes) nor on a disk.
 # Only its first block is read ahead — the tar header of the env file: name, size and mode, no content — so that an
 # empty stdin or an env file piped in the old way is refused.
@@ -543,6 +547,67 @@ cmd_env_push() {
   rm -f "$enc"
   [ "$(offsite_size "$obj")" = "$bytes" ] || die "env-push: the object of $name has another size after the upload"
   log "env-push: uploaded as ${obj#offsite:}"
+}
+
+# The secret files of docker/compose.secrets.yml (ADR-0021, spec 2026-10-27-secret-store, section 3).
+SECRET_FILES='postgres_superuser_password pharmacy_owner_password pharmacy_app_password pharmacy_platform_password
+pharmacy_backup_password redis_password redis_users_acl session_jwt_keys password_peppers offsite_secret_access_key'
+
+# env_stream <archive> <tar arguments…> — the archive decrypted with KEY straight into tar; fails when either fails.
+env_stream() {
+  archive=$1
+  shift
+  (
+    set -o pipefail
+    printf '%s\n' "$KEY" | age -d -i /dev/stdin "$archive" | tar "$@"
+  )
+}
+
+# env-open <archive> <dir> — after the loss of the server or a break-in (docs/guides/deploy-vps.md): an archive of
+# env-push, decrypted with the private key of a keeper read from stdin (never stored), into <dir>
+# (/opt/pharmacy/docker). Anyone with the bucket key can put an archive encrypted for the public keys there, so, as a
+# copy in offsite_download, it is opened only when it holds the env file env/<env>.env and every secret file
+# secrets/<env>/<name> as plain files: no links, no other paths (left-over dot files of the secrets directory are
+# skipped). Only those are written, nothing that exists is overwritten, and they get the rights of ADR-0021: the env
+# file 600, the secrets directory 700, its files 444. The plain text streams from age into tar and never lies on a disk.
+# Runs without the stack, as the deploy user: docker run --rm -i --user … -v …:/w pharmacy/postgres:<tag> pharmacy-backup
+# env-open /w/<time>.tar.age /w < key.txt
+cmd_env_open() {
+  archive=${1:-}
+  dir=${2:-}
+  { [ -f "$archive" ] && [ -d "$dir" ]; } ||
+    die "usage: pharmacy-backup env-open <archive .tar.age> <directory> — the private key of a keeper on stdin"
+  [ -t 0 ] && die "env-open: the private key of a keeper goes on stdin, it is never stored on this host"
+  # In memory only; a key file saved on Windows has CRLF.
+  KEY=$(tr -d '\r')
+  printf '%s\n' "$KEY" | grep -q '^AGE-SECRET-KEY-1' ||
+    die "env-open: stdin holds no private key of age (a line AGE-SECRET-KEY-1…)"
+  err=/tmp/pharmacy-backup.env-open.err
+  names=$(env_stream "$archive" -tf - 2>"$err") && long=$(env_stream "$archive" -tvf - 2>>"$err") ||
+    die "env-open: the archive cannot be decrypted or read (the private key of a keeper?): $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"
+  e=$(printf '%s\n' "$names" | sed -n 's|^env/\([a-z][a-z0-9]*\)\.env$|\1|p')
+  [ "$(printf '%s\n' "$e" | grep -c .)" = 1 ] || die "env-open: the archive does not hold one env file env/<env>.env"
+  expected=$({
+    printf 'env/%s.env\n' "$e"
+    for f in $SECRET_FILES; do printf 'secrets/%s/%s\n' "$e" "$f"; done
+  } | sort)
+  held=$(printf '%s\n' "$names" | grep -v -e '^env/\{0,1\}$' -e '^secrets/\{0,1\}$' -e "^secrets/$e/\{0,1\}\$" \
+    -e "^secrets/$e/\.[^/]*\$" | sort)
+  # busybox tar lists a symbolic link as l…, a hard link as -… <name> -> <target>
+  if [ "$held" != "$expected" ] || printf '%s\n' "$long" | grep -q -e '^[^-d]' -e ' -> '; then
+    die "env-open: the archive does not hold exactly env/$e.env and the secret files of secrets/$e/ as plain files"
+  fi
+  for f in $expected; do
+    [ ! -e "$dir/$f" ] || die "env-open: $dir/$f already exists; nothing was written (it is never overwritten)"
+  done
+  mkdir -p "$dir/env" "$dir/secrets/$e" || die "env-open: $dir is not writable by uid $(id -u)"
+  # shellcheck disable=SC2086
+  env_stream "$archive" -xf - -C "$dir" $expected 2>"$err" ||
+    die "env-open: unpacking failed: $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"
+  unset KEY
+  chmod 600 "$dir/env/$e.env" && chmod 700 "$dir/secrets/$e" && (cd "$dir/secrets/$e" && chmod 444 $SECRET_FILES) ||
+    die "env-open: the rights of the files cannot be set"
+  log "env-open: env/$e.env and $(printf '%s\n' $SECRET_FILES | grep -c .) secret files of secrets/$e/ are in $dir"
 }
 
 # fail <reason> — the copy in progress becomes <name>.failed with the reason and the tail of its log. Its dump is
@@ -848,5 +913,6 @@ list-offsite) cmd_list_offsite "${2:-}" "${3:-}" ;;
 fetch) cmd_fetch "${2:-}" "${3:-}" "${4:-}" ;;
 verify-offsite) cmd_verify_offsite "${2:-}" "${3:-}" "${4:-}" ;;
 env-push) cmd_env_push ;;
-*) die "usage: pharmacy-backup daemon | run | push | verify <copy> | status | health | restore <copy> [--check] | list-offsite [--at <time>] | fetch <copy> [--at <time>] | verify-offsite <copy> [--at <time>] | env-push" ;;
+env-open) cmd_env_open "${2:-}" "${3:-}" ;;
+*) die "usage: pharmacy-backup daemon | run | push | verify <copy> | status | health | restore <copy> [--check] | list-offsite [--at <time>] | fetch <copy> [--at <time>] | verify-offsite <copy> [--at <time>] | env-push | env-open <archive> <dir>" ;;
 esac

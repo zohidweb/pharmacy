@@ -316,7 +316,11 @@ npm run prod:build / prod:up / prod:down
   - Env-файл test, созданный до ADR-0021: `npm run stack -- test init` переносит его секреты в файлы с прежними
     значениями (тома не пересоздаются, вход прежним паролем работает) и заменяет их строки комментарием без значения.
     Пока секреты в env-файле, `up` и `restore` отказывают. В prod `build` и `up` отказывают при секретах в `prod.env`:
-    секреты prod создаются и живут только на VPS (`docs/guides/deploy-vps.md`).
+    секреты prod создаются и живут только на VPS (`docs/guides/deploy-vps.md`). Если том базы уже есть, а файла её
+    пароля или pepper нет, `up` отказывает: новый секрет не совпал бы с базой — файлы восстанавливают, а не создают.
+  - После переноса env-файла test ветки, созданные до ADR-0021, сначала обновить от `main`: старый `stack.mjs` не знает
+    файлов секретов, посчитает секреты пропавшими, а его `init` допишет в env-файл новые случайные значения. Такие
+    строки потом удаляются из env-файла вручную.
   - Роли создаёт initdb только на пустом томе: существующие тома (`pharmacy-<env>_pg-data`) после появления
     новых ролей нужно пересоздать (`docker volume rm`, данные теряются — только для test/dev).
 - Вход в test/prod — только через proxy (Caddy, ADR-0012); `PROXY_PROFILE` (`cloud` | `local` | `offline`) и
@@ -376,7 +380,7 @@ npm run prod:build / prod:up / prod:down
   - копия env-файла и каталога секретов (ключи JWT, pepper, пароли, ключ S3) — один tar, зашифрованный теми же
     ключами, объект `<env>/env/<время>.tar.age` того же бакета; после каждого их изменения — `env-push` на хосте среды:
     для test `npm run stack -- test env-push`, для prod — на VPS
-    `tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push`
+    `( set -o pipefail; tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push )`
     (секретов prod на машине архитектора нет). Архив идёт в `age` потоком, открытый текст не ложится на диск.
 
 ## Containers (ADR-0005)
@@ -401,16 +405,17 @@ npm run prod:build / prod:up / prod:down
   иначе мог бы подменить сокет. Вход по сокету тоже с паролем; скрипт образа `pharmacy-psql` берёт его из файла
   `POSTGRES_PASSWORD_FILE` и передаёт psql через окружение, поэтому `docker compose … exec postgres pharmacy-psql`
   работает без ввода (аргументы psql — как обычно, `-d`/`-c`/`-f`). В dev правила образа прежние.
-  - Раньше суперпользователь входил по сокету без пароля, и его пароль в базе мог разойтись с файлом
-    `postgres_superuser_password`. Поэтому перед первой выкладкой этих правил на существующий кластер его нужно
-    проверить (ответ `1`):
+  - Пароль суперпользователя в базе должен совпадать с файлом `postgres_superuser_password`, иначе `stack up` падает
+    на шаге роли копий. Проверка (ответ `1`; сокет в test и prod спрашивает пароль):
     `docker compose --project-name pharmacy-<env> --env-file docker/env/<env>.env -f docker/compose.yml -f
-    docker/compose.<env>.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml exec -T postgres sh -c
-    'pharmacy-psql -h "$(hostname -i)" -Atc "select 1"'`.
+    docker/compose.<env>.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml exec -T postgres
+    pharmacy-psql -Atc "select 1"`.
   - Если пароль разошёлся и `up` уже упал:
     1. в контейнере `postgres` выполнить
        `sed -i '1i local all <суперпользователь> trust' /etc/pharmacy/pg_hba.conf && kill -HUP 1`;
-    2. задать пароль через `alter role … password …`;
+    2. задать пароль из файла, не набирая его в командной строке (на VPS, с `dc` и `S` из `docs/guides/deploy-vps.md`):
+       `( export PW="$(cat "$S/postgres_superuser_password")"; printf '%s\n' '\getenv pw PW' "alter role postgres
+       password :'pw';" | dc exec -T -e PW postgres pharmacy-psql -q -f - )`;
     3. вернуть файл образа: `up -d --force-recreate postgres`.
   - Пароли ролей и суперпользователя доходят до psql через его окружение (`\getenv`), не аргументами: в списке
     процессов хоста их нет (S6, ADR-0021).

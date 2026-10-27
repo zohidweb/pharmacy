@@ -31,7 +31,11 @@ import {
   ensureSession,
   useSession,
 } from '@/entities/session';
-import { shiftQueryKey, useCurrentShift } from '@/entities/shift';
+import {
+  ClosedElsewhereNotice,
+  shiftQueryKey,
+  useCurrentShift,
+} from '@/entities/shift';
 import { useBufferState, useTerminalRuntime } from '@/entities/terminal';
 import { BindTerminalButton } from '@/features/bind-terminal';
 import {
@@ -458,6 +462,9 @@ function PosPageView() {
     <div className="flex h-(--ph-pos-height) min-h-0 flex-col">
       {header}
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 pt-4">
+        {!openShift && (
+          <ClosedElsewhereNotice storeId={storeId} shift={shift.data} />
+        )}
         {!openShift && (
           <EmptyState
             icon="clock"

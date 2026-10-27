@@ -2,9 +2,13 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import type {
   ReceiptPaymentMethod,
   Shift,
+  ShiftDetails,
+  ShiftListItem,
+  ShiftListResponse,
   ZReport,
 } from '@pharmacy/shared-dto';
 import {
+  type EmployeePrincipal,
   requirePrincipal,
   requireTenantId,
 } from '../../common/context/request-context';
@@ -15,7 +19,13 @@ import { AuditService } from '../audit/audit.service';
 import { Numbering } from '../inventory/numbering';
 import { TerminalRevocationChecks } from '../terminals/terminal-revocation-checks';
 import { TerminalsService } from '../terminals/terminals.service';
-import type { CashMovementDto, CloseShiftDto, OpenShiftDto } from './dto/pos.dto';
+import type {
+  CashMovementDto,
+  CloseShiftDto,
+  ForceCloseShiftDto,
+  OpenShiftDto,
+  ShiftListQueryDto,
+} from './dto/pos.dto';
 import { PosIdempotency } from './idempotency';
 import {
   boundedMoment,
@@ -33,8 +43,17 @@ import {
 } from './shifts.repository';
 
 const IN_REASONS = new Set(['change_fund', 'other']);
+const DEFAULT_LIMIT = 20;
 const OUT_REASONS = new Set(['collection', 'expense']);
 const BANK: Array<Exclude<ReceiptPaymentMethod, 'cash'>> = ['card', 'qr', 'nfc'];
+
+/** The stores whose shifts an employee sees: a PIN session — the store of its terminal only. */
+function viewScope(principal: EmployeePrincipal): 'all' | readonly string[] {
+  if (principal.auth === 'pin') {
+    return principal.currentStoreId ? [principal.currentStoreId] : [];
+  }
+  return principal.storeScope;
+}
 
 /** A buffered operation is never older than this (a broken clock of the PC, M8). */
 /** The moment of an operation (E4), see `boundedMoment`. */
@@ -71,7 +90,9 @@ export class ShiftsService implements OnModuleInit {
 
   /**
    * The open shift of the terminal locked for the transaction, else 409: none or of another
-   * terminal — `no_open_shift`, closed — `shift_closed`.
+   * terminal — `no_open_shift`, closed — `shift_closed`. `accept-forced` returns a shift of the terminal closed from
+   * another computer too (plan 2026-10-27-shift-history, S4): its late operations are kept; the caller reads
+   * `status`.
    */
   async lockOpenShift(
     trx: TenantTransaction,
@@ -79,6 +100,7 @@ export class ShiftsService implements OnModuleInit {
     shiftId: string,
     terminalId: string,
     mode: 'share' | 'update',
+    late: 'refuse' | 'accept-forced' = 'refuse',
   ): Promise<ShiftRow> {
     const shift = await this.shifts.lockShift(
       trx,
@@ -89,7 +111,7 @@ export class ShiftsService implements OnModuleInit {
     if (shift === null || shift.terminalId !== terminalId) {
       throw new ProblemException(409, 'no_open_shift');
     }
-    if (shift.status !== 'open') {
+    if (shift.status !== 'open' && !(late === 'accept-forced' && shift.forced)) {
       throw new ProblemException(409, 'shift_closed');
     }
     return shift;
@@ -227,7 +249,10 @@ export class ShiftsService implements OnModuleInit {
           shiftId,
           op.terminalId,
           'share',
+          'accept-forced',
         );
+        // the shift was closed from another computer meanwhile: kept, not in its Z-report (S4)
+        const afterClosing = shift.status === 'closed';
         // a cash-out above the expected cash is accepted: the screen only warns (E15)
         await this.shifts.insertCashOperation(trx, op.tenantId, {
           id,
@@ -240,6 +265,7 @@ export class ShiftsService implements OnModuleInit {
           occurredAt: operationMoment(op, shift.openedAt),
           receivedAt: op.receivedAt,
           authorFlagged: op.author.flagged,
+          afterClosing,
         });
         await this.audit.append(trx, {
           action: body.kind === 'in' ? 'shift.cash-in' : 'shift.cash-out',
@@ -253,6 +279,7 @@ export class ShiftsService implements OnModuleInit {
             amountMinor: body.amountMinor,
             reason: body.reason,
             authorFlagged: op.author.flagged,
+            ...(afterClosing && { afterClosing }),
             ...terminalVia(op),
           },
         });
@@ -289,55 +316,44 @@ export class ShiftsService implements OnModuleInit {
           shiftId,
           op.terminalId,
           'update',
+          'accept-forced',
         );
-        const open = await this.mapper.view(trx, op.tenantId, shift);
-        const closedAt = operationMoment(op, shift.openedAt);
-        const expected = open.cash.expectedMinor;
-        const discrepancy = body.actualCashMinor - expected;
+        if (shift.status === 'closed') {
+          // closed from another computer meanwhile (S4): the till's own closing gets the saved report and is not
+          // left in the quarantine of the buffer; what the till counted goes to the journal
+          await this.audit.append(trx, {
+            action: 'shift.close-superseded',
+            entityType: 'shift',
+            entityId: shift.id,
+            storeId: op.storeId,
+            ...terminalAuthor(op),
+            details: {
+              number: shift.number,
+              authorId: op.author.id,
+              actualCashMinor: body.actualCashMinor,
+              ...terminalVia(op),
+            },
+          });
+          return shift.zReport as ZReport;
+        }
         const reason = body.discrepancyReason;
-        const closedRow: ShiftRow = {
-          ...shift,
-          status: 'closed',
-          closedBy: op.author.id,
-          closedByName: await this.employeeName(trx, op, shift),
-          closedAt,
-          countedCashDirams: BigInt(body.actualCashMinor),
-          closedAuthorFlagged: op.author.flagged,
-        };
-        const closed = await this.mapper.view(trx, op.tenantId, closedRow);
-        const report: ZReport = {
-          shift: { ...closed, status: 'closed' },
-          actualCashMinor: body.actualCashMinor,
-          discrepancyMinor: discrepancy,
-          terminalDiff: Object.fromEntries(
-            BANK.map((m) => [
-              m,
-              // the sales less the returns of the kind (spec 2026-10-13-customer-returns, E13)
-              body.terminalTotals[m] -
-                (open.byMethod[m].amountMinor -
-                  open.returnsByMethod[m].amountMinor),
-            ]),
-          ) as ZReport['terminalDiff'],
-          // the closing is a fact (E24): no reason at a discrepancy is marked, not refused
-          discrepancyReasonMissing: discrepancy !== 0 && reason === '',
-        };
-        await this.shifts.closeShift(trx, op.tenantId, shift.id, {
-          closedBy: op.author.id,
-          closedAt,
-          closedAuthorFlagged: op.author.flagged,
-          expectedCashDirams: expected,
-          countedCashDirams: body.actualCashMinor,
-          discrepancyDirams: discrepancy,
-          discrepancyReason: reason === '' ? null : reason,
-          terminalTotals: {
-            card: body.terminalTotals.card,
-            qr: body.terminalTotals.qr,
-            nfc: body.terminalTotals.nfc,
+        const { report, expected, discrepancy } = await this.closeWith(
+          trx,
+          op.tenantId,
+          shift,
+          {
+            id: op.author.id,
+            name: await this.employeeName(trx, op, shift),
+            flagged: op.author.flagged,
+            at: operationMoment(op, shift.openedAt),
           },
-          zReport: report,
-        });
-        // held receipts live until their shift closes (ТЗ, E12)
-        await this.shifts.deleteHeld(trx, op.tenantId, { shiftId: shift.id });
+          {
+            actualCashMinor: body.actualCashMinor,
+            terminalTotals: body.terminalTotals,
+            reason,
+          },
+          null,
+        );
         await this.audit.append(trx, {
           action: 'shift.closed',
           entityType: 'shift',
@@ -358,6 +374,236 @@ export class ShiftsService implements OnModuleInit {
         return report;
       }),
     );
+  }
+
+  /**
+   * POST /shifts/{id}/forced-closure — a manager closes the open shift of another till from another computer (plan
+   * 2026-10-27-shift-history, S3): any session of the scope, online only, a fresh sign-in (the controller). The
+   * expected cash and the Z-report as at a closing (E24), with who closed it and why. The late operations of the till
+   * are kept (S4). 404 outside the scope, 409 `shift_closed`.
+   */
+  async forceClose(
+    shiftId: string,
+    body: ForceCloseShiftDto,
+    key: string | undefined,
+  ): Promise<ZReport> {
+    this.idempotency.checkHeader(key, body.id);
+    const principal = requirePrincipal();
+    const { tenantId } = principal;
+    const id = body.id.toLowerCase();
+    const replay = await this.idempotency.replay<ZReport>(
+      tenantId,
+      'shift.force-close',
+      id,
+      body,
+    );
+    if (replay) return replay.response;
+    const scope = viewScope(principal);
+    return this.db.tenantTransaction((trx) =>
+      this.idempotency.run(trx, tenantId, 'shift.force-close', id, body, 201, async () => {
+        const shift = await this.shifts.lockShift(
+          trx,
+          tenantId,
+          shiftId.toLowerCase(),
+          'update',
+        );
+        if (shift === null || (scope !== 'all' && !scope.includes(shift.storeId))) {
+          throw new ProblemException(404, 'not_found');
+        }
+        if (shift.status !== 'open') {
+          throw new ProblemException(409, 'shift_closed');
+        }
+        // the shifts of an offline store are its own facts (ADR-0014); a store being closed still gets the shift of
+        // its broken till closed — the store closing waits for it (E7)
+        const store = await this.repository.store(trx, tenantId, shift.storeId);
+        if (store === null) throw new ProblemException(404, 'not_found');
+        if (store.mode !== 'online') {
+          throw new ProblemException(409, 'offline_store_read_only');
+        }
+        const closer = await trx
+          .selectFrom('employees')
+          .select('fullName')
+          .where('tenantId', '=', tenantId)
+          .where('id', '=', principal.employeeId)
+          .executeTakeFirst();
+        const byName = closer?.fullName ?? '';
+        const { report, expected, discrepancy } = await this.closeWith(
+          trx,
+          tenantId,
+          shift,
+          { id: principal.employeeId, name: byName, flagged: false, at: new Date() },
+          {
+            actualCashMinor: body.actualCashMinor,
+            terminalTotals: body.terminalTotals,
+            reason: body.reason,
+          },
+          { byName, reason: body.reason },
+        );
+        await this.audit.append(trx, {
+          action: 'shift.force-closed',
+          entityType: 'shift',
+          entityId: shift.id,
+          storeId: shift.storeId,
+          details: {
+            operationId: id,
+            number: shift.number,
+            terminalId: shift.terminalId,
+            expectedMinor: expected,
+            actualCashMinor: body.actualCashMinor,
+            discrepancyMinor: discrepancy,
+            reason: body.reason,
+          },
+        });
+        return report;
+      }),
+    );
+  }
+
+  /**
+   * The closing of an open shift and its Z-report (E24): by its till, or from another computer with `forced` (S3).
+   * The expected cash is counted by the server; held receipts end with their shift (ТЗ, E12).
+   */
+  private async closeWith(
+    trx: TenantTransaction,
+    tenantId: string,
+    shift: ShiftRow,
+    closer: { id: string; name: string; flagged: boolean; at: Date },
+    input: {
+      actualCashMinor: number;
+      terminalTotals: Record<Exclude<ReceiptPaymentMethod, 'cash'>, number>;
+      reason: string;
+    },
+    forced: { byName: string; reason: string } | null,
+  ): Promise<{ report: ZReport; expected: number; discrepancy: number }> {
+    const open = await this.mapper.view(trx, tenantId, shift);
+    const expected = open.cash.expectedMinor;
+    const discrepancy = input.actualCashMinor - expected;
+    const closedRow: ShiftRow = {
+      ...shift,
+      status: 'closed',
+      closedBy: closer.id,
+      closedByName: closer.name,
+      closedAt: closer.at,
+      countedCashDirams: BigInt(input.actualCashMinor),
+      closedAuthorFlagged: closer.flagged,
+      forced: forced !== null,
+      forcedReason: forced?.reason ?? null,
+    };
+    const closed = await this.mapper.view(trx, tenantId, closedRow);
+    const report: ZReport = {
+      shift: { ...closed, status: 'closed' },
+      actualCashMinor: input.actualCashMinor,
+      discrepancyMinor: discrepancy,
+      terminalDiff: Object.fromEntries(
+        BANK.map((m) => [
+          m,
+          // the sales less the returns of the kind (spec 2026-10-13-customer-returns, E13)
+          input.terminalTotals[m] -
+            (open.byMethod[m].amountMinor - open.returnsByMethod[m].amountMinor),
+        ]),
+      ) as ZReport['terminalDiff'],
+      // the closing is a fact (E24): no reason at a discrepancy is marked, not refused
+      discrepancyReasonMissing: discrepancy !== 0 && input.reason === '',
+      ...(forced && { forced }),
+    };
+    await this.shifts.closeShift(trx, tenantId, shift.id, {
+      closedBy: closer.id,
+      closedAt: closer.at,
+      closedAuthorFlagged: closer.flagged,
+      expectedCashDirams: expected,
+      countedCashDirams: input.actualCashMinor,
+      discrepancyDirams: discrepancy,
+      discrepancyReason: input.reason === '' ? null : input.reason,
+      terminalTotals: {
+        card: input.terminalTotals.card,
+        qr: input.terminalTotals.qr,
+        nfc: input.terminalTotals.nfc,
+      },
+      forced: forced !== null,
+      forcedReason: forced?.reason ?? null,
+      zReport: report,
+    });
+    await this.shifts.deleteHeld(trx, tenantId, { shiftId: shift.id });
+    return { report, expected, discrepancy };
+  }
+
+  /**
+   * GET /shifts — the shift history of the stores of the scope (plan 2026-10-27-shift-history, S1): a closed shift
+   * reads its totals from its Z-report, an open one is counted as on the shift screen. 403 `store_not_in_scope`.
+   */
+  async list(query: ShiftListQueryDto): Promise<ShiftListResponse> {
+    const principal = requirePrincipal();
+    const scope = viewScope(principal);
+    const storeId = query.storeId?.toLowerCase();
+    if (storeId && scope !== 'all' && !scope.includes(storeId)) {
+      throw new ProblemException(403, 'store_not_in_scope');
+    }
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const offset = query.offset ?? 0;
+    return this.db.tenantTransaction(async (trx) => {
+      const { rows, total } = await this.shifts.list(
+        trx,
+        principal.tenantId,
+        scope,
+        { storeId, from: query.from, to: query.to, status: query.status, limit, offset },
+      );
+      const items: ShiftListItem[] = [];
+      for (const row of rows) {
+        const z = row.status === 'closed' ? row.zTotals : null;
+        // an open shift is counted now; there are as many as tills (S1)
+        const totals = z ?? (await this.mapper.view(trx, principal.tenantId, row));
+        items.push({
+          id: row.id,
+          number: row.number,
+          storeId: row.storeId,
+          storeName: row.storeName,
+          terminalName: row.terminalName,
+          status: row.status,
+          openedAt: row.openedAt.toISOString(),
+          openedByName: row.openedByName,
+          closedAt: row.closedAt?.toISOString() ?? null,
+          closedByName: row.closedByName,
+          forced: row.forced,
+          receipts: totals.receipts,
+          revenueMinor: totals.revenueMinor,
+          discrepancyMinor: z ? z.discrepancyMinor : null,
+          discrepancyReceipts: totals.discrepancyReceipts,
+          reasonMissing: z?.discrepancyReasonMissing ?? false,
+          afterClosingReceipts: row.afterClosingReceipts,
+        });
+      }
+      return { items, total, limit, offset };
+    });
+  }
+
+  /**
+   * GET /shifts/{id} — the card of a shift of the scope (S2): an open one now, a closed one as in its Z-report, the
+   * late operations of a forced closing, when its till was last heard from. 404 outside the scope.
+   */
+  async details(shiftId: string): Promise<ShiftDetails> {
+    const principal = requirePrincipal();
+    const scope = viewScope(principal);
+    return this.db.tenantTransaction(async (trx) => {
+      const { tenantId } = principal;
+      const row = await this.shifts.findShift(trx, tenantId, shiftId.toLowerCase());
+      if (row === null || (scope !== 'all' && !scope.includes(row.storeId))) {
+        throw new ProblemException(404, 'not_found');
+      }
+      const store = await this.repository.store(trx, tenantId, row.storeId);
+      if (store === null) throw new ProblemException(404, 'not_found');
+      const zReport = row.status === 'closed' ? (row.zReport as ZReport | null) : null;
+      const lastActivity = await this.shifts.lastActivityAt(trx, tenantId, row.id);
+      return {
+        shift: zReport?.shift ?? (await this.mapper.view(trx, tenantId, row)),
+        storeName: store.name,
+        terminalName: await this.shifts.terminalName(trx, tenantId, row.terminalId),
+        closedByName: row.closedByName,
+        zReport,
+        afterClosing: await this.mapper.afterClosing(trx, tenantId, row.id),
+        lastActivityAt: lastActivity?.toISOString() ?? null,
+        print: { storeName: store.name, storeAddress: store.address, taxId: store.taxId },
+      };
+    });
   }
 
   /** GET /shifts/{id}/z-report — the Z-report saved at the closing of a shift of the scope. */

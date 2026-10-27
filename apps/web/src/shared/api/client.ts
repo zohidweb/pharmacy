@@ -310,6 +310,9 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'shifts.cashMovement',
   'shifts.close',
   'shifts.zReport',
+  'shifts.list',
+  'shifts.details',
+  'shifts.forceClose',
   'deployment.get',
   // the announcements of the platform (spec 2026-10-19-operator-notifications)
   'announcements.list',

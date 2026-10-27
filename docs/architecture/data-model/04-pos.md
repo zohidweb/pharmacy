@@ -16,7 +16,7 @@
 >   `comment`; у операций и смены — пометка автора (`author_flagged`, `opened_author_flagged`,
 >   `closed_author_flagged`);
 > - **продажа — факт** (ADR-0015): нехватка остатка, изменённая цена, скидка или карточка товара не отклоняют чек —
->   `receipts.discrepancy_kinds` (`stock`, `price`, `discount`, `catalog`, `author`, `closed_period`),
+>   `receipts.discrepancy_kinds` (`stock`, `price`, `discount`, `catalog`, `author`, `closed_period`, `after_closing`),
 >   `receipt_lines.shortfall_pieces` и `current_price_dirams`; чек несёт значения снимка кассы
 >   (`receipt_lines.pieces_per_pack`, `receipts.discount_min_total_dirams`);
 > - **права автора** проверяются по текущему состоянию: неактивен, вне охвата или без права — пометка `author`, не
@@ -64,12 +64,13 @@ erDiagram
 | `discrepancy_dirams` | bigint null | `counted − expected` |
 | `discrepancy_reason` | text null | Обязательна при расхождении ≠ 0 |
 | `z_report` | jsonb null | Снимок Z-отчёта при закрытии: выручка по способам оплаты, возвраты, число чеков — повторная печать совпадает |
+| `forced`, `forced_reason` | boolean, text null | Закрыта с другого компьютера и почему (1–500 символов; `forced` ⇔ причина есть, только у `closed`). Поздние операции её кассы принимаются с пометкой `after_closing` и в Z-отчёт не входят (план `2026-10-27-shift-history`, S3, S4) |
 
-На один терминал — не больше одной смены `open` (уникальный частичный индекс `(tenant_id, terminal_id) where status = 'open'`). Открытие смены датируется не раньше закрытия последней смены терминала (частичный индекс `(tenant_id, terminal_id, closed_at) where status = 'closed'`; спецификация `2026-10-21-pos-offline-limits`, У17).
+Список смен точки — индекс `(tenant_id, store_id, opened_at desc)` (история смен, S1). На один терминал — не больше одной смены `open` (уникальный частичный индекс `(tenant_id, terminal_id) where status = 'open'`). Открытие смены датируется не раньше закрытия последней смены терминала (частичный индекс `(tenant_id, terminal_id, closed_at) where status = 'closed'`; спецификация `2026-10-21-pos-offline-limits`, У17).
 
 ## `shift_cash_operations` (класс `tenant`, только добавление)
 
-`shift_id`, `kind` — `deposit` / `withdrawal`, `amount_dirams > 0`, `reason text`, `employee_id`, `occurred_at`.
+`shift_id`, `kind` — `deposit` / `withdrawal`, `amount_dirams > 0`, `reason text`, `employee_id`, `occurred_at`; `after_closing boolean` — пришла после закрытия смены с другого компьютера (в итоги и Z-отчёт не входит).
 
 ## `held_receipts` — отложенный чек (класс `tenant`, локально)
 
@@ -79,7 +80,7 @@ erDiagram
 
 | Колонка | Тип | Правило |
 |---|---|---|
-| `store_id`, `terminal_id`, `shift_id` | uuid | Смена обязательна и открыта (БЛ 6.2) |
+| `store_id`, `terminal_id`, `shift_id` | uuid | Смена обязательна и открыта (БЛ 6.2); чек кассы, чью смену закрыли с другого компьютера, принимается в эту смену с пометкой `after_closing` (поправка спецификации кассы 2026-10-27) |
 | `cashier_id` | uuid | Сотрудник PIN-сессии |
 | `number` | text | Уникален в `(tenant_id, store_id, number)`; счётчик `receipt` |
 | `local_number` | integer null 1…999999 (проверка добавлена `NOT VALID` и проверена отдельной миграцией `pos-offline-limits-validate`) | Номер чека терминала в смене (спецификация `2026-10-21-pos-offline-limits`, P12): касса присваивает его при «Оплатить»; не уникален — после очистки данных браузера касса продолжает счёт сервера. Чек без номера ЧК печатается с ним и кодом — последними 8 символами `id` (P13), по коду кассир находит чек для возврата (P14) |

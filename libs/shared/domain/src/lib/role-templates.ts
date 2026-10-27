@@ -71,6 +71,8 @@ const manager: Permission[] = [
   'notifications:view',
   'sync:view',
   'sync:run',
+  // the shift of a broken till is closed from another computer (plan 2026-10-27-shift-history, S6)
+  'shifts:force-close',
 ];
 
 const accountant: Permission[] = [

@@ -6,10 +6,13 @@ import type {
   CashMovementRequest,
   CashOutReason,
   CloseShiftRequest,
+  ForceCloseShiftRequest,
   HoldReceiptRequest,
   OpenShiftRequest,
   PosOperationContext,
   SaleUnit,
+  ShiftListQuery,
+  ShiftStatus,
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -24,6 +27,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Length,
   Max,
   Matches,
   MaxLength,
@@ -31,6 +35,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 
 // Limits of spec 2026-10-13-pos-shift-sale, sections 4.4–4.6; the shift, the terminal, the author,
 // the products and the batches are checked by the services.
@@ -130,6 +135,40 @@ export class TerminalTotalsDto {
   @Min(-MAX_MONEY_MINOR)
   @Max(MAX_MONEY_MINOR)
   nfc!: number;
+}
+
+const SHIFT_STATUSES: ShiftStatus[] = ['open', 'closed'];
+
+/** GET /api/v1/shifts — the shift history (plan 2026-10-27-shift-history, S1). */
+export class ShiftListQueryDto implements ShiftListQuery {
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
+
+  @IsOptional()
+  @IsCalendarDate()
+  from?: string;
+
+  @IsOptional()
+  @IsCalendarDate()
+  to?: string;
+
+  @IsOptional()
+  @IsIn(SHIFT_STATUSES)
+  status?: ShiftStatus;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
 }
 
 /** POST /api/v1/shifts/{id}/closure */
@@ -376,4 +415,28 @@ export class CreateReceiptDto
 
   @IsIn(['ru', 'tj'])
   language!: 'ru' | 'tj';
+}
+
+/** POST /api/v1/shifts/{id}/forced-closure — a manager closes the shift of another till (plan 2026-10-27-shift-history, S3). */
+export class ForceCloseShiftDto implements ForceCloseShiftRequest {
+  /** UUIDv7 of the operation = `Idempotency-Key`. */
+  @IsUUID()
+  id!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(MAX_MONEY_MINOR)
+  actualCashMinor!: number;
+
+  // the same range as at a closing of the till: returns paid back by a kind may exceed its sales
+  @IsObject()
+  @ValidateNested()
+  @Type(() => TerminalTotalsDto)
+  terminalTotals!: TerminalTotalsDto;
+
+  /** Required: why the shift is closed from another computer. */
+  @Transform(trim)
+  @IsString()
+  @Length(1, 500)
+  reason!: string;
 }

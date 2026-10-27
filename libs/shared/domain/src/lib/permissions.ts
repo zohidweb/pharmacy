@@ -56,6 +56,8 @@ export const specialPermissions = [
   // changing a peer — the same permissions and stores (ADR-0018, amendment 2026-10-13)
   'employees:manage-peers',
   'sync:run',
+  // closing the shift of another till from another computer (ADR-0018, amendment 2026-10-27)
+  'shifts:force-close',
 ] as const;
 
 export type PermissionModule = keyof typeof moduleActions;

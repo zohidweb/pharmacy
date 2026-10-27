@@ -6,11 +6,24 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
-import type { Shift, ZReport } from '@pharmacy/shared-dto';
+import type {
+  Shift,
+  ShiftDetails,
+  ShiftListResponse,
+  ZReport,
+} from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
 import { BufferedOperation } from './buffer-replay.interceptor';
-import { CashMovementDto, CloseShiftDto, OpenShiftDto } from './dto/pos.dto';
+import { RequireFreshAuth } from '../../common/guards/decorators';
+import {
+  CashMovementDto,
+  CloseShiftDto,
+  ForceCloseShiftDto,
+  OpenShiftDto,
+  ShiftListQueryDto,
+} from './dto/pos.dto';
 import { ShiftsService } from './shifts.service';
 
 // Shifts of the terminals (spec 2026-10-13-pos-shift-sale, 4.1, 4.4). The operations of the buffer
@@ -25,6 +38,23 @@ export class ShiftsController {
   @Get('current')
   current(): Promise<Shift> {
     return this.shifts.current();
+  }
+
+  /**
+   * The shift history of the scope (plan 2026-10-27-shift-history, S1): a report, any session. 403
+   * `store_not_in_scope`.
+   */
+  @RequirePermission('reports:view')
+  @Get()
+  list(@Query() query: ShiftListQueryDto): Promise<ShiftListResponse> {
+    return this.shifts.list(query);
+  }
+
+  /** The card of a shift of the scope (S2); 404 `not_found` outside it. After `current`, which it would shadow. */
+  @RequirePermission('reports:view')
+  @Get(':id')
+  details(@Param('id', new ParseUUIDPipe()) id: string): Promise<ShiftDetails> {
+    return this.shifts.details(id);
   }
 
   /** 409 `shift_open`. */
@@ -63,6 +93,21 @@ export class ShiftsController {
     @Headers('x-client-sent-at') sentAt?: string,
   ): Promise<ZReport> {
     return this.shifts.close(id, body, key, sentAt);
+  }
+
+  /**
+   * A manager closes the shift of another till from another computer (plan 2026-10-27-shift-history, S3): online,
+   * any session of the scope, a fresh sign-in. 404 `not_found`, 409 `shift_closed` / `idempotency_conflict`.
+   */
+  @RequirePermission('shifts:force-close')
+  @RequireFreshAuth()
+  @Post(':id/forced-closure')
+  forceClose(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: ForceCloseShiftDto,
+    @Headers('idempotency-key') key?: string,
+  ): Promise<ZReport> {
+    return this.shifts.forceClose(id, body, key);
   }
 
   /** 404 `not_found` — not closed or not of the scope. */

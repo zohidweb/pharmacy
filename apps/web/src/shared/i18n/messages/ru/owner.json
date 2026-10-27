@@ -336,7 +336,8 @@
         "roles_manage": "Управление ролями",
         "employees_assign-role": "Назначение ролей",
         "employees_manage-peers": "Изменение сотрудников с равными правами",
-        "sync_run": "Запуск синхронизации"
+        "sync_run": "Запуск синхронизации",
+        "shifts_force-close": "Закрытие смены с другого компьютера"
       }
     },
     "terminals": {

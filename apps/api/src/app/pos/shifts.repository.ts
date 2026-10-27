@@ -296,6 +296,9 @@ export class ShiftsRepository {
       discrepancyDirams: number;
       discrepancyReason: string | null;
       terminalTotals: Record<'card' | 'qr' | 'nfc', number>;
+      /** Closed from another computer (S3). */
+      forced: boolean;
+      forcedReason: string | null;
       zReport: unknown;
     },
   ): Promise<void> {
@@ -311,6 +314,8 @@ export class ShiftsRepository {
         discrepancyDirams: BigInt(values.discrepancyDirams),
         discrepancyReason: values.discrepancyReason,
         terminalTotals: JSON.stringify(values.terminalTotals),
+        forced: values.forced,
+        forcedReason: values.forcedReason,
         zReport: JSON.stringify(values.zReport),
       })
       .where('tenantId', '=', tenantId)
@@ -332,6 +337,8 @@ export class ShiftsRepository {
       occurredAt: Date;
       receivedAt: Date;
       authorFlagged: boolean;
+      /** Received after its shift was closed from another computer (S4): not in the Z-report. */
+      afterClosing: boolean;
     },
   ): Promise<void> {
     await trx
@@ -344,7 +351,10 @@ export class ShiftsRepository {
       .execute();
   }
 
-  /** Totals of the receipts, payments and cash operations of a shift. */
+  /**
+   * Totals of the receipts, payments and cash operations of a shift; those accepted after a closing from another
+   * computer are not in them — they are counted apart (`afterClosing`, S4).
+   */
   async totals(
     trx: TenantTransaction,
     tenantId: string,
@@ -362,7 +372,8 @@ export class ShiftsRepository {
              (count(*) filter (where r.discrepancy_kinds <> '{}'))::integer as flagged,
              max(r.local_number) as last_local_number
       from pharmacy.receipts r
-      where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}`.execute(trx);
+      where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
+        and not ('after_closing' = any(r.discrepancy_kinds))`.execute(trx);
     const payments = await sql<{
       kind: ReceiptPaymentMethod;
       count: number;
@@ -372,13 +383,14 @@ export class ShiftsRepository {
       from pharmacy.payments p
       join pharmacy.receipts r on r.tenant_id = p.tenant_id and r.id = p.receipt_id
       where p.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
+        and not ('after_closing' = any(r.discrepancy_kinds))
       group by p.kind`.execute(trx);
     const cash = await sql<{ deposits: string; withdrawals: string }>`
       select coalesce(sum(o.amount_dirams) filter (where o.kind = 'deposit'), 0)::text as deposits,
              coalesce(sum(o.amount_dirams) filter (where o.kind = 'withdrawal'), 0)::text
                as withdrawals
       from pharmacy.shift_cash_operations o
-      where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId}`.execute(trx);
+      where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId} and not o.after_closing`.execute(trx);
     const r = receipts.rows[0];
     return {
       receipts: r.receipts,
@@ -410,6 +422,7 @@ export class ShiftsRepository {
       from pharmacy.receipts r
       join pharmacy.employees e on e.tenant_id = r.tenant_id and e.id = r.cashier_id
       where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
+        and not ('after_closing' = any(r.discrepancy_kinds))
       union all
       select o.id, o.occurred_at, case o.kind when 'deposit' then 'cash_in' else 'cash_out' end,
              o.reason, e.full_name,
@@ -417,7 +430,7 @@ export class ShiftsRepository {
              o.author_flagged
       from pharmacy.shift_cash_operations o
       join pharmacy.employees e on e.tenant_id = o.tenant_id and e.id = o.employee_id
-      where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId}`.execute(trx);
+      where o.tenant_id = ${tenantId} and o.shift_id = ${shiftId} and not o.after_closing`.execute(trx);
     return result.rows.map((row) => ({
       ...row,
       amountDirams: Number(row.amountDirams),

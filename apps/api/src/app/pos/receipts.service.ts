@@ -164,12 +164,14 @@ export class ReceiptsService {
     const { tenantId, storeId } = op;
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, tenantId, 'receipt', id, body, 201, async () => {
+        // a sale is a fact (K4): the shift may have been closed from another computer while it waited (S4)
         const shift = await this.shifts.lockOpenShift(
           trx,
           tenantId,
           body.shiftId,
           op.terminalId,
           'share',
+          'accept-forced',
         );
         const store = await this.context.cloudStore(trx, tenantId, storeId);
         const ruleId = body.discountRuleId?.split(':')[0].toLowerCase() ?? null;
@@ -249,6 +251,7 @@ export class ReceiptsService {
         if (store.closedUntil !== null && businessDate <= store.closedUntil) {
           kinds.add('closed_period');
         }
+        if (shift.status === 'closed') kinds.add('after_closing');
 
         // the price and the discount by the rules of the store (I2): the current ones, or those of the moment of the
         // POS snapshot when it is not older than the buffer of the network allows (ADR-0015, amendment 2026-10-23)

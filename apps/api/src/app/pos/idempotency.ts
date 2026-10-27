@@ -14,7 +14,9 @@ export type PosScope =
   | 'shift.open'
   | 'shift.cash'
   | 'shift.close'
-  | 'return';
+  | 'return'
+  // the closing of another till's shift from another computer (plan 2026-10-27-shift-history, S3)
+  | 'shift.force-close';
 
 /** How long a key answers repeats: longer than any buffer of a terminal (ADR-0015: 24 h). */
 const KEY_TTL_DAYS = 30;

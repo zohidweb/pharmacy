@@ -16,9 +16,11 @@ import type {
 } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
 import { BufferedOperation } from './buffer-replay.interceptor';
+import { RequireFreshAuth } from '../../common/guards/decorators';
 import {
   CashMovementDto,
   CloseShiftDto,
+  ForceCloseShiftDto,
   OpenShiftDto,
   ShiftListQueryDto,
 } from './dto/pos.dto';
@@ -91,6 +93,21 @@ export class ShiftsController {
     @Headers('x-client-sent-at') sentAt?: string,
   ): Promise<ZReport> {
     return this.shifts.close(id, body, key, sentAt);
+  }
+
+  /**
+   * A manager closes the shift of another till from another computer (plan 2026-10-27-shift-history, S3): online,
+   * any session of the scope, a fresh sign-in. 404 `not_found`, 409 `shift_closed` / `idempotency_conflict`.
+   */
+  @RequirePermission('shifts:force-close')
+  @RequireFreshAuth()
+  @Post(':id/forced-closure')
+  forceClose(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: ForceCloseShiftDto,
+    @Headers('idempotency-key') key?: string,
+  ): Promise<ZReport> {
+    return this.shifts.forceClose(id, body, key);
   }
 
   /** 404 `not_found` — not closed or not of the scope. */

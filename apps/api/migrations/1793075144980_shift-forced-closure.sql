@@ -24,4 +24,10 @@ alter table pharmacy.receipts
     check (discrepancy_kinds <@ array['stock', 'price', 'discount', 'catalog', 'author', 'closed_period',
                                       'after_closing']::text[]);
 
+-- the closing from another computer carries its idempotency key (S3)
+alter table pharmacy.idempotency_keys
+  drop constraint idempotency_keys_scope_check,
+  add constraint idempotency_keys_scope_check
+    check (scope in ('receipt', 'shift.open', 'shift.cash', 'shift.close', 'return', 'shift.force-close'));
+
 create index shifts_store_opened_idx on pharmacy.shifts (tenant_id, store_id, opened_at desc);

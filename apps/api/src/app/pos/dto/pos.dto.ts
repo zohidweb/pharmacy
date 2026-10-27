@@ -6,6 +6,7 @@ import type {
   CashMovementRequest,
   CashOutReason,
   CloseShiftRequest,
+  ForceCloseShiftRequest,
   HoldReceiptRequest,
   OpenShiftRequest,
   PosOperationContext,
@@ -26,6 +27,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Length,
   Max,
   Matches,
   MaxLength,
@@ -413,4 +415,28 @@ export class CreateReceiptDto
 
   @IsIn(['ru', 'tj'])
   language!: 'ru' | 'tj';
+}
+
+/** POST /api/v1/shifts/{id}/forced-closure — a manager closes the shift of another till (plan 2026-10-27-shift-history, S3). */
+export class ForceCloseShiftDto implements ForceCloseShiftRequest {
+  /** UUIDv7 of the operation = `Idempotency-Key`. */
+  @IsUUID()
+  id!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(MAX_MONEY_MINOR)
+  actualCashMinor!: number;
+
+  // the same range as at a closing of the till: returns paid back by a kind may exceed its sales
+  @IsObject()
+  @ValidateNested()
+  @Type(() => TerminalTotalsDto)
+  terminalTotals!: TerminalTotalsDto;
+
+  /** Required: why the shift is closed from another computer. */
+  @Transform(trim)
+  @IsString()
+  @Length(1, 500)
+  reason!: string;
 }

@@ -336,7 +336,8 @@
         "roles_manage": "Идораи нақшҳо",
         "employees_assign-role": "Таъини нақшҳо",
         "employees_manage-peers": "Тағйир додани кормандони ҳамсатҳ",
-        "sync_run": "Оғози ҳамоҳангсозӣ"
+        "sync_run": "Оғози ҳамоҳангсозӣ",
+        "shifts_force-close": "Бастани баст аз компютери дигар"
       }
     },
     "terminals": {

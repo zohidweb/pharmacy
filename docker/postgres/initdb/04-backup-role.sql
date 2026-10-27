@@ -1,10 +1,10 @@
 -- pharmacy_backup (ADR-0019): the read-only role of the backup service — LOGIN, BYPASSRLS, member of
 -- pg_read_all_data, no superuser. Idempotent: creates the role or updates its attributes and password from
--- PHARMACY_BACKUP_PASSWORD in the environment of the postgres container; without the variable (dev) it does nothing.
--- Runs as the superuser: once by initdb on a new cluster, and on every `npm run stack -- <test|prod> up`, which
--- brings the role to an existing cluster and applies a changed password:
---   docker compose ... exec -T postgres sh -c \
---     'psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/04-backup-role.sql'
+-- PHARMACY_BACKUP_PASSWORD, which pharmacy-psql reads from PHARMACY_BACKUP_PASSWORD_FILE (compose secrets,
+-- ADR-0021); without it (dev, and initdb, which has the file but not the variable) it does nothing.
+-- Runs as the superuser on every `npm run stack -- <test|prod> up`, which creates the role on a new or an existing
+-- cluster and applies a changed password:
+--   docker compose ... exec -T postgres pharmacy-psql -q -f /docker-entrypoint-initdb.d/04-backup-role.sql
 -- psql variables are not substituted inside DO $$ … $$, hence \gexec. The password reaches the server log only with
 -- log_statement = ddl or all, or when the statement fails.
 \getenv backup_pw PHARMACY_BACKUP_PASSWORD

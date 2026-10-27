@@ -10,4 +10,7 @@ COPY pg_hba.conf /etc/pharmacy/pg_hba.conf
 # Backups (ADR-0019): the script runs in the `backup` service (copies) and in this container (restore). The
 # named volume backup-scratch takes the owner of /scratch from the image.
 COPY --chmod=0755 backup/pharmacy-backup /usr/local/bin/
+# Secrets of test and prod (ADR-0021): pharmacy-secrets creates and checks the secret files (tool service `secrets`),
+# pharmacy-psql runs psql as the superuser with the password from its file.
+COPY --chmod=0755 pharmacy-psql pharmacy-secrets /usr/local/bin/
 RUN install -d -o postgres -g postgres -m 700 /backups /scratch

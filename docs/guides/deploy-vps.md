@@ -1,7 +1,8 @@
 # Выкладка prod на VPS (пилот)
 
 Ручная выкладка по ADR-0020 до отдельного ADR о CD. Хост — Contabo Cloud VPS 6 (EU), домен `nurmed.online`,
-вход — Caddy (ADR-0012). На хосте нет исходного кода, Node.js и npm: только Docker, compose-файлы и env-файл.
+вход — Caddy (ADR-0012). На хосте нет исходного кода, Node.js и npm: только Docker, compose-файлы, env-файл и каталог
+секретов (ADR-0021: каждый секрет — свой файл, в контейнеры — через `secrets:` Compose; env-файл секретов не хранит).
 
 ## 1. Сервер (один раз)
 
@@ -31,7 +32,9 @@
 4. Docker Engine и Compose-плагин — из официального репозитория Docker
    (docs.docker.com/engine/install/ubuntu, пакеты `docker-ce`, `docker-compose-plugin`). `usermod -aG docker deploy`:
    группа `docker` равна root на этом хосте — только для `deploy`.
-5. Каталог `/opt/pharmacy` (владелец `deploy`) с подкаталогами `docker/` и `docker/env/` (`chmod 700`).
+5. Каталог `/opt/pharmacy` (владелец `deploy`) с подкаталогами `docker/`, `docker/env/` и `docker/secrets/prod`
+   (`install -d -m 700 /opt/pharmacy/docker/env /opt/pharmacy/docker/secrets/prod` от `deploy`): каталог секретов —
+   `SECRETS_DIR` env-файла, его создаёт `deploy`, а не Docker (иначе владельцем стал бы root).
 6. Каталог копий БД (ADR-0019) — `BACKUP_DIR` env-файла, владелец uid 70 (postgres в образе):
    `install -d -o 70 -g 70 -m 700 /srv/pharmacy-backups/prod`. На VPS один диск: копии на нём не переживут потерю
    сервера, поэтому каждая копия уходит во внешнее хранилище (раздел 2.1); пока оно не настроено, реальные данные не
@@ -43,8 +46,9 @@
    ```bash
    dc() ( export IMAGE_TAG="${IMAGE_TAG:-$(cat /opt/pharmacy/image-tag 2>/dev/null)}"; : "${IMAGE_TAG:?export IMAGE_TAG=<sha>}"
      cd /opt/pharmacy && docker compose --project-name pharmacy-prod --env-file docker/env/prod.env \
-       -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml "$@" )
+       -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml "$@" )
    pb() { dc exec -T -u postgres -e TZ=Asia/Dushanbe postgres pharmacy-backup "$@"; }
+   S=/opt/pharmacy/docker/secrets/prod
    ```
 
 ## 2. Env-файл prod (один раз, на своей машине)
@@ -55,16 +59,18 @@ npm run stack -- prod init
 
 В `docker/env/prod.env` заполнить `ACME_EMAIL` и `OPERATOR_ALLOW` — публичные IP офисов операторов или VPN (CIDR через
 пробел, `203.0.113.10/32`): админка и `/api/v1/operator/*` отвечают только им, остальным 403 (ревью безопасности
-2026-10-22, A1; поправка ADR-0012 2026-10-23). Адреса `nurmed.online` и `BACKUP_DIR` уже стоят. Перенести на хост и
-закрыть права:
+2026-10-22, A1; поправка ADR-0012 2026-10-23). Адреса `nurmed.online`, `BACKUP_DIR` и `SECRETS_DIR` уже стоят. Секретов
+в нём нет и не должно быть: их создаёт сервер (раздел 4), а `npm run prod:build` и `up` отказывают, пока в `prod.env`
+есть пароль, ключ или pepper (тогда — удалить названные строки). Перенести на хост и закрыть права:
 
 ```bash
 scp docker/env/prod.env deploy@<IP>:/opt/pharmacy/docker/env/prod.env
 ssh deploy@<IP> chmod 600 /opt/pharmacy/docker/env/prod.env
 ```
 
-Локальную копию — не в git и не в чаты. В нём pepper паролей и ключи JWT (ADR-0008): его копия хранится отдельно от
-копий БД, зашифрованной `age` (ADR-0020). Потеря pepper = все пароли и PIN недействительны.
+Локальная копия — не в git и не в чаты. Pepper паролей, ключи JWT и пароли лежат только на сервере, в каталоге
+секретов; их копия — зашифрованный `age` архив `env-push` в бакете (раздел 2.1, шаг 6). Потеря pepper = все пароли и
+PIN недействительны (ADR-0008).
 
 ## 2.1. Хранилище копий вне хоста (один раз, ADR-0020)
 
@@ -96,11 +102,14 @@ ssh deploy@<IP> chmod 600 /opt/pharmacy/docker/env/prod.env
    аккаунта (поправка ADR-0020 2026-10-23: от удаления защищает Object Lock). Бакет rclone не создаёт: ошибка в имени —
    ошибка выгрузки в `pb status`, а не новый бакет без Object Lock.
 5. В `docker/env/prod.env`: `BACKUP_OFFSITE_BUCKET`, `BACKUP_AGE_RECIPIENTS`, `RCLONE_CONFIG_OFFSITE_ENDPOINT`
-   (`https://usc1.contabostorage.com` или `https://sin1.contabostorage.com`), `RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID`,
-   `RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY`. Ключи S3 — ещё и в менеджер паролей хранителей: при потере сервера
-   env-файл достают из бакета ими же.
-6. После сборки образов (раздел 3) — копия env-файла в бакет: `npm run stack -- prod env-push`; и после каждого
-   изменения env-файла.
+   (`https://usc1.contabostorage.com` или `https://sin1.contabostorage.com`), `RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID`.
+   Секретный ключ S3 — не сюда, а в файл `offsite_secret_access_key` на сервере (раздел 4, первый запуск). Ключи S3 —
+   ещё и в менеджер паролей хранителей: при потере сервера архив env-файла и секретов достают из бакета ими же.
+6. После первого запуска (раздел 4) — копия env-файла и секретов в бакет, на сервере:
+   `( set -o pipefail; tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push )`;
+   и после каждого изменения env-файла или секрета. `pipefail`: архив, который `tar` не дочитал, не уходит в бакет как
+   целый. Архив шифруется потоком, открытый текст не ложится на диск; объект —
+   `prod/env/<время UTC>.tar.age`.
 
 ## 3. Сборка и перенос образов (каждая выкладка)
 
@@ -119,24 +128,43 @@ docker save pharmacy/api:<sha> pharmacy/postgres:<sha> pharmacy/redis:<sha> phar
 Compose-файлы — те же, что в репозитории на этом коммите:
 
 ```bash
-scp docker/compose.yml docker/compose.prod.yml docker/compose.backup.yml deploy@<IP>:/opt/pharmacy/docker/
+scp docker/compose.yml docker/compose.prod.yml docker/compose.backup.yml docker/compose.secrets.yml deploy@<IP>:/opt/pharmacy/docker/
 ```
 
 ## 4. Запуск
 
 Если в выкладке есть миграции — сначала снимок диска в панели Contabo (откат миграций только так, ADR-0006: только Up).
 
+Первый запуск — сначала секреты (ADR-0021; спецификация `2026-10-27-secret-store-design.md`, раздел 4). Скрипт
+`pharmacy-secrets` из образа `pharmacy/postgres` создаёт недостающие файлы случайными значениями (существующие не
+перезаписывает), отдаёт их владельцу каталога (`deploy`) с правами 0444 и пересчитывает `redis_users_acl` — у Redis
+только SHA-256 пароля. Ключ S3 из панели Contabo вводится без эха и без истории shell:
+
 ```bash
 ssh deploy@<IP>
 export IMAGE_TAG=<sha>
+dc --profile tools run --rm secrets init
+( umask 077; read -rs k && printf '%s' "$k" > "$S/.k" && chmod 444 "$S/.k" && mv -f "$S/.k" "$S/offsite_secret_access_key" )
+dc --profile tools run --rm secrets check
+```
+
+`check` называет файлы, которых нет, с переводом строки, с заглушкой или с паролем короче 16 символов; значения он
+не печатает. Каждая выкладка:
+
+```bash
+ssh deploy@<IP>
+export IMAGE_TAG=<sha>
+dc --profile tools run --rm secrets check
 dc up -d --no-build --wait postgres
-dc exec -T postgres psql -q -v ON_ERROR_STOP=1 -U postgres -d pharmacy -f /docker-entrypoint-initdb.d/04-backup-role.sql
+dc exec -T postgres pharmacy-psql -q -f /docker-entrypoint-initdb.d/04-backup-role.sql
 dc up -d --no-build --wait && echo "$IMAGE_TAG" > /opt/pharmacy/image-tag
 dc ps
 ```
 
-Второй шаг `npm run stack -- prod up` делает сам: создаёт или обновляет роль `pharmacy_backup` по паролю из env-файла
-(ADR-0019). `image-tag` — тег работающей выкладки для `dc` в следующих сессиях.
+Третий шаг `npm run stack -- prod up` делает сам: создаёт или обновляет роль `pharmacy_backup` по паролю из её файла
+(ADR-0019). `pharmacy-psql` — psql суперпользователем по локальному сокету с паролем из файла: пароль не попадает ни в
+аргументы, ни в окружение контейнера. `image-tag` — тег работающей выкладки для `dc` в следующих сессиях. После первого
+запуска — `env-push` (раздел 2.1, шаг 6).
 
 Первый старт proxy выпускает сертификаты Let's Encrypt: нужны DNS из шага 1.2 и открытый 80-й порт. Ошибка выпуска —
 в `dc logs proxy`. Том `pharmacy-prod_proxy-data` хранит ключ ACME-аккаунта и сертификаты — не удалять.
@@ -176,7 +204,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://admin.nurmed.online/       # 40
 тега нет. На своей машине:
 
 ```bash
-for f in compose.yml compose.prod.yml compose.backup.yml; do git show <прежний sha>:docker/$f | ssh deploy@<IP> "cat > /opt/pharmacy/docker/$f"; done
+for f in compose.yml compose.prod.yml compose.backup.yml compose.secrets.yml; do git show <прежний sha>:docker/$f | ssh deploy@<IP> "cat > /opt/pharmacy/docker/$f"; done
 ```
 
 Затем на хосте `export IMAGE_TAG=<прежний sha>` и `dc up -d --no-build --wait && echo "$IMAGE_TAG" > /opt/pharmacy/image-tag`. Если новая версия применила миграции —
@@ -192,7 +220,7 @@ for f in compose.yml compose.prod.yml compose.backup.yml; do git show <преж�
 `backup`, рабочая база не трогается; в спокойное время — грузит CPU):
 
 ```bash
-ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=$(cat image-tag) docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml run --rm --no-deps -T backup pharmacy-backup verify-offsite <копия>' < key.txt
+ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=$(cat image-tag) docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml run --rm --no-deps -T backup pharmacy-backup verify-offsite <копия>' < key.txt
 ```
 
 ## Восстановление из копии
@@ -208,17 +236,27 @@ dc restart redis        # все входят заново
 
 Затем шаг 4 целиком: роль копий и `migrate`, который догоняет миграции новее копии. Прежняя база остаётся как
 `pharmacy_before_<копия>` (без подключений) и удаляется вручную:
-`dc exec -T postgres psql -U postgres -d postgres -c "drop database pharmacy_before_<копия>"`. Пароли и PIN
-восстановленной базы работают только с pepper её env-файла (ADR-0008).
+`dc exec -T postgres pharmacy-psql -d postgres -c "drop database pharmacy_before_<копия>"`. Пароли и PIN
+восстановленной базы работают только с pepper её каталога секретов (`password_peppers`, ADR-0008).
 
 ## Новый сервер вместо потерянного
 
 1. Раздел 1 — новый VPS; DNS — на его IP.
-2. Env-файл — из бакета: последний объект `prod/env/<время>.env.age` (панель Contabo или `aws s3 cp` ключами S3 из
-   менеджера паролей), расшифровать закрытым ключом хранителя, например
-   `docker run --rm -i --pull=never -v "$PWD:/w" pharmacy/postgres:<sha> age -d -i /dev/stdin -o /w/prod.env /w/<время>.env.age < key.txt`;
-   положить на хост как в разделе 2.
-3. Раздел 3 — образы и compose-файлы того коммита, что работал (или новее).
+2. Раздел 3 — образы и compose-файлы того коммита, что работал (или новее).
+3. Env-файл и секреты — из бакета: последний объект `prod/env/<время>.tar.age` (панель Contabo или `aws s3 cp` ключами
+   S3 из менеджера паролей) скопировать на сервер (это шифротекст) и открыть там командой `pharmacy-backup env-open`
+   образа `pharmacy/postgres` от пользователя `deploy`. Закрытый ключ хранителя идёт по ssh в stdin и на диск сервера не
+   попадает. Архив мог положить и захвативший сервер (ключ бакета был на нём), поэтому `env-open` открывает его, только
+   если в нём ровно `env/prod.env` и файлы секретов как обычные файлы, без ссылок и чужих путей; пишет только их,
+   ничего существующего не перезаписывает и ставит права 600/700/444:
+
+   ```bash
+   scp <время>.tar.age deploy@<IP>:/opt/pharmacy/
+   ssh deploy@<IP> 'docker run --rm -i --pull=never --network none --user "$(id -u):$(id -g)" -v /opt/pharmacy:/w pharmacy/postgres:<sha> pharmacy-backup env-open /w/<время>.tar.age /w/docker && rm /opt/pharmacy/<время>.tar.age' < key.txt
+   ssh deploy@<IP>
+   export IMAGE_TAG=<sha>
+   dc --profile tools run --rm secrets check
+   ```
 4. Только PostgreSQL: `export IMAGE_TAG=<sha>; dc up -d --no-build --wait postgres`. Не полный `up`: на новом хосте
    `BACKUP_DIR` пуст, защите пустой базы (B15) не с чем сравнить, и `backup` сразу скопировал бы пустую базу и выгрузил
    её как самую свежую копию вне хоста.
@@ -226,8 +264,8 @@ dc restart redis        # все входят заново
    (после взлома — с `--at`, раздел ниже):
 
    ```bash
-   ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=<sha> docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml run --rm --no-deps -T backup pharmacy-backup list-offsite'
-   ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=<sha> docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml run --rm --no-deps -T backup pharmacy-backup fetch <копия>' < key.txt
+   ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=<sha> docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml run --rm --no-deps -T backup pharmacy-backup list-offsite'
+   ssh deploy@<IP> 'cd /opt/pharmacy && IMAGE_TAG=<sha> docker compose --project-name pharmacy-prod --env-file docker/env/prod.env -f docker/compose.yml -f docker/compose.prod.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml run --rm --no-deps -T backup pharmacy-backup fetch <копия>' < key.txt
    ```
 
 6. Дальше — раздел «Восстановление из копии» выше и шаг 4 целиком.
@@ -235,16 +273,73 @@ dc restart redis        # все входят заново
 ## После взлома сервера
 
 Захвативший сервер знает ключ бакета и открытые ключи `age`. Удалить или изменить выгруженные версии он не может
-(Object Lock), но может положить поверх новую версию — подделанную копию или env-файл — или метку удаления. Текущим
-объектам бакета после взлома не верить; `list-offsite` показывает прежние версии (`…-v<время>…`).
+(Object Lock), но может положить поверх новую версию — подделанную копию или архив env-файла и секретов — или метку
+удаления. Текущим объектам бакета после взлома не верить; `list-offsite` показывает прежние версии (`…-v<время>…`).
 
 1. Время взлома (UTC) — раньше первых его следов. Дальше бакет читается «как был» на это время: по времени записи
    версий хранилищем, а не по именам объектов.
-2. Env-файл: `aws s3api list-object-versions --bucket <имя> --prefix prod/env/` — последняя версия с `LastModified`
-   раньше взлома, затем
-   `aws s3api get-object --bucket <имя> --key prod/env/<время>.env.age --version-id <VersionId> <время>.env.age` и
-   расшифровка, как в шаге 2 раздела выше.
+2. Env-файл и секреты: `aws s3api list-object-versions --bucket <имя> --prefix prod/env/` — последняя версия с
+   `LastModified` раньше взлома, затем
+   `aws s3api get-object --bucket <имя> --key prod/env/<время>.tar.age --version-id <VersionId> <время>.tar.age` и
+   `env-open`, как в шаге 3 раздела выше.
 3. Копия: команды шага 5 раздела выше с `--at <время UTC>` в конце: `list-offsite --at 2026-10-20T21:00:00Z`, затем
    `fetch <копия> --at 2026-10-20T21:00:00Z`.
-4. Ключи S3 и все секреты env-файла считать раскрытыми: новые ключи S3 (старые отозвать), ключи JWT и пароли ролей.
-   Новый pepper обесценивает все пароли и PIN — решение архитектора.
+4. Ключи S3 и все секреты считать раскрытыми: новые ключи S3 (старые отозвать), ключи JWT и пароли ролей и Redis —
+   раздел «Ротация секретов», всё сразу. Новый pepper без старого в кольце обесценивает все пароли и PIN — решение
+   архитектора.
+
+## Ротация секретов
+
+ADR-0021, спецификация `2026-10-27-secret-store-design.md`, раздел 5. На сервере, от `deploy`, с `dc` и `S` из шага 1.7.
+Compose монтирует файл секрета в контейнер при его создании, поэтому после замены файла контейнеры его сервисов
+пересоздаются (`--force-recreate`). Файл меняется через временный рядом и `mv`: старый остаётся целым, пока новый не
+готов. После каждой ротации — `env-push` (раздел 2.1, шаг 6); после взлома меняется всё сразу.
+
+```bash
+rand() { head -c "${1:-24}" /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'; }
+# rotate_role <роль> <файл> [сервисы…] — новый пароль роли БД: роль берёт его (через окружение psql, не аргументы),
+# файл заменяется, postgres и сервисы роли пересоздаются (postgres — чтобы 04-backup-role.sql и pharmacy-psql читали
+# новые файлы; это несколько секунд недоступности).
+rotate_role() (
+  set -e; umask 077; role=$1 file=$2; shift 2
+  rand > "$S/.$file"
+  NEW_PW=$(cat "$S/.$file"); export NEW_PW
+  printf '%s\n' '\getenv pw NEW_PW' "alter role \"$role\" password :'pw';" | dc exec -T -e NEW_PW postgres pharmacy-psql -q -f -
+  chmod 444 "$S/.$file" && mv -f "$S/.$file" "$S/$file"
+  dc up -d --no-build --force-recreate --wait postgres "$@"
+)
+```
+
+- **Пароль роли БД:** `rotate_role pharmacy_app pharmacy_app_password api`,
+  `rotate_role pharmacy_platform pharmacy_platform_password api`, `rotate_role pharmacy_owner pharmacy_owner_password`
+  (`migrate` возьмёт его при следующем `up`), `rotate_role pharmacy_backup pharmacy_backup_password backup`.
+- **Суперпользователь:** `rotate_role postgres postgres_superuser_password` (имя — `POSTGRES_SUPERUSER` env-файла).
+- **Redis:** `( umask 077; rand > "$S/.r" && chmod 444 "$S/.r" && mv -f "$S/.r" "$S/redis_password" )`, затем
+  `dc --profile tools run --rm secrets init` (пересчёт `redis_users_acl`) и
+  `dc up -d --no-build --force-recreate --wait redis api` — все сессии сбрасываются, все входят заново.
+- **Ключи сессий:** добавить в кольцо `k2` —
+  `( umask 077; printf '%s,k2:%s' "$(cat "$S/session_jwt_keys")" "$(rand 32)" > "$S/.j" && chmod 444 "$S/.j" && mv -f "$S/.j" "$S/session_jwt_keys" )`,
+  в `prod.env` — `SESSION_JWT_ACTIVE_KID=k2`, затем `dc up -d --no-build --force-recreate --wait api`. Через 12 ч
+  (абсолютный срок сессии) старый ключ убрать из кольца тем же способом (оставить только `k2:…`) и снова пересоздать
+  `api`.
+- **Pepper:** добавить `2:<…>` в `password_peppers` так же, как ключ сессий (`rand 32`), `PASSWORD_PEPPER_ACTIVE=2`,
+  пересоздать `api`. Старая версия остаётся в кольце, пока по ней есть хеши: ADR-0008 переводит хеш на новую версию при
+  входе. Убрать её раньше — значит обесценить пароли и PIN тех, кто ещё не входил.
+- **Ключ S3:** новый ключ в панели Contabo (те же права, раздел 2.1, шаг 4); записать его как при первом запуске
+  (раздел 4, `read -rs`), новый `RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID` — в `prod.env`; `dc up -d --no-build
+  --force-recreate --wait backup`, проверить выгрузку (`dc exec -T backup pharmacy-backup push`, `pb status`), затем
+  отозвать старый ключ.
+
+## Доступ
+
+ADR-0021, п. 6.
+
+- root и группа `docker` на VPS — только у архитектора и второго хранителя ключа `age`; вход только по SSH-ключам
+  (раздел 1). Группа `docker` равна root: она читает и каталог секретов, и тома.
+- Файлы `secrets/` не открываются (`cat`, `less`, редактор) ни при диагностике, ни AI-ассистентами, не копируются в
+  чаты и тикеты; меняются только по разделу «Ротация секретов». `docker inspect`, `dc config` и `dc ps` секретов не
+  показывают — их можно запускать при диагностике. `dc logs` — тоже, с одним исключением: неудачный
+  `ALTER ROLE … PASSWORD` попадает в журнал PostgreSQL вместе с паролем, поэтому вывод `dc logs postgres` после ошибки
+  ротации в чаты не копировать, а пароль этой ротации считать раскрытым.
+- Открытые значения секретов prod есть только в каталоге секретов на сервере и в зашифрованном архиве `env-push`; на
+  машине архитектора — только `prod.env` без секретов.

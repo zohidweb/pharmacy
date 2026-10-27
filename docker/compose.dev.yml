@@ -1,15 +1,37 @@
 # dev: local development. PostgreSQL and Redis are published on localhost for `npx nx serve api`.
+# The passwords and keys come from the root .env as variables (ADR-0021: dev keeps them there; test and prod read them
+# from files, compose.secrets.yml).
 services:
   postgres:
     environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in the env file}
+      PHARMACY_OWNER_PASSWORD: ${PHARMACY_OWNER_PASSWORD:?set in the env file}
+      PHARMACY_APP_PASSWORD: ${PHARMACY_APP_PASSWORD:?set in the env file}
+      PHARMACY_PLATFORM_PASSWORD: ${PHARMACY_PLATFORM_PASSWORD:?set in the env file}
       PHARMACY_TEST_DATABASE: pharmacy_test
     ports:
       - '127.0.0.1:5432:5432'
   redis:
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --requirepass
+      - ${REDIS_PASSWORD:?set in the env file}
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-256mb}
     ports:
       - '127.0.0.1:6379:6379'
+  migrate:
+    environment:
+      MIGRATION_DATABASE_URL: postgres://pharmacy_owner:${PHARMACY_OWNER_PASSWORD:?set in the env file}@localhost/${POSTGRES_DB:-pharmacy}?host=/var/run/postgresql
   # `npm run stack -- dev up` without services also starts the dockerized api (dev:deps does not)
   api:
+    environment:
+      DATABASE_URL: postgres://pharmacy_app:${PHARMACY_APP_PASSWORD:?set in the env file}@postgres:5432/${POSTGRES_DB:-pharmacy}
+      PLATFORM_DATABASE_URL: postgres://pharmacy_platform:${PHARMACY_PLATFORM_PASSWORD:?set in the env file}@postgres:5432/${POSTGRES_DB:-pharmacy}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set in the env file}@redis:6379
+      SESSION_JWT_KEYS: ${SESSION_JWT_KEYS:?set in the env file}
+      PASSWORD_PEPPERS: ${PASSWORD_PEPPERS:?set in the env file}
     ports:
       - '127.0.0.1:${API_PORT:-3000}:3000'
   # dev serves web/admin with `next dev` and its /api rewrite; the proxy runs on test/prod only (ADR-0012)

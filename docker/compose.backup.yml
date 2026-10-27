@@ -6,9 +6,7 @@
 
 services:
   postgres:
-    environment:
-      # 04-backup-role.sql creates the role pharmacy_backup with this password (initdb and every `stack up`).
-      PHARMACY_BACKUP_PASSWORD: ${PHARMACY_BACKUP_PASSWORD:?set in the env file}
+    # The password of pharmacy_backup is a file: PHARMACY_BACKUP_PASSWORD_FILE of compose.secrets.yml (ADR-0021).
     volumes:
       # Read-only: `stack restore` runs pg_restore in this container over the local socket.
       - ${BACKUP_DIR:?set in the env file}:/backups:ro
@@ -32,7 +30,8 @@ services:
       PGHOST: /var/run/postgresql
       PGPORT: 5432
       PGUSER: pharmacy_backup
-      PGPASSWORD: ${PHARMACY_BACKUP_PASSWORD:?set in the env file}
+      # The password and the S3 key are files: PGPASSWORD_FILE and RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY_FILE of
+      # compose.secrets.yml (ADR-0021).
       PGDATABASE: ${POSTGRES_DB:-pharmacy}
       BACKUP_TIME: ${BACKUP_TIME:-02:00}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
@@ -48,7 +47,6 @@ services:
       RCLONE_CONFIG_OFFSITE_PROVIDER: ${RCLONE_CONFIG_OFFSITE_PROVIDER:-}
       RCLONE_CONFIG_OFFSITE_ENDPOINT: ${RCLONE_CONFIG_OFFSITE_ENDPOINT:-}
       RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID: ${RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID:-}
-      RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY: ${RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY:-}
       RCLONE_CONFIG_OFFSITE_FORCE_PATH_STYLE: ${RCLONE_CONFIG_OFFSITE_FORCE_PATH_STYLE:-}
       # No CreateBucket before an upload: a mistyped bucket name fails instead of making a bucket without Object Lock.
       # One PUT up to 5 GiB: the path that the first upload to the real bucket checks (Object Lock needs Content-MD5).

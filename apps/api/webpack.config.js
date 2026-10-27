@@ -27,6 +27,9 @@ module.exports = {
         { input: './scripts', glob: 'create-operator.mjs', output: 'scripts' },
         // Generates the JWT key and pepper of an offline store into its env file (auth design, section 10).
         { input: './scripts', glob: 'generate-store-secrets.mjs', output: 'scripts' },
+        // Reads the secrets of test and prod from files before any code of the image (ADR-0021): NODE_OPTIONS of
+        // docker/compose.secrets.yml.
+        { input: './scripts', glob: 'secret-files.mjs', output: 'scripts' },
       ],
       optimization: false,
       outputHashing: 'none',

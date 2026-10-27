@@ -53,6 +53,8 @@ Thumbs.db
 .env.*
 !.env.example
 docker/env/*.env
+# the secret files of test and prod (ADR-0021, SECRETS_DIR)
+docker/secrets/
 *.pem
 *.key
 

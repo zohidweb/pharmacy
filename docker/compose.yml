@@ -7,6 +7,9 @@
 # The proxy addresses and ports are required by the test/prod overrides, not here: dev runs no proxy.
 # The pharmacy/* images are built locally, never pulled (pull_policy: never): a missing or mistyped IMAGE_TAG fails
 # instead of fetching a same-named image from Docker Hub.
+# No secrets here (ADR-0021): dev takes its passwords and keys from .env in compose.dev.yml; test and prod get them as
+# files from SECRETS_DIR through compose.secrets.yml, which the stack script adds. The connection URLs below carry no
+# password: the secret files loader of the api image puts it in.
 
 x-logging: &logging
   driver: json-file
@@ -31,13 +34,6 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-pharmacy}
       POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in the env file}
-      # psql in this container over the local socket (`stack up`, `restore`): in test and prod the socket needs a
-      # password too (docker/postgres/pg_hba.conf).
-      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in the env file}
-      PHARMACY_OWNER_PASSWORD: ${PHARMACY_OWNER_PASSWORD:?set in the env file}
-      PHARMACY_APP_PASSWORD: ${PHARMACY_APP_PASSWORD:?set in the env file}
-      PHARMACY_PLATFORM_PASSWORD: ${PHARMACY_PLATFORM_PASSWORD:?set in the env file}
       PHARMACY_TEST_DATABASE: ${PHARMACY_TEST_DATABASE:-}
     volumes:
       - pg-data:/var/lib/postgresql/data
@@ -58,26 +54,23 @@ services:
     build: ./redis
     image: pharmacy/redis:${IMAGE_TAG:-local}
     pull_policy: never
+    # The password: --requirepass in dev (compose.dev.yml), the ACL file with its SHA-256 in test and prod
+    # (compose.secrets.yml); each override repeats the whole command.
     command:
       - redis-server
       - /usr/local/etc/redis/redis.conf
-      - --requirepass
-      - ${REDIS_PASSWORD:?set in the env file}
       - --maxmemory
       - ${REDIS_MAXMEMORY:-256mb}
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-    # redis-server replaces its arguments with its process title; redis-cli does not, so the healthcheck gives it the
-    # password by REDISCLI_AUTH, not `-a` — every 5 s it would show in `ps` on the host to every user
+    # Without a password, the same in every environment: NOAUTH, like PONG, means the server answers (K6).
     healthcheck:
-      test: ['CMD-SHELL', 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      test: ['CMD-SHELL', "redis-cli ping 2>&1 | grep -qE 'PONG|NOAUTH'"]
       interval: 5s
       timeout: 3s
       retries: 10
     logging: *logging
 
   # One-shot: applies SQL migrations as pharmacy_owner before the API starts (ADR-0006).
-  # PHARMACY_OWNER_PASSWORD is passed to this service only - never to api.
+  # The password of pharmacy_owner is given to this service only - never to api.
   migrate:
     <<: *hardened
     image: pharmacy/api:${IMAGE_TAG:-local}
@@ -85,7 +78,7 @@ services:
     command: ['node', 'scripts/migrate.mjs']
     environment:
       # Over the shared local socket (pg-socket): pharmacy_owner does not sign in over TCP in test and prod (Z6).
-      MIGRATION_DATABASE_URL: postgres://pharmacy_owner:${PHARMACY_OWNER_PASSWORD:?set in the env file}@localhost/${POSTGRES_DB:-pharmacy}?host=/var/run/postgresql
+      MIGRATION_DATABASE_URL: postgres://pharmacy_owner@localhost/${POSTGRES_DB:-pharmacy}?host=/var/run/postgresql
     volumes:
       # Read-only: connect() to the socket works, replacing it does not (pg-socket of postgres).
       - pg-socket:/var/run/postgresql:ro
@@ -106,12 +99,11 @@ services:
       NODE_ENV: production
       APP_ENV: ${APP_ENV:?set in the env file}
       PORT: 3000
-      DATABASE_URL: postgres://pharmacy_app:${PHARMACY_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-pharmacy}
-      PLATFORM_DATABASE_URL: postgres://pharmacy_platform:${PHARMACY_PLATFORM_PASSWORD}@postgres:5432/${POSTGRES_DB:-pharmacy}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      SESSION_JWT_KEYS: ${SESSION_JWT_KEYS:?set in the env file}
+      DATABASE_URL: postgres://pharmacy_app@postgres:5432/${POSTGRES_DB:-pharmacy}
+      PLATFORM_DATABASE_URL: postgres://pharmacy_platform@postgres:5432/${POSTGRES_DB:-pharmacy}
+      REDIS_URL: redis://redis:6379
+      # The key rings themselves (SESSION_JWT_KEYS, PASSWORD_PEPPERS) are secrets; only the active ids are here.
       SESSION_JWT_ACTIVE_KID: ${SESSION_JWT_ACTIVE_KID:?set in the env file}
-      PASSWORD_PEPPERS: ${PASSWORD_PEPPERS:?set in the env file}
       PASSWORD_PEPPER_ACTIVE: ${PASSWORD_PEPPER_ACTIVE:?set in the env file}
       WEB_ORIGIN: ${WEB_ORIGIN:?set in the env file}
       ADMIN_ORIGIN: ${ADMIN_ORIGIN:?set in the env file}

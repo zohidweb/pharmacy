@@ -1,7 +1,7 @@
 # test: acceptance environment (customer test database, backlog W2-05). Same topology as prod,
 # smaller resources (C4 deployment). The proxy serves HTTPS on *.localhost with Caddy's local CA
 # (ADR-0012 «Принятие», 5). PostgreSQL and the API are published on localhost only, for diagnostics: over TCP only
-# pharmacy_app and pharmacy_platform sign in; the superuser — `docker compose exec postgres psql`.
+# pharmacy_app and pharmacy_platform sign in; the superuser — `docker compose exec postgres pharmacy-psql`.
 services:
   postgres:
     # Over TCP only the runtime roles of the API sign in (docker/postgres/pg_hba.conf; security review 2026-10-22, Z6).

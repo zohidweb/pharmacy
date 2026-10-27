@@ -21,7 +21,8 @@
 #                          stdin (never stored) and put it into BACKUP_ROOT for `restore`
 #   verify-offsite <name> [--at <time>]
 #                          the monthly drill: download, decrypt (key on stdin), restore into a scratch instance, compare
-#   env-push               the env file of the environment from stdin, encrypted for the keepers, into the bucket
+#   env-push               the tar of the env file and the secret files of the environment from stdin, encrypted for
+#                          the keepers, into the bucket
 #
 # Copies off the host (ADR-0020, docs/superpowers/specs/2026-10-23-offsite-backups-design.md): a verified copy is
 # encrypted with age for BACKUP_AGE_RECIPIENTS and uploaded with rclone (remote `offsite`, RCLONE_CONFIG_OFFSITE_*) as
@@ -33,7 +34,9 @@
 # Environment: BACKUP_ROOT (/backups), SCRATCH (/scratch), BACKUP_TIME (02:00), BACKUP_RETENTION_DAYS (30), TZ,
 # IMAGE_TAG, APP_ENV, BACKUP_OFFSITE_BUCKET, BACKUP_AGE_RECIPIENTS; `run` connects with PGHOST, PGPORT, PGUSER,
 # PGPASSWORD, PGDATABASE (role pharmacy_backup); `restore` with POSTGRES_USER and POSTGRES_DB of the postgres
-# container. Passwords and keys are never logged.
+# container. Passwords and keys are never logged. In test and prod the secrets come from files (compose secrets,
+# ADR-0021): PGPASSWORD_FILE and RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY_FILE (an empty file — no key) of the backup
+# service, POSTGRES_PASSWORD_FILE of the postgres container for `restore`.
 set -u
 umask 077
 # Notices such as "role … has already been granted membership" are expected when roles are re-applied.
@@ -285,7 +288,8 @@ retention() {
 
 offsite_enabled() { [ -n "${BACKUP_OFFSITE_BUCKET:-}" ]; }
 
-# The objects of the environment: copies <prefix>/<name>.tar.age, env files <prefix>/env/<time>.env.age.
+# The objects of the environment: copies <prefix>/<name>.tar.age, the env file with the secrets
+# <prefix>/env/<time>.tar.age.
 offsite_prefix() { printf 'offsite:%s/%s' "$BACKUP_OFFSITE_BUCKET" "${APP_ENV:-unknown}"; }
 offsite_object() { printf '%s/%s.tar.age' "$(offsite_prefix)" "$1"; }
 
@@ -505,21 +509,34 @@ cmd_verify_offsite() {
   log "verify-offsite $name: ok — downloaded, decrypted and restored in $(($(date +%s) - t0)) s, $c_tenants networks"
 }
 
-# env-push — the env file of the environment from stdin (keys of JWT, peppers, passwords; ADR-0008), encrypted for the
-# keepers and uploaded as <APP_ENV>/env/<time>.env.age (spec O13). The plain text stays in memory.
+# env-push — the tar of the env file and the secret files of the environment from stdin (keys of JWT, peppers,
+# passwords; ADR-0008, ADR-0021), encrypted for the keepers and uploaded as <APP_ENV>/env/<time>.tar.age (spec
+# 2026-10-23-offsite-backups O13, spec 2026-10-27-secret-store K10):
+#   tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push
+# The archive streams into age: the plain text is held neither in a variable (a tar holds NUL bytes) nor on a disk.
+# Only its first block is read ahead — the tar header of the env file: name, size and mode, no content — so that an
+# empty stdin or an env file piped in the old way is refused.
 cmd_env_push() {
   offsite_enabled || die "copies off the host are not configured (BACKUP_OFFSITE_BUCKET is empty)"
-  [ -t 0 ] && die "env-push: the env file goes on stdin"
+  [ -t 0 ] && die "env-push: the tar of the env file and the secrets goes on stdin"
   recipients=$(age_recipients) || die "env-push: BACKUP_AGE_RECIPIENTS must hold public keys age1…, space-separated"
-  envfile=$(cat)
-  [ -n "$envfile" ] || die "env-push: stdin is empty"
   name=$(date -u +%Y%m%dT%H%M%SZ)
-  obj="$(offsite_prefix)/env/$name.env.age"
+  obj="$(offsite_prefix)/env/$name.tar.age"
+  header="/tmp/pharmacy-env-$name.header"
   enc="/tmp/pharmacy-env-$name.age"
   err=/tmp/pharmacy-backup.offsite.err
+  # fullblock: exactly one block, however the pipe splits it, and not a byte more (head -c reads ahead).
+  dd bs=512 count=1 iflag=fullblock of="$header" 2>/dev/null
+  first=$(dd if="$header" bs=100 count=1 2>/dev/null | tr -d '\000')
+  magic=$(dd if="$header" bs=1 skip=257 count=5 2>/dev/null)
+  if [ "$magic" != ustar ] || ! printf '%s' "$first" | grep -q '^env/[^/]*\.env$'; then
+    rm -f "$header"
+    die "env-push: stdin is not the tar of the env file and the secrets (env/<env>.env first)"
+  fi
   # shellcheck disable=SC2086
-  printf '%s\n' "$envfile" | age $recipients -o "$enc" 2>"$err" ||
-    { rm -f "$enc"; die "env-push: encryption failed: $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"; }
+  cat "$header" - | age $recipients -o "$enc" 2>"$err" ||
+    { rm -f "$header" "$enc"; die "env-push: encryption failed: $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"; }
+  rm -f "$header"
   bytes=$(stat -c %s "$enc")
   rclone copyto "$enc" "$obj" 2>"$err" ||
     { rm -f "$enc"; die "env-push: upload failed: $(sanitize "$(tail -n 1 "$err")" | cut -c1-200)"; }
@@ -747,8 +764,13 @@ cmd_restore() {
   old="${db}_before_$(printf '%s' "$name" | tr 'A-Z' 'a-z')"
   conn="-h /var/run/postgresql -U ${POSTGRES_USER:-postgres}"
   unset PGHOST PGPORT PGUSER PGDATABASE
-  # the socket asks the superuser for its password in test and prod (docker/postgres/pg_hba.conf, Z6)
-  PGPASSWORD=${POSTGRES_PASSWORD:-}
+  # the socket asks the superuser for its password in test and prod (docker/postgres/pg_hba.conf, Z6); there it comes
+  # from its file (compose secrets, ADR-0021)
+  if [ -n "${POSTGRES_PASSWORD_FILE:-}" ]; then
+    PGPASSWORD=$(cat "$POSTGRES_PASSWORD_FILE") || die "cannot read POSTGRES_PASSWORD_FILE ($POSTGRES_PASSWORD_FILE)"
+  else
+    PGPASSWORD=${POSTGRES_PASSWORD:-}
+  fi
   export PGPASSWORD
   { is_name "$name" && [ -f "$m" ]; } || die "no copy $name in $BACKUP_ROOT"
   [ "$(manifest_get "$m" verified)" = true ] || die "copy $name is not verified"
@@ -797,6 +819,22 @@ cmd_restore() {
   fi
   log "restore $name: done; the previous database is kept as $old (no connections allowed)"
 }
+
+# Secrets of the backup service from files (compose secrets, ADR-0021). rclone takes its key from its variable only,
+# so the key is in the environment of this process and its children — never in the configuration of the container.
+if [ -n "${PGPASSWORD_FILE:-}" ]; then
+  PGPASSWORD=$(cat "$PGPASSWORD_FILE") || die "cannot read PGPASSWORD_FILE ($PGPASSWORD_FILE)"
+  export PGPASSWORD
+fi
+if [ -n "${RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY_FILE:-}" ]; then
+  s3_key=$(cat "$RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY_FILE") ||
+    die "cannot read RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY_FILE ($RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY_FILE)"
+  if [ -n "$s3_key" ]; then
+    RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY=$s3_key
+    export RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY
+  fi
+  unset s3_key
+fi
 
 case "${1:-}" in
 daemon) cmd_daemon ;;

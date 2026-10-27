@@ -42,7 +42,7 @@ import type { MockHandlers } from './types';
 
 type PurchasingRoute = Extract<
   ApiRouteKey,
-  | `purchaseOrders.${'list' | 'get' | 'create' | 'update' | 'confirm' | 'deficit'}`
+  | `purchaseOrders.${'list' | 'get' | 'create' | 'update' | 'confirm' | 'close' | 'deficit'}`
   | `suppliers.${'list' | 'get' | 'create' | 'update' | 'pay'}`
   | `supplierImports.${'check' | 'apply'}`
 >;
@@ -59,7 +59,13 @@ function buildOrder(
   input: PurchaseOrderInput,
   base: Pick<
     PurchaseOrder,
-    'id' | 'number' | 'status' | 'date' | 'createdBy' | 'confirmedBy'
+    | 'id'
+    | 'number'
+    | 'status'
+    | 'date'
+    | 'createdBy'
+    | 'confirmedBy'
+    | 'closedBy'
   >,
   correlationId: string,
 ): PurchaseOrder {

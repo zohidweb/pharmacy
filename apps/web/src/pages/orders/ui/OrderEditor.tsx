@@ -55,7 +55,7 @@ export interface OrderAccess {
  */
 function orderSheet(
   order: PurchaseOrder,
-  t: (key: string, values?: Record<string, string | number>) => string,
+  t: ReturnType<typeof useTranslations<'orders.sheet'>>,
 ): InvoiceSheetProps {
   const money = (minor: number) => formatMoney(minor, { withSign: false });
   const date = formatDateOnly(order.date);
@@ -623,9 +623,7 @@ export function OrderEditor({
         )}
         {doc && (
           <SheetPrint>
-            <InvoiceSheet
-              {...orderSheet(doc, (key, values) => tSheet(key, values))}
-            />
+            <InvoiceSheet {...orderSheet(doc, tSheet)} />
           </SheetPrint>
         )}
       </div>

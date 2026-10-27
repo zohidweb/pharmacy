@@ -7,7 +7,11 @@ import type {
 } from '@pharmacy/shared-dto';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, apiRequest, isUnreachable } from '@/shared/api';
-import { rememberShift, rememberedShift } from '@/shared/lib/terminal-cache';
+import {
+  rememberLastShift,
+  rememberShift,
+  rememberedShift,
+} from '@/shared/lib/terminal-cache';
 
 export const shiftQueryKey = (storeId: string | null) =>
   ['shift', 'current', storeId] as const;
@@ -41,6 +45,8 @@ export function useCurrentShift(storeId: string | null, onTerminal = true) {
       try {
         const shift = await apiRequest('shifts.current', { signal });
         void rememberShift(store, shift);
+        // told later if it is closed from another computer meanwhile (S5)
+        void rememberLastShift(store, shift.id);
         return shift;
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) {

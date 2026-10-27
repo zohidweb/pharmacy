@@ -37,6 +37,7 @@ import {
   useSession,
 } from '@/entities/session';
 import {
+  ClosedElsewhereNotice,
   shiftQueryKey,
   useCurrentShift,
   useZReportLabels,
@@ -62,7 +63,7 @@ import {
   OpenShiftDialog,
 } from './ShiftDialogs';
 import { WithMessages } from '@/shared/i18n';
-import { rememberShift } from '@/shared/lib/terminal-cache';
+import { rememberLastShift, rememberShift } from '@/shared/lib/terminal-cache';
 
 function Totals({ shift }: { shift: Shift }) {
   const t = useTranslations('shift');
@@ -559,6 +560,8 @@ function ShiftPageView() {
       });
       queryClient.setQueryData(shiftQueryKey(storeId), null);
       void rememberShift(storeId ?? '', null);
+      // closed here: nothing to tell about it later (S5)
+      void rememberLastShift(storeId ?? '', null);
     });
 
   const quarantined = (records.data ?? []).filter(
@@ -731,25 +734,28 @@ function ShiftPageView() {
                   )}
                 </>
               ) : (
-                <EmptyState
-                  icon="clock"
-                  title={t('titleNone')}
-                  description={t('noneHint')}
-                  action={
-                    lastZ ? (
-                      <Button
-                        variant="secondary"
-                        iconStart="printer"
-                        onClick={() => {
-                          setPreliminary(false);
-                          setReport(lastZ);
-                        }}
-                      >
-                        {t('lastZ', { number: lastZ.shift.number })}
-                      </Button>
-                    ) : undefined
-                  }
-                />
+                <>
+                  <ClosedElsewhereNotice storeId={storeId} shift={current} />
+                  <EmptyState
+                    icon="clock"
+                    title={t('titleNone')}
+                    description={t('noneHint')}
+                    action={
+                      lastZ ? (
+                        <Button
+                          variant="secondary"
+                          iconStart="printer"
+                          onClick={() => {
+                            setPreliminary(false);
+                            setReport(lastZ);
+                          }}
+                        >
+                          {t('lastZ', { number: lastZ.shift.number })}
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                </>
               )}
             </div>
           </>

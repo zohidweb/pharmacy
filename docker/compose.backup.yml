@@ -38,6 +38,25 @@ services:
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       TZ: Asia/Dushanbe
       IMAGE_TAG: ${IMAGE_TAG:-local}
+      # Copies off the host (ADR-0020, spec 2026-10-23-offsite-backups): encrypted with the public keys of the keepers
+      # and uploaded with rclone under <APP_ENV>/ in the bucket; without a bucket nothing leaves the host (prod reports
+      # it as unhealthy).
+      APP_ENV: ${APP_ENV:?set in the env file}
+      BACKUP_OFFSITE_BUCKET: ${BACKUP_OFFSITE_BUCKET:-}
+      BACKUP_AGE_RECIPIENTS: ${BACKUP_AGE_RECIPIENTS:-}
+      RCLONE_CONFIG_OFFSITE_TYPE: ${RCLONE_CONFIG_OFFSITE_TYPE:-}
+      RCLONE_CONFIG_OFFSITE_PROVIDER: ${RCLONE_CONFIG_OFFSITE_PROVIDER:-}
+      RCLONE_CONFIG_OFFSITE_ENDPOINT: ${RCLONE_CONFIG_OFFSITE_ENDPOINT:-}
+      RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID: ${RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY: ${RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY:-}
+      RCLONE_CONFIG_OFFSITE_FORCE_PATH_STYLE: ${RCLONE_CONFIG_OFFSITE_FORCE_PATH_STYLE:-}
+      # No CreateBucket before an upload: a mistyped bucket name fails instead of making a bucket without Object Lock.
+      # One PUT up to 5 GiB: the path that the first upload to the real bucket checks (Object Lock needs Content-MD5).
+      RCLONE_CONFIG_OFFSITE_NO_CHECK_BUCKET: "true"
+      RCLONE_CONFIG_OFFSITE_UPLOAD_CUTOFF: 5G
+      # The root is read-only: rclone keeps its (empty) config file and its cache on the tmpfs.
+      RCLONE_CONFIG: /tmp/rclone.conf
+      RCLONE_CACHE_DIR: /tmp/rclone-cache
     volumes:
       - ${BACKUP_DIR:?set in the env file}:/backups
       - backup-scratch:/scratch

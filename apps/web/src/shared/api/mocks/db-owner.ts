@@ -408,6 +408,7 @@ export function createOwnerDb(): OwnerMockDb {
       posBufferMaxOperations: 500,
       posControlledMaxHours: 8,
       posControlledMaxOperations: 20,
+      receiptFooter: { ru: 'Спасибо за покупку!', tj: 'Ташаккур барои харид!' },
       notifications: {
         batch_expiring: true,
         low_stock: true,

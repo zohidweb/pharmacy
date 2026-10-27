@@ -36,9 +36,13 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { APP_TIME_ZONE } from '@/shared/i18n';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiRequest,
+  isApiRouteAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { routes } from '@/shared/config';
-import { QueryState } from '@/shared/ui';
+import { QueryState, StateScreen } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 const filters: InstallationFilter[] = ['all', 'outdated', 'critical'];
@@ -169,7 +173,7 @@ function ScheduleUpdateDialog({
 }
 
 /** «Версии установок» (UI mockup «Версии»): versions of offline stores and the release feed. */
-export function InstallationsPage() {
+function InstallationsPageView() {
   const t = useTranslations('installations');
   const tTable = useTranslations('table');
   const [filter, setFilter] = useState<InstallationFilter>('all');
@@ -375,4 +379,11 @@ export function InstallationsPage() {
       </div>
     </>
   );
+}
+
+/** Without its routes in the API the page is an unknown address, as in the menu (spec 2026-10-26-pilot-small-gaps, P7). */
+export function InstallationsPage() {
+  if (!isApiRouteAvailable('installations.list'))
+    return <StateScreen kind="notFound" />;
+  return <InstallationsPageView />;
 }

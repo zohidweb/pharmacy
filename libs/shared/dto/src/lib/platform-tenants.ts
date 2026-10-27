@@ -77,6 +77,17 @@ export interface TenantDetails extends TenantListItem {
   block: TenantBlockInfo | null;
 }
 
+/**
+ * PATCH /operator/tenants/{id} — the network's name, city and INN as at creation (spec 2026-10-26-pilot-small-gaps,
+ * P9); needs a fresh sign-in. 409 `inn_taken`. Issued invoices keep their copy of the name and INN.
+ */
+export interface UpdateTenantRequest {
+  name: string;
+  city: string;
+  /** 9 digits. */
+  inn: string;
+}
+
 /** POST /operator/tenants/{id}/block */
 export interface BlockTenantRequest {
   reason: string;

@@ -36,9 +36,13 @@ import { useFormatter, useTranslations } from 'use-intl';
 import { LicenseStatusPill, licenseStatusKey } from '@/entities/license';
 import { storeKeys, SYNC_STALE_DAYS } from '@/entities/store';
 import { tenantKeys } from '@/entities/tenant';
-import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  apiRequest,
+  isApiRouteAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { routes } from '@/shared/config';
-import { QueryState } from '@/shared/ui';
+import { QueryState, StateScreen } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
 const filters: LicenseListFilter[] = ['all', 'expiring', 'inactive'];
@@ -290,7 +294,7 @@ function RevokeDialog({
 }
 
 /** «Лицензионные ключи» (UI mockup «Ключи»): keys of offline stores. */
-export function LicensesPage() {
+function LicensesPageView() {
   const t = useTranslations('licenses');
   const tTable = useTranslations('table');
   const format = useFormatter();
@@ -484,4 +488,11 @@ export function LicensesPage() {
       <RevokeDialog license={revoking} onClose={() => setRevoking(null)} />
     </>
   );
+}
+
+/** Without its routes in the API the page is an unknown address, as in the menu (spec 2026-10-26-pilot-small-gaps, P7). */
+export function LicensesPage() {
+  if (!isApiRouteAvailable('licenses.list'))
+    return <StateScreen kind="notFound" />;
+  return <LicensesPageView />;
 }

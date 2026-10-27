@@ -644,6 +644,8 @@ export interface PurchaseOrderLines {
 }
 
 export interface PurchaseOrders {
+  closedManuallyAt: Timestamp | null;
+  closedManuallyBy: string | null;
   comment: string | null;
   confirmedAt: Timestamp | null;
   confirmedBy: string | null;

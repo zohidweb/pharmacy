@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -19,7 +20,12 @@ import type {
 import { RequireFreshAuth } from '../../../common/guards/decorators';
 import { DEFAULT_PAGE_LIMIT } from '../../../common/pagination';
 import { RequireOperatorPermission } from '../auth/decorators';
-import { BlockTenantDto, CreateTenantDto, TenantListQueryDto } from './dto/tenant.dto';
+import {
+  BlockTenantDto,
+  CreateTenantDto,
+  TenantListQueryDto,
+  UpdateTenantDto,
+} from './dto/tenant.dto';
 import { TenantsService } from './tenants.service';
 
 // Networks of the platform, the operator contour (spec 2026-10-05-tenants-module, section 3).
@@ -58,6 +64,17 @@ export class TenantsController {
   @Post()
   create(@Body() body: CreateTenantDto): Promise<CreateTenantResponse> {
     return this.tenants.create(body);
+  }
+
+  /** The name, city and INN (spec 2026-10-26-pilot-small-gaps, P9). 404, 409 `inn_taken`. */
+  @RequireOperatorPermission('tenants:manage')
+  @RequireFreshAuth()
+  @Patch(':id')
+  update(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: UpdateTenantDto,
+  ): Promise<TenantDetails> {
+    return this.tenants.update(id, body);
   }
 
   /** 201 `{ activationCode }` — a new code for the owner. 404, 409 `tenant_blocked`. */

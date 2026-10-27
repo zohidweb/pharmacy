@@ -378,6 +378,10 @@ export const apiRoutes = {
     'POST',
     (p) => `/purchase-orders/${id(p)}/confirmation`,
   ),
+  'purchaseOrders.close': route<PurchaseOrder, undefined, { id: string }>(
+    'POST',
+    (p) => `/purchase-orders/${id(p)}/close`,
+  ),
   'purchaseOrders.deficit': route<
     DeficitLine[],
     undefined,

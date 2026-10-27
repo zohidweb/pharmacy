@@ -1034,6 +1034,10 @@ function settingsInput(
     posBufferMaxOperations: body.posBufferMaxOperations,
     posControlledMaxHours: body.posControlledMaxHours,
     posControlledMaxOperations: body.posControlledMaxOperations,
+    receiptFooter: {
+      ru: body.receiptFooter.ru.trim(),
+      tj: body.receiptFooter.tj.trim(),
+    },
   };
 }
 

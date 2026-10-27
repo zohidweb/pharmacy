@@ -28,7 +28,7 @@ import {
   useOperatorAuditText,
 } from '@/entities/operator-audit';
 import { useTenant } from '@/entities/tenant';
-import { apiRequest } from '@/shared/api';
+import { apiRequest, isOfflineSectionAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -191,18 +191,20 @@ function AuditLogView() {
             >
               {t('allTypes')}
             </Chip>
-            {operatorActionTypes.map((value) => (
-              <Chip
-                key={value}
-                selected={type === value}
-                onClick={() => {
-                  setType(value);
-                  setOffset(0);
-                }}
-              >
-                {t(`types.${value}`)}
-              </Chip>
-            ))}
+            {operatorActionTypes
+              .filter((value) => value !== 'key' || isOfflineSectionAvailable())
+              .map((value) => (
+                <Chip
+                  key={value}
+                  selected={type === value}
+                  onClick={() => {
+                    setType(value);
+                    setOffset(0);
+                  }}
+                >
+                  {t(`types.${value}`)}
+                </Chip>
+              ))}
           </ChipGroup>
         </Card>
         <QueryState query={log}>

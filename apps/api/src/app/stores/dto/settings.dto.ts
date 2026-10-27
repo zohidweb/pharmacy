@@ -6,15 +6,39 @@ import type {
   NotificationKind,
   UpdateNetworkSettingsRequest,
 } from '@pharmacy/shared-dto';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
   IsObject,
+  IsString,
   Max,
+  Matches,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+
+const trim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
+
+// Printable text: line breaks are kept (a printed line each), other control characters are not.
+const FOOTER_TEXT = /^(?:[^\p{Cc}]|[\n\r\t])*$/u;
+
+/** The text under the receipts per language (spec 2026-10-26-pilot-small-gaps, P1): empty — no footer. */
+export class ReceiptFooterDto {
+  @Transform(trim)
+  @IsString()
+  @MaxLength(200)
+  @Matches(FOOTER_TEXT)
+  ru!: string;
+
+  @Transform(trim)
+  @IsString()
+  @MaxLength(200)
+  @Matches(FOOTER_TEXT)
+  tj!: string;
+}
 
 /** One switch per kind: a missing or unknown kind is 400 `validation_failed`, not a 500. */
 export class NotificationSwitchesDto implements Record<
@@ -110,4 +134,9 @@ export class UpdateNetworkSettingsDto implements UpdateNetworkSettingsRequest {
   @Min(posBufferBounds.controlledMaxOperations[0])
   @Max(posBufferBounds.controlledMaxOperations[1])
   posControlledMaxOperations!: number;
+
+  @IsObject()
+  @ValidateNested()
+  @Type(() => ReceiptFooterDto)
+  receiptFooter!: ReceiptFooterDto;
 }

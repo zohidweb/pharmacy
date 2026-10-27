@@ -20,7 +20,7 @@ import {
   useEventText,
 } from '@/entities/event';
 import { TenantStatusPill, useTenantList } from '@/entities/tenant';
-import { apiRequest } from '@/shared/api';
+import { apiRequest, isOfflineSectionAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { AsOfNote, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -92,10 +92,16 @@ export function DashboardPage() {
                   <KpiTile
                     label={t('kpi.stores')}
                     value={summary.cloudStores + summary.offlineStores}
-                    hint={t('kpi.storesHint', {
-                      cloud: summary.cloudStores,
-                      offline: summary.offlineStores,
-                    })}
+                    hint={
+                      isOfflineSectionAvailable()
+                        ? t('kpi.storesHint', {
+                            cloud: summary.cloudStores,
+                            offline: summary.offlineStores,
+                          })
+                        : t('kpi.storesHintCloud', {
+                            cloud: summary.cloudStores,
+                          })
+                    }
                     icon="store"
                   />
                   <KpiTile
@@ -111,7 +117,11 @@ export function DashboardPage() {
                   <KpiTile
                     label={t('kpi.attention')}
                     value={attention}
-                    hint={t('kpi.attentionHint', summary.attention)}
+                    hint={
+                      isOfflineSectionAvailable()
+                        ? t('kpi.attentionHint', summary.attention)
+                        : t('kpi.attentionHintCloud', summary.attention)
+                    }
                     tone={attention > 0 ? 'warning' : 'success'}
                     icon="triangle-alert"
                   />

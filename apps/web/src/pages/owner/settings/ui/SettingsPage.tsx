@@ -13,6 +13,7 @@ import {
   Card,
   CardHeader,
   Switch,
+  TextareaField,
   TextField,
   useToast,
 } from '@pharmacy/ui';
@@ -68,6 +69,10 @@ const RANGES: Record<NumberField, readonly [number, number]> = {
   posControlledMaxOperations: posBufferBounds.controlledMaxOperations,
 };
 
+/** The text under the receipts, per language (spec 2026-10-26-pilot-small-gaps, P1). */
+const FOOTER_MAX = 200;
+const FOOTER_LANGUAGES = ['ru', 'tj'] as const;
+
 /** The ПКУ limits of the buffer are not above the general ones (P6): the field over its general one. */
 function aboveGeneral(form: NetworkSettings, field: NumberField): boolean {
   if (field === 'posControlledMaxHours') {
@@ -104,6 +109,7 @@ function NetworkCard({
         posBufferMaxOperations: form.posBufferMaxOperations,
         posControlledMaxHours: form.posControlledMaxHours,
         posControlledMaxOperations: form.posControlledMaxOperations,
+        receiptFooter: form.receiptFooter,
       };
       return withFreshAuth(() => apiRequest('settings.update', { body }));
     },
@@ -120,9 +126,12 @@ function NetworkCard({
   const error = useApiErrorMessage(save.error);
   const outOfRange = (field: NumberField) =>
     form[field] < RANGES[field][0] || form[field] > RANGES[field][1];
-  const invalid = (Object.keys(RANGES) as NumberField[]).some(
-    (field) => outOfRange(field) || aboveGeneral(form, field),
-  );
+  const footerTooLong = (language: (typeof FOOTER_LANGUAGES)[number]) =>
+    form.receiptFooter[language].trim().length > FOOTER_MAX;
+  const invalid =
+    (Object.keys(RANGES) as NumberField[]).some(
+      (field) => outOfRange(field) || aboveGeneral(form, field),
+    ) || FOOTER_LANGUAGES.some(footerTooLong);
   const number = (field: NumberField) => (
     <TextField
       label={t(`network.${field}`)}
@@ -203,6 +212,46 @@ function NetworkCard({
           {number('prescriptionRetentionDays')}
           {number('posControlledMaxHours')}
           {number('posControlledMaxOperations')}
+        </div>
+        {editable && (
+          <Button
+            className="self-end"
+            loading={save.isPending}
+            disabled={invalid}
+            onClick={() => save.mutate()}
+          >
+            {t('save')}
+          </Button>
+        )}
+      </Card>
+      <Card className="flex flex-col gap-4">
+        <CardHeader
+          title={t('receipt.title')}
+          description={t('receipt.hint')}
+        />
+        <div className="grid grid-cols-2 gap-4">
+          {FOOTER_LANGUAGES.map((language) => (
+            <TextareaField
+              key={language}
+              label={t(`receipt.footer.${language}`)}
+              rows={3}
+              disabled={!editable}
+              value={form.receiptFooter[language]}
+              hint={t('receipt.footerHint', { max: FOOTER_MAX })}
+              error={
+                footerTooLong(language)
+                  ? t('receipt.tooLong', { max: FOOTER_MAX })
+                  : undefined
+              }
+              onChange={(event) => {
+                const text = event.target.value;
+                setForm((current) => ({
+                  ...current,
+                  receiptFooter: { ...current.receiptFooter, [language]: text },
+                }));
+              }}
+            />
+          ))}
         </div>
         {editable && (
           <Button

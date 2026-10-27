@@ -3,6 +3,7 @@
 import { Icon, SegmentedControl, type IconName } from '@pharmacy/ui';
 import type { ReactNode } from 'react';
 import { useTranslations } from 'use-intl';
+import { isOfflineSectionAvailable } from '@/shared/api';
 import { locales, setLocale, useLocale } from '@/shared/i18n';
 
 const promoItems: Array<{
@@ -62,12 +63,20 @@ export function AuthCard({ title, subtitle, children }: AuthCardProps) {
               {t('auth.promo.title')}
             </p>
             <ul className="m-0 flex list-none flex-col gap-4 p-0">
-              {promoItems.map((item) => (
-                <li key={item.key} className="flex items-center gap-3 text-sm">
-                  <Icon name={item.icon} size="md" />
-                  <span>{t(`auth.promo.${item.key}`)}</span>
-                </li>
-              ))}
+              {promoItems
+                .filter(
+                  (item) =>
+                    item.key !== 'licenses' || isOfflineSectionAvailable(),
+                )
+                .map((item) => (
+                  <li
+                    key={item.key}
+                    className="flex items-center gap-3 text-sm"
+                  >
+                    <Icon name={item.icon} size="md" />
+                    <span>{t(`auth.promo.${item.key}`)}</span>
+                  </li>
+                ))}
             </ul>
           </div>
           <p className="text-xs">{t('auth.promo.footnote')}</p>

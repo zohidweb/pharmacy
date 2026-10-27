@@ -20,6 +20,8 @@ export interface NetworkSettingsRow {
   posBufferMaxOperations: number;
   posControlledMaxHours: number;
   posControlledMaxOperations: number;
+  /** jsonb `{ru, tj}` or null (spec 2026-10-26-pilot-small-gaps, P2). */
+  receiptFooter: unknown;
 }
 
 // The network settings of the owner cabinet in tenant_settings (spec 2026-10-14-owner-cabinet, E14,
@@ -48,7 +50,8 @@ export class NetworkSettingsRepository {
              coalesce(ts.pos_controlled_max_hours, ${posBufferDefaults.controlledMaxHours})
                as pos_controlled_max_hours,
              coalesce(ts.pos_controlled_max_operations, ${posBufferDefaults.controlledMaxOperations})
-               as pos_controlled_max_operations
+               as pos_controlled_max_operations,
+             ts.receipt_footer
       from pharmacy.tenants t
       left join pharmacy.tenant_settings ts on ts.tenant_id = t.id
       where t.id = ${tenantId}`.execute(trx);
@@ -66,12 +69,13 @@ export class NetworkSettingsRepository {
         (tenant_id, cashier_session_idle_min, pin_min_length, expiry_reminder_days,
          warn_below_cost, disabled_notifications, prescription_retention_days,
          pos_buffer_max_hours, pos_buffer_max_operations, pos_controlled_max_hours,
-         pos_controlled_max_operations, updated_by)
+         pos_controlled_max_operations, receipt_footer, updated_by)
       values (${tenantId}, ${next.posSessionTimeoutMinutes}, ${next.minPinLength},
               ${next.expiryNoticeDays}, ${next.warnBelowCost},
               ${sql.val(next.disabledNotifications)}::text[], ${next.prescriptionRetentionDays},
               ${next.posBufferMaxHours}, ${next.posBufferMaxOperations},
-              ${next.posControlledMaxHours}, ${next.posControlledMaxOperations}, ${updatedBy})
+              ${next.posControlledMaxHours}, ${next.posControlledMaxOperations},
+              ${next.receiptFooter === null ? null : JSON.stringify(next.receiptFooter)}::jsonb, ${updatedBy})
       on conflict (tenant_id) do update set
         cashier_session_idle_min = excluded.cashier_session_idle_min,
         pin_min_length = excluded.pin_min_length,
@@ -83,6 +87,7 @@ export class NetworkSettingsRepository {
         pos_buffer_max_operations = excluded.pos_buffer_max_operations,
         pos_controlled_max_hours = excluded.pos_controlled_max_hours,
         pos_controlled_max_operations = excluded.pos_controlled_max_operations,
+        receipt_footer = excluded.receipt_footer,
         updated_by = excluded.updated_by,
         updated_at = now()`.execute(trx);
   }

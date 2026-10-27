@@ -83,4 +83,15 @@ export class PurchaseOrdersController {
   ): Promise<PurchaseOrder> {
     return this.orders.confirm(id);
   }
+
+  /**
+   * confirmed / partially received → closed by hand (spec 2026-10-26-pilot-small-gaps, P3); needs
+   * `finance:view-cost` as well. 409 `order_not_open`.
+   */
+  @RequirePermission('purchasing:post')
+  @Post(':id/close')
+  @HttpCode(HttpStatus.OK)
+  close(@Param('id', new ParseUUIDPipe()) id: string): Promise<PurchaseOrder> {
+    return this.orders.close(id);
+  }
 }

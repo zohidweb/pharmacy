@@ -254,6 +254,7 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'purchaseOrders.create',
   'purchaseOrders.update',
   'purchaseOrders.confirm',
+  'purchaseOrders.close',
   'purchaseOrders.open',
   'purchaseOrders.deficit',
   'writeOffs.list',

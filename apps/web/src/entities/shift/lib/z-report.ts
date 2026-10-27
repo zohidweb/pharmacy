@@ -34,6 +34,8 @@ export interface ZReportLabels {
   discrepancyReceipts: string;
   reasonMissing: string;
   preliminary: string;
+  /** Closed from another computer (plan 2026-10-27-shift-history, S8). */
+  forced: (name: string, reason: string) => string;
 }
 
 export function zReportLines(
@@ -59,6 +61,12 @@ export function zReportLines(
       labels.closed,
       shift.closedAt ? formatDateTime(shift.closedAt) : '—',
     ),
+    ...(report.forced
+      ? receiptCenter(
+          labels.forced(report.forced.byName, report.forced.reason),
+          cols,
+        )
+      : []),
     receiptRule(cols),
     ...row(labels.receipts, String(shift.receipts)),
     ...(['cash', 'card', 'qr', 'nfc'] as const).flatMap((m) =>

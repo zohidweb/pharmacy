@@ -16,6 +16,8 @@ const DB_NAME = 'pharmacy-terminal';
 const SESSION_KEY = 'session';
 const BINDING_KEY = 'binding';
 const shiftKey = (storeId: string) => `shift:${storeId}`;
+const LAST_SHIFT_PREFIX = 'last-shift:';
+const lastShiftKey = (storeId: string) => `${LAST_SHIFT_PREFIX}${storeId}`;
 
 let opening: Promise<IDBPDatabase<TerminalCacheSchema>> | null = null;
 
@@ -64,6 +66,17 @@ export const rememberShift = (storeId: string, shift: Shift | null) =>
 export const rememberedShift = (storeId: string) =>
   read<Shift | null>(shiftKey(storeId));
 
+/**
+ * The id of the last open shift this terminal saw (plan 2026-10-27-shift-history, S5): kept across sign-outs like the
+ * binding — an id only — so a shift closed from another computer while the till was away is told at the next PIN
+ * sign-in. null forgets it.
+ */
+export const rememberLastShift = (storeId: string, shiftId: string | null) =>
+  write(lastShiftKey(storeId), shiftId ?? undefined);
+
+export const rememberedLastShift = (storeId: string) =>
+  read<string>(lastShiftKey(storeId));
+
 /** The network and store of the bound terminal: no employee data (spec 2026-10-21-pos-offline-limits, P18). */
 export interface TerminalBinding {
   tenantId: string;
@@ -80,7 +93,7 @@ export const forgetBinding = () => write(BINDING_KEY, undefined);
 
 /**
  * Sign-out and an expired session: nothing of the employee stays on the terminal. The binding stays — the buffer
- * of the terminal is still sent without a session (P18).
+ * of the terminal is still sent without a session (P18) — and the id of its last shift (S5).
  */
 export async function forgetTerminal() {
   try {
@@ -89,7 +102,10 @@ export async function forgetTerminal() {
     const keys = await tx.store.getAllKeys();
     await Promise.all(
       keys
-        .filter((key) => key !== BINDING_KEY)
+        .filter(
+          (key) =>
+            key !== BINDING_KEY && !String(key).startsWith(LAST_SHIFT_PREFIX),
+        )
         .map((key) => tx.store.delete(key)),
     );
     await tx.done;

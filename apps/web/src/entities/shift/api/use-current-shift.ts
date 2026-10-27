@@ -5,12 +5,20 @@ import type {
   ReceiptPaymentMethod,
   Shift,
 } from '@pharmacy/shared-dto';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, apiRequest, isUnreachable } from '@/shared/api';
-import { rememberShift, rememberedShift } from '@/shared/lib/terminal-cache';
+import {
+  rememberLastShift,
+  rememberShift,
+  rememberedShift,
+} from '@/shared/lib/terminal-cache';
 
 export const shiftQueryKey = (storeId: string | null) =>
   ['shift', 'current', storeId] as const;
+
+/** The id of the last open shift the till saw (S5): the query mirrors the terminal cache, set wherever it is written. */
+export const lastShiftQueryKey = (storeId: string | null) =>
+  ['shift', 'last', storeId] as const;
 
 /**
  * A shift remembered before the customer returns were released has no `returnsByMethod`: no return
@@ -34,6 +42,7 @@ function withReturns(shift: Shift | null): Shift | null {
  * terminal has a shift (spec 2026-10-13-pos-shift-sale, K6): otherwise the query stays off.
  */
 export function useCurrentShift(storeId: string | null, onTerminal = true) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: shiftQueryKey(storeId),
     queryFn: async ({ signal }): Promise<Shift | null> => {
@@ -41,6 +50,9 @@ export function useCurrentShift(storeId: string | null, onTerminal = true) {
       try {
         const shift = await apiRequest('shifts.current', { signal });
         void rememberShift(store, shift);
+        // told later if it is closed from another computer meanwhile (S5)
+        void rememberLastShift(store, shift.id);
+        queryClient.setQueryData(lastShiftQueryKey(storeId), shift.id);
         return shift;
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) {

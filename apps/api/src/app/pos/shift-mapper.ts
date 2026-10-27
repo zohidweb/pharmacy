@@ -3,13 +3,32 @@ import type {
   PaymentTotal,
   ReceiptPaymentMethod,
   Shift,
+  ShiftAfterClosing,
   ShiftEvent,
 } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
 import { ShiftReturns } from './shift-returns';
-import { type ShiftRow, ShiftsRepository } from './shifts.repository';
+import {
+  type ShiftEventRow,
+  type ShiftRow,
+  ShiftsRepository,
+} from './shifts.repository';
 
 const METHODS: ReceiptPaymentMethod[] = ['cash', 'card', 'qr', 'nfc'];
+
+const eventOf = (row: ShiftEventRow): ShiftEvent => ({
+  id: row.id,
+  at: row.at.toISOString(),
+  kind: row.kind,
+  reference: row.reference,
+  employeeName: row.employeeName,
+  amountMinor: row.amountDirams,
+  flagged: row.flagged,
+});
+
+// the newest first, as the log of the screen shows them
+const newestFirst = (a: ShiftEvent, b: ShiftEvent) =>
+  a.at < b.at ? 1 : a.at > b.at ? -1 : 0;
 
 // The `Shift` of the contract from the rows of a shift (spec 2026-10-13-pos-shift-sale, 4.4): the
 // totals are counted from its receipts, payments and cash operations, never stored. The cash part
@@ -27,7 +46,7 @@ export class ShiftMapper {
   async view(
     trx: TenantTransaction,
     tenantId: string,
-    shift: ShiftRow,
+    shift: Omit<ShiftRow, 'zReport'>,
   ): Promise<Shift> {
     const totals = await this.shifts.totals(trx, tenantId, shift.id);
     const rows = await this.shifts.events(trx, tenantId, shift.id);
@@ -58,15 +77,7 @@ export class ShiftMapper {
       }),
     ) as Record<ReceiptPaymentMethod, PaymentTotal>;
     const cashReturns = returnsByMethod.cash.amountMinor;
-    const events: ShiftEvent[] = [...rows, ...returned.events].map((row) => ({
-      id: row.id,
-      at: row.at.toISOString(),
-      kind: row.kind,
-      reference: row.reference,
-      employeeName: row.employeeName,
-      amountMinor: row.amountDirams,
-      flagged: row.flagged,
-    }));
+    const events: ShiftEvent[] = [...rows, ...returned.events].map(eventOf);
     events.push({
       id: `${shift.id}-opened`,
       at: shift.openedAt.toISOString(),
@@ -87,8 +98,7 @@ export class ShiftMapper {
         flagged: shift.closedAuthorFlagged,
       });
     }
-    // the newest first, as the log of the screen shows them
-    events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+    events.sort(newestFirst);
     return {
       id: shift.id,
       number: shift.number,
@@ -120,5 +130,24 @@ export class ShiftMapper {
       lastLocalNumber: totals.lastLocalNumber,
       events,
     };
+  }
+
+  /**
+   * The operations of a till accepted after its shift was closed from another computer (plan 2026-10-27-shift-history,
+   * S4): their figures and their list — the card of the shift reconciles them with the count of the forced closing.
+   */
+  async afterClosing(
+    trx: TenantTransaction,
+    tenantId: string,
+    shiftId: string,
+  ): Promise<ShiftAfterClosing> {
+    const figures = await this.shifts.afterClosing(trx, tenantId, shiftId);
+    const rows = await this.shifts.events(
+      trx,
+      tenantId,
+      shiftId,
+      'after-closing',
+    );
+    return { ...figures, events: rows.map(eventOf).sort(newestFirst) };
   }
 }

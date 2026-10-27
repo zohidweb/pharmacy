@@ -8,7 +8,9 @@ export type DiscrepancyKind =
   | 'discount'
   | 'catalog'
   | 'author'
-  | 'closed_period';
+  | 'closed_period'
+  // received after its shift was closed from another computer (plan 2026-10-27-shift-history, S4)
+  | 'after_closing';
 
 export interface ReceiptValues {
   id: string;

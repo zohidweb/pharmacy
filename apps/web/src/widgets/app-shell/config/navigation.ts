@@ -190,6 +190,13 @@ export const navigation: NavSection[] = [
         ready: true,
       },
       {
+        // the shift history of the scope (plan 2026-10-27-shift-history, S7)
+        route: 'shiftHistory',
+        icon: 'clock',
+        permission: 'reports:view',
+        ready: true,
+      },
+      {
         route: 'expenses',
         icon: 'wallet',
         permission: 'expenses:view',

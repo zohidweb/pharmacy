@@ -30,6 +30,9 @@ export const routes = {
   pricing: () => '/pricing',
 
   reports: () => '/reports',
+  /** The shift history (plan 2026-10-27-shift-history, S7) and the card of a shift. */
+  shiftHistory: () => '/shifts',
+  shiftCard: (id: string) => `/shifts/view?id=${encodeURIComponent(id)}`,
   expenses: () => '/expenses',
   auditLog: () => '/audit-log',
 

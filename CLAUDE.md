@@ -48,6 +48,7 @@ Project class: Full
 | Runtime / тесты | Node.js 22 LTS (≥ 22.20) или 24 LTS (`.nvmrc` — 24, Docker — 24), npm, Jest; e2e фронтенда — Playwright | ADR-0008, ADR-0009 |
 | CI | GitHub Actions | ADR-0009 |
 | Резервное копирование БД | Ежедневный `pg_dump` с проверкой восстановления: сервис `backup` (test, prod) на образе `pharmacy/postgres`, роль `pharmacy_backup` | ADR-0019 |
+| Секреты test и prod | Файл на каждый секрет в каталоге среды `SECRETS_DIR` (0700, вне git), в контейнеры — только `secrets:` Compose (`docker/compose.secrets.yml`), чтение `*_FILE`; генератор `pharmacy-secrets`; dev — `.env` | ADR-0021 |
 
 **Ещё не решено — ADR в статусе `proposed`, до `accepted` не использовать:** на `main` таких нет.
 
@@ -81,7 +82,7 @@ pharmacy/
 │   ├── shared/domain/  # @pharmacy/shared-domain — Tenant, Store, Batch, Receipt, StockMovement…
 │   ├── shared/util/    # @pharmacy/shared-util — деньги (integer дирамы), даты, i18n RU/TJ
 │   └── ui/             # @pharmacy/ui — общий UI-кит web и admin (сенсорные экраны от 10″)
-├── docker/           # compose.yml (+ compose.backup.yml для test/prod) + образы postgres/, redis/, proxy/ (Caddy + статика, ADR-0012); apps/api/Dockerfile
+├── docker/           # compose.yml (+ compose.backup.yml и compose.secrets.yml для test/prod) + образы postgres/, redis/, proxy/ (Caddy + статика, ADR-0012); apps/api/Dockerfile
 ├── docs/architecture/, templates/   # архитектура, ADR; шаблоны ai-project-start
 └── nx.json / package.json / tsconfig.base.json / eslint.config.mjs
 ```
@@ -276,15 +277,16 @@ Only these. Financial operations require idempotency and a correlation ID.
 npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs> [service…] [--skip-checks]
 npm run stack -- <test|prod> <backup|backup-status|backup-verify <копия>|restore <копия> [--replace-database]>
 npm run stack -- <test|prod> <offsite-list|offsite-fetch <копия> --identity <ключ>|offsite-verify <копия> --identity <ключ>> [--at <время UTC>]
-npm run stack -- <test|prod> env-push
-npm run stack -- test init     # env-файл из примера со случайными паролями (один раз)
+npm run stack -- test env-push # env-файл и секреты — в бакет; prod — на VPS (docs/guides/deploy-vps.md)
+npm run stack -- test init     # env-файл из примера, без секретов (один раз); старый — переносит его секреты в файлы
 npm run test-env:build         # lint + test + образы с тегом <git sha> (web/admin собирает образ proxy)
 npm run test-env:up            # запуск и ожидание healthy;  test-env:down — остановка
 npm run prod:build / prod:up / prod:down
 ```
 
 - Скрипт: `tools/scripts/stack.mjs`; compose: `docker/compose.yml` + `docker/compose.<env>.yml` (+ `compose.backup.yml`
-  в test и prod — без него compose отказывает: `backup` в `compose.<env>.yml` только дополняется). Образы `pharmacy/*`
+  и `compose.secrets.yml` в test и prod — без них compose отказывает: `backup` в `compose.<env>.yml` только
+  дополняется, а базовый файл секретов не содержит). Образы `pharmacy/*`
   собираются локально и никогда не скачиваются (`pull_policy: never`): неверный `IMAGE_TAG` — ошибка, а не чужой
   образ с Docker Hub.
 - `build` — ручной quality gate, пока workflow-файлы CI не созданы (ADR-0009): lint + test всех
@@ -298,11 +300,25 @@ npm run prod:build / prod:up / prod:down
 - Env-файлы сред лежат в `docker/env/`, а не `.env.test`: Nx автоматически грузит `.env.<имя>`
   в задачи (`.env.test` попал бы в `nx test`). В корневом `.env` не задавать `NODE_ENV`.
 - `APP_ENV` (dev|test|prod) — среда развёртывания; `NODE_ENV` в test/prod всегда `production`.
-- В env-файлах сред обязательны `PHARMACY_OWNER_PASSWORD`, `PHARMACY_APP_PASSWORD` и `PHARMACY_PLATFORM_PASSWORD`.
-  Пароли подставляются в URL подключения compose: символы `@ / : ? #` в пароле, заданном вручную,
-  ломают URL — `stack init` генерирует безопасные (base64url).
-  Роли создаёт initdb только на пустом томе: существующие тома (`pharmacy-<env>_pg-data`) после появления
-  новых ролей нужно пересоздать (`docker volume rm`, данные теряются — только для test/dev).
+- **Секреты test и prod** (ADR-0021, спецификация `docs/superpowers/specs/2026-10-27-secret-store-design.md`) — каждый
+  в своём файле каталога `SECRETS_DIR` env-файла (относительно `docker/`: `docker/secrets/<env>`, каталог 0700, файлы
+  0444, в `.gitignore` и `.dockerignore`); в env-файле секретов нет. Сервис получает только свои файлы через
+  `docker/compose.secrets.yml` (`/run/secrets/<имя>` и переменные `*_FILE`), поэтому `docker inspect`,
+  `docker compose config` и список процессов секретов не показывают и годятся для диагностики. Сами файлы не открывать
+  и не печатать — ни в чатах, ни AI-ассистентам.
+  - `stack up` и `restore` сначала создают недостающие файлы и проверяют набор: `secrets init` и `secrets check`
+    сервиса-инструмента `secrets` (скрипт `pharmacy-secrets` образа `pharmacy/postgres`). Существующий файл не
+    перезаписывается; `redis_users_acl` пересчитывается из `redis_password`.
+  - API и его скрипты читают `*_FILE` загрузчиком `apps/api/scripts/secret-files.mjs` (`NODE_OPTIONS=--import`):
+    пароль из `*_PASSWORD_FILE` попадает в `*_URL`, который в compose записан без пароля. PostgreSQL —
+    `POSTGRES_PASSWORD_FILE` и `PHARMACY_*_PASSWORD_FILE`, Redis — файл ACL с SHA-256 пароля вместо `--requirepass`,
+    `backup` — `PGPASSWORD_FILE` и файл ключа S3 `offsite_secret_access_key` (пустой — выгрузки нет).
+  - Env-файл test, созданный до ADR-0021: `npm run stack -- test init` переносит его секреты в файлы с прежними
+    значениями (тома не пересоздаются, вход прежним паролем работает) и заменяет их строки комментарием без значения.
+    Пока секреты в env-файле, `up` и `restore` отказывают. В prod `build` и `up` отказывают при секретах в `prod.env`:
+    секреты prod создаются и живут только на VPS (`docs/guides/deploy-vps.md`).
+  - Роли создаёт initdb только на пустом томе: существующие тома (`pharmacy-<env>_pg-data`) после появления
+    новых ролей нужно пересоздать (`docker volume rm`, данные теряются — только для test/dev).
 - Вход в test/prod — только через proxy (Caddy, ADR-0012); `PROXY_PROFILE` (`cloud` | `local` | `offline`) и
   `TLS_MODE` (`acme` | `internal` | `files` | `off`) выбирают схему, адреса — `WEB_ADDR`, `ADMIN_ADDR`, `APEX_ADDR`.
   `WEB_ORIGIN`/`ADMIN_ORIGIN` (проверка `Origin` в API) должны совпадать с адресами proxy, `TRUST_PROXY=1`.
@@ -312,7 +328,7 @@ npm run prod:build / prod:up / prod:down
   не считается), но старые `WEB_ORIGIN`/`ADMIN_ORIGIN` нужно поправить вручную.
 - test локально: HTTPS на `*.localhost` с локальным УЦ Caddy (`tls internal`). Корневой сертификат тома
   `pharmacy-test_proxy-data` доверить один раз (иначе браузер не примет cookie `__Host-*`):
-  `docker compose --project-name pharmacy-test --env-file docker/env/test.env -f docker/compose.yml -f docker/compose.test.yml -f docker/compose.backup.yml cp proxy:/data/caddy/pki/authorities/local/root.crt caddy-test-root.crt`,
+  `docker compose --project-name pharmacy-test --env-file docker/env/test.env -f docker/compose.yml -f docker/compose.test.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml cp proxy:/data/caddy/pki/authorities/local/root.crt caddy-test-root.crt`,
   затем `certutil -addstore -user Root caddy-test-root.crt` (Windows, текущий пользователь); файл после этого удалить.
 - prod — VPS Contabo по ADR-0020: DNS A-записи `app.`, `admin.` и apex `nurmed.online` на IP сервера и открытый 80-й
   порт до первого старта (Let's Encrypt), `ACME_EMAIL` обязателен; том `pharmacy-prod_proxy-data` хранит ключ
@@ -332,11 +348,11 @@ npm run prod:build / prod:up / prod:down
     и `backup`, восстанавливает копию рядом (`pharmacy_restore`), меняет имена (прежняя база остаётся как
     `pharmacy_before_<копия>`, без подключений, удаляется вручную — команду печатает `restore`), перезапускает Redis
     (все входят заново) и поднимает стек; `migrate` догоняет миграции, вышедшие после копии;
-  - потеря диска: восстановить env-файл из его копии → `up postgres` → `backup-status` → `restore <копия>
-    --replace-database`. Если сразу сделали полный `up`, защита пустой базы не даст копировать пустую базу поверх
-    истории копий;
-  - env-файл (ключи JWT, pepper, пароли) в копии не входит и хранится отдельно (ADR-0008): без того же pepper
-    пароли и PIN восстановленной базы недействительны. Redis не копируется;
+  - потеря диска: восстановить env-файл и каталог секретов из их копии → `up postgres` → `backup-status` →
+    `restore <копия> --replace-database`. Если сразу сделали полный `up`, защита пустой базы не даст копировать
+    пустую базу поверх истории копий;
+  - env-файл и секреты (ключи JWT, pepper, пароли) в копии БД не входят и хранятся отдельно (`env-push`, ADR-0008):
+    без того же pepper пароли и PIN восстановленной базы недействительны. Redis не копируется;
   - в окне копии не выкладывать и не запускать миграции вручную: `pg_dump` держит блокировки до конца, а
     `lock_timeout` есть не у всех миграций. `stack up` с новым тегом перезапускает `postgres` и обрывает копию — новый
     `backup` сделает её сразу после `migrate`;
@@ -349,7 +365,7 @@ npm run prod:build / prod:up / prod:down
     не создаёт. Без `BACKUP_OFFSITE_BUCKET` копии остаются только на хосте; в prod тогда `backup` unhealthy через 2 ч после
     старта (решение 7.1: реальных данных до копий вне хоста нет). При включённой выгрузке `backup` unhealthy, если
     свежайшая выгрузка старше 26 ч; `backup-status` показывает выгрузку у каждой копии;
-  - восстановление после потери сервера: env-файл — из его копии (`env-push`, ниже), `up postgres`, `offsite-list`,
+  - восстановление после потери сервера: env-файл и секреты — из их копии (`env-push`, ниже), `up postgres`, `offsite-list`,
     `offsite-fetch <копия> --identity <файл ключа>` (ключ уходит в контейнер только через stdin, на диск сервера не
     пишется), затем `restore <копия> --replace-database`. Архив открывается, только если в нём ровно три обычных файла
     копии, а её манифест называет эту копию проверенной. Захвативший сервер может положить поверх копии новую версию
@@ -357,16 +373,19 @@ npm run prod:build / prod:up / prod:down
     были» до него — `--at <время UTC>` (`docs/guides/deploy-vps.md`, «После взлома сервера»);
   - раз в месяц хранитель ключа делает учебное восстановление: `offsite-verify <копия> --identity <файл ключа>`
     (скачать, расшифровать, восстановить во временный экземпляр, сверить с манифестом);
-  - копия env-файла (ключи JWT, pepper, пароли): после каждого его изменения `npm run stack -- prod env-push` на машине
-    архитектора — шифрование теми же ключами, объект `prod/env/<время>.env.age` того же бакета; образ
-    `pharmacy/postgres` того же коммита (с `age` и `rclone`) должен быть собран.
+  - копия env-файла и каталога секретов (ключи JWT, pepper, пароли, ключ S3) — один tar, зашифрованный теми же
+    ключами, объект `<env>/env/<время>.tar.age` того же бакета; после каждого их изменения — `env-push` на хосте среды:
+    для test `npm run stack -- test env-push`, для prod — на VPS
+    `tar -C /opt/pharmacy/docker -cf - env/prod.env secrets/prod | dc run --rm --no-deps -T backup pharmacy-backup env-push`
+    (секретов prod на машине архитектора нет). Архив идёт в `age` потоком, открытый текст не ложится на диск.
 
 ## Containers (ADR-0005)
 
 - Образы: `apps/api/Dockerfile` (multi-stage, `nx run api:prune`, non-root; код принадлежит root, без source map и
   npm), `docker/postgres`
   (роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver` / `pharmacy_provisioner`, схема
-  `pharmacy`, `pg_trgm`; скрипт копий `pharmacy-backup`, ADR-0019), `docker/redis` (без персистентности). Контекст сборки — корень репозитория
+  `pharmacy`, `pg_trgm`; скрипт копий `pharmacy-backup`, ADR-0019; `pharmacy-secrets` и `pharmacy-psql`, ADR-0021),
+  `docker/redis` (без персистентности). Контекст сборки — корень репозитория
   (`.dockerignore`).
 - Роли БД (ADR-0006, ADR-0013): база принадлежит `pharmacy_owner`. API в рантайме подключается ролями
   `pharmacy_app` (tenant-путь, `DATABASE_URL`) и `pharmacy_platform` (только `app/platform/**` и
@@ -374,30 +393,31 @@ npm run prod:build / prod:up / prod:down
   только чтение); `pharmacy_provisioner` — NOLOGIN (владелец функций создания сети `provision_tenant` /
   `issue_owner_code`, ADR-0013, поправка 2026-10-05). На кластере, созданном до поправки, роль добавляется
   один раз суперпользователем: `docker/postgres/initdb/03-provisioner-role.sql` (команда — в его шапке).
-  `pharmacy_owner` используется только сервисом `migrate`; `PHARMACY_OWNER_PASSWORD` не передаётся в `api`.
+  `pharmacy_owner` используется только сервисом `migrate`: файл его пароля `api` не получает.
   В test и prod PostgreSQL берёт правила входа из `docker/postgres/pg_hba.conf` (ревью безопасности 2026-10-22, Z6):
   по TCP входят только `pharmacy_app` и `pharmacy_platform`. Суперпользователь, `pharmacy_owner` (`migrate`) и
   `pharmacy_backup` (`backup`) — только через локальный сокет: том `pg-socket` общий у `postgres`, `migrate` и
   `backup`, но не у `api`; `migrate` и `backup` подключают его только для чтения: `backup` работает с uid сервера и
-  иначе мог бы подменить сокет. Вход по сокету тоже с паролем; в контейнере `postgres` его даёт `PGPASSWORD`, поэтому
-  `docker compose exec postgres psql -U <суперпользователь>` работает без ввода. В dev правила образа прежние.
-  - Раньше суперпользователь входил по сокету без пароля, и его пароль в базе мог разойтись с
-    `POSTGRES_SUPERUSER_PASSWORD` env-файла. Поэтому перед первой выкладкой этих правил на существующий кластер его
-    нужно проверить (ответ `1`):
+  иначе мог бы подменить сокет. Вход по сокету тоже с паролем; скрипт образа `pharmacy-psql` берёт его из файла
+  `POSTGRES_PASSWORD_FILE` и передаёт psql через окружение, поэтому `docker compose … exec postgres pharmacy-psql`
+  работает без ввода (аргументы psql — как обычно, `-d`/`-c`/`-f`). В dev правила образа прежние.
+  - Раньше суперпользователь входил по сокету без пароля, и его пароль в базе мог разойтись с файлом
+    `postgres_superuser_password`. Поэтому перед первой выкладкой этих правил на существующий кластер его нужно
+    проверить (ответ `1`):
     `docker compose --project-name pharmacy-<env> --env-file docker/env/<env>.env -f docker/compose.yml -f
-    docker/compose.<env>.yml -f docker/compose.backup.yml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$(hostname -i)" -U
-    "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select 1"'`.
+    docker/compose.<env>.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml exec -T postgres sh -c
+    'pharmacy-psql -h "$(hostname -i)" -Atc "select 1"'`.
   - Если пароль разошёлся и `up` уже упал:
     1. в контейнере `postgres` выполнить
        `sed -i '1i local all <суперпользователь> trust' /etc/pharmacy/pg_hba.conf && kill -HUP 1`;
     2. задать пароль через `alter role … password …`;
     3. вернуть файл образа: `up -d --force-recreate postgres`.
-  - Пароль `pharmacy_backup` остаётся в окружении `postgres` для `04-backup-role.sql` (вторая половина Z6 не
-    сделана). Тот же контейнер и так держит пароль суперпользователя.
+  - Пароли ролей и суперпользователя доходят до psql через его окружение (`\getenv`), не аргументами: в списке
+    процессов хоста их нет (S6, ADR-0021).
   `pharmacy_backup` (ADR-0019) — LOGIN, BYPASSRLS, член `pg_read_all_data`, не суперпользователь: только сервис
-  `backup` (test, prod), пароль `PHARMACY_BACKUP_PASSWORD`. Роль создаёт или обновляет идемпотентный
-  `docker/postgres/initdb/04-backup-role.sql` — при initdb и при каждом `stack <test|prod> up` до старта остальных
-  сервисов, поэтому новая роль и смена пароля в env-файле ручных шагов не требуют.
+  `backup` (test, prod), пароль — файл `pharmacy_backup_password`. Роль создаёт или обновляет идемпотентный
+  `docker/postgres/initdb/04-backup-role.sql` (через `pharmacy-psql`) при каждом `stack <test|prod> up` до старта
+  остальных сервисов, поэтому новая роль и смена пароля в файле ручных шагов не требуют.
 - Миграции: одноразовый сервис `migrate` (тот же образ `pharmacy/api`, `node scripts/migrate.mjs`) применяет
   SQL-миграции ролью `pharmacy_owner` до старта API (`api` ждёт `service_completed_successfully`). Скрипт и
   `migrations/` попадают в образ через assets webpack. Если API не стартует из-за миграции —
@@ -421,18 +441,18 @@ npm run prod:build / prod:up / prod:down
   `ADMIN_ORIGIN` (ревью безопасности 2026-10-22, A7, решение 7.2). В `prod.env`, созданном раньше, строка
   `# TRUST_PROXY=0` закомментирована: `npm run stack -- prod init` допишет `TRUST_PROXY=1`, иначе `api` не поднимется
   (причина — в `logs api`).
-- `stack build/up/restore` в test и prod отказывают, если в env-файле нет переменной с заглушкой в примере, остались
-  `change-me` / `generate-key` или пароль короче 16 символов (S2; файл читается как его читает compose). Заменять
-  только названные переменные: на базе с данными новый пароль роли нужно ещё задать `ALTER ROLE … PASSWORD`
-  суперпользователем (в test можно пересоздать том), а новый pepper обесценивает все пароли и PIN — новый env-файл от
-  `init` годится только для нового стека.
+- `secrets check` (каждый `stack up` и `restore` в test и prod) отклоняет набор секретов, если файла нет, в нём перевод
+  строки или заглушка `change-me` / `generate-key`, пароль короче 16 символов или `redis_users_acl` не совпадает с
+  `redis_password` (S2); называет только файлы. Менять секрет на базе с данными — по разделу «Ротация секретов»
+  `docs/guides/deploy-vps.md`: новый пароль роли нужно ещё задать `ALTER ROLE … PASSWORD` (`pharmacy-psql`), а новый
+  pepper без старого в кольце обесценивает все пароли и PIN.
 - Первый код активации владельца (часть 1 аутентификации; выдаёт оператор, печатается один раз). В test/prod
   PostgreSQL доступен только в сети compose, поэтому скрипт запускается из образа `api`
   (`scripts/create-activation-code.mjs`, `DATABASE_URL` уже задан в сервисе `api`, срок —
   `ACTIVATION_CODE_TTL_HOURS`, по умолчанию 72 ч). Стек должен быть поднят (`npm run stack -- <env> up`):
 
   ```
-  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose --project-name pharmacy-<test|prod>     --env-file docker/env/<test|prod>.env -f docker/compose.yml -f docker/compose.<test|prod>.yml -f docker/compose.backup.yml     run --rm --no-deps api node scripts/create-activation-code.mjs --login <логин|телефон|e-mail>
+  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose --project-name pharmacy-<test|prod>     --env-file docker/env/<test|prod>.env -f docker/compose.yml -f docker/compose.<test|prod>.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml     run --rm --no-deps api node scripts/create-activation-code.mjs --login <логин|телефон|e-mail>
   ```
 
   `IMAGE_TAG` — тег образа, собранного `build` (короткий sha; у test с незакоммиченными изменениями —
@@ -480,7 +500,7 @@ npm run prod:build / prod:up / prod:down
 - Never commit secrets (passwords, keys, connection strings, tokens) to git, in any form.
 - Переменные аутентификации `SESSION_JWT_KEYS`, `SESSION_JWT_ACTIVE_KID`, `PASSWORD_PEPPERS`,
   `PASSWORD_PEPPER_ACTIVE` (а также `WEB_ORIGIN`, `ADMIN_ORIGIN`) обязательны: без них API не стартует, а
-  `docker/compose.yml` не поднимает даже `npm run dev:deps`. Перенесите их из `.env.example` в `.env`;
+  `docker/compose.dev.yml` не поднимает даже `npm run dev:deps`. Перенесите их из `.env.example` в `.env`;
   свои ключи — случайные 32 байта base64url. Команда заменяет в `.env` четыре строки ключей и ничего не
   печатает:
 
@@ -492,8 +512,9 @@ npm run prod:build / prod:up / prod:down
   `APP_ENV=test` и `AUTH_TEST_COOKIES=true` тест задаёт сам для запускаемого процесса API.
 - `.env` (API, docker compose) и `.env.local` (frontend) — в `.gitignore`; в git только `.env.example`
   без реальных значений.
-- Production secrets: хранилище секретов пока не выбрано — через ADR (вопрос № 8 в stack.md);
-  до этого — env-файлы только на хосте среды (`docker/env/*.env`).
+- Production secrets: ADR-0021 — в test и prod каждый секрет — файл в каталоге `SECRETS_DIR` на хосте среды, в
+  контейнеры — `secrets:` Compose (раздел «Environments»); в env-файлах test и prod секретов нет. Секреты prod создаются
+  и живут только на VPS, их копия — зашифрованный архив `env-push` в бакете (`docs/guides/deploy-vps.md`).
 
 ## CI/CD (ADR-0009)
 

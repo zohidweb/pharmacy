@@ -32,19 +32,21 @@ npm run dev                          # api + web + admin с hot reload
 | Среда | Env-файл (не в git) | Compose-проект | API | PostgreSQL / Redis наружу |
 |---|---|---|---|---|
 | dev | `.env` ← `.env.example` | `pharmacy-dev` | `127.0.0.1:3000` | `5432` / `6379` на localhost |
-| test | `docker/env/test.env` | `pharmacy-test` | `127.0.0.1:3100` | PostgreSQL `127.0.0.1:5433` (по TCP — только роли API; суперпользователь — `docker compose exec postgres psql`), Redis — нет |
+| test | `docker/env/test.env` | `pharmacy-test` | `127.0.0.1:3100` | PostgreSQL `127.0.0.1:5433` (по TCP — только роли API; суперпользователь — `docker compose exec postgres pharmacy-psql`), Redis — нет |
 | prod | `docker/env/prod.env` | `pharmacy-prod` | `127.0.0.1:3200` | нет (только сеть compose) |
 
 ```
 npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs> [service…] [--skip-checks]
-npm run stack -- test init     # env-файл из примера со случайными паролями; на готовом файле — дописывает
-                               #   переменные, появившиеся в примере позже (существующие не меняет)
+npm run stack -- test init     # env-файл из примера, без секретов; на готовом файле — дописывает переменные,
+                               #   появившиеся в примере позже, и переносит его секреты в файлы docker/secrets/test
 npm run test-env:build         # lint + test + static web/admin + образы с тегом <git sha>
 npm run test-env:up            # запуск и ожидание healthy;  test-env:down — остановка
 npm run prod:build / prod:up / prod:down
 ```
 
-Скрипт — `tools/scripts/stack.mjs`; compose — `docker/compose.yml` + `docker/compose.<env>.yml`.
+Скрипт — `tools/scripts/stack.mjs`; compose — `docker/compose.yml` + `docker/compose.<env>.yml` (в test и prod ещё
+`compose.backup.yml` и `compose.secrets.yml`). Секреты test и prod — файлы каталога `SECRETS_DIR`, их создаёт `up`
+(ADR-0021); в env-файлах их нет.
 Подробности и правила разработки — в `CLAUDE.md`.
 
 ## Архитектура

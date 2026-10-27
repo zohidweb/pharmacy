@@ -34,12 +34,22 @@ import {
   eventTone,
   useEventText,
 } from '@/entities/event';
-import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
+import {
+  ApiError,
+  apiRequest,
+  isOfflineSectionAvailable,
+  useApiErrorMessage,
+} from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
-const topics: NotificationTopic[] = ['billing', 'keys', 'services', 'sync'];
-const scopes: AnnouncementScope[] = ['all', 'cloud', 'offline'];
+// keys and sync, the offline-only scope — only with the offline section (spec 2026-10-26-pilot-small-gaps, P8)
+const topics: NotificationTopic[] = isOfflineSectionAvailable()
+  ? ['billing', 'keys', 'services', 'sync']
+  : ['billing', 'services'];
+const scopes: AnnouncementScope[] = isOfflineSectionAvailable()
+  ? ['all', 'cloud', 'offline']
+  : ['all', 'cloud'];
 const DUSHANBE_OFFSET = '+05:00';
 
 const toneIcon = {

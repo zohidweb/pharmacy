@@ -34,6 +34,7 @@ const notFound = () => new ProblemException(404, 'not_found');
 const badField = (field: string, code: string) =>
   new FieldProblemException(400, 'validation_failed', [{ field, code }]);
 const notEditable = () => new ProblemException(409, 'order_not_editable');
+const notOpen = () => new ProblemException(409, 'order_not_open');
 
 interface OrderLineView {
   productId: string;
@@ -238,6 +239,48 @@ export class PurchaseOrdersService {
     });
   }
 
+  /**
+   * A confirmed or partially received order closed by hand: the rest is not awaited, no goods receipt by it any more
+   * (spec 2026-10-26-pilot-small-gaps, P3, P4). A repeat of a closing by hand returns the order as is (a lost
+   * response retried); 409 `order_not_open` otherwise.
+   */
+  async close(id: string): Promise<PurchaseOrder> {
+    this.requireCost();
+    const { tenantId, employeeId } = requirePrincipal();
+    return this.db.tenantTransaction(async (trx) => {
+      const order = await this.visible(trx, tenantId, id, true);
+      if (order.closedManuallyAt !== null) {
+        return this.toOrder(trx, tenantId, order);
+      }
+      if (
+        !(await this.repository.closeManually(
+          trx,
+          tenantId,
+          order.id,
+          employeeId,
+        ))
+      ) {
+        throw notOpen();
+      }
+      const closed = await this.toOrder(
+        trx,
+        tenantId,
+        await this.read(trx, tenantId, order.id),
+      );
+      await this.audit.append(trx, {
+        action: 'purchase_order.closed',
+        entityType: 'purchase_order',
+        entityId: order.id,
+        storeId: order.storeId,
+        details: {
+          number: order.number,
+          receivedPercent: closed.receivedPercent,
+        },
+      });
+      return closed;
+    });
+  }
+
   /** The latest orders of a supplier in the stores of the scope, for the supplier card. */
   async ofSupplier(
     trx: TenantTransaction,
@@ -394,6 +437,7 @@ export class PurchaseOrdersService {
     const names = await this.repository.employeeNames(trx, tenantId, [
       order.createdBy,
       ...(order.confirmedBy ? [order.confirmedBy] : []),
+      ...(order.closedManuallyBy ? [order.closedManuallyBy] : []),
     ]);
     return {
       id: order.id,
@@ -418,6 +462,13 @@ export class PurchaseOrdersService {
           ? {
               name: names.get(order.confirmedBy) ?? '—',
               at: order.confirmedAt.toISOString(),
+            }
+          : null,
+      closedBy:
+        order.closedManuallyBy && order.closedManuallyAt
+          ? {
+              name: names.get(order.closedManuallyBy) ?? '—',
+              at: order.closedManuallyAt.toISOString(),
             }
           : null,
     };

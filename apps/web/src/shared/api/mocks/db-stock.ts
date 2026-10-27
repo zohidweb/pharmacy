@@ -198,6 +198,7 @@ function order(
     receivedPercent: ordered ? Math.floor((received * 100) / ordered) : 0,
     createdBy: author('Фируз А.', 12),
     confirmedBy: author('Фируз А.', 12),
+    closedBy: null,
     ...overrides,
   };
 }

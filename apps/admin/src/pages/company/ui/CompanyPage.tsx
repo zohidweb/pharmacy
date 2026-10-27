@@ -18,6 +18,7 @@ import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { BlockTenant } from './BlockTenant';
+import { EditTenant } from './EditTenant';
 import { IssueOwnerCode } from './IssueOwnerCode';
 import { BillingTab, ServicesTab, StatsTab, StoresTab } from './CompanyTabs';
 
@@ -81,6 +82,7 @@ function CompanyView() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <EditTenant tenant={company} />
                   <RecordPayment tenantId={company.id} variant="tertiary" />
                   <IssueOwnerCode tenant={company} />
                   <BlockTenant tenant={company} />

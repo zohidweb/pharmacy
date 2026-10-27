@@ -271,6 +271,8 @@ function networkSettingsOf(storeName: string, storeAddress: string) {
   return {
     ...base,
     networkName: network.networkName,
+    // the footer typed in the owner's settings (the API picks the cashier's language; the mocks — Russian first)
+    receiptFooter: network.receiptFooter.ru || network.receiptFooter.tj,
     returnWindowDays: mockDb().owner.returnPolicy.returnWindowDays,
     bufferLimits: {
       maxHours: network.posBufferMaxHours,

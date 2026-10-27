@@ -483,6 +483,11 @@ export interface NetworkSettings {
   posBufferMaxOperations: number;
   posControlledMaxHours: number;
   posControlledMaxOperations: number;
+  /**
+   * The text under every receipt of the network, per language, up to 200 characters each; an empty string — no
+   * footer in that language (spec 2026-10-26-pilot-small-gaps, P1). The POS gets it with the catalog snapshot.
+   */
+  receiptFooter: { ru: string; tj: string };
 }
 
 /** PUT /api/v1/settings — needs a fresh sign-in (`fresh_auth_required`). */

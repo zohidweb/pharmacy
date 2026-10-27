@@ -63,11 +63,13 @@
       "tenantsHint": "{active, plural, one {# активна} other {# активны}}",
       "stores": "Активных точек",
       "storesHint": "{cloud} облачных · {offline} офлайн",
+      "storesHintCloud": "{cloud} облачных",
       "accrued": "Выставлено за период",
       "accruedHint": "{month}, с НДС",
       "accruedNone": "счетов ещё нет",
       "attention": "Требует внимания",
-      "attentionHint": "просрочек {overdueInvoices} · ключей {expiringKeys} · запросов {serviceRequests} · без синхронизации {staleSync}"
+      "attentionHint": "просрочек {overdueInvoices} · ключей {expiringKeys} · запросов {serviceRequests} · без синхронизации {staleSync}",
+      "attentionHintCloud": "просрочек {overdueInvoices} · запросов {serviceRequests}"
     },
     "salesTitle": "Продажи компаний за 14 дней",
     "salesHint": "Сумма чеков всех аптек по дням; возвраты не вычитаются",
@@ -375,6 +377,14 @@
       "blocked": "Компания заблокирована",
       "unblocked": "Компания разблокирована",
       "unblock": "Разблокировать"
+    },
+    "edit": {
+      "action": "Изменить реквизиты",
+      "title": "Реквизиты компании",
+      "description": "Выставленные счета сохраняют прежние название и ИНН; новые счета возьмут новые.",
+      "save": "Сохранить",
+      "saved": "Реквизиты сохранены",
+      "innTaken": "Компания с таким ИНН уже есть"
     },
     "stores": {
       "caption": "Точки компании",
@@ -935,7 +945,7 @@
     },
     "maintenance": {
       "title": "Технические работы",
-      "description": "Платформа временно недоступна. Кассы офлайн-точек продолжают работать; повторите попытку позже."
+      "description": "Платформа временно недоступна. Повторите попытку позже."
     }
   },
   "statistics": {
@@ -1020,7 +1030,7 @@
         "cloud": "Только облачные точки",
         "offline": "Только офлайн-точки"
       },
-      "note": "Время — по Душанбе. Плановые работы проводятся ночью; офлайн-точки работают без облака.",
+      "note": "Время — по Душанбе. Плановые работы проводятся ночью.",
       "published": "Объявление опубликовано"
     }
   },
@@ -1075,6 +1085,7 @@
       "tenant_owner-code-issued": "Выдан код активации владельцу",
       "tenant_blocked": "Компания заблокирована",
       "tenant_unblocked": "Компания разблокирована",
+      "tenant_updated": "Изменены реквизиты компании",
       "auth_operator-login-succeeded": "Вход в админку",
       "auth_operator-login-failed": "Неудачная попытка входа",
       "auth_operator-login-locked": "Вход заблокирован после неверных паролей",

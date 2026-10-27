@@ -314,6 +314,7 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
         date: today(),
         createdBy: author(),
         confirmedBy: null,
+        closedBy: null,
       },
       correlationId,
     );
@@ -349,6 +350,20 @@ export const purchasingHandlers: Pick<MockHandlers, PurchasingRoute> = {
     }
     order.status = 'confirmed';
     order.confirmedBy = author();
+    return order;
+  },
+  'purchaseOrders.close': ({ params, correlationId }) => {
+    const { session, author } = context(correlationId, 'purchasing:post', {
+      write: true,
+    });
+    authorize(correlationId, 'finance:view-cost');
+    const order = findDoc(db().orders, params.id, correlationId);
+    inScope(session, order.storeId, correlationId);
+    if (order.status !== 'confirmed' && order.status !== 'partially_received') {
+      throw new ApiError(409, 'order_not_open', correlationId);
+    }
+    order.status = 'closed';
+    order.closedBy = author();
     return order;
   },
   'purchaseOrders.deficit': ({ query, correlationId }) => {

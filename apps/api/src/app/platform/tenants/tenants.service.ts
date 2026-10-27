@@ -9,6 +9,7 @@ import type {
   StoreSummary,
   TenantDetails,
   TenantListResponse,
+  UpdateTenantRequest,
 } from '@pharmacy/shared-dto';
 import {
   getRequestContext,
@@ -237,6 +238,48 @@ export class TenantsService {
       activationCode: display,
       activationCodeExpiresAt: expiresAt.toISOString(),
     };
+  }
+
+  /**
+   * The name, city and INN of a network (spec 2026-10-26-pilot-small-gaps, P9). The audit names the changed fields,
+   * not their values; the issued invoices keep their copy. 404, 409 `inn_taken`.
+   */
+  async update(
+    id: string,
+    request: UpdateTenantRequest,
+  ): Promise<TenantDetails> {
+    const tenantId = id.toLowerCase();
+    const next = {
+      name: request.name.trim(),
+      city: request.city.trim(),
+      inn: request.inn.trim(),
+    };
+    try {
+      await this.db.platformTransaction(this.actor(), async (trx) => {
+        const current = await this.repository.requisites(trx, tenantId);
+        if (current === null) throw notFound();
+        const fields = (['name', 'city', 'inn'] as const).filter(
+          (field) => current[field] !== next[field],
+        );
+        if (fields.length === 0) return;
+        await this.repository.updateRequisites(trx, tenantId, next);
+        await this.audit.append(trx, {
+          action: 'tenant.updated',
+          tenantId,
+          entityType: 'tenant',
+          entityId: tenantId,
+          details: { fields },
+        });
+      });
+    } catch (error) {
+      if (uniqueConstraint(error) === 'tenants_inn_uq') {
+        throw new FieldProblemException(409, 'inn_taken', [
+          { field: 'inn', code: 'inn_taken' },
+        ]);
+      }
+      throw error;
+    }
+    return this.details(tenantId);
   }
 
   /**

@@ -28,6 +28,27 @@ const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'invoice_overdue',
 ];
 
+/** The stored footer as two strings: a missing or non-text language reads as empty. */
+function footerOf(value: unknown): NetworkSettings['receiptFooter'] {
+  const map =
+    value !== null && typeof value === 'object'
+      ? (value as Record<string, unknown>)
+      : {};
+  const text = (key: string) =>
+    typeof map[key] === 'string' ? (map[key] as string) : '';
+  return { ru: text('ru'), tj: text('tj') };
+}
+
+/** Only the languages with a text are stored; none — null (P2). */
+function storedFooter(
+  footer: NetworkSettings['receiptFooter'],
+): Partial<Record<'ru' | 'tj', string>> | null {
+  const stored = Object.fromEntries(
+    Object.entries(footer).filter(([, text]) => text !== ''),
+  );
+  return Object.keys(stored).length === 0 ? null : stored;
+}
+
 function toSettings(row: NetworkSettingsRow): NetworkSettings {
   const disabled = new Set(row.disabledNotifications);
   return {
@@ -41,6 +62,7 @@ function toSettings(row: NetworkSettingsRow): NetworkSettings {
     posBufferMaxOperations: row.posBufferMaxOperations,
     posControlledMaxHours: row.posControlledMaxHours,
     posControlledMaxOperations: row.posControlledMaxOperations,
+    receiptFooter: footerOf(row.receiptFooter),
     notifications: Object.fromEntries(
       NOTIFICATION_KINDS.map((kind) => [kind, !disabled.has(kind)]),
     ) as Record<NotificationKind, boolean>,
@@ -60,6 +82,7 @@ function editable(settings: NetworkSettings): UpdateNetworkSettingsRequest {
     posBufferMaxOperations: settings.posBufferMaxOperations,
     posControlledMaxHours: settings.posControlledMaxHours,
     posControlledMaxOperations: settings.posControlledMaxOperations,
+    receiptFooter: settings.receiptFooter,
   };
 }
 
@@ -112,6 +135,7 @@ export class SettingsService {
       posBufferMaxOperations: body.posBufferMaxOperations,
       posControlledMaxHours: body.posControlledMaxHours,
       posControlledMaxOperations: body.posControlledMaxOperations,
+      receiptFooter: storedFooter(body.receiptFooter),
     };
     return this.db.tenantTransaction(async (trx) => {
       const before = toSettings(await this.repository.read(trx, tenantId));

@@ -129,7 +129,15 @@ export function BillingTab({ tenantId }: { tenantId: string }) {
       key: 'number',
       header: t('columns.number'),
       nowrap: true,
-      cell: (invoice) => <span className="font-mono">{invoice.number}</span>,
+      // the invoice opens as its print page (spec 2026-10-26-pilot-small-gaps, P10)
+      cell: (invoice) => (
+        <Link
+          href={routes.invoicePrint(invoice.id)}
+          className="font-mono text-primary hover:text-primary-hover"
+        >
+          {invoice.number}
+        </Link>
+      ),
     },
     {
       key: 'period',

@@ -1,0 +1,23 @@
+#!/bin/sh
+# pharmacy-psql [psql arguments…] — psql as the superuser over the local socket of the postgres container (ADR-0021).
+# In test and prod the socket asks for the password too (docker/postgres/pg_hba.conf, Z6); it comes from
+# POSTGRES_PASSWORD_FILE (compose secrets), dev signs in over the socket without one. PHARMACY_BACKUP_PASSWORD for
+# 04-backup-role.sql comes from PHARMACY_BACKUP_PASSWORD_FILE. Both reach psql through its environment only — never
+# its arguments, which every user of the host sees in the process list. A later -d or -h replaces the default one.
+#   docker compose … exec -T postgres pharmacy-psql -q -f /docker-entrypoint-initdb.d/04-backup-role.sql
+#   docker compose … exec -T postgres pharmacy-psql -d postgres -c "drop database pharmacy_before_<copy>"
+#   docker compose … exec postgres pharmacy-psql          (an interactive session; ALTER ROLE … PASSWORD — see the
+#                                                         rotation section of docs/guides/deploy-vps.md)
+set -eu
+
+if [ -n "${POSTGRES_PASSWORD_FILE:-}" ]; then
+  PGPASSWORD=$(cat "$POSTGRES_PASSWORD_FILE") || { echo "pharmacy-psql: cannot read POSTGRES_PASSWORD_FILE" >&2; exit 1; }
+  export PGPASSWORD
+fi
+if [ -n "${PHARMACY_BACKUP_PASSWORD_FILE:-}" ]; then
+  PHARMACY_BACKUP_PASSWORD=$(cat "$PHARMACY_BACKUP_PASSWORD_FILE") ||
+    { echo "pharmacy-psql: cannot read PHARMACY_BACKUP_PASSWORD_FILE" >&2; exit 1; }
+  export PHARMACY_BACKUP_PASSWORD
+fi
+
+exec psql -X -v ON_ERROR_STOP=1 -h /var/run/postgresql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}" "$@"

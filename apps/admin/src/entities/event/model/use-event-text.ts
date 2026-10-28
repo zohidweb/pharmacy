@@ -13,6 +13,7 @@ export const eventIcon: Record<EventKind, IconName> = {
   sync_stale: 'refresh-cw',
   payment_recorded: 'circle-check',
   update_available: 'package',
+  connection_requested: 'sparkles',
 };
 
 export const eventTone: Record<EventKind, StatusTone> = {
@@ -23,6 +24,7 @@ export const eventTone: Record<EventKind, StatusTone> = {
   sync_stale: 'warning',
   payment_recorded: 'success',
   update_available: 'info',
+  connection_requested: 'info',
 };
 
 /**

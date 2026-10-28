@@ -10,6 +10,7 @@ import { requireOperator } from '../../../common/context/request-context';
 import { DEFAULT_PAGE_LIMIT } from '../../../common/pagination';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { BillingOverview } from '../billing/billing-overview';
+import { ConnectionRequestsOverview } from '../connection-requests/connection-requests-overview';
 import {
   kindsOf,
   NOTIFICATION_TOPICS,
@@ -29,6 +30,7 @@ export class PlatformNotificationsService {
     private readonly repository: PlatformNotificationsRepository,
     private readonly refresh: PlatformNotificationsRefresh,
     private readonly billing: BillingOverview,
+    private readonly leads: ConnectionRequestsOverview,
   ) {}
 
   private operatorId(): string {
@@ -58,7 +60,14 @@ export class PlatformNotificationsService {
         (topic) => !muted.includes(topic),
       );
       const byKind = await this.repository.countsByKind(trx);
-      const counts = { all: 0, billing: 0, keys: 0, services: 0, sync: 0 };
+      const counts = {
+        all: 0,
+        billing: 0,
+        keys: 0,
+        services: 0,
+        sync: 0,
+        leads: 0,
+      };
       for (const [kind, n] of byKind) {
         counts[topicOf(kind)] += n;
         counts.all += n;
@@ -120,6 +129,8 @@ export class PlatformNotificationsService {
         // the keys screen comes with the offline sync (stage 6)
         expiringLicenses: 0,
         unreadNotifications: page.unread,
+        // the requests of the site nobody has taken yet (ADR-0023)
+        connectionRequests: await this.leads.newCount(trx),
       };
     });
   }
@@ -152,5 +163,6 @@ function preferencesOf(
     keys: !muted.includes('keys'),
     services: !muted.includes('services'),
     sync: !muted.includes('sync'),
+    leads: !muted.includes('leads'),
   };
 }

@@ -7,7 +7,10 @@
 //                   `license_keys`;
 //                   `operators`, `operator_credentials`, `platform_audit_log`, `tenant_payments`
 //                   and `tenant_payment_allocations` are open to pharmacy_platform only, which
-//                   never deletes their rows (spec 2026-10-15-billing-services, B18);
+//                   never deletes their rows (spec 2026-10-15-billing-services, B18); so are the
+//                   tables of the public site (ADR-0023): `site_settings`, `site_media`, `articles`,
+//                   `article_translations`, `legal_document_revisions` (append-only),
+//                   `legal_document_drafts` and `connection_requests`;
 //   shared        - reference data shared by all tenants;
 //   system        - internal service tables (job queue).
 export type TableClass =
@@ -95,6 +98,15 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     platform_notifications: 'platform',
     platform_notification_reads: 'platform',
     platform_notification_refresh: 'platform',
+    // the public site (ADR-0023): open to pharmacy_platform only, no DELETE; the revisions of the legal
+    // documents are append-only by a trigger and select, insert (like platform_audit_log)
+    site_settings: 'platform',
+    site_media: 'platform',
+    articles: 'platform',
+    article_translations: 'platform',
+    legal_document_revisions: 'platform',
+    legal_document_drafts: 'platform',
+    connection_requests: 'platform',
     platform_settings: 'shared',
     services: 'shared',
     announcements: 'shared',

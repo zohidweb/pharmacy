@@ -52,7 +52,7 @@ export class PlatformDatabase implements OnModuleDestroy {
         pool: async () =>
           createPool({
             connectionString: settings.url,
-            applicationName: 'api-platform',
+            applicationName: settings.applicationName ?? 'api-platform',
             max: settings.poolMax,
             connectionTimeoutMillis: settings.connectionTimeoutMs,
           }),

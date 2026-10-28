@@ -81,6 +81,15 @@ class EnvironmentVariables {
   @IsOptional()
   PLATFORM_DB_POOL_MAX = 3;
 
+  // The pool of the public reads of the site (ADR-0023, ruling R8): the same role and URL as the platform pool, apart
+  // from it so anonymous reads never starve the operator admin.
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  @IsOptional()
+  PUBLIC_DB_POOL_MAX = 2;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -245,6 +254,10 @@ class EnvironmentVariables {
   @Matches(ORIGIN)
   ADMIN_ORIGIN!: string;
 
+  // The origin of the public marketing site (ADR-0023): its form posts to /api/v1/public/*.
+  @Matches(ORIGIN)
+  SITE_ORIGIN!: string;
+
   // e2e only: cookies without the __Host- prefix and Secure. A process outside APP_ENV=test refuses to start.
   @Transform(toBoolean)
   @IsBoolean()
@@ -336,7 +349,11 @@ function checkCrossFields(env: EnvironmentVariables): string[] {
     // origins, and the real hop count — with 0 every guest behind the proxy shares one rate-limit bucket. An offline
     // store serves its browser on http://localhost without a proxy (ADR-0008, transport offline).
     if (env.STORE_MODE === 'cloud') {
-      for (const name of ['WEB_ORIGIN', 'ADMIN_ORIGIN'] as const) {
+      for (const name of [
+        'WEB_ORIGIN',
+        'ADMIN_ORIGIN',
+        'SITE_ORIGIN',
+      ] as const) {
         if (!env[name].startsWith('https://')) {
           problems.push(`${name} must be an https:// origin when APP_ENV=prod`);
         }

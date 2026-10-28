@@ -6,6 +6,7 @@ import {
   ADMIN_ORIGIN,
   API_BASE_URL,
   E2E_API_PORT,
+  SITE_ORIGIN,
   WEB_ORIGIN,
 } from './env';
 
@@ -44,7 +45,9 @@ async function prepareRedis(redisUrl: string): Promise<string> {
   try {
     const { db } = await client.clientInfo();
     if (db !== E2E_REDIS_DATABASE) {
-      throw new Error(`Refusing to flush Redis database ${db}: api-e2e uses ${E2E_REDIS_DATABASE}`);
+      throw new Error(
+        `Refusing to flush Redis database ${db}: api-e2e uses ${E2E_REDIS_DATABASE}`,
+      );
     }
     await client.flushDb();
   } finally {
@@ -77,7 +80,9 @@ module.exports = async function () {
   }
 
   // Read by the API below and by the seed of the test files (workers inherit the environment).
-  process.env['REDIS_URL'] = await prepareRedis(process.env['REDIS_URL'] as string);
+  process.env['REDIS_URL'] = await prepareRedis(
+    process.env['REDIS_URL'] as string,
+  );
 
   const root = join(__dirname, '..', '..', '..', '..');
   const main = join(root, 'apps', 'api', 'dist', 'main.js');
@@ -95,6 +100,7 @@ module.exports = async function () {
       PORT: String(E2E_API_PORT),
       WEB_ORIGIN,
       ADMIN_ORIGIN,
+      SITE_ORIGIN,
       // The lock tests rely on these two values.
       LOGIN_MAX_FAILURES: '5',
       LOGIN_LOCK_SECONDS: '900',
@@ -106,7 +112,8 @@ module.exports = async function () {
   const tail: string[] = [];
   const collect = (chunk: Buffer) => {
     tail.push(...chunk.toString().split('\n').filter(Boolean));
-    if (tail.length > LOG_TAIL_LINES) tail.splice(0, tail.length - LOG_TAIL_LINES);
+    if (tail.length > LOG_TAIL_LINES)
+      tail.splice(0, tail.length - LOG_TAIL_LINES);
   };
   child.stdout?.on('data', collect);
   child.stderr?.on('data', collect);

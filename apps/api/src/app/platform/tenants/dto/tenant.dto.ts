@@ -14,6 +14,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Matches,
   Max,
@@ -104,6 +105,11 @@ export class CreateTenantDto implements CreateTenantRequest {
   @ValidateNested()
   @Type(() => TenantOwnerDto)
   owner!: TenantOwnerDto;
+
+  // The connection request of the site the network is created from (ADR-0023): it becomes `connected`.
+  @IsOptional()
+  @IsUUID()
+  connectionRequestId?: string;
 }
 
 /** PATCH /api/v1/operator/tenants/{id} (spec 2026-10-26-pilot-small-gaps, P9): the rules of the creation. */

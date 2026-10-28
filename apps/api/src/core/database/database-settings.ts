@@ -8,10 +8,15 @@ export interface DatabaseSettings {
   statementTimeoutMs: number;
   lockTimeoutMs: number;
   connectionTimeoutMs: number;
+  /** `application_name` of the pool; the path's own default when omitted. */
+  applicationName?: string;
 }
 
 export const TENANT_DATABASE_SETTINGS = Symbol('TENANT_DATABASE_SETTINGS');
 export const PLATFORM_DATABASE_SETTINGS = Symbol('PLATFORM_DATABASE_SETTINGS');
+export const PUBLIC_SITE_DATABASE_SETTINGS = Symbol(
+  'PUBLIC_SITE_DATABASE_SETTINGS',
+);
 
 // Values are already validated and converted by validateEnv (app/config/env.validation.ts).
 export function databaseSettings(

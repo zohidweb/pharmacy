@@ -31,7 +31,7 @@ Project class: Full
 | Слой | Технология | Статус |
 |---|---|---|
 | Backend | NestJS (Express adapter), TypeScript strict | ADR-0003 |
-| Frontend (web, admin) | Next.js (React, TypeScript), **static export (SPA)** | ADR-0004 |
+| Frontend (web, admin, site) | Next.js (React, TypeScript): web и admin — **static export (SPA)**; публичный сайт `apps/site` — Next.js с серверной отрисовкой | ADR-0004, ADR-0023 |
 | БД | PostgreSQL | ADR-0001 |
 | Кэш / сессии | Redis, клиент `redis` (node-redis): серверные сессии (запись по `jti`), версия прав, лимиты входа и throttler; на офлайн-точке Redis нет — сессии в PostgreSQL | ADR-0001, ADR-0008 |
 | API-стиль | REST | ADR-0001 |
@@ -71,7 +71,7 @@ pharmacy/
 ├── apps/
 │   ├── api/          # NestJS: модульный монолит — src/app/{stores, staff, catalog, inventory,
 │   │                 #   pos, purchasing, pricing, returns, notifications, reports, billing, sync, fiscal,
-│   │                 #   export-1c, audit}
+│   │                 #   export-1c, audit, platform/{site-content, connection-requests}}
 │   ├── api-e2e/      # e2e-тесты API (Jest)
 │   ├── web/          # Next.js: клиентский продукт (касса, склад, кабинет владельца)
 │   │                 #   app/ — маршруты (реэкспорты), pages/ — пустая; src/{app,pages,widgets,features,entities,shared} — FSD (ADR-0017)
@@ -135,6 +135,16 @@ pharmacy/
   Загрузка данных из файла (спецификация 2026-10-20-data-import): каталог, начальные остатки и поставщиков загружают
   их модули (`catalog`, `inventory`, `purchasing`); общий журнал загрузок `ImportJobs` (`core/imports`, глобальный) —
   очередь загрузок сети, повтор по ключу, прошлые загрузки тех же строк.
+  Публичный сайт (ADR-0023, спецификация 2026-10-28-public-site-design, часть 1 — API): `app/platform/site-content`
+  (настройки сайта, картинки, ревизии оферты и политики, статьи; публичный контур `/api/v1/public/*` без сессии,
+  только чтение) и `app/platform/connection-requests` (форма `POST public/connection-requests`, разбор заявок
+  оператором `operator/connection-requests`). `site-content` ← `connection-requests` (`LegalDocumentsService` — согласие
+  заявки привязано к действующей ревизии политики ПДн); `tenants` ← `connection-requests` (`TenantLookup` — похожие
+  сети по ИНН и телефону); обратной зависимости нет: `markConnected` `tenants` получает через порт
+  `ConnectionRequestLinker`, который заполняет `connection-requests` (как `PurchasePrices`); `connection-requests` ←
+  `platform/notifications` (`ConnectionRequestsOverview` — счётчик «Заявки», состояние `connection_requested`, тема
+  `leads`); `connection-requests` ← `platform/retention` (`ConnectionRequestRetention` — обезличивание заявок
+  `rejected` и `spam` через 180 дней). Оба модуля — только облако.
 
 ## Build / test / lint
 
@@ -326,10 +336,16 @@ npm run prod:build / prod:up / prod:down
 - Вход в test/prod — только через proxy (Caddy, ADR-0012); `PROXY_PROFILE` (`cloud` | `local` | `offline`) и
   `TLS_MODE` (`acme` | `internal` | `files` | `off`) выбирают схему, адреса — `WEB_ADDR`, `ADMIN_ADDR`, `APEX_ADDR`.
   `WEB_ORIGIN`/`ADMIN_ORIGIN` (проверка `Origin` в API) должны совпадать с адресами proxy, `TRUST_PROXY=1`.
+  `SITE_ORIGIN` (ADR-0023) — разрешённый `Origin` публичного контура `/api/v1/public/*` (форма заявки на подключение);
+  обязательна, в prod — `https://`: test — `https://site.pharmacy-test.localhost:8443`, prod — `https://nurmed.online`,
+  dev — `http://127.0.0.1:4400`. Сам сайт (`apps/site`) и его адрес в proxy — часть 3.
+  Чтение публичного контура идёт отдельным пулом той же роли `pharmacy_platform` — `PUBLIC_DB_POOL_MAX` (необязательна,
+  2, от 1 до 10), чтобы анонимные запросы не занимали пул админки оператора (`PLATFORM_DB_POOL_MAX`, 3).
   `OPERATOR_ALLOW` обязателен: в test — `private_ranges` (локально клиенты приходят из сети Docker; на общем стенде —
   адреса тестировщиков), в prod — публичные IP офисов операторов или VPN.
   В env-файле, созданном до proxy, `stack init` допишет новые переменные (и `TRUST_PROXY=1` — закомментированная строка
-  не считается), но старые `WEB_ORIGIN`/`ADMIN_ORIGIN` нужно поправить вручную.
+  не считается), но старые `WEB_ORIGIN`/`ADMIN_ORIGIN` нужно поправить вручную. Строку `SITE_ORIGIN` в env-файлах
+  test и prod, созданных до ADR-0023, тоже допишет `stack <env> init`; без неё API не стартует.
 - test локально: HTTPS на `*.localhost` с локальным УЦ Caddy (`tls internal`). Корневой сертификат тома
   `pharmacy-test_proxy-data` доверить один раз (иначе браузер не примет cookie `__Host-*`):
   `docker compose --project-name pharmacy-test --env-file docker/env/test.env -f docker/compose.yml -f docker/compose.test.yml -f docker/compose.backup.yml -f docker/compose.secrets.yml cp proxy:/data/caddy/pki/authorities/local/root.crt caddy-test-root.crt`,
@@ -434,6 +450,8 @@ npm run prod:build / prod:up / prod:down
   по адресу соединения, без `X-Forwarded-For`), остальным 403 (ревью безопасности 2026-10-22, A1; поправка ADR-0012
   2026-10-23). Лимиты тела (MiB, как в API): `/api` 1, `/api/v1/sync/*` 4, загрузки `*-imports` 10; сжатое тело
   (`Content-Encoding`) вне sync — 415; ответы `/api` — `Cache-Control: no-store` (эшелоны к A3 и P1 в API).
+  Факт API (ADR-0023): JSON до 3 MiB у `POST /api/v1/operator/site-media` и до 1 MiB у сохранения статьи и черновика
+  документа — только с токеном оператора; предел на стороне Caddy — часть 3.
   Без SPA-fallback: маршрут — свой HTML, неизвестный путь — `404.html` со статусом 404. HSTS ставит только proxy
   (`acme`/`files`), helmet API его не шлёт. В dev proxy не запускается (compose-профиль `proxy`). Образ сначала собирает
   декларации библиотек (`typecheck`): `next build` проверяет типы по `libs/*/dist`, а в контексте сборки их нет.
@@ -504,8 +522,9 @@ npm run prod:build / prod:up / prod:down
 
 - Never commit secrets (passwords, keys, connection strings, tokens) to git, in any form.
 - Переменные аутентификации `SESSION_JWT_KEYS`, `SESSION_JWT_ACTIVE_KID`, `PASSWORD_PEPPERS`,
-  `PASSWORD_PEPPER_ACTIVE` (а также `WEB_ORIGIN`, `ADMIN_ORIGIN`) обязательны: без них API не стартует, а
-  `docker/compose.dev.yml` не поднимает даже `npm run dev:deps`. Перенесите их из `.env.example` в `.env`;
+  `PASSWORD_PEPPER_ACTIVE` (а также `WEB_ORIGIN`, `ADMIN_ORIGIN`, `SITE_ORIGIN`) обязательны: без них API не стартует,
+  а `docker/compose.dev.yml` не поднимает даже `npm run dev:deps`. Перенесите их из `.env.example` в `.env`
+  (в существующий `.env` после ADR-0023 допишите `SITE_ORIGIN=http://127.0.0.1:4400`);
   свои ключи — случайные 32 байта base64url. Команда заменяет в `.env` четыре строки ключей и ничего не
   печатает:
 

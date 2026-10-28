@@ -64,4 +64,7 @@ export class NotificationPreferencesDto implements NotificationPreferences {
 
   @IsBoolean()
   sync!: boolean;
+
+  @IsBoolean()
+  leads!: boolean;
 }

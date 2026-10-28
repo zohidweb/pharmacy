@@ -8,6 +8,7 @@ export const OPERATOR_PERMISSIONS = [
   'tenants:view',
   'tenants:manage',
   'operators:manage',
+  'content:manage',
 ] as const;
 
 export type OperatorPermission = (typeof OPERATOR_PERMISSIONS)[number];

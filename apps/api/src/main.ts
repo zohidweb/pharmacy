@@ -9,6 +9,8 @@ import helmet from 'helmet';
 import { AppModule } from './app/app.module';
 import {
   isImportPath,
+  isSiteMediaUploadPath,
+  isSiteTextSavePath,
   isSyncPath,
   licenseKeyIdOf,
 } from './common/http/contour';
@@ -39,6 +41,8 @@ async function bootstrap() {
   // No API answer is stored by the browser: they carry personal and prescription data, and pharmacy PCs are shared
   // (security review 2026-10-22, P1). No ETag either — nothing is revalidated.
   app.set('etag', false);
+  // Every answer keeps this by default; the one image the public media route sends overrides it itself (ADR-0023, P3),
+  // so a 404 or 429 of that route is not stored.
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
@@ -70,6 +74,29 @@ async function bootstrap() {
         return false;
       const token = extractor.extract(req);
       return token !== null && tokens.verifyNow(token, 'web') !== null;
+    },
+  });
+  // The upload of a site image — a JSON body with base64, up to 3 MiB (ADR-0023, P16), only with a genuine operator
+  // token (signature and expiry; the session record and the permission are checked after the parse).
+  app.useBodyParser('json', {
+    limit: 3 * 1024 * 1024,
+    inflate: false,
+    type: (req: BodyRequest) => {
+      if (!isSiteMediaUploadPath(req.originalUrl ?? req.url) || !isJson(req))
+        return false;
+      const token = extractor.extractOperator(req);
+      return token !== null && tokens.verifyOperatorNow(token) !== null;
+    },
+  });
+  // The save of an article or of a draft of a legal document — up to 1 MiB (the texts are long), same condition.
+  app.useBodyParser('json', {
+    limit: 1024 * 1024,
+    inflate: false,
+    type: (req: BodyRequest) => {
+      if (!isSiteTextSavePath(req.originalUrl ?? req.url) || !isJson(req))
+        return false;
+      const token = extractor.extractOperator(req);
+      return token !== null && tokens.verifyOperatorNow(token) !== null;
     },
   });
   app.useBodyParser('json', { inflate: false });

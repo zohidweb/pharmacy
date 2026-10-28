@@ -20,6 +20,7 @@ const base = {
   PASSWORD_PEPPER_ACTIVE: '1',
   WEB_ORIGIN: 'http://localhost:4200',
   ADMIN_ORIGIN: 'http://localhost:4300',
+  SITE_ORIGIN: 'http://127.0.0.1:4400',
 };
 
 describe('validateEnv', () => {

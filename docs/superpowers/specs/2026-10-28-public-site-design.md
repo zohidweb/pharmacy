@@ -215,7 +215,8 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 ### 7.1 Таблицы (схема `pharmacy`, классы — в `table-classes.ts`)
 
 **`articles`** — `id uuid`, `slug text unique` (`^[a-z0-9]+(-[a-z0-9]+)*$`, до 120), `status`
-(`draft` | `published` | `unpublished`), `published_at`, `cover_media_id`, `created_by`/`updated_by` (операторы),
+(`draft` | `published` | `unpublished` | `archived`; «Удалить» черновик = `archived`, такие статьи нигде не
+показываются), `published_at`, `cover_media_id`, `created_by`/`updated_by` (операторы),
 `created_at`/`updated_at`, `version int` (оптимистичная блокировка).
 **`article_translations`** — `(article_id, locale)` PK, `locale in ('ru','tg')`, `title` (3–150), `excerpt`
 (до 300), `body` (до 100 000 символов), `seo_title` (до 70), `seo_description` (до 160). RU обязательна для
@@ -236,7 +237,12 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 `assigned_to` (оператор), `operator_note` (до 1000), `reject_reason` (5–500), `tenant_id` (сеть, созданная из
 заявки), `decided_at`, `decided_by`. Индексы: `(status, created_at)`, телефон для поиска дублей.
 
-Права ролей: `pharmacy_platform` — чтение и запись; RLS/гранты — по образцу `announcements` и ADR-0013.
+**`site_settings`** — одна строка (`id = 1`), поля 6.2.
+
+Все новые таблицы — класс `platform` (`table-classes.ts`): RLS включён и принудителен, политика `platform_all` для
+`pharmacy_platform`, гранты `select, insert, update` — **без DELETE** (предел класса, проверяется
+`catalog.int-spec.ts`). Поэтому строки не удаляются: черновик статьи — в `archived`, картинки не удаляются в этой
+работе, ПДн заявок по сроку обезличиваются (7.4). `pharmacy_app` к этим таблицам доступа не имеет.
 
 ### 7.2 Эндпоинты
 
@@ -258,10 +264,10 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 
 | Метод и путь | Право |
 |---|---|
-| `GET/POST operator/articles`, `GET/PUT/DELETE operator/articles/{id}` (DELETE — только черновик) | `content:manage` |
-| `POST operator/articles/{id}/publish`, `.../unpublish` | `content:manage` |
+| `GET/POST operator/articles`, `GET/PUT operator/articles/{id}` | `content:manage` |
+| `POST operator/articles/{id}/publish`, `.../unpublish`, `.../archive` (только черновик) | `content:manage` |
 | `GET operator/legal-documents`, `PUT operator/legal-documents/{kind}/{locale}/draft`, `POST .../publish` | `content:manage` |
-| `POST operator/site-media` (multipart, до 2 МиБ), `GET operator/site-media` | `content:manage` |
+| `POST operator/site-media` (JSON `{contentType, dataBase64, alt}`, файл до 2 МиБ; свой предел тела JSON 3 МиБ по пути, как у загрузок `*-imports`), `GET operator/site-media`, `GET operator/site-media/{id}/content` (картинка для предпросмотра в админке: публичный контур на домене админки закрыт) | `content:manage` |
 | `GET/PUT operator/site-settings` (PUT — со step-up) | `content:manage` |
 | `GET operator/connection-requests?status&q&limit&offset`, `GET .../{id}` | `tenants:view` |
 | `POST .../{id}/take`, `.../reject`, `.../mark-spam`, `PUT .../{id}/note` | `tenants:manage` |
@@ -279,14 +285,18 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 
 ### 7.3 Защита публичной формы
 
-- Лимит по IP на `POST public/connection-requests` — существующим throttler'ом (Redis): 3 заявки в час с адреса
-  (моё решение); общий дневной предел новых заявок — 200 (сверх — 429, чтобы спам не забил админку).
+- Лимит по IP на `POST public/connection-requests` — существующим throttler'ом (Redis), переопределением
+  `@Throttle({ default: … })`: 3 заявки в час с адреса (моё решение); общий дневной предел новых заявок — 200 (счёт
+  строк за сутки в сервисе; сверх — 429 `too_many_requests`, чтобы спам не забил админку). Публичные `GET` —
+  `@Throttle({ default: { limit: 1200, ttl: 60_000 } })`.
 - Поле-ловушка: заполнено — ответ `201` (боту не сообщаем), заявка сохраняется сразу со статусом `spam`.
 - Время заполнения: форма передаёт время открытия; меньше 3 с — `spam` тем же способом.
 - Дубль: тот же телефон со статусом `new`/`in_progress` за 24 ч — новая строка не создаётся, ответ `201`.
 - Ответ не раскрывает, есть ли такая сеть или телефон в системе.
-- CSRF: `CsrfGuard` проверяет `Origin`; для публичного контура разрешённый origin — новая переменная `SITE_ORIGIN`
-  (обязательна в test/prod, как `WEB_ORIGIN`).
+- CSRF: `CsrfGuard` проверяет `Origin`; для публичного контура (`isPublicPath` в `common/http/contour.ts`)
+  разрешённый origin — новая переменная `SITE_ORIGIN` (обязательна; в prod — `https://`, как `WEB_ORIGIN`).
+- Ответы API по умолчанию `Cache-Control: no-store` (`main.ts`); исключение — `GET public/media/{id}`
+  (`public, max-age=31536000, immutable`), и в API, и в Caddy.
 - Капча (reCAPTCHA, hCaptcha) — нет: внешний SaaS.
 - Пока нет опубликованной политики ПДн на языке формы (с откатом на RU), API отвечает 409 `privacy_not_published`,
   а сайт вместо формы показывает «Приём заявок скоро откроется» и контакты. Опубликованные оферта и политика (тексты
@@ -296,8 +306,10 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 
 - Новая заявка (не спам) — уведомление оператору вида `connection_requested` (`platform_notifications`, тема для
   отключения — `leads`) и счётчик «Заявки» в меню админки (`platform/notifications`, число `new`).
-- Срок хранения ПДн: заявки `rejected` и `spam` удаляются через 180 дней после решения/создания часовым проходом
-  `platform/retention` (моё решение; срок указать в политике ПДн). `connected` хранятся, пока существует сеть.
+- Срок хранения ПДн: у заявок `rejected` и `spam` через 180 дней после решения/создания ПДн обезличиваются
+  (ФИО, телефон, e-mail, комментарий, удобное время, IP, заметка оператора — `null`, `anonymized_at` = сейчас) часовым
+  проходом `platform/retention` (моё решение; срок указать в политике ПДн). Удаления строк нет — у класса `platform`
+  нет DELETE. `connected` хранятся, пока существует сеть.
 
 ## 8. Админка (`apps/admin`)
 
@@ -363,7 +375,8 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 | P4 | Оферта и политика — ревизии append-only с датой вступления; согласие заявки ссылается на ревизию |
 | P5 | Новое право `content:manage` (пока у единственной роли `full_access`, отдельной роли нет); заявки — под `tenants:view`/`tenants:manage` |
 | P6 | Защита формы: 3 заявки/ч с IP, 200 в сутки всего, ловушка, время заполнения, дубль телефона за 24 ч |
-| P7 | Заявки `rejected`/`spam` удаляются через 180 дней |
+| P7 | У заявок `rejected`/`spam` ПДн обезличиваются через 180 дней; строки не удаляются (класс `platform` без DELETE) |
+| P16 | Картинка загружается JSON с base64 (multipart в API нет; свой предел тела 3 МиБ по пути) |
 | P8 | Свежесть сайта — `revalidate = 60`, без активной инвалидации |
 | P9 | Тексты главной — в i18n кода, не в админке |
 | P10 | Тарифы на сайте — из `platform_settings` и `services` |

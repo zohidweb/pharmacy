@@ -280,8 +280,11 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 отдельная роль «только сайт» в эту работу не входит — право заводится отдельным, чтобы такую роль можно было добавить
 позже без переделки.
 
-Все действия оператора — в `platform_audit_log`: `article.published`, `article.unpublished`, `legal_document.published`,
-`connection_request.rejected` и т. д. — без ПДн заявки в параметрах (только id).
+Все действия оператора — в `platform_audit_log`: `article.created`, `article.updated`, `article.published`,
+`article.unpublished`, `article.archived`, `legal-document.draft-saved`, `legal-document.published`,
+`site-media.uploaded`, `site-settings.updated`, `connection-request.taken`, `connection-request.rejected`,
+`connection-request.marked-spam`, `connection-request.noted`, `connection-request.connected` — без ПДн заявки в
+параметрах (только id и статус).
 
 ### 7.3 Защита публичной формы
 
@@ -289,8 +292,12 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
   `@Throttle({ default: … })`: 3 заявки в час с адреса (моё решение); общий дневной предел новых заявок — 200 (счёт
   строк за сутки в сервисе; сверх — 429 `too_many_requests`, чтобы спам не забил админку). Публичные `GET` —
   `@Throttle({ default: { limit: 1200, ttl: 60_000 } })`.
-- Поле-ловушка: заполнено — ответ `201` (боту не сообщаем), заявка сохраняется сразу со статусом `spam`.
+- Порядок проверок формы: политика ПДн (`privacy_not_published`) → спам → суточный предел → дубль → новая заявка.
+- Поле-ловушка: заполнено — ответ `201` (боту не сообщаем), заявка сохраняется сразу со статусом `spam`; спам не
+  считается в суточный предел, не бывает дублем и не порождает уведомления.
 - Время заполнения: форма передаёт время открытия; меньше 3 с — `spam` тем же способом.
+- Суточный предел проверяется до дубля: на пределе любой телефон получает один и тот же 429, поэтому ответ не
+  раскрывает, есть ли у телефона открытая заявка.
 - Дубль: тот же телефон со статусом `new`/`in_progress` за 24 ч — новая строка не создаётся, ответ `201`.
 - Ответ не раскрывает, есть ли такая сеть или телефон в системе.
 - CSRF: `CsrfGuard` проверяет `Origin`; для публичного контура (`isPublicPath` в `common/http/contour.ts`)

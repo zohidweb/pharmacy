@@ -121,6 +121,12 @@ export {
 } from './lib/print/SheetPrint';
 
 export {
+  LabelPrint,
+  type LabelPrintProps,
+  type LabelSize,
+} from './lib/print/LabelPrint';
+
+export {
   invoiceSheetOf,
   type InvoiceSheetMessage,
   type InvoiceSheetTranslate,

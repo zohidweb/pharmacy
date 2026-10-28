@@ -20,6 +20,42 @@
    */
   --ph-sheet-margin: 15mm;
   --ph-sheet-width: 210mm;
+
+  /* The QR of a sale receipt (ADR-0022): about 0.5 mm a module of a 29 × 29 code with its quiet zone */
+  --ph-receipt-qr-size: 20mm;
+  --ph-receipt-qr-gap: 2mm;
+
+  /*
+   * Price tags of the shelf (ADR-0022): a bar module of 0.25 mm is two dots of a 203 dpi printer and three of a
+   * 300 dpi one, so the bars stay crisp. Start values — check the reading with the scanner of the store.
+   */
+  /* the widest bars of a label (MAX_BAR_MODULES of apps/web print-price-tags/ui/PriceTag.tsx) follow from these two */
+  --ph-tag-module: 0.25mm;
+  --ph-tag-padding: 2mm;
+  --ph-tag-gap: 0.5mm;
+}
+
+/* the label stock of a price tag: on the print root and on a tag of the on-screen preview */
+[data-label-size='58x40'] {
+  --ph-tag-width: 58mm;
+  --ph-tag-height: 40mm;
+  --ph-tag-bar-height: 10mm;
+  --ph-tag-name-size: 9pt;
+  --ph-tag-name-lines: 3;
+  --ph-tag-details-size: 7pt;
+  --ph-tag-code-size: 7pt;
+  --ph-tag-price-size: 16pt;
+}
+
+[data-label-size='40x30'] {
+  --ph-tag-width: 40mm;
+  --ph-tag-height: 30mm;
+  --ph-tag-bar-height: 7mm;
+  --ph-tag-name-size: 7pt;
+  --ph-tag-name-lines: 2;
+  --ph-tag-details-size: 6pt;
+  --ph-tag-code-size: 6pt;
+  --ph-tag-price-size: 12pt;
 }
 
 [data-receipt-width='80'] {

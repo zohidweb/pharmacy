@@ -38,6 +38,7 @@ import { Suspense, useState } from 'react';
 import { useFormatter, useTranslations } from 'use-intl';
 import { can, useSession } from '@/entities/session';
 import { StockStatePill } from '@/entities/stock-document';
+import { PrintTagsDialog, stockTags } from '@/features/print-price-tags';
 import { StockNotices, useStockAccess } from '@/features/stock-document';
 import { apiRequest } from '@/shared/api';
 import { routes } from '@/shared/config';
@@ -93,6 +94,8 @@ function StockPageView({
   const t = useTranslations('stock');
   const tCommon = useTranslations('stockDocs');
   const tExport = useTranslations('export');
+  const tTags = useTranslations('priceTags');
+  const [tagsOpen, setTagsOpen] = useState(false);
   const format = useFormatter();
   const xlsx = useXlsxExport();
   const { data: session } = useSession();
@@ -237,6 +240,11 @@ function StockPageView({
         fileName: fileName(t('title')),
       };
     });
+  // price tags of the selected rows: one per store × product with a price (plan 2026-10-28-price-tags-qr, T7)
+  const selectedTags = stockTags(
+    rows.filter((r) => selected.has(r.id)),
+    (pieces) => tTags('pack', { count: pieces }),
+  );
   // the selected rows of the page
   const exportSelected = () =>
     xlsx.run(() => {
@@ -536,8 +544,7 @@ function StockPageView({
               <Button
                 variant="secondary"
                 iconStart="tag"
-                disabled
-                title={tCommon('tagsPending')}
+                onClick={() => setTagsOpen(true)}
               >
                 {t('printTags')}
               </Button>
@@ -554,11 +561,15 @@ function StockPageView({
               <Button variant="tertiary" onClick={() => setSelected(new Set())}>
                 {t('clearSelection')}
               </Button>
-              <span className="text-xs text-fg-subtle">
-                {tCommon('tagsPending')}
-              </span>
             </div>
           )}
+          <PrintTagsDialog
+            open={tagsOpen}
+            title={tTags('printMany')}
+            tags={selectedTags.tags}
+            skipped={selectedTags.skipped}
+            onClose={() => setTagsOpen(false)}
+          />
           {reorder ? (
             <QueryState query={reorderList}>
               {(lines) => (
@@ -613,7 +624,11 @@ function StockPageView({
                       total={data.total}
                       limit={PAGE}
                       offset={offset}
-                      onOffsetChange={setOffset}
+                      // the selection is of the page: tags and the export take the rows on the screen
+                      onOffsetChange={(next) => {
+                        setOffset(next);
+                        setSelected(new Set());
+                      }}
                       labels={{
                         nav: t('pagination'),
                         previous: tCommon('previous'),

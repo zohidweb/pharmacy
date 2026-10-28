@@ -38,7 +38,7 @@ Project class: Full
 | Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`; токен — JWT (`@nestjs/jwt`, HS256) в HttpOnly-cookie `__Host-sid` **с проверкой серверной сессии** (Redis; офлайн — PostgreSQL); контекст запроса строит `SessionMiddleware`, guard'ы только решают; вход «от имени» не реализуется (решение пересматривается) | ADR-0001, ADR-0008 |
 | Авторизация | RBAC: динамические роли тенанта, каталог прав `модуль:действие` (`libs/shared/domain`), одна роль + охват точек, запрет эскалации, проверка только на сервере | ADR-0018 |
 | Архитектура фронтенда | Feature-Sliced Design в `apps/web` и `apps/admin` («pages first», Steiger) | ADR-0017 |
-| Фронтенд-библиотеки | TanStack Query, Zustand, React Hook Form + zod, use-intl, idb, uuid; свои: API-клиент, Service Worker, сканер, чтение xlsx/csv, запись xlsx | ADR-0015 |
+| Фронтенд-библиотеки | TanStack Query, Zustand, React Hook Form + zod, use-intl, idb, uuid, lean-qr (QR на чеке, только web); свои: API-клиент, Service Worker, сканер, чтение xlsx/csv, запись xlsx, штрихкоды ценников (EAN, Code 128) | ADR-0015, ADR-0022 |
 | UI и стили (web, admin, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей | ADR-0007 |
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |

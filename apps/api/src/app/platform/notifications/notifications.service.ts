@@ -10,6 +10,7 @@ import { requireOperator } from '../../../common/context/request-context';
 import { DEFAULT_PAGE_LIMIT } from '../../../common/pagination';
 import { PlatformDatabase } from '../../../core/database/platform';
 import { BillingOverview } from '../billing/billing-overview';
+import { ConnectionRequestsOverview } from '../connection-requests/connection-requests-overview';
 import {
   kindsOf,
   NOTIFICATION_TOPICS,
@@ -29,6 +30,7 @@ export class PlatformNotificationsService {
     private readonly repository: PlatformNotificationsRepository,
     private readonly refresh: PlatformNotificationsRefresh,
     private readonly billing: BillingOverview,
+    private readonly leads: ConnectionRequestsOverview,
   ) {}
 
   private operatorId(): string {
@@ -120,8 +122,8 @@ export class PlatformNotificationsService {
         // the keys screen comes with the offline sync (stage 6)
         expiringLicenses: 0,
         unreadNotifications: page.unread,
-        // replaced by the count of new connection requests (ADR-0023)
-        connectionRequests: 0,
+        // the requests of the site nobody has taken yet (ADR-0023)
+        connectionRequests: await this.leads.newCount(trx),
       };
     });
   }

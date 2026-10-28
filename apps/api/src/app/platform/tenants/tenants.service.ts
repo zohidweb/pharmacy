@@ -28,6 +28,7 @@ import {
 import { normalizeIdentifier } from '../../auth/identifier';
 import { PlatformAuditService } from '../audit/platform-audit.service';
 import { StoreMonthSales } from '../stats/store-month-sales';
+import { ConnectionRequestLinker } from './connection-request-linker';
 import { type TenantListParams, TenantsRepository } from './tenants.repository';
 
 // The owner role of every new network (ADR-0018: the system role «Владелец», the whole catalog).
@@ -82,6 +83,7 @@ export class TenantsService {
     private readonly sessions: SessionStore,
     private readonly audit: PlatformAuditService,
     private readonly storeSales: StoreMonthSales,
+    private readonly requests: ConnectionRequestLinker,
     config: ConfigService,
   ) {
     this.codeTtlHours = config.getOrThrow<number>('ACTIVATION_CODE_TTL_HOURS');
@@ -189,6 +191,15 @@ export class TenantsService {
             entityType: 'tenant',
             entityId: tenantId,
           });
+          // the request the network came from becomes `connected` with it, or nothing is created (spec
+          // 2026-10-28-public-site-design, 7.2): its 404/409 is a ProblemException, never a code collision to retry
+          if (request.connectionRequestId !== undefined) {
+            await this.requests.markConnected(
+              trx,
+              request.connectionRequestId.toLowerCase(),
+              tenantId,
+            );
+          }
         });
         return {
           id: tenantId,

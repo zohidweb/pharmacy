@@ -10,6 +10,7 @@ import { PlatformDatabase } from '../../../core/database/platform';
 import { PrescriptionRetention } from '../../pos/prescription-retention';
 import { FeedRetention } from '../../sync/feed-retention';
 import { InboxRetention } from '../../sync/inbox-retention';
+import { ConnectionRequestRetention } from '../connection-requests/connection-request-retention';
 import { RetentionRepository } from './retention.repository';
 
 const FIRST_PASS_MS = 60_000;
@@ -28,7 +29,8 @@ const errorCode = (error: unknown): string =>
 // network within its window (spec 2026-10-16-offline-sync, section 13, 2026-10-23): without it the feed of a network
 // no offline store reads grows without end. A timer of the API process, no scheduler library and no job queue;
 // several API instances do not clash (a try-lock per network, the advisory lock of the feed, an idempotent update). A
-// failure of one network is logged with its code and the loop goes on; no prescription data is ever logged.
+// failure of one network is logged with its code and the loop goes on; no prescription data is ever logged. After the
+// networks the pass anonymizes the connection requests of the site past their term (ADR-0023), counts only.
 @Injectable()
 export class PrescriptionPurgeScheduler
   implements OnApplicationBootstrap, OnModuleDestroy
@@ -45,6 +47,7 @@ export class PrescriptionPurgeScheduler
     private readonly prescriptions: PrescriptionRetention,
     private readonly inbox: InboxRetention,
     private readonly feed: FeedRetention,
+    private readonly connectionRequests: ConnectionRequestRetention,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -121,10 +124,33 @@ export class PrescriptionPurgeScheduler
             `Feed changes past the window dropped: ${changes} [correlationId=${correlationId}]`,
           );
         }
+        if (!this.stopping) await this.anonymizeRequests(correlationId);
       });
     } catch (error) {
       this.logger.warn(
         `The prescription purge pass failed (${errorCode(error)}) [correlationId=${correlationId}]`,
+      );
+    }
+  }
+
+  /**
+   * The personal data of the declined connection requests of the site past their term (spec
+   * 2026-10-28-public-site-design, 7.4): one platform step, not per network; a failure never stops the other steps.
+   */
+  private async anonymizeRequests(correlationId: string): Promise<void> {
+    try {
+      const anonymized = await this.platform.platformTransaction(
+        { kind: 'system', job: 'connection-requests.anonymize' },
+        (trx) => this.connectionRequests.anonymizeExpired(trx),
+      );
+      if (anonymized > 0) {
+        this.logger.log(
+          `Connection requests anonymized: ${anonymized} [correlationId=${correlationId}]`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Connection requests not anonymized (${errorCode(error)}) [correlationId=${correlationId}]`,
       );
     }
   }

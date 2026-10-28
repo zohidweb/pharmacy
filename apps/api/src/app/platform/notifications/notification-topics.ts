@@ -21,8 +21,7 @@ export const TOPIC_KINDS: Readonly<
   keys: ['key_expiring', 'key_revoked'],
   services: ['service_requested'],
   sync: ['sync_stale', 'update_available'],
-  // the producer of `connection_requested` comes with the connection requests (ADR-0023)
-  leads: [],
+  leads: ['connection_requested'],
 });
 
 /** Shown while they last; resolved when gone (N3). */
@@ -31,6 +30,7 @@ export const STATE_KINDS: readonly EventKind[] = Object.freeze([
   'key_expiring',
   'sync_stale',
   'service_requested',
+  'connection_requested',
 ]);
 
 /** Never resolved; shown 30 days (N4). */
@@ -51,11 +51,15 @@ export function kindsOf(topics: readonly NotificationTopic[]): EventKind[] {
   return topics.flatMap((topic) => [...TOPIC_KINDS[topic]]);
 }
 
-/** Where a notification leads (N10): the network, or «Услуги» for a request. */
+/**
+ * Where a notification leads (N10): the network, «Услуги» for a service request, «Заявки» for a connection
+ * request of the site.
+ */
 export function targetOf(
   kind: EventKind,
   tenantId: string | null,
 ): EventTarget {
+  if (kind === 'connection_requested') return { screen: 'connectionRequests' };
   if (kind === 'service_requested' || tenantId === null) {
     return { screen: 'services' };
   }

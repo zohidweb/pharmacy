@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { EventKind } from '@pharmacy/shared-dto';
 import type { Transaction } from 'kysely';
 import type { DB } from '../../../core/database';
+import { ConnectionRequestsOverview } from '../connection-requests/connection-requests-overview';
 import { OperatorQueue } from '../stats/operator-queue';
 import {
   type NewPlatformNotification,
@@ -24,6 +25,7 @@ export class PlatformNotificationsRefresh {
   constructor(
     private readonly repository: PlatformNotificationsRepository,
     private readonly queue: OperatorQueue,
+    private readonly leads: ConnectionRequestsOverview,
   ) {}
 
   /** Refreshes when the last refresh is older than 5 minutes and no other request is refreshing. */
@@ -102,6 +104,21 @@ export class PlatformNotificationsRefresh {
           tenantName: request.tenantName,
           serviceName: request.serviceName,
         },
+      })),
+    );
+    // a request of the site nobody has taken yet (spec 2026-10-28-public-site-design, 7.4); not a network yet
+    const leads = await this.leads.newRequests(trx);
+    await this.states(
+      trx,
+      'connection_requested',
+      leads.map((lead) => ({
+        kind: 'connection_requested',
+        dedupeKey: `connection-request:${lead.id}`,
+        tenantId: null,
+        storeId: null,
+        entityType: 'connection_request',
+        entityId: lead.id,
+        params: { tenantName: lead.networkName },
       })),
     );
 

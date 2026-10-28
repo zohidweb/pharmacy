@@ -43,6 +43,7 @@ import { PlatformBillingModule } from './platform/billing/platform-billing.modul
 import { PlatformStatsModule } from './platform/stats/platform-stats.module';
 import { PlatformNotificationsModule } from './platform/notifications/platform-notifications.module';
 import { SiteContentModule } from './platform/site-content/site-content.module';
+import { ConnectionRequestsModule } from './platform/connection-requests/connection-requests.module';
 import { PlatformRetentionModule } from './platform/retention/platform-retention.module';
 import { TenantsModule } from './platform/tenants/tenants.module';
 import { OperatorPermissionsGuard } from './platform/auth/operator-permissions.guard';
@@ -128,6 +129,8 @@ const EXPORT_THROTTLE = {
     ConditionalModule.registerWhen(PlatformRetentionModule, cloudMode),
     // The settings, pictures (and later the articles and legal documents) of the public site and its public contour.
     ConditionalModule.registerWhen(SiteContentModule, cloudMode),
+    // The connection requests of the site form and their review by the operators (ADR-0023).
+    ConditionalModule.registerWhen(ConnectionRequestsModule, cloudMode),
     // Stores and legal entities are kept in the cloud only (spec 2026-10-06-owner-stores).
     ConditionalModule.registerWhen(StoresModule, cloudMode),
     // Employees and roles are kept in the cloud only (spec 2026-10-06-staff-design).

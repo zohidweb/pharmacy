@@ -55,7 +55,9 @@ export type EventTarget =
   | { screen: 'billing' }
   | { screen: 'services' }
   | { screen: 'licenses' }
-  | { screen: 'installations' };
+  | { screen: 'installations' }
+  /** «Сайт → Заявки»: the connection requests of the public site (ADR-0023). */
+  | { screen: 'connectionRequests' };
 
 export interface EventParams {
   tenantName?: string;

@@ -7,6 +7,7 @@ type NavLabelKey =
   | 'statistics'
   | 'companies'
   | 'createCompany'
+  | 'siteRequests'
   | 'invoices'
   | 'services'
   | 'licenses'
@@ -20,13 +21,17 @@ export interface NavItem {
   label: NavLabelKey;
   icon: IconName;
   /** Field of AttentionCounts shown as a counter next to the item. */
-  counter?: 'serviceRequests' | 'expiringLicenses' | 'unreadNotifications';
+  counter?:
+    | 'serviceRequests'
+    | 'expiringLicenses'
+    | 'unreadNotifications'
+    | 'connectionRequests';
   /** The route the screen loads; the item is hidden in a build where it does not answer. */
   api?: ApiRouteKey;
 }
 
 export interface NavSection {
-  title: 'overview' | 'clients' | 'billing' | 'offline' | 'system';
+  title: 'overview' | 'clients' | 'site' | 'billing' | 'offline' | 'system';
   items: NavItem[];
 }
 
@@ -44,6 +49,17 @@ export const navigation: NavSection[] = [
     items: [
       { route: 'companies', label: 'companies', icon: 'building-2' },
       { route: 'companyCreate', label: 'createCompany', icon: 'user-plus' },
+    ],
+  },
+  {
+    title: 'site',
+    items: [
+      {
+        route: 'siteRequests',
+        label: 'siteRequests',
+        icon: 'inbox',
+        counter: 'connectionRequests',
+      },
     ],
   },
   {

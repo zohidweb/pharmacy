@@ -32,8 +32,10 @@ export function createTenantSchema() {
 
 export type CreateTenantValues = z.input<ReturnType<typeof createTenantSchema>>;
 
+/** `connectionRequestId` — the request of the site the network is created from: it becomes `connected` with it. */
 export function toCreateTenantRequest(
   values: CreateTenantValues,
+  connectionRequestId?: string,
 ): CreateTenantRequest {
   const email = values.ownerEmail.trim().toLowerCase();
   return {
@@ -46,6 +48,7 @@ export function toCreateTenantRequest(
       login: values.ownerLogin.trim().toLowerCase(),
       ...(email !== '' && { email }),
     },
+    ...(connectionRequestId !== undefined && { connectionRequestId }),
   };
 }
 

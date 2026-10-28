@@ -8,6 +8,7 @@ export {
   useSiteSettings,
 } from './api/site-content-queries';
 export { ArticleStatusPill } from './ui/ArticleStatusPill';
+export { SiteMarkdownView } from './ui/SiteMarkdownView';
 export {
   isSiteMediaType,
   siteMediaEmbed,

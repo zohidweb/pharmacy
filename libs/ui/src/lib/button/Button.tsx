@@ -15,17 +15,19 @@ export type ButtonVariant =
   'primary' | 'secondary' | 'tertiary' | 'destructive' | 'success';
 export type ButtonSize = 'md' | 'lg';
 
+// The button of the client mockups in apps/web and apps/admin (QA 2026-10-28): radius 8 px, semibold text.
 const base =
   'inline-flex items-center justify-center gap-2 rounded-(--ph-button-radius) border ' +
-  'border-transparent px-(--ph-button-padding-x) text-sm font-medium whitespace-nowrap ' +
+  'border-transparent px-(--ph-button-padding-x) text-sm font-semibold whitespace-nowrap ' +
   'transition-colors select-none disabled:cursor-not-allowed disabled:bg-disabled ' +
   'disabled:text-on-disabled aria-disabled:cursor-not-allowed';
 
 const variants: Record<ButtonVariant, string> = {
   primary:
     'bg-primary text-on-primary hover:bg-primary-hover active:bg-primary-active',
+  // white with a border, as the second button of the client mockups
   secondary:
-    'bg-primary-subtle text-primary hover:bg-primary-subtle-hover active:bg-primary-subtle-hover',
+    'border-border-strong bg-surface text-fg hover:bg-surface-sunken active:bg-surface-sunken',
   tertiary:
     'bg-transparent text-primary hover:bg-primary-subtle active:bg-primary-subtle-hover',
   destructive: 'bg-danger text-on-danger hover:bg-danger-hover',

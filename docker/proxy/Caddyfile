@@ -105,6 +105,17 @@
 
 # The admin host passes the operator contour only.
 (api-operator) {
+	# site picture upload (ADR-0023): JSON with base64, up to 3 MiB as the API counts it; before @operator, which would
+	# cap it at 1 MiB. Still inside the admin host's OPERATOR_ALLOW guard (the snippet is imported from its handle).
+	@siteMedia path /api/v1/operator/site-media
+	handle @siteMedia {
+		import plain-body
+		request_body {
+			max_size 3MiB
+		}
+		encode zstd gzip
+		import upstream 30s
+	}
 	@operator path /api/v1/operator /api/v1/operator/*
 	handle @operator {
 		import plain-body

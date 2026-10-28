@@ -18,6 +18,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { IntlProvider } from 'use-intl';
 import { resetSession, watchPendingSignOut } from '@/entities/session';
 import { ConfirmPasswordDialog } from '@/features/confirm-password';
+import { useApplyFontScale } from '@/features/font-scale';
 import {
   apiMocksEnabled,
   apiMocksMode,
@@ -133,6 +134,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const { locale, messages } = useMessages(useLocale());
   const apiReady = useApiReady();
   useConnectivity(apiReady);
+  useApplyFontScale();
   useEffect(() => watchPendingSignOut(queryClient), [queryClient]);
 
   return (

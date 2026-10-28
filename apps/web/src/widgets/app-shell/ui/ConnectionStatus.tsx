@@ -62,7 +62,8 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
 
   return (
     <p role="status" className="flex min-w-0 flex-col items-end text-xs">
-      <span className={`flex items-center gap-2 ${tone}`}>
+      {/* max-w-full: a long status is cut with an ellipsis instead of running over the store switcher */}
+      <span className={`flex max-w-full min-w-0 items-center gap-2 ${tone}`}>
         <Icon name={icon} size="sm" />
         <span className="truncate">{text}</span>
       </span>

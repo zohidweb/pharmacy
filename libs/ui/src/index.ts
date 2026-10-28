@@ -81,6 +81,20 @@ export {
 export { Tabs, type TabItem, type TabsProps } from './lib/navigation/Tabs';
 
 export {
+  createFontScaleStore,
+  DEFAULT_FONT_SCALE,
+  FONT_SCALES,
+  type FontScale,
+  type FontScaleStore,
+} from './lib/font-scale/font-scale';
+export {
+  FontScaleControl,
+  type FontScaleControlLabels,
+  type FontScaleControlProps,
+  type FontScaleControlSize,
+} from './lib/font-scale/FontScaleControl';
+
+export {
   Dialog,
   type DialogProps,
   type DialogSize,

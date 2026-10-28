@@ -39,7 +39,10 @@ const OWNER_ROLE_NAME = { ru: 'Владелец', tj: 'Соҳиб' } as const;
 // Tajik names are to be reviewed by a native speaker.
 const DEFAULT_ROLES = [
   { key: 'manager', name: { ru: 'Заведующий точкой', tj: 'Мудири нуқта' } },
-  { key: 'cashier', name: { ru: 'Фармацевт-кассир', tj: 'Фармасевт-хазинадор' } },
+  {
+    key: 'cashier',
+    name: { ru: 'Фармацевт-кассир', tj: 'Фармасевт-хазинадор' },
+  },
   { key: 'accountant', name: { ru: 'Бухгалтер', tj: 'Муҳосиб' } },
 ] as const;
 
@@ -90,7 +93,10 @@ export class TenantsService {
   }
 
   private actor() {
-    return { kind: 'operator' as const, operatorId: requireOperator().operatorId };
+    return {
+      kind: 'operator' as const,
+      operatorId: requireOperator().operatorId,
+    };
   }
 
   async list(params: TenantListParams): Promise<TenantListResponse> {
@@ -111,10 +117,14 @@ export class TenantsService {
 
   /** The stores of a network with their month from the marts, as on their cards (spec 2026-10-23, A3). */
   async stores(tenantId: string): Promise<StoreSummary[]> {
-    const stores = await this.db.platformTransaction(this.actor(), async (trx) => {
-      if ((await this.repository.status(trx, tenantId)) === null) throw notFound();
-      return this.repository.stores(trx, tenantId);
-    });
+    const stores = await this.db.platformTransaction(
+      this.actor(),
+      async (trx) => {
+        if ((await this.repository.status(trx, tenantId)) === null)
+          throw notFound();
+        return this.repository.stores(trx, tenantId);
+      },
+    );
     const month = await this.storeSales.ofNetwork(tenantId);
     return stores.map((store) => ({
       ...store,
@@ -131,7 +141,10 @@ export class TenantsService {
       this.repository.storeCard(trx, storeId),
     );
     if (card === null) throw notFound();
-    const month = await this.storeSales.of(card.summary.tenantId, card.summary.id);
+    const month = await this.storeSales.of(
+      card.summary.tenantId,
+      card.summary.id,
+    );
     return {
       ...card.summary,
       monthSalesMinor: month.salesMinor,
@@ -208,8 +221,10 @@ export class TenantsService {
         };
       } catch (error) {
         const constraint = uniqueConstraint(error);
-        if (constraint === TENANT_CODE_CONSTRAINT && attempt < CODE_ATTEMPTS) continue;
-        const conflict = constraint === null ? undefined : CONFLICTS[constraint];
+        if (constraint === TENANT_CODE_CONSTRAINT && attempt < CODE_ATTEMPTS)
+          continue;
+        const conflict =
+          constraint === null ? undefined : CONFLICTS[constraint];
         if (conflict) {
           throw new FieldProblemException(409, conflict.code, [
             { field: conflict.field, code: conflict.code },
@@ -235,7 +250,8 @@ export class TenantsService {
       });
       if (!issued) {
         const status = await this.repository.status(trx, tenantId);
-        if (status === 'blocked') throw new ProblemException(409, 'tenant_blocked');
+        if (status === 'blocked')
+          throw new ProblemException(409, 'tenant_blocked');
         throw notFound();
       }
       await this.audit.append(trx, {
@@ -304,7 +320,14 @@ export class TenantsService {
     const tenantId = id.toLowerCase();
     const actor = this.actor();
     const blocked = await this.db.platformTransaction(actor, async (trx) => {
-      if (await this.repository.block(trx, tenantId, actor.operatorId, reason.trim())) {
+      if (
+        await this.repository.block(
+          trx,
+          tenantId,
+          actor.operatorId,
+          reason.trim(),
+        )
+      ) {
         await this.audit.append(trx, {
           action: 'tenant.blocked',
           tenantId,
@@ -325,20 +348,23 @@ export class TenantsService {
   async unblock(id: string): Promise<TenantDetails> {
     // Canonical, as in block: the flag is keyed by the lower-case id.
     const tenantId = id.toLowerCase();
-    const unblocked = await this.db.platformTransaction(this.actor(), async (trx) => {
-      if (await this.repository.unblock(trx, tenantId)) {
-        await this.audit.append(trx, {
-          action: 'tenant.unblocked',
-          tenantId,
-          entityType: 'tenant',
-          entityId: tenantId,
-        });
-        return true;
-      }
-      const status = await this.repository.status(trx, tenantId);
-      if (status === null) throw notFound();
-      return false;
-    });
+    const unblocked = await this.db.platformTransaction(
+      this.actor(),
+      async (trx) => {
+        if (await this.repository.unblock(trx, tenantId)) {
+          await this.audit.append(trx, {
+            action: 'tenant.unblocked',
+            tenantId,
+            entityType: 'tenant',
+            entityId: tenantId,
+          });
+          return true;
+        }
+        const status = await this.repository.status(trx, tenantId);
+        if (status === null) throw notFound();
+        return false;
+      },
+    );
     await this.afterCommit(() => this.sessions.clearTenantBlocked(tenantId));
     if (!unblocked) throw new ProblemException(409, 'not_blocked');
     return this.details(tenantId);
@@ -361,9 +387,11 @@ export class TenantsService {
   // optional e-mail; each must normalize to its own kind.
   private normalizeOwner(owner: CreateTenantRequest['owner']) {
     const login = normalizeIdentifier(owner.login);
-    if (login === null || login.kind !== 'login') throw invalidField('owner.login', 'login_format');
+    if (login === null || login.kind !== 'login')
+      throw invalidField('owner.login', 'login_format');
     const phone = normalizeIdentifier(owner.phone);
-    if (phone === null || phone.kind !== 'phone') throw invalidField('owner.phone', 'phone_format');
+    if (phone === null || phone.kind !== 'phone')
+      throw invalidField('owner.phone', 'phone_format');
     let email: string | null = null;
     if (owner.email !== undefined && owner.email.trim() !== '') {
       const parsed = normalizeIdentifier(owner.email);

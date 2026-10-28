@@ -60,7 +60,14 @@ export class PlatformNotificationsService {
         (topic) => !muted.includes(topic),
       );
       const byKind = await this.repository.countsByKind(trx);
-      const counts = { all: 0, billing: 0, keys: 0, services: 0, sync: 0, leads: 0 };
+      const counts = {
+        all: 0,
+        billing: 0,
+        keys: 0,
+        services: 0,
+        sync: 0,
+        leads: 0,
+      };
       for (const [kind, n] of byKind) {
         counts[topicOf(kind)] += n;
         counts.all += n;

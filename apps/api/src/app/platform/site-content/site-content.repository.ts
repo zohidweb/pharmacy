@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  LegalDocumentDraft,
+  LegalDocumentKind,
+  LegalDocumentRevision,
   PublicService,
   PublicSiteInfo,
   SiteMedia,
   SiteMediaType,
   SiteSettings,
   SiteText,
+  UiLocale,
   UpdateSiteSettingsRequest,
 } from '@pharmacy/shared-dto';
 import { sql, type Transaction } from 'kysely';
@@ -46,6 +50,44 @@ const toMedia = (row: MediaRow): SiteMedia => ({
   byteSize: Number(row.byteSize),
   alt: row.alt,
   createdAt: iso(row.createdAt),
+});
+
+interface LegalRevisionRow {
+  id: string;
+  kind: string;
+  locale: string;
+  title: string;
+  body: string;
+  effectiveFrom: string;
+  publishedAt: Date | string;
+}
+
+const toLegalRevision = (row: LegalRevisionRow): LegalDocumentRevision => ({
+  id: row.id,
+  kind: row.kind as LegalDocumentKind,
+  locale: row.locale as UiLocale,
+  title: row.title,
+  body: row.body,
+  effectiveFrom: row.effectiveFrom,
+  publishedAt: iso(row.publishedAt),
+});
+
+interface LegalDraftRow {
+  kind: string;
+  locale: string;
+  title: string;
+  body: string;
+  effectiveFrom: string;
+  updatedAt: Date | string;
+}
+
+const toLegalDraft = (row: LegalDraftRow): LegalDocumentDraft => ({
+  kind: row.kind as LegalDocumentKind,
+  locale: row.locale as UiLocale,
+  title: row.title,
+  body: row.body,
+  effectiveFrom: row.effectiveFrom,
+  updatedAt: iso(row.updatedAt),
 });
 
 // Everything but the bytes: lists and records never read the file (it is up to 2 MiB).
@@ -228,5 +270,141 @@ export class SiteContentRepository {
         basePriceDirams: Number(row.basePriceDirams),
       })),
     };
+  }
+
+  // ── Legal documents ───────────────────────────────────────────────────────────────────
+
+  async legalDrafts(trx: Transaction<DB>): Promise<LegalDocumentDraft[]> {
+    const rows = await trx
+      .selectFrom('legalDocumentDrafts')
+      .selectAll()
+      .orderBy('kind')
+      .orderBy('locale')
+      .execute();
+    return rows.map(toLegalDraft);
+  }
+
+  async legalDraft(
+    trx: Transaction<DB>,
+    kind: LegalDocumentKind,
+    locale: UiLocale,
+  ): Promise<LegalDocumentDraft | null> {
+    const row = await trx
+      .selectFrom('legalDocumentDrafts')
+      .selectAll()
+      .where('kind', '=', kind)
+      .where('locale', '=', locale)
+      .executeTakeFirst();
+    return row === undefined ? null : toLegalDraft(row);
+  }
+
+  /** One draft per kind and language: the save replaces it. */
+  async saveLegalDraft(
+    trx: Transaction<DB>,
+    kind: LegalDocumentKind,
+    locale: UiLocale,
+    values: { title: string; body: string; effectiveFrom: string },
+    operatorId: string,
+  ): Promise<LegalDocumentDraft> {
+    const row = await trx
+      .insertInto('legalDocumentDrafts')
+      .values({ kind, locale, ...values, updatedBy: operatorId })
+      .onConflict((oc) =>
+        oc.columns(['kind', 'locale']).doUpdateSet({
+          ...values,
+          updatedAt: sql`now()`,
+          updatedBy: operatorId,
+        }),
+      )
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    return toLegalDraft(row);
+  }
+
+  /** The published revisions without the text (the overview never reads the body), the newest first. */
+  async legalRevisions(
+    trx: Transaction<DB>,
+  ): Promise<Omit<LegalDocumentRevision, 'body'>[]> {
+    const rows = await trx
+      .selectFrom('legalDocumentRevisions')
+      .select(['id', 'kind', 'locale', 'title', 'effectiveFrom', 'publishedAt'])
+      .orderBy('kind')
+      .orderBy('locale')
+      .orderBy('effectiveFrom', 'desc')
+      .orderBy('publishedAt', 'desc')
+      .execute();
+    return rows.map(
+      ({ id, kind, locale, title, effectiveFrom, publishedAt }) => ({
+        id,
+        kind: kind as LegalDocumentKind,
+        locale: locale as UiLocale,
+        title,
+        effectiveFrom,
+        publishedAt: iso(publishedAt),
+      }),
+    );
+  }
+
+  async insertLegalRevision(
+    trx: Transaction<DB>,
+    values: {
+      id: string;
+      kind: LegalDocumentKind;
+      locale: UiLocale;
+      title: string;
+      body: string;
+      effectiveFrom: string;
+      publishedBy: string;
+    },
+  ): Promise<LegalDocumentRevision> {
+    const row = await trx
+      .insertInto('legalDocumentRevisions')
+      .values(values)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    return toLegalRevision(row);
+  }
+
+  /**
+   * The revision in force on `today` (Dushanbe date): the latest by the date of entry into force, then by the time of
+   * the publication, among those whose date has come. `null` when there is none.
+   */
+  async currentLegalRevision(
+    trx: Transaction<DB>,
+    kind: LegalDocumentKind,
+    locale: UiLocale,
+    today: string,
+  ): Promise<LegalDocumentRevision | null> {
+    const row = await trx
+      .selectFrom('legalDocumentRevisions')
+      .selectAll()
+      .where('kind', '=', kind)
+      .where('locale', '=', locale)
+      .where('effectiveFrom', '<=', today)
+      .orderBy('effectiveFrom', 'desc')
+      .orderBy('publishedAt', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return row === undefined ? null : toLegalRevision(row);
+  }
+
+  /** The id only: the text of a revision is not needed to refer to it. */
+  async currentLegalRevisionId(
+    trx: Transaction<DB>,
+    kind: LegalDocumentKind,
+    locale: UiLocale,
+    today: string,
+  ): Promise<string | null> {
+    const row = await trx
+      .selectFrom('legalDocumentRevisions')
+      .select('id')
+      .where('kind', '=', kind)
+      .where('locale', '=', locale)
+      .where('effectiveFrom', '<=', today)
+      .orderBy('effectiveFrom', 'desc')
+      .orderBy('publishedAt', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return row?.id ?? null;
   }
 }

@@ -35,7 +35,7 @@ export interface SiteSettings {
 
 /**
  * PUT /operator/site-settings (`content:manage`, fresh operator sign-in) → `SiteSettings`. Errors: 400
- * `validation_failed`; 404 `site_media_not_found` (a media id that does not exist).
+ * `validation_failed`; 400 `media_not_found` (a media id that is not stored); 403 `fresh_auth_required`.
  */
 export type UpdateSiteSettingsRequest = Omit<SiteSettings, 'updatedAt'>;
 
@@ -79,8 +79,10 @@ export interface SiteMedia {
 /**
  * POST /operator/site-media (`content:manage`) → 201 `SiteMedia`: JSON with the file in base64 (no
  * multipart in the API), up to 2 MiB of the file; the same file twice returns the stored one. Errors:
- * 400 `validation_failed`; 413 `payload_too_large`; 415 `unsupported_media_type` (the signature does
- * not match one of `SiteMediaType`).
+ * 400 `validation_failed` (also a `dataBase64` that is not base64); 400 `unsupported_media_type` (the
+ * signature does not match the declared `SiteMediaType`, or a side is over 20 000 pixels); 413
+ * `media_too_large` (the file is over 2 MiB), 413 `payload_too_large` (the body is over 3 MiB).
+ * GET /operator/site-media/{id}/content and GET /public/media/{id} answer 404 `media_not_found`.
  */
 export interface UploadSiteMediaRequest {
   contentType: SiteMediaType;
@@ -196,8 +198,10 @@ export interface LegalDocumentDraft {
 
 /**
  * PUT /operator/legal-documents/{kind}/{locale}/draft (`content:manage`) → `LegalDocumentDraft`; then
- * POST .../publish → `LegalDocumentRevision`. Errors: 400 `validation_failed`; 404
- * `legal_draft_not_found` (publish without a draft).
+ * POST .../publish → 201 `LegalDocumentRevision` (the draft stays). Errors: 400 `validation_failed` (on
+ * publication: `effectiveFrom` earlier than today in Asia/Dushanbe); 400 `media_not_found` (a picture of
+ * the text is not stored); 404 `not_found` (a `kind` or `locale` that does not exist); 409 `draft_empty`
+ * (publish without a draft).
  */
 export interface SaveLegalDocumentDraftRequest {
   title: string;
@@ -212,8 +216,9 @@ export interface LegalDocumentsOverview {
 }
 
 /**
- * GET /public/legal-documents/{kind}?locale → `LegalDocumentRevision` (the current one). Errors: 404
- * `legal_document_not_found`.
+ * GET /public/legal-documents/{kind}?locale → `LegalDocumentRevision` (the current one of the language,
+ * else of RU). Errors: 400 `validation_failed` (a `locale` other than `ru` and `tg`); 404 `not_found`
+ * (an unknown `kind`, or nothing is published).
  *
  * GET /public/sitemap: slugs and dates of the published articles and documents by language (for
  * `sitemap.xml`).

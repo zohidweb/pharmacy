@@ -4,3 +4,4 @@ export * from './lib/id';
 export * from './lib/import-keys';
 export * from './lib/percent';
 export * from './lib/receipt-lines';
+export * from './lib/xlsx/xlsx';

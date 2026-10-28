@@ -16,7 +16,7 @@ import type {
 } from '@pharmacy/shared-dto';
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
-import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '../../common/pagination';
 import { TenantDatabase } from '../../core/database';
 import { ProductsReader, type StockProduct } from '../catalog/products-reader';
 import { StorePriceWriter } from '../pricing/store-price-writer';
@@ -139,6 +139,13 @@ export class StockService {
       throw new ProblemException(403, 'store_not_in_scope');
     }
     const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
+    // a page past the screen size is the Excel export (ADR-0015, amendment 2026-10-27)
+    if (
+      limit > MAX_PAGE_LIMIT &&
+      !hasPermissions(permissions, 'inventory:export')
+    ) {
+      throw new ProblemException(403, 'forbidden');
+    }
     const offset = query.offset ?? 0;
     return this.db.tenantTransaction(async (trx) => {
       const stores = (

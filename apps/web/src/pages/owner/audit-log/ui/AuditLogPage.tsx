@@ -3,11 +3,14 @@
 import { auditGroups } from '@pharmacy/shared-domain';
 import type { AuditAction, TenantAuditEntry } from '@pharmacy/shared-dto';
 import {
+  EXPORT_ROW_LIMIT,
   formatDateOnly,
   formatDateTime,
   toAppDate,
+  xlsxFileName,
 } from '@pharmacy/shared-util';
 import {
+  Alert,
   Avatar,
   Button,
   Card,
@@ -21,13 +24,15 @@ import {
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useTranslations } from 'use-intl';
+import { useFormatter, useTranslations } from 'use-intl';
 import { useAuditEntryText } from '@/entities/audit-entry';
 import { can, useSession } from '@/entities/session';
 import { apiRequest } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
+import { useXlsxExport } from '@/shared/lib/xlsx-export';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { auditSheet } from '../lib/audit-sheet';
 
 const PAGE = 20;
 // the groups of the journal filter (spec 2026-10-14-owner-cabinet, 6.4)
@@ -40,6 +45,9 @@ const daysAgo = (days: number) =>
 function AuditLogPageView() {
   const t = useTranslations('auditLog');
   const tActions = useTranslations('auditGroups');
+  const tExport = useTranslations('export');
+  const format = useFormatter();
+  const xlsx = useXlsxExport();
   const text = useAuditEntryText();
   const { data: session } = useSession();
   const [from, setFrom] = useState(() => daysAgo(30));
@@ -79,6 +87,71 @@ function AuditLogPageView() {
       set(value);
       setOffset(0);
     };
+
+  // the journal of the filters as an Excel file: one request for the whole period (plan 2026-10-27-excel-export, X7)
+  const exportJournal = () =>
+    xlsx.run(async () => {
+      const data = await apiRequest('auditLog.list', {
+        query: {
+          from: from || undefined,
+          to: to || undefined,
+          employeeId: employeeId || undefined,
+          storeId: storeId || undefined,
+          action: action || undefined,
+          q: q || undefined,
+          limit: EXPORT_ROW_LIMIT,
+          offset: 0,
+        },
+        timeoutMs: 60_000,
+      });
+      if (data.total > EXPORT_ROW_LIMIT) {
+        return {
+          refused: tExport('tooManyAudit', {
+            limit: format.number(EXPORT_ROW_LIMIT),
+          }),
+        };
+      }
+      const day = (value: string) => (value ? formatDateOnly(value) : '…');
+      const filters = [
+        tExport('period', { from: day(from), to: day(to) }),
+        storeId &&
+          tExport('store', {
+            name: session?.stores.find((s) => s.id === storeId)?.name ?? '—',
+          }),
+        employeeId &&
+          tExport('employee', {
+            name:
+              employees.data?.items.find((e) => e.id === employeeId)
+                ?.fullName ?? '—',
+          }),
+        action && tExport('action', { name: tActions(action) }),
+        q.trim() && tExport('search', { q: q.trim() }),
+      ].filter((part): part is string => !!part);
+      return {
+        sheet: auditSheet(data.items, {
+          name: t('title'),
+          heading: [
+            t('title'),
+            filters.join(' · '),
+            tExport('madeAt', { at: formatDateTime(new Date().toISOString()) }),
+          ],
+          columns: [
+            t('at'),
+            tExport('documentDate'),
+            t('employee'),
+            t('store'),
+            t('action'),
+            t('object'),
+            t('details'),
+            t('source'),
+          ],
+          entry: text,
+          network: t('network'),
+          operator: t('operator'),
+        }),
+        fileName: xlsxFileName(t('title'), `${day(from)}–${day(to)}`),
+      };
+    });
 
   const columns: DataTableColumn<TenantAuditEntry>[] = [
     {
@@ -141,20 +214,20 @@ function AuditLogPageView() {
         title={t('title')}
         subtitle={t('subtitle')}
         actions={
-          <Button
-            variant="secondary"
-            iconStart="download"
-            disabled
-            aria-describedby="audit-excel-pending"
-          >
-            {t('excel')}
-          </Button>
+          can(session, 'audit:export') && (
+            <Button
+              variant="secondary"
+              iconStart="download"
+              loading={xlsx.busy}
+              onClick={() => void exportJournal()}
+            >
+              {t('excel')}
+            </Button>
+          )
         }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        <p id="audit-excel-pending" className="text-xs text-fg-subtle">
-          {t('excelPending')}
-        </p>
+        {xlsx.message && <Alert tone="warning">{xlsx.message}</Alert>}
         <Card padding="none">
           <div className="flex flex-wrap items-end gap-3 p-(--ph-card-padding)">
             <TextField

@@ -6,8 +6,15 @@ import type {
   StockSortKey,
   StockStateFilter,
 } from '@pharmacy/shared-dto';
-import { formatDateOnly, formatMoney } from '@pharmacy/shared-util';
 import {
+  EXPORT_ROW_LIMIT,
+  formatDateOnly,
+  formatDateTime,
+  formatMoney,
+  xlsxFileName,
+} from '@pharmacy/shared-util';
+import {
+  Alert,
   Button,
   buttonClassName,
   Card,
@@ -28,8 +35,8 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { useTranslations } from 'use-intl';
-import { useSession } from '@/entities/session';
+import { useFormatter, useTranslations } from 'use-intl';
+import { can, useSession } from '@/entities/session';
 import { StockStatePill } from '@/entities/stock-document';
 import { StockNotices, useStockAccess } from '@/features/stock-document';
 import { apiRequest } from '@/shared/api';
@@ -37,6 +44,8 @@ import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { WithMessages } from '@/shared/i18n';
+import { useXlsxExport } from '@/shared/lib/xlsx-export';
+import { reorderSheet, stockSheet } from '../lib/stock-sheet';
 
 const PAGE = 20;
 const STATES: StockStateFilter[] = [
@@ -83,6 +92,9 @@ function StockPageView({
 }) {
   const t = useTranslations('stock');
   const tCommon = useTranslations('stockDocs');
+  const tExport = useTranslations('export');
+  const format = useFormatter();
+  const xlsx = useXlsxExport();
   const { data: session } = useSession();
   const access = useStockAccess();
   const stores = session?.stores ?? [];
@@ -140,6 +152,108 @@ function StockPageView({
   };
   const rows = list.data?.items ?? [];
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+
+  // the Excel export (plan 2026-10-27-excel-export, X7, X9, X10)
+  const canExport = can(session, 'inventory:export');
+  const storeName = stores.find((s) => s.id === storeId)?.name ?? null;
+  const place =
+    view === 'network'
+      ? t('network')
+      : tExport('store', { name: storeName ?? '—' });
+  const fileName = (title: string) =>
+    xlsxFileName(title, view === 'network' ? t('network') : storeName);
+  const madeAt = () =>
+    tExport('madeAt', { at: formatDateTime(new Date().toISOString()) });
+  const stockTexts = (heading: string[]) => ({
+    name: t('title'),
+    heading,
+    columns: {
+      product: t('product'),
+      barcode: tExport('barcode'),
+      store: t('store'),
+      controlled: t('controlled'),
+      batch: t('batch'),
+      expiresOn: t('expiresOn'),
+      quantity: tExport('pieces', { header: t('quantity') }),
+      perPack: tExport('perPack'),
+      min: tExport('pieces', { header: t('reorder.min') }),
+      cost: t('cost'),
+      price: t('price'),
+      state: t('stateHeader'),
+    },
+    controlled: tExport('controlled'),
+    state: (value: StockRow['state']) => t(`state.${value}`),
+  });
+  const exportStock = () =>
+    xlsx.run(async () => {
+      if (reorder) {
+        return {
+          sheet: reorderSheet(reorderList.data ?? [], {
+            name: t('reorder.table'),
+            heading: [t('reorder.table'), place, madeAt()],
+            columns: {
+              product: t('product'),
+              store: t('store'),
+              stock: tExport('pieces', { header: t('reorder.stock') }),
+              min: tExport('pieces', { header: t('reorder.min') }),
+              shortage: tExport('pieces', { header: t('reorder.shortage') }),
+              perPack: tExport('perPack'),
+            },
+          }),
+          fileName: fileName(t('reorder.table')),
+        };
+      }
+      // the whole list of the filters in one request
+      const data = await apiRequest('stock.list', {
+        query: {
+          storeId: view === 'store' ? storeId : undefined,
+          q: q.trim() || undefined,
+          state,
+          sort: sort.key,
+          direction: sort.direction,
+          limit: EXPORT_ROW_LIMIT,
+          offset: 0,
+        },
+        timeoutMs: 60_000,
+      });
+      if (data.total > EXPORT_ROW_LIMIT) {
+        return {
+          refused: tExport('tooManyStock', {
+            limit: format.number(EXPORT_ROW_LIMIT),
+          }),
+        };
+      }
+      const filters = [
+        place,
+        state !== 'all' && tExport('state', { name: t(`filters.${state}`) }),
+        q.trim() && tExport('search', { q: q.trim() }),
+      ].filter((part): part is string => !!part);
+      return {
+        sheet: stockSheet(
+          data.items,
+          stockTexts([t('title'), filters.join(' · '), madeAt()]),
+          { canSeeCost: access.canSeeCost },
+        ),
+        fileName: fileName(t('title')),
+      };
+    });
+  // the selected rows of the page
+  const exportSelected = () =>
+    xlsx.run(() => {
+      const picked = rows.filter((r) => selected.has(r.id));
+      return {
+        sheet: stockSheet(
+          picked,
+          stockTexts([
+            t('title'),
+            `${place} · ${tExport('selected', { count: picked.length })}`,
+            madeAt(),
+          ]),
+          { canSeeCost: access.canSeeCost },
+        ),
+        fileName: fileName(t('title')),
+      };
+    });
 
   const columns: DataTableColumn<StockRow, string>[] = [
     {
@@ -309,14 +423,17 @@ function StockPageView({
         subtitle={t('subtitle')}
         actions={
           <>
-            <Button
-              variant="secondary"
-              iconStart="download"
-              disabled
-              title={tCommon('soonHint')}
-            >
-              {t('excel')}
-            </Button>
+            {canExport && (
+              <Button
+                variant="secondary"
+                iconStart="download"
+                loading={xlsx.busy}
+                disabled={reorder ? !reorderList.data : !list.data}
+                onClick={() => void exportStock()}
+              >
+                {t('excel')}
+              </Button>
+            )}
             <Link
               href={routes.stockCounts()}
               className={buttonClassName({ variant: 'secondary' })}
@@ -327,6 +444,7 @@ function StockPageView({
         }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">
+        {xlsx.message && <Alert tone="warning">{xlsx.message}</Alert>}
         <StockNotices access={access} />
         <Card padding="none">
           <div className="flex flex-wrap items-end gap-3 border-b border-border p-4">
@@ -419,23 +537,25 @@ function StockPageView({
                 variant="secondary"
                 iconStart="tag"
                 disabled
-                title={tCommon('soonHint')}
+                title={tCommon('tagsPending')}
               >
                 {t('printTags')}
               </Button>
-              <Button
-                variant="secondary"
-                iconStart="download"
-                disabled
-                title={tCommon('soonHint')}
-              >
-                {t('exportSelected')}
-              </Button>
+              {canExport && (
+                <Button
+                  variant="secondary"
+                  iconStart="download"
+                  loading={xlsx.busy}
+                  onClick={() => void exportSelected()}
+                >
+                  {t('exportSelected')}
+                </Button>
+              )}
               <Button variant="tertiary" onClick={() => setSelected(new Set())}>
                 {t('clearSelection')}
               </Button>
               <span className="text-xs text-fg-subtle">
-                {tCommon('soonHint')}
+                {tCommon('tagsPending')}
               </span>
             </div>
           )}

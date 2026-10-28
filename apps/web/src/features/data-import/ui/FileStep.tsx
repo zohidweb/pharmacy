@@ -6,13 +6,14 @@ import {
   Button,
   Card,
   CardHeader,
+  saveFile,
   Select,
   TextField,
 } from '@pharmacy/ui';
 import { useRef } from 'react';
 import { useTranslations } from 'use-intl';
 import type { SpreadsheetErrorCode, Workbook } from '@/shared/lib/spreadsheet';
-import { saveBlob, templateCsv } from '../model/csv-out';
+import { templateCsv } from '../model/csv-out';
 import { type ImportKindKey, kindFields } from '../model/fields';
 
 export interface FileStepProps {
@@ -71,7 +72,7 @@ export function FileStep(props: FileStepProps) {
             variant="tertiary"
             iconStart="download"
             onClick={() =>
-              saveBlob(
+              saveFile(
                 templateCsv(props.kind, (key) => tFields(key as never)),
                 `${t(`kinds.${props.kind}.template`)}.csv`,
               )

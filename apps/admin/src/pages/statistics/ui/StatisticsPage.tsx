@@ -93,6 +93,7 @@ export function StatisticsPage() {
             cashiers: format.number(data.kpi.activeCashiers),
           }),
           t('note'),
+          t('exportSubtotals'),
           t('exportMadeAt', { at: formatDateTime(new Date().toISOString()) }),
         ],
         columns: {
@@ -107,7 +108,9 @@ export function StatisticsPage() {
         mode: (mode) => tMode(mode),
       });
       await saveXlsx(sheet, xlsxFileName(t('title'), period, company));
-    } catch {
+    } catch (error) {
+      // the build of a loaded table fails only on a bug or a browser without CompressionStream: the cause for support
+      console.error(error);
       setExportFailed(true);
     } finally {
       setExporting(false);

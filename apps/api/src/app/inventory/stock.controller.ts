@@ -5,6 +5,7 @@ import type {
   StockListResponse,
   StockProductOption,
 } from '@pharmacy/shared-dto';
+import { ExportPage } from '../../common/pagination';
 import { RequirePermission } from '../auth/decorators';
 import {
   ReorderQueryDto,
@@ -19,6 +20,7 @@ export class StockController {
   constructor(private readonly stock: StockService) {}
 
   @RequirePermission('inventory:view')
+  @ExportPage()
   @Get('stock')
   list(@Query() query: StockListQueryDto): Promise<StockListResponse> {
     return this.stock.list(query);

@@ -1,5 +1,5 @@
 import type { StoreMode, UsageStatsResponse } from '@pharmacy/shared-dto';
-import { type XlsxSheet, xlsxCell } from '@pharmacy/shared-util';
+import { type XlsxCell, type XlsxSheet, xlsxCell } from '@pharmacy/shared-util';
 
 export interface StatsSheetTexts {
   name: string;
@@ -17,14 +17,40 @@ export interface StatsSheetTexts {
 }
 
 /**
- * The usage statistics as a sheet (plan 2026-10-27-excel-export, X10): a row of the company, then its stores with the
- * company repeated, so the auto filter keeps a company together; the store column of a company row stays empty.
+ * The usage statistics as a sheet (plan 2026-10-27-excel-export, X10): a row of the company — bold, the subtotal of its
+ * stores, as the group row of the screen — then its stores with the company repeated, so the auto filter keeps a
+ * company together; the store column of a company row stays empty.
  */
 export function statsSheet(
   data: UsageStatsResponse,
   texts: StatsSheetTexts,
 ): XlsxSheet {
   const c = texts.columns;
+  const rows: XlsxCell[][] = [];
+  const companyRows = new Set<number>();
+  for (const tenant of data.rows) {
+    companyRows.add(rows.length);
+    rows.push([
+      xlsxCell.text(tenant.tenantName),
+      null,
+      null,
+      xlsxCell.integer(tenant.receipts),
+      xlsxCell.money(tenant.salesMinor),
+      xlsxCell.money(tenant.averageReceiptMinor),
+      xlsxCell.dateTime(tenant.lastActivityAt),
+    ]);
+    for (const store of tenant.stores) {
+      rows.push([
+        xlsxCell.text(tenant.tenantName),
+        xlsxCell.text(store.storeName),
+        xlsxCell.text(texts.mode(store.mode)),
+        xlsxCell.integer(store.receipts),
+        xlsxCell.money(store.salesMinor),
+        xlsxCell.money(store.averageReceiptMinor),
+        xlsxCell.dateTime(store.lastActivityAt),
+      ]);
+    }
+  }
   return {
     name: texts.name,
     heading: texts.heading,
@@ -37,25 +63,7 @@ export function statsSheet(
       c.average,
       c.activity,
     ],
-    rows: data.rows.flatMap((tenant) => [
-      [
-        xlsxCell.text(tenant.tenantName),
-        null,
-        null,
-        xlsxCell.integer(tenant.receipts),
-        xlsxCell.money(tenant.salesMinor),
-        xlsxCell.money(tenant.averageReceiptMinor),
-        xlsxCell.dateTime(tenant.lastActivityAt),
-      ],
-      ...tenant.stores.map((store) => [
-        xlsxCell.text(tenant.tenantName),
-        xlsxCell.text(store.storeName),
-        xlsxCell.text(texts.mode(store.mode)),
-        xlsxCell.integer(store.receipts),
-        xlsxCell.money(store.salesMinor),
-        xlsxCell.money(store.averageReceiptMinor),
-        xlsxCell.dateTime(store.lastActivityAt),
-      ]),
-    ]),
+    rows,
+    boldRows: companyRows,
   };
 }

@@ -162,6 +162,7 @@ function ReportsPageView() {
             return header;
           },
           cell,
+          perPack: tExport('perPack'),
         }),
         fileName: xlsxFileName(
           name,

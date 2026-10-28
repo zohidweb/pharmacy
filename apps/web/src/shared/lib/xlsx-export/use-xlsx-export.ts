@@ -30,6 +30,9 @@ export function useXlsxExport() {
       if ('refused' in result) setRefused(result.refused);
       else await saveXlsx(result.sheet, result.fileName);
     } catch (caught) {
+      // an API error has its message and correlation id; a failed build (the writer, a mapper, a browser without
+      // CompressionStream) keeps its cause in the console for support
+      if (!(caught instanceof ApiError)) console.error(caught);
       setError(caught);
     } finally {
       setBusy(false);

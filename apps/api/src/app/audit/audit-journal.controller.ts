@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import type { AuditListResponse } from '@pharmacy/shared-dto';
+import { ExportPage } from '../../common/pagination';
 import { RequirePermission } from '../auth/decorators';
 import { AuditJournal } from './audit-journal';
 import { AuditJournalQueryDto } from './dto/audit-journal.dto';
@@ -11,6 +12,7 @@ export class AuditJournalController {
 
   /** 403 `store_not_in_scope` for a store out of the scope; 422 `validation_failed` (`from` > `to`). */
   @RequirePermission('audit:view')
+  @ExportPage()
   @Get()
   list(@Query() query: AuditJournalQueryDto): Promise<AuditListResponse> {
     return this.journal.list(query);

@@ -14,6 +14,8 @@ export interface ReportSheetTexts {
   header: (column: ReportColumn) => string;
   /** The text the screen shows: `text` and `reason` cells, a purged prescription. */
   cell: (column: ReportColumn, value: ReportCell, row: ReportRow) => string;
+  /** «Штук в упаковке» — the last column of a report with pieces. */
+  perPack: string;
 }
 
 /**
@@ -50,13 +52,32 @@ export function reportSheet(
         return xlsxCell.text(texts.cell(column, value, row));
     }
   };
+  // the screen shows pieces as «N уп. M шт.» by `piecesPerPack` of the row, a field and not a column: the file
+  // carries it as a column, so the packs can be counted in Excel, as in the stock file
+  const perPack =
+    table.columns.some((column) => column.type === 'pieces') &&
+    table.rows.some((row) => row.piecesPerPack != null);
   const line = (row: ReportRow) =>
     table.columns.map((column) => cell(column, row[column.key], row));
   return {
     name: texts.name,
     heading: texts.heading,
-    columns: table.columns.map(texts.header),
-    rows: table.rows.map(line),
-    total: table.total ? line(table.total) : undefined,
+    columns: [
+      ...table.columns.map(texts.header),
+      ...(perPack ? [texts.perPack] : []),
+    ],
+    rows: table.rows.map((row) => [
+      ...line(row),
+      ...(perPack
+        ? [
+            xlsxCell.integer(
+              row.piecesPerPack == null ? null : Number(row.piecesPerPack),
+            ),
+          ]
+        : []),
+    ]),
+    total: table.total
+      ? [...line(table.total), ...(perPack ? [null] : [])]
+      : undefined,
   };
 }

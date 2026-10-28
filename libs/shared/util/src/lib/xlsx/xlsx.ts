@@ -50,7 +50,12 @@ export interface XlsxSheet {
   heading: readonly string[];
   columns: readonly string[];
   rows: readonly (readonly XlsxCell[])[];
-  /** The total row, bold, outside the auto filter. */
+  /** Indexes of `rows` written bold: subtotal rows, as the group rows of the screen. */
+  boldRows?: ReadonlySet<number>;
+  /**
+   * The total row, bold, after one empty row: Excel widens the auto filter over a row that touches the data, and a sort
+   * from the header would move the total among the rows.
+   */
   total?: readonly XlsxCell[];
 }
 
@@ -61,8 +66,9 @@ const DAY_MS = 86_400_000;
 const UNIX_EPOCH_SERIAL = 25_569;
 // characters XML 1.0 does not allow, lone surrogates included (Excel refuses such a file as damaged)
 const INVALID_XML =
+  // the complement of the Char production of XML 1.0, written as escapes: the range ends are invisible characters
   // eslint-disable-next-line no-control-regex -- the controls XML 1.0 allows are named on purpose
-  /[^\u0009\u000A\u000D -퟿-�\u{10000}-\u{10FFFF}]/gu;
+  /[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu;
 const SHEET_NAME_FORBIDDEN = /[[\]:*?/\\]/g;
 // eslint-disable-next-line no-control-regex -- control characters are not allowed in a Windows file name
 const FILE_NAME_FORBIDDEN = /[\\/:*?"<>|\u0000-\u001F]/g;
@@ -233,13 +239,25 @@ function cellLength(cell: XlsxCell): number {
   }
 }
 
+/**
+ * The longest start of `value` within `units` UTF-16 units, as Excel and Windows count a name, by whole code points: a
+ * cut never leaves half of a surrogate pair, and an emoji takes two of the units.
+ */
+function cut(value: string, units: number): string {
+  let start = '';
+  for (const char of value) {
+    if (start.length + char.length > units) break;
+    start += char;
+  }
+  return start;
+}
+
 function sheetName(name: string): string {
-  const cleaned = clean(name)
-    .replace(SHEET_NAME_FORBIDDEN, ' ')
-    .replace(/^'+|'+$/g, '')
-    .trim()
-    .slice(0, 31)
-    .trim();
+  // Excel forbids an apostrophe at either end: stripped after the cut, which may bring one to the end
+  const cleaned = cut(
+    clean(name).replace(SHEET_NAME_FORBIDDEN, ' ').trim(),
+    31,
+  ).replace(/^['\s]+|['\s]+$/g, '');
   return cleaned || 'Sheet1';
 }
 
@@ -257,7 +275,7 @@ function rowXml(
 function worksheetXml(sheet: XlsxSheet, headerRow: number): string {
   const lastColumn = columnName(sheet.columns.length - 1);
   const lastData = headerRow + sheet.rows.length;
-  const lastRow = lastData + (sheet.total ? 1 : 0);
+  const lastRow = lastData + (sheet.total ? 2 : 0);
   const rows: string[] = sheet.heading.map((line, i) =>
     rowXml(i + 1, [xlsxCell.text(line)], i === 0),
   );
@@ -269,7 +287,9 @@ function worksheetXml(sheet: XlsxSheet, headerRow: number): string {
     ),
   );
   sheet.rows.forEach((cells, i) =>
-    rows.push(rowXml(headerRow + 1 + i, cells, false)),
+    rows.push(
+      rowXml(headerRow + 1 + i, cells, sheet.boldRows?.has(i) ?? false),
+    ),
   );
   if (sheet.total) rows.push(rowXml(lastRow, sheet.total, true));
 
@@ -383,7 +403,7 @@ export async function xlsxBytes(
     throw new RangeError('A sheet needs at least one column');
   }
   const headerRow = sheet.heading.length === 0 ? 1 : sheet.heading.length + 2;
-  const lastRow = headerRow + sheet.rows.length + (sheet.total ? 1 : 0);
+  const lastRow = headerRow + sheet.rows.length + (sheet.total ? 2 : 0);
   if (lastRow > MAX_ROWS) {
     throw new RangeError(`A sheet holds at most ${MAX_ROWS} rows`);
   }
@@ -407,13 +427,13 @@ export async function xlsxBytes(
 export function xlsxFileName(
   ...parts: readonly (string | null | undefined)[]
 ): string {
-  const name = parts
+  const joined = parts
     .filter((part): part is string => !!part && part.trim() !== '')
     .join(' ')
     .replace(FILE_NAME_FORBIDDEN, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 150)
-    .replace(/[. ]+$/, '');
+    .trim();
+  // cut as the sheet name; Windows drops a trailing dot or space
+  const name = cut(joined, 150).replace(/[. ]+$/, '');
   return `${name || 'export'}.xlsx`;
 }

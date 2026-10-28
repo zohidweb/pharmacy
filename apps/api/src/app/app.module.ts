@@ -1,13 +1,15 @@
 import {
+  type ExecutionContext,
   type MiddlewareConsumer,
   Module,
   type NestModule,
   RequestMethod,
 } from '@nestjs/common';
 import { ConfigModule, ConditionalModule } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, Reflector } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ProblemDetailsFilter } from '../common/filters/problem-details.filter';
+import { EXPORT_PAGE, MAX_PAGE_LIMIT } from '../common/pagination';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { CsrfGuard } from '../common/guards/csrf.guard';
 import { FreshAuthGuard } from '../common/guards/fresh-auth.guard';
@@ -64,6 +66,28 @@ import { AuditModule } from './audit/audit.module';
 // (nestjs-rate-limiting.md); sign-in and activation routes carry a stricter @Throttle.
 const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
 
+// A page past the screen size of an @ExportPage route is an Excel export (ADR-0015, amendment 2026-10-27): up to
+// 20 000 rows, some 200 ordinary pages of work, so it has its own small budget per tracker, route and minute besides
+// the default one.
+const reflector = new Reflector();
+const EXPORT_THROTTLE = {
+  name: 'export',
+  ttl: 60_000,
+  limit: 10,
+  skipIf: (context: ExecutionContext) => {
+    if (
+      context.getType() !== 'http' ||
+      !reflector.get<boolean | undefined>(EXPORT_PAGE, context.getHandler())
+    ) {
+      return true;
+    }
+    const { query } = context
+      .switchToHttp()
+      .getRequest<{ query?: Record<string, unknown> }>();
+    return !(Number(query?.limit) > MAX_PAGE_LIMIT);
+  },
+};
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -82,7 +106,7 @@ const DEFAULT_THROTTLE = { name: 'default', ttl: 60_000, limit: 300 };
     ThrottlerModule.forRootAsync({
       inject: [REDIS_CLIENT],
       useFactory: (client: RedisClient | null) => ({
-        throttlers: [DEFAULT_THROTTLE],
+        throttlers: [DEFAULT_THROTTLE, EXPORT_THROTTLE],
         ...(client ? { storage: new RedisThrottlerStorage(client) } : {}),
       }),
     }),

@@ -1,5 +1,6 @@
 import { auditGroups } from '@pharmacy/shared-domain';
 import type { AuditAction, AuditQuery } from '@pharmacy/shared-dto';
+import { EXPORT_ROW_LIMIT } from '@pharmacy/shared-util';
 import { Type } from 'class-transformer';
 import {
   IsIn,
@@ -44,7 +45,8 @@ export class AuditJournalQueryDto implements AuditQuery {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  // the Excel export asks for the whole period at once; past 100 — audit:export (ADR-0015, amendment 2026-10-27)
+  @Max(EXPORT_ROW_LIMIT)
   limit?: number;
 
   @IsOptional()

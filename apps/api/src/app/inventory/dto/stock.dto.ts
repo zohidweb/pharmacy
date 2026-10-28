@@ -4,6 +4,7 @@ import type {
   StockSortKey,
   StockStateFilter,
 } from '@pharmacy/shared-dto';
+import { EXPORT_ROW_LIMIT } from '@pharmacy/shared-util';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -63,7 +64,8 @@ export class StockListQueryDto implements StockListQuery {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  // the Excel export asks for the whole list at once; past 100 — inventory:export (ADR-0015, amendment 2026-10-27)
+  @Max(EXPORT_ROW_LIMIT)
   limit?: number;
 
   @IsOptional()

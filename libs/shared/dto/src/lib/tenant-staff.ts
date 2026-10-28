@@ -186,6 +186,7 @@ export interface AuditQuery {
   storeId?: string;
   action?: AuditAction;
   q?: string;
+  /** ≤ 100; up to `EXPORT_ROW_LIMIT` with `audit:export` (the Excel export, ADR-0015 amendment 2026-10-27). */
   limit?: number;
   offset?: number;
 }

@@ -30,6 +30,7 @@ const IMAGE_LINE = /^!\[([^\]]*)\]\(media:([^()\s]+)\)$/;
 const UNORDERED_ITEM = /^[-*]\s+(\S.*)$/;
 const ORDERED_ITEM = /^\d+\.\s+(\S.*)$/;
 const SEPARATOR_CELL = /^:?-{3,}:?$/;
+const MAX_TABLE_COLUMNS = 20;
 
 /**
  * Whether a link target may be rendered as a link: `https:`, `http:`, `mailto:` or a path from the site
@@ -201,17 +202,21 @@ function splitCells(line: string): string[] {
     .map((cell) => cell.trim());
 }
 
-function isTableSeparator(line: string): boolean {
-  if (!isTableRow(line)) return false;
-  return splitCells(line).every((cell) => SEPARATOR_CELL.test(cell));
+function isSeparatorCells(cells: string[]): boolean {
+  return cells.every((cell) => SEPARATOR_CELL.test(cell));
 }
 
+/**
+ * A table starts with a header row of at most MAX_TABLE_COLUMNS cells followed by a separator row of exactly
+ * the same number of cells. Bounding the width keeps the padding of body rows linear in the text.
+ */
 function isTableStart(lines: string[], index: number): boolean {
-  return (
-    isTableRow(lines[index]) &&
-    index + 1 < lines.length &&
-    isTableSeparator(lines[index + 1])
-  );
+  if (!isTableRow(lines[index]) || index + 1 >= lines.length) return false;
+  if (!isTableRow(lines[index + 1])) return false;
+  const header = splitCells(lines[index]);
+  if (header.length > MAX_TABLE_COLUMNS) return false;
+  const separator = splitCells(lines[index + 1]);
+  return separator.length === header.length && isSeparatorCells(separator);
 }
 
 function normalizeRow(cells: string[], width: number): SiteInline[][] {

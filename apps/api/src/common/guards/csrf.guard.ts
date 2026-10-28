@@ -6,7 +6,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { ProblemException } from '../errors/problem.exception';
-import { isOperatorPath, isSyncPath, licenseKeyIdOf } from '../http/contour';
+import {
+  isOperatorPath,
+  isPublicPath,
+  isSyncPath,
+  licenseKeyIdOf,
+} from '../http/contour';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -32,17 +37,26 @@ function isJson(contentType: string): boolean {
 // Global CSRF guard of the web contour (ADR-0008; auth design 2026-10-02, section 7, guard 2).
 // Applies to every route, @Public() ones included (login is a public POST). For unsafe methods:
 // Sec-Fetch-Site, when present, must be same-origin; without it the Origin must equal WEB_ORIGIN
-// exactly (ADMIN_ORIGIN on the operator contour /api/v1/operator/*, WEB_ORIGIN elsewhere); a body
+// exactly (ADMIN_ORIGIN on the operator contour /api/v1/operator/*, SITE_ORIGIN on the public contour
+// /api/v1/public/*, WEB_ORIGIN elsewhere); a body
 // (or a declared content type) must be JSON, which rules out form posts and other "simple"
 // cross-site requests.
 @Injectable()
 export class CsrfGuard implements CanActivate {
   private readonly webOrigin: string;
   private readonly adminOrigin: string;
+  private readonly siteOrigin: string;
 
   constructor(config: ConfigService) {
     this.webOrigin = config.getOrThrow<string>('WEB_ORIGIN');
     this.adminOrigin = config.getOrThrow<string>('ADMIN_ORIGIN');
+    this.siteOrigin = config.getOrThrow<string>('SITE_ORIGIN');
+  }
+
+  private allowedOrigin(originalUrl: string | undefined): string {
+    if (isOperatorPath(originalUrl)) return this.adminOrigin;
+    if (isPublicPath(originalUrl)) return this.siteOrigin;
+    return this.webOrigin;
   }
 
   canActivate(context: ExecutionContext): boolean {
@@ -62,8 +76,7 @@ export class CsrfGuard implements CanActivate {
     const sameOrigin =
       fetchSite !== undefined
         ? fetchSite === 'same-origin'
-        : header(req, 'origin') ===
-          (isOperatorPath(req.originalUrl) ? this.adminOrigin : this.webOrigin);
+        : header(req, 'origin') === this.allowedOrigin(req.originalUrl);
     if (!sameOrigin) throw new ProblemException(403, 'csrf_rejected');
 
     const contentType = header(req, 'content-type');

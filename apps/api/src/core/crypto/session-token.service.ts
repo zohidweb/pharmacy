@@ -121,6 +121,38 @@ export class SessionTokenService {
     }
   }
 
+  /**
+   * The operator check without a promise, for the body parser of the site image upload: it asks whether a request
+   * carries a genuine operator token before it reads 3 MiB. HMAC only — the session record is still checked by the
+   * operator session resolver after the parse. The same rules as verifyOperator.
+   */
+  verifyOperatorNow(token: string): VerifiedOperatorClaims | null {
+    try {
+      const key = this.keyFor(token);
+      if (!key) return null;
+      const payload = this.jwt.verify<Record<string, unknown>>(token, {
+        secret: key,
+        algorithms: [ALGORITHM],
+        issuer: SESSION_TOKEN_ISSUER,
+        audience: OPERATOR_AUDIENCE,
+      });
+      const { jti, sub, tid, aud, iat, exp } = payload;
+      if (
+        !isNonEmptyString(jti) ||
+        !isNonEmptyString(sub) ||
+        tid !== undefined ||
+        aud !== OPERATOR_AUDIENCE ||
+        !isTimestamp(iat) ||
+        !isTimestamp(exp)
+      ) {
+        return null;
+      }
+      return { jti, sub, aud: OPERATOR_AUDIENCE, iat, exp };
+    } catch {
+      return null;
+    }
+  }
+
   /** The verified claims, or null for any invalid, foreign, expired or malformed token. */
   async verify(
     token: string,

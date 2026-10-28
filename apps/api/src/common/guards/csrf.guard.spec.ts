@@ -23,7 +23,10 @@ class Controller {
 // Both origins are given here: the guard reads ADMIN_ORIGIN too, and the developer's .env (which
 // ConfigService falls back to) is not there in every checkout.
 const ADMIN_ORIGIN = 'https://admin.pharmacy.test';
-const guard = new CsrfGuard(new ConfigService({ WEB_ORIGIN, ADMIN_ORIGIN }));
+const SITE_ORIGIN = 'https://site.pharmacy.test';
+const guard = new CsrfGuard(
+  new ConfigService({ WEB_ORIGIN, ADMIN_ORIGIN, SITE_ORIGIN }),
+);
 
 function check(request: TestRequest, handler = 'handle'): boolean {
   return guard.canActivate(httpContext(Controller, handler, request));

@@ -4,6 +4,8 @@
 
 const OPERATOR_PREFIX = '/api/v1/operator';
 const SYNC_PREFIX = '/api/v1/sync';
+const PUBLIC_PREFIX = '/api/v1/public';
+const SITE_MEDIA_UPLOAD_PATH = '/api/v1/operator/site-media';
 
 export function isOperatorPath(originalUrl: string | undefined): boolean {
   // Express always sets originalUrl; without one there is no operator route to reach.
@@ -25,6 +27,26 @@ export function isSyncPath(originalUrl: string | undefined): boolean {
     return false;
   const path = originalUrl.split('?')[0].toLowerCase();
   return path === SYNC_PREFIX || path.startsWith(`${SYNC_PREFIX}/`);
+}
+
+// The public contour of the marketing site (ADR-0023): no session, answers for anyone; its unsafe requests (the
+// connection request form) come from SITE_ORIGIN. Origin-form paths only.
+export function isPublicPath(originalUrl: string | undefined): boolean {
+  if (typeof originalUrl !== 'string' || !originalUrl.startsWith('/'))
+    return false;
+  const path = originalUrl.split('?')[0].toLowerCase();
+  return path === PUBLIC_PREFIX || path.startsWith(`${PUBLIC_PREFIX}/`);
+}
+
+// The upload of a site image by an operator (ADR-0023, P16): a JSON body with base64, up to 3 MiB. The path only —
+// the caller checks the method (a body parser sees bodies of unsafe methods only). Origin-form paths only.
+export function isSiteMediaUploadPath(
+  originalUrl: string | undefined,
+): boolean {
+  if (typeof originalUrl !== 'string' || !originalUrl.startsWith('/'))
+    return false;
+  const path = originalUrl.split('?')[0].toLowerCase();
+  return path === SITE_MEDIA_UPLOAD_PATH;
 }
 
 // The loads of data from a file (spec 2026-10-20-data-import, F19): their JSON body holds up to 20 000 rows, so these

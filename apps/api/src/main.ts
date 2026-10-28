@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import { AppModule } from './app/app.module';
 import {
   isImportPath,
+  isSiteMediaUploadPath,
   isSyncPath,
   licenseKeyIdOf,
 } from './common/http/contour';
@@ -39,8 +40,13 @@ async function bootstrap() {
   // No API answer is stored by the browser: they carry personal and prescription data, and pharmacy PCs are shared
   // (security review 2026-10-22, P1). No ETag either — nothing is revalidated.
   app.set('etag', false);
-  app.use((_req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('Cache-Control', 'no-store');
+  // The exception: the public images of the site (GET /api/v1/public/media/…, ADR-0023, P3) — the controller sets the
+  // immutable header itself.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const path = (req.originalUrl ?? req.url).split('?')[0].toLowerCase();
+    if (req.method !== 'GET' || !path.startsWith('/api/v1/public/media/')) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
     next();
   });
   // Before the body parsers: the parser of the loads reads the session token from the cookie.
@@ -70,6 +76,18 @@ async function bootstrap() {
         return false;
       const token = extractor.extract(req);
       return token !== null && tokens.verifyNow(token, 'web') !== null;
+    },
+  });
+  // The upload of a site image — a JSON body with base64, up to 3 MiB (ADR-0023, P16), only with a genuine operator
+  // token (signature and expiry; the session record and the permission are checked after the parse).
+  app.useBodyParser('json', {
+    limit: 3 * 1024 * 1024,
+    inflate: false,
+    type: (req: BodyRequest) => {
+      if (!isSiteMediaUploadPath(req.originalUrl ?? req.url) || !isJson(req))
+        return false;
+      const token = extractor.extractOperator(req);
+      return token !== null && tokens.verifyOperatorNow(token) !== null;
     },
   });
   app.useBodyParser('json', { inflate: false });

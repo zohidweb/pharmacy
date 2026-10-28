@@ -108,7 +108,12 @@ export interface ArticleTranslation {
   seoDescription: string;
 }
 
-/** GET /operator/articles/{id} (`content:manage`). RU is required for publication. */
+/**
+ * GET /operator/articles/{id} (`content:manage`). RU with a title and a text is required for publication. A saved
+ * translation cannot be removed (rows are never deleted): the readers (the public list, the page, `locales`, the
+ * sitemap) treat a translation with an empty `title` or `body` as absent. The table needs a title of 3+ characters,
+ * so the operator hides a language by emptying its `body`.
+ */
 export interface Article {
   id: string;
   slug: string;
@@ -121,24 +126,35 @@ export interface Article {
   translations: Partial<Record<UiLocale, ArticleTranslation>>;
 }
 
-/** GET /operator/articles?status&limit&offset (`content:manage`) → `Page<ArticleListItem>`. */
+/**
+ * GET /operator/articles?status&q&limit&offset (`content:manage`) → `Page<ArticleListItem>`, the latest changed first
+ * (20 by default, 100 at most). Without `status` the archived ones are left out; `q` is a part of the RU title.
+ */
 export interface ArticleListItem {
   id: string;
   slug: string;
   status: ArticleStatus;
   titleRu: string;
-  /** The languages the article has a translation in. */
+  /** The languages with a readable translation (a title and a text). `titleRu` is empty without an RU translation. */
   locales: UiLocale[];
   publishedAt: string | null;
   updatedAt: string;
 }
 
 /**
- * POST /operator/articles (no `version`, 201 `Article`) and PUT /operator/articles/{id} (with
- * `version`) (`content:manage`). Errors: 400 `validation_failed`; 404 `article_not_found`,
- * `site_media_not_found`; 409 `slug_taken`, `version_conflict` (someone saved after the version
- * given). Publication (POST .../publish) also answers 409 `ru_translation_required`; archiving
- * (POST .../archive) 409 `only_draft_can_be_archived`.
+ * POST /operator/articles (no `version`, 201 `Article` of version 1) and PUT /operator/articles/{id} (with
+ * `version`, 200) (`content:manage`). A language is saved as a whole; a language absent from the request (or with all
+ * five fields empty) stays as it was; a given language needs a title of 3–150 characters. Errors: 400
+ * `validation_failed` (also PUT without `version`), 400 `media_not_found` (the cover or a `media:<id>` picture of a
+ * text is not stored); 404 `article_not_found`; 409 `slug_taken`, `version_conflict` (someone saved after the version
+ * given), `slug_locked` (the slug of an article that was ever published does not change), `archived` (an archived
+ * article accepts no change).
+ *
+ * Every save and every status change raises `version`. Status changes (200 `Article`, no body):
+ * POST /operator/articles/{id}/publish (draft or unpublished → published; `publishedAt` keeps the first date) —
+ * 400 `translation_required` (no RU with a title and a text), 409 `already_published`, `archived`;
+ * POST .../unpublish (published → unpublished) — 409 `not_published`, `archived`;
+ * POST .../archive (draft → archived) — 409 `not_draft`, `archived`. All of them 404 `article_not_found`.
  */
 export interface SaveArticleRequest {
   slug: string;

@@ -2,13 +2,22 @@ import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type {
   LegalDocumentRevision,
+  Page,
+  PublicArticle,
+  PublicArticleListItem,
   PublicSiteInfo,
+  PublicSitemap,
 } from '@pharmacy/shared-dto';
 import type { Response } from 'express';
 import { PUBLIC_READ_LIMIT } from '../../../common/throttling/public-limits';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { Public } from '../../../common/guards/decorators';
 import { isUuid } from '../../../core/database';
+import { ArticlesService } from './articles.service';
+import {
+  PublicArticleListQueryDto,
+  PublicArticleQueryDto,
+} from './dto/articles.dto';
 import { PublicLegalQueryDto } from './dto/legal-documents.dto';
 import { legalKind } from './legal-documents.controller';
 import { LegalDocumentsService } from './legal-documents.service';
@@ -16,8 +25,7 @@ import { sendMedia } from './media-response';
 import { SiteMediaService } from './site-media.service';
 import { SiteSettingsService } from './site-settings.service';
 
-// The public contour of the site (ADR-0023, spec 2026-10-28-public-site-design, 7.2): no session, reads only. The
-// articles join the same path.
+// The public contour of the site (ADR-0023, spec 2026-10-28-public-site-design, 7.2): no session, reads only.
 @Public()
 @Throttle({ default: PUBLIC_READ_LIMIT })
 @Controller({ path: 'public', version: '1' })
@@ -26,6 +34,7 @@ export class PublicSiteController {
     private readonly settings: SiteSettingsService,
     private readonly media: SiteMediaService,
     private readonly legal: LegalDocumentsService,
+    private readonly articles: ArticlesService,
   ) {}
 
   /** The settings of the site and the tariffs in one answer; the site keeps it for 60 seconds (A5). */
@@ -59,5 +68,35 @@ export class PublicSiteController {
     @Query() query: PublicLegalQueryDto,
   ): Promise<LegalDocumentRevision> {
     return this.legal.publicCurrent(legalKind(kind), query.locale ?? 'ru');
+  }
+
+  /** The published articles that have a text in the language (RU when omitted), the newest first; 12 by default, 50 at most. */
+  @Get('articles')
+  async articleList(
+    @Query() query: PublicArticleListQueryDto,
+  ): Promise<Page<PublicArticleListItem>> {
+    const limit = query.limit ?? 12;
+    const offset = query.offset ?? 0;
+    const page = await this.articles.publicList(
+      query.locale ?? 'ru',
+      limit,
+      offset,
+    );
+    return { ...page, limit, offset };
+  }
+
+  /** 404 `article_not_found`: not published, or no text in the language (P11); 400 `validation_failed` (a bad language). */
+  @Get('articles/:slug')
+  article(
+    @Param('slug') slug: string,
+    @Query() query: PublicArticleQueryDto,
+  ): Promise<PublicArticle> {
+    return this.articles.publicArticle(slug, query.locale ?? 'ru');
+  }
+
+  /** The slugs and dates of the articles and legal documents by language, for sitemap.xml of the site. */
+  @Get('sitemap')
+  sitemap(): Promise<PublicSitemap> {
+    return this.articles.sitemap();
   }
 }

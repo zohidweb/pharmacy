@@ -49,6 +49,18 @@ export function isSiteMediaUploadPath(
   return path === SITE_MEDIA_UPLOAD_PATH;
 }
 
+// The texts of the site written by an operator (ADR-0023): an article takes 100 000 characters of body per language,
+// a legal document 200 000 — in Cyrillic two bytes each, so the default 100 KB of a body does not hold them; these
+// routes take up to 1 MiB. The path only — the caller checks the method. Origin-form paths only.
+const SITE_TEXT_SAVE_PATH =
+  /^\/api\/v1\/operator\/(articles(\/[0-9a-f-]{36})?|legal-documents\/[a-z]+\/[a-z]+\/draft)\/?$/;
+
+export function isSiteTextSavePath(originalUrl: string | undefined): boolean {
+  if (typeof originalUrl !== 'string' || !originalUrl.startsWith('/'))
+    return false;
+  return SITE_TEXT_SAVE_PATH.test(originalUrl.split('?')[0].toLowerCase());
+}
+
 // The loads of data from a file (spec 2026-10-20-data-import, F19): their JSON body holds up to 20 000 rows, so these
 // routes — the load and its check — take a body of up to 10 MB. Origin-form paths only.
 const IMPORT_PATH =

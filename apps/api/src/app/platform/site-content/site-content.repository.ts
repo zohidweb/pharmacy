@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  Article,
+  ArticleListItem,
+  ArticleStatus,
+  ArticleTranslation,
   LegalDocumentDraft,
   LegalDocumentKind,
   LegalDocumentRevision,
+  PublicArticle,
+  PublicArticleListItem,
   PublicService,
   PublicSiteInfo,
   SiteMedia,
@@ -89,6 +95,41 @@ const toLegalDraft = (row: LegalDraftRow): LegalDocumentDraft => ({
   effectiveFrom: row.effectiveFrom,
   updatedAt: iso(row.updatedAt),
 });
+
+interface ArticleRow {
+  id: string;
+  slug: string;
+  status: string;
+  coverMediaId: string | null;
+  publishedAt: Date | string | null;
+  version: number;
+}
+
+/** The part of an article the rules of the service decide on. */
+export interface ArticleState {
+  id: string;
+  slug: string;
+  status: ArticleStatus;
+  coverMediaId: string | null;
+  publishedAt: string | null;
+  version: number;
+}
+
+const toArticleState = (row: ArticleRow): ArticleState => ({
+  id: row.id,
+  slug: row.slug,
+  status: row.status as ArticleStatus,
+  coverMediaId: row.coverMediaId,
+  publishedAt: row.publishedAt === null ? null : iso(row.publishedAt),
+  version: row.version,
+});
+
+/** A translation counts for the readers only with a title and a text (the table cannot hold a removed translation). */
+const READABLE = sql`t.title <> '' and t.body <> ''`;
+
+/** `%`, `_` and the escape character itself are text in a LIKE pattern. */
+const likeEscape = (value: string): string =>
+  value.replace(/[\\%_]/g, (char) => `\\${char}`);
 
 // Everything but the bytes: lists and records never read the file (it is up to 2 MiB).
 const MEDIA_COLUMNS = sql`m.id, m.content_type, m.width, m.height, octet_length(m.bytes) as byte_size, m.alt,
@@ -406,5 +447,337 @@ export class SiteContentRepository {
       .limit(1)
       .executeTakeFirst();
     return row?.id ?? null;
+  }
+
+  /**
+   * The current revision of every kind and language that has one, by the same rule as `currentLegalRevision` (the
+   * latest by the date of entry into force, then by the time of the publication, among those whose date has come).
+   */
+  async currentLegalRevisions(
+    trx: Transaction<DB>,
+    today: string,
+  ): Promise<
+    { kind: LegalDocumentKind; locale: UiLocale; publishedAt: string }[]
+  > {
+    const rows = await trx
+      .selectFrom('legalDocumentRevisions')
+      .select(['kind', 'locale', 'publishedAt'])
+      .distinctOn(['kind', 'locale'])
+      .where('effectiveFrom', '<=', today)
+      .orderBy('kind')
+      .orderBy('locale')
+      .orderBy('effectiveFrom', 'desc')
+      .orderBy('publishedAt', 'desc')
+      .execute();
+    return rows.map((row) => ({
+      kind: row.kind as LegalDocumentKind,
+      locale: row.locale as UiLocale,
+      publishedAt: iso(row.publishedAt),
+    }));
+  }
+
+  // ── Articles ──────────────────────────────────────────────────────────────────────────
+
+  /** The row a rule decides on; `lock` takes the row lock that serializes the status changes of one article. */
+  async articleState(
+    trx: Transaction<DB>,
+    id: string,
+    lock = false,
+  ): Promise<ArticleState | null> {
+    let query = trx
+      .selectFrom('articles')
+      .select([
+        'id',
+        'slug',
+        'status',
+        'coverMediaId',
+        'publishedAt',
+        'version',
+      ])
+      .where('id', '=', id);
+    if (lock) query = query.forUpdate();
+    const row = await query.executeTakeFirst();
+    return row === undefined ? null : toArticleState(row);
+  }
+
+  async article(trx: Transaction<DB>, id: string): Promise<Article | null> {
+    const row = await trx
+      .selectFrom('articles')
+      .select([
+        'id',
+        'slug',
+        'status',
+        'coverMediaId',
+        'publishedAt',
+        'version',
+        'updatedAt',
+      ])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (row === undefined) return null;
+    const translations = await trx
+      .selectFrom('articleTranslations')
+      .selectAll()
+      .where('articleId', '=', id)
+      .execute();
+    const byLocale: Article['translations'] = {};
+    for (const t of translations)
+      byLocale[t.locale as UiLocale] = {
+        title: t.title,
+        excerpt: t.excerpt,
+        body: t.body,
+        seoTitle: t.seoTitle,
+        seoDescription: t.seoDescription,
+      };
+    return {
+      id: row.id,
+      slug: row.slug,
+      status: row.status as ArticleStatus,
+      coverMediaId: row.coverMediaId,
+      publishedAt: row.publishedAt === null ? null : iso(row.publishedAt),
+      updatedAt: iso(row.updatedAt),
+      version: row.version,
+      translations: byLocale,
+    };
+  }
+
+  async insertArticle(
+    trx: Transaction<DB>,
+    values: {
+      id: string;
+      slug: string;
+      coverMediaId: string | null;
+      operatorId: string;
+    },
+  ): Promise<void> {
+    await trx
+      .insertInto('articles')
+      .values({
+        id: values.id,
+        slug: values.slug,
+        coverMediaId: values.coverMediaId,
+        createdBy: values.operatorId,
+        updatedBy: values.operatorId,
+      })
+      .execute();
+  }
+
+  /**
+   * The edit, taken only while `version` is still the stored one: of two edits made on the same version the second
+   * finds nothing to change and gets `false`. A success raises the version.
+   */
+  async updateArticleVersioned(
+    trx: Transaction<DB>,
+    id: string,
+    version: number,
+    values: { slug: string; coverMediaId: string | null },
+    operatorId: string,
+  ): Promise<boolean> {
+    const result = await trx
+      .updateTable('articles')
+      .set({
+        slug: values.slug,
+        coverMediaId: values.coverMediaId,
+        version: sql<number>`version + 1`,
+        updatedAt: sql`now()`,
+        updatedBy: operatorId,
+      })
+      .where('id', '=', id)
+      .where('version', '=', version)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) === 1;
+  }
+
+  /** The status change; `published_at` keeps the first date of the publication. The caller holds the row lock. */
+  async setArticleStatus(
+    trx: Transaction<DB>,
+    id: string,
+    status: ArticleStatus,
+    operatorId: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('articles')
+      .set({
+        status,
+        ...(status === 'published'
+          ? { publishedAt: sql<Date>`coalesce(published_at, now())` }
+          : {}),
+        version: sql<number>`version + 1`,
+        updatedAt: sql`now()`,
+        updatedBy: operatorId,
+      })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  async upsertArticleTranslation(
+    trx: Transaction<DB>,
+    articleId: string,
+    locale: UiLocale,
+    t: ArticleTranslation,
+  ): Promise<void> {
+    await trx
+      .insertInto('articleTranslations')
+      .values({ articleId, locale, ...t })
+      .onConflict((oc) => oc.columns(['articleId', 'locale']).doUpdateSet(t))
+      .execute();
+  }
+
+  /**
+   * The operator list, the latest changed first. Without `status` the archived ones are left out; `q` is a part of the
+   * RU title. `locales` are the readable translations.
+   */
+  async listArticles(
+    trx: Transaction<DB>,
+    filter: { status?: ArticleStatus; q?: string },
+    limit: number,
+    offset: number,
+  ): Promise<{ items: ArticleListItem[]; total: number }> {
+    const byStatus =
+      filter.status === undefined
+        ? sql`a.status <> 'archived'`
+        : sql`a.status = ${filter.status}`;
+    const byTitle =
+      filter.q === undefined || filter.q === ''
+        ? sql`true`
+        : sql`r.title ilike ${`%${likeEscape(filter.q)}%`}`;
+    const { rows } = await sql<{
+      id: string;
+      slug: string;
+      status: string;
+      titleRu: string;
+      locales: string[];
+      publishedAt: Date | string | null;
+      updatedAt: Date | string;
+    }>`
+      select a.id, a.slug, a.status, coalesce(r.title, '') as title_ru,
+             coalesce((select array_agg(t.locale order by t.locale) from pharmacy.article_translations t
+                       where t.article_id = a.id and ${READABLE}), '{}'::text[]) as locales,
+             a.published_at, a.updated_at
+      from pharmacy.articles a
+      left join pharmacy.article_translations r on r.article_id = a.id and r.locale = 'ru'
+      where ${byStatus} and ${byTitle}
+      order by a.updated_at desc, a.id desc
+      limit ${limit} offset ${offset}`.execute(trx);
+    const { rows: counted } = await sql<{ total: number | string }>`
+      select count(*) as total
+      from pharmacy.articles a
+      left join pharmacy.article_translations r on r.article_id = a.id and r.locale = 'ru'
+      where ${byStatus} and ${byTitle}`.execute(trx);
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        status: row.status as ArticleStatus,
+        titleRu: row.titleRu,
+        locales: row.locales as UiLocale[],
+        publishedAt: row.publishedAt === null ? null : iso(row.publishedAt),
+        updatedAt: iso(row.updatedAt),
+      })),
+      total: Number(counted[0].total),
+    };
+  }
+
+  /** The published articles that have a readable translation in `locale`, the newest publication first. */
+  async publicArticles(
+    trx: Transaction<DB>,
+    locale: UiLocale,
+    limit: number,
+    offset: number,
+  ): Promise<{ items: PublicArticleListItem[]; total: number }> {
+    const { rows } = await sql<{
+      slug: string;
+      title: string;
+      excerpt: string;
+      coverMediaId: string | null;
+      publishedAt: Date | string;
+    }>`
+      select a.slug, t.title, t.excerpt, a.cover_media_id, a.published_at
+      from pharmacy.articles a
+      join pharmacy.article_translations t on t.article_id = a.id and t.locale = ${locale}
+      where a.status = 'published' and ${READABLE}
+      order by a.published_at desc, a.id desc
+      limit ${limit} offset ${offset}`.execute(trx);
+    const { rows: counted } = await sql<{ total: number | string }>`
+      select count(*) as total
+      from pharmacy.articles a
+      join pharmacy.article_translations t on t.article_id = a.id and t.locale = ${locale}
+      where a.status = 'published' and ${READABLE}`.execute(trx);
+    return {
+      items: rows.map((row) => ({
+        slug: row.slug,
+        title: row.title,
+        excerpt: row.excerpt,
+        coverMediaId: row.coverMediaId,
+        publishedAt: iso(row.publishedAt),
+      })),
+      total: Number(counted[0].total),
+    };
+  }
+
+  /** A published article in `locale`; `null` when it is not published or has no readable text in the language. */
+  async publicArticle(
+    trx: Transaction<DB>,
+    slug: string,
+    locale: UiLocale,
+  ): Promise<PublicArticle | null> {
+    const { rows } = await sql<{
+      slug: string;
+      title: string;
+      excerpt: string;
+      body: string;
+      seoTitle: string;
+      seoDescription: string;
+      coverMediaId: string | null;
+      publishedAt: Date | string;
+      updatedAt: Date | string;
+      locales: string[];
+    }>`
+      select a.slug, t.title, t.excerpt, t.body, t.seo_title, t.seo_description, a.cover_media_id, a.published_at,
+             a.updated_at,
+             (select array_agg(l.locale order by l.locale) from pharmacy.article_translations l
+              where l.article_id = a.id and l.title <> '' and l.body <> '') as locales
+      from pharmacy.articles a
+      join pharmacy.article_translations t on t.article_id = a.id and t.locale = ${locale}
+      where a.slug = ${slug} and a.status = 'published' and ${READABLE}`.execute(
+      trx,
+    );
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      slug: row.slug,
+      title: row.title,
+      excerpt: row.excerpt,
+      coverMediaId: row.coverMediaId,
+      publishedAt: iso(row.publishedAt),
+      locale,
+      body: row.body,
+      seoTitle: row.seoTitle,
+      seoDescription: row.seoDescription,
+      updatedAt: iso(row.updatedAt),
+      locales: row.locales as UiLocale[],
+    };
+  }
+
+  /** The published articles with the languages they can be read in, for `sitemap.xml`; the newest first. */
+  async sitemapArticles(
+    trx: Transaction<DB>,
+  ): Promise<{ slug: string; locales: UiLocale[]; updatedAt: string }[]> {
+    const { rows } = await sql<{
+      slug: string;
+      updatedAt: Date | string;
+      locales: string[];
+    }>`
+      select a.slug, a.updated_at, array_agg(t.locale order by t.locale) as locales
+      from pharmacy.articles a
+      join pharmacy.article_translations t on t.article_id = a.id
+      where a.status = 'published' and ${READABLE}
+      group by a.id
+      order by a.published_at desc, a.id desc`.execute(trx);
+    return rows.map((row) => ({
+      slug: row.slug,
+      locales: row.locales as UiLocale[],
+      updatedAt: iso(row.updatedAt),
+    }));
   }
 }

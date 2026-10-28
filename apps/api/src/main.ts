@@ -10,6 +10,7 @@ import { AppModule } from './app/app.module';
 import {
   isImportPath,
   isSiteMediaUploadPath,
+  isSiteTextSavePath,
   isSyncPath,
   licenseKeyIdOf,
 } from './common/http/contour';
@@ -82,6 +83,17 @@ async function bootstrap() {
     inflate: false,
     type: (req: BodyRequest) => {
       if (!isSiteMediaUploadPath(req.originalUrl ?? req.url) || !isJson(req))
+        return false;
+      const token = extractor.extractOperator(req);
+      return token !== null && tokens.verifyOperatorNow(token) !== null;
+    },
+  });
+  // The save of an article or of a draft of a legal document — up to 1 MiB (the texts are long), same condition.
+  app.useBodyParser('json', {
+    limit: 1024 * 1024,
+    inflate: false,
+    type: (req: BodyRequest) => {
+      if (!isSiteTextSavePath(req.originalUrl ?? req.url) || !isJson(req))
         return false;
       const token = extractor.extractOperator(req);
       return token !== null && tokens.verifyOperatorNow(token) !== null;

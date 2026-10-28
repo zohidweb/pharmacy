@@ -16,6 +16,12 @@
     "operatorRole": "Оператор платформы",
     "openProfile": "Профиль: {name}",
     "localeLabel": "Язык интерфейса",
+    "fontScale": {
+      "label": "Размер шрифта",
+      "decrease": "Уменьшить шрифт",
+      "increase": "Увеличить шрифт",
+      "reset": "Размер шрифта {percent} %, вернуть обычный"
+    },
     "notifications": "Уведомления",
     "allNotifications": "Все уведомления",
     "noNotifications": "Новых уведомлений нет",

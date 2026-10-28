@@ -54,7 +54,8 @@ export function Select({
             required={required}
             className={cx(
               controlClassName,
-              'ph-select h-(--ph-input-height) cursor-pointer pe-10',
+              // items-center: a customizable select is a flex box, its value would sit at the top
+              'ph-select h-(--ph-input-height) cursor-pointer items-center pe-10',
             )}
             {...control}
             {...selectProps}

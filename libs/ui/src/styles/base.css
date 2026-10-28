@@ -4,7 +4,8 @@
  */
 html {
   font-family: var(--ph-font-sans);
-  font-size: 100%; /* 1rem = 16px, user zoom preserved */
+  /* 1rem = 16px, user zoom preserved; apps/admin scales it by the operator's font size (--ph-root-font-scale) */
+  font-size: calc(100% * var(--ph-root-font-scale));
   color: var(--ph-color-fg);
   background: var(--ph-color-bg);
   -webkit-text-size-adjust: 100%;
@@ -16,10 +17,47 @@ body {
   line-height: var(--ph-line-height-md);
 }
 
-/* Focus via outline (kept in Windows forced-colors mode); components never reset it. */
+/*
+ * Focus via outline (kept in Windows forced-colors mode); components never reset it. Text-like controls replace it with
+ * their primary border and ring (--ph-input-ring-focus), through outline-hidden, which forced-colors mode still draws.
+ */
 :focus-visible {
   outline: var(--ph-focus-ring-width) solid var(--ph-color-focus-ring);
   outline-offset: var(--ph-focus-ring-offset);
+}
+
+/*
+ * Clickable controls show the hand cursor in apps/web and apps/admin (QA 2026-10-28): Tailwind v4 preflight gives
+ * buttons the arrow. Zero specificity, and in the base layer: a component's disabled:cursor-not-allowed still wins.
+ */
+:where(
+  button,
+  select,
+  summary,
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='file'],
+  input[type='range'],
+  input[type='color'],
+  input[type='button'],
+  input[type='submit'],
+  input[type='reset'],
+  [role='button'],
+  [role='tab'],
+  [role='menuitem'],
+  [role='menuitemradio'],
+  [role='menuitemcheckbox'],
+  [role='option'],
+  [role='switch'],
+  [role='checkbox'],
+  [role='radio']
+):not(:disabled, [aria-disabled='true']) {
+  cursor: pointer;
+}
+
+/* The calendar button of date and time fields */
+::-webkit-calendar-picker-indicator {
+  cursor: pointer;
 }
 
 .ph-numeric {

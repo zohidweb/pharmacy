@@ -29,21 +29,36 @@
     margin-block-start: var(--ph-space-1);
     padding: var(--ph-space-1);
     border: var(--ph-border-width-1) solid var(--ph-color-border);
-    border-radius: var(--ph-radius-md);
+    border-radius: var(--ph-input-radius);
     background: var(--ph-color-surface);
     box-shadow: var(--ph-shadow-lg);
   }
 
+  /*
+   * The text of an option stands under the value of the field (QA 2026-10-28): the picker's padding (space-1) and the
+   * option's (space-2) make the field's padding (space-3); the checkmark of the chosen option moves to its end.
+   */
   .ph-select option {
     min-block-size: var(--ph-size-control-compact);
-    padding-inline: var(--ph-space-3);
+    padding-inline: var(--ph-space-2);
     border-radius: var(--ph-radius-sm);
     font-size: var(--ph-font-size-sm);
+  }
+
+  .ph-select option::checkmark {
+    order: 1;
+    margin-inline-start: auto;
+    padding-inline-start: var(--ph-space-2);
   }
 
   .ph-select option:hover,
   .ph-select option:focus-visible {
     background: var(--ph-color-surface-sunken);
+  }
+
+  /* The focus ring stays inside the option: an offset one would stick out of the picker. */
+  .ph-select option:focus-visible {
+    outline-offset: calc(var(--ph-focus-ring-width) * -1);
   }
 
   .ph-select option:checked {

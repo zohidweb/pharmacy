@@ -82,11 +82,15 @@ export function Field({
   );
 }
 
-/** Shared look of text-like controls (input, textarea, select). */
+/**
+ * Shared look of text-like controls (input, textarea, select) in apps/web and apps/admin: a white field; focus — the
+ * primary border and a soft ring in place of the offset outline (tokens --ph-input-*).
+ */
 export const controlClassName =
   'w-full min-w-0 rounded-(--ph-input-radius) border border-(--ph-input-border) ' +
-  'bg-(--ph-input-bg) px-(--ph-input-padding-x) text-sm text-fg transition-colors ' +
+  'bg-(--ph-input-bg) px-(--ph-input-padding-x) text-sm text-fg transition ' +
   'placeholder:text-fg-subtle hover:border-fg-subtle focus-visible:border-(--ph-input-border-focus) ' +
-  'focus-visible:bg-surface aria-invalid:border-(--ph-input-border-invalid) ' +
+  'focus-visible:shadow-(--ph-input-ring-focus) focus-visible:outline-hidden ' +
+  'aria-invalid:border-(--ph-input-border-invalid) ' +
   'read-only:text-fg-muted disabled:cursor-not-allowed disabled:border-border ' +
-  'disabled:text-fg-disabled';
+  'disabled:bg-(--ph-input-bg-disabled) disabled:text-fg-disabled';

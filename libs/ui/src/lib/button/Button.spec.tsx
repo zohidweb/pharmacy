@@ -41,7 +41,7 @@ describe('Button', () => {
   it('exposes variant classes for links styled as buttons', () => {
     const classes = buttonClassName({ variant: 'secondary', block: true });
 
-    expect(classes).toContain('bg-primary-subtle');
+    expect(classes).toContain('bg-surface');
     expect(classes).toContain('w-full');
   });
 

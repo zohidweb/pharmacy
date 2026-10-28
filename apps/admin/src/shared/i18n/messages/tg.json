@@ -16,6 +16,12 @@
     "operatorRole": "Оператори платформа",
     "openProfile": "Профил: {name}",
     "localeLabel": "Забони интерфейс",
+    "fontScale": {
+      "label": "Андозаи ҳарф",
+      "decrease": "Хурд кардани ҳарф",
+      "increase": "Калон кардани ҳарф",
+      "reset": "Андозаи ҳарф {percent} %, ба андозаи муқаррарӣ баргардонед"
+    },
     "notifications": "Огоҳиномаҳо",
     "allNotifications": "Ҳамаи огоҳиномаҳо",
     "noNotifications": "Огоҳиномаи нав нест",

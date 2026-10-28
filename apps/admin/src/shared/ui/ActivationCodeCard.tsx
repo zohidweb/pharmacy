@@ -15,6 +15,8 @@ export interface ActivationCodeCardProps {
   recipient?: 'owner' | 'operator';
   /** What the operator does next (a link to the company, a close button). */
   action?: ReactNode;
+  /** false inside a dialog: the dialog is the frame, so no card within it. */
+  framed?: boolean;
 }
 
 // The code is 26 base32 characters; groups of 4 are easier to dictate (activation-code.ts).
@@ -34,19 +36,15 @@ export function ActivationCodeCard({
   title,
   recipient = 'owner',
   action,
+  framed = true,
 }: ActivationCodeCardProps) {
   const t = useTranslations('activationCode');
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const display = groups(code);
   const once = recipient === 'operator' ? 'onceOperator' : 'once';
 
-  return (
-    <Card
-      as="section"
-      aria-labelledby="activation-code-title"
-      className="flex flex-col gap-4"
-    >
-      <CardHeader title={title} titleId="activation-code-title" level={2} />
+  const body = (
+    <>
       <p
         className="m-0 select-all whitespace-nowrap font-mono text-lg font-bold tracking-wider"
         aria-label={t('codeLabel')}
@@ -82,6 +80,30 @@ export function ActivationCodeCard({
         </Button>
         {action}
       </div>
+    </>
+  );
+
+  if (!framed) {
+    return (
+      <section
+        aria-labelledby="activation-code-title"
+        className="flex flex-col gap-4"
+      >
+        <h3 id="activation-code-title" className="text-md font-bold text-fg">
+          {title}
+        </h3>
+        {body}
+      </section>
+    );
+  }
+  return (
+    <Card
+      as="section"
+      aria-labelledby="activation-code-title"
+      className="flex flex-col gap-4"
+    >
+      <CardHeader title={title} titleId="activation-code-title" level={2} />
+      {body}
     </Card>
   );
 }

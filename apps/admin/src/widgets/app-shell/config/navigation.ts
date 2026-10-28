@@ -8,6 +8,7 @@ type NavLabelKey =
   | 'companies'
   | 'createCompany'
   | 'siteRequests'
+  | 'siteMedia'
   | 'invoices'
   | 'services'
   | 'licenses'
@@ -60,6 +61,7 @@ export const navigation: NavSection[] = [
         icon: 'inbox',
         counter: 'connectionRequests',
       },
+      { route: 'siteMedia', label: 'siteMedia', icon: 'image' },
     ],
   },
   {

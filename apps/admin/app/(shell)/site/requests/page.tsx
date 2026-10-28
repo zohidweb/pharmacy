@@ -1,1 +1,1 @@
-export { SiteRequestsPage as default } from '@/pages/site-requests';
+export { SiteRequestsPage as default } from '@/pages/site/requests';

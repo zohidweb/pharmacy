@@ -9,6 +9,8 @@ export const siteKeys = {
   articles: (query: ArticleListQuery) => ['site', 'articles', query] as const,
   article: (id: string) => ['site', 'article', id] as const,
   legal: ['site', 'legal'] as const,
+  /** Every page of the library: for invalidation after an upload. */
+  mediaAll: ['site', 'media'] as const,
   media: (query: SiteMediaListQuery) => ['site', 'media', query] as const,
   settings: ['site', 'settings'] as const,
 };

@@ -16,14 +16,14 @@
   /*
    * Text-like controls look the same in apps/web and apps/admin (QA 2026-10-28: the input of the client mockups): a
    * white field with a small radius; focus — the primary border and a soft ring instead of the offset outline. The
-   * border keeps --ph-color-border-control: a lighter one would fall under 3:1 (WCAG 1.4.11).
+   * border is the light --ph-color-border-input (#cbd5e1).
    */
   --ph-input-height: var(--ph-size-touch-min);
   --ph-input-padding-x: var(--ph-space-3);
   --ph-input-radius: var(--ph-radius-sm);
   --ph-input-bg: var(--ph-color-surface);
   --ph-input-bg-disabled: var(--ph-color-surface-sunken);
-  --ph-input-border: var(--ph-color-border-control);
+  --ph-input-border: var(--ph-color-border-input);
   --ph-input-border-focus: var(--ph-color-primary);
   --ph-input-border-invalid: var(--ph-color-danger);
   --ph-input-ring-focus: 0 0 0 var(--ph-border-width-2)

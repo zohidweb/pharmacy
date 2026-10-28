@@ -24,6 +24,9 @@
   --ph-color-border: var(--ph-slate-100);
   --ph-color-border-strong: var(--ph-slate-200);
   --ph-color-border-control: var(--ph-slate-400);
+  /* Borders of fields and dropdowns (QA 2026-10-28, #cbd5e1): 1.5:1, below 1.4.11 by the product's choice — the
+     label above and the focus ring mark the field. */
+  --ph-color-border-input: var(--ph-slate-150);
 
   /* Primary 7.0:1 on surface and with on-primary; primary text on subtle 6.0:1.
      Accent — chart bars only (non-text, always paired with labels). */

@@ -14,6 +14,7 @@ import {
 import { receiptCode } from '@pharmacy/shared-domain';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { QrSvg } from '@/shared/ui';
 import {
   saleReceiptLines,
   type ReceiptLabels,
@@ -61,6 +62,10 @@ export function SaleReceiptDialog({
   const lines = data
     ? saleReceiptLines(data, labels, RECEIPT_COLUMNS[paper])
     : [];
+  // the QR of the receipt id (ADR-0022): the till knows it before the server, the return screen finds the receipt by it
+  const qr = data ? (
+    <QrSvg text={data.request.id} label={t('qr')} className="ph-receipt-qr" />
+  ) : null;
   return (
     <Dialog
       open={data !== null}
@@ -104,8 +109,13 @@ export function SaleReceiptDialog({
             {t('buffered')}
           </Alert>
         )}
-        <ReceiptPreview lines={lines} paperWidth={paper} label={t('preview')} />
-        {data && <ReceiptPrint lines={lines} paperWidth={paper} />}
+        <ReceiptPreview
+          lines={lines}
+          paperWidth={paper}
+          label={t('preview')}
+          after={qr}
+        />
+        {data && <ReceiptPrint lines={lines} paperWidth={paper} after={qr} />}
       </div>
     </Dialog>
   );

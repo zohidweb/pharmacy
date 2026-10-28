@@ -16,6 +16,7 @@ import type { PriceTagData } from '../model/tag';
 import { PriceTag } from './PriceTag';
 
 const MAX_COPIES = 100;
+const MAX_LABELS = 500;
 
 export interface PrintTagsDialogProps {
   open: boolean;
@@ -50,14 +51,28 @@ export function PrintTagsDialog({
   const count = Number(copies);
   const copiesValid =
     Number.isInteger(count) && count >= 1 && count <= MAX_COPIES;
-  const labels = copiesValid
-    ? tags.flatMap((tag, i) =>
-        Array.from({ length: count }, (_, copy) => ({
-          key: `${i}-${copy}`,
-          tag,
-        })),
-      )
-    : [];
+  const total = copiesValid ? tags.length * count : 0;
+  // one print is a roll of labels the browser lays out at once
+  const tooMany = total > MAX_LABELS;
+  const labels =
+    copiesValid && !tooMany
+      ? tags.flatMap((tag, i) =>
+          Array.from({ length: count }, (_, copy) => ({
+            key: `${i}-${copy}`,
+            tag,
+          })),
+        )
+      : [];
+  // the tags of several stores carry different prices: the dialog says how many each store gets
+  const perStore = [
+    ...tags.reduce(
+      (stores, tag) =>
+        tag.store
+          ? stores.set(tag.store, (stores.get(tag.store) ?? 0) + 1)
+          : stores,
+      new Map<string, number>(),
+    ),
+  ];
 
   return (
     <Dialog
@@ -73,7 +88,7 @@ export function PrintTagsDialog({
           </Button>
           <Button
             iconStart="printer"
-            disabled={!copiesValid || tags.length === 0}
+            disabled={!copiesValid || tooMany || tags.length === 0}
             onClick={() => void printDocument()}
           >
             {t('print')}
@@ -112,7 +127,21 @@ export function PrintTagsDialog({
           />
         </div>
         {!store && (
-          <p className="text-sm">{t('count', { count: tags.length })}</p>
+          <p className="text-sm">
+            {t('count', { count: tags.length, labels: total })}
+          </p>
+        )}
+        {perStore.length > 1 && (
+          <p className="text-sm">
+            {t('perStore', {
+              list: perStore
+                .map(([name, n]) => t('storeCount', { store: name, count: n }))
+                .join(', '),
+            })}
+          </p>
+        )}
+        {tooMany && (
+          <Alert tone="warning">{t('tooMany', { max: MAX_LABELS })}</Alert>
         )}
         {skipped > 0 && (
           <Alert tone="warning">{t('skipped', { count: skipped })}</Alert>

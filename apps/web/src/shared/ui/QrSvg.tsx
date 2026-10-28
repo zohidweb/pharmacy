@@ -1,6 +1,6 @@
 import { cx } from '@pharmacy/ui';
 import { useMemo } from 'react';
-import { qrModules } from '../lib/barcode';
+import { qrModules } from '@/shared/lib/barcode';
 
 // the quiet zone on each side, in modules (ISO/IEC 18004)
 const QUIET = 4;

@@ -240,12 +240,12 @@ function StockPageView({
         fileName: fileName(t('title')),
       };
     });
-  // the selected rows of the page
   // price tags of the selected rows: one per store × product with a price (plan 2026-10-28-price-tags-qr, T7)
   const selectedTags = stockTags(
     rows.filter((r) => selected.has(r.id)),
     (pieces) => tTags('pack', { count: pieces }),
   );
+  // the selected rows of the page
   const exportSelected = () =>
     xlsx.run(() => {
       const picked = rows.filter((r) => selected.has(r.id));
@@ -624,7 +624,11 @@ function StockPageView({
                       total={data.total}
                       limit={PAGE}
                       offset={offset}
-                      onOffsetChange={setOffset}
+                      // the selection is of the page: tags and the export take the rows on the screen
+                      onOffsetChange={(next) => {
+                        setOffset(next);
+                        setSelected(new Set());
+                      }}
                       labels={{
                         nav: t('pagination'),
                         previous: tCommon('previous'),

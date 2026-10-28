@@ -29,6 +29,7 @@
    * Price tags of the shelf (ADR-0022): a bar module of 0.25 mm is two dots of a 203 dpi printer and three of a
    * 300 dpi one, so the bars stay crisp. Start values — check the reading with the scanner of the store.
    */
+  /* the widest bars of a label (MAX_BAR_MODULES of apps/web print-price-tags/ui/PriceTag.tsx) follow from these two */
   --ph-tag-module: 0.25mm;
   --ph-tag-padding: 2mm;
   --ph-tag-gap: 0.5mm;

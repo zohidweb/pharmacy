@@ -1,6 +1,8 @@
 /*
- * Code 128, set B (ISO/IEC 15417, ADR-0022): printable ASCII 32–126. Each symbol is six widths (bar, space, …) of
- * 11 modules; the check symbol is (104 + Σ position × value) mod 103; Stop is seven widths of 13 modules.
+ * Code 128 (ISO/IEC 15417, ADR-0022): digits in set C, two to a symbol — the catalog codes are 8–14 digits and must
+ * fit the 40 × 30 label; an odd last digit switches to set B; any other printable ASCII (32–126) is set B. Each symbol
+ * is six widths (bar, space, …) of 11 modules; the check symbol is (start + Σ position × value) mod 103; Stop is seven
+ * widths of 13 modules.
  */
 
 // widths of the symbols 0–105 (103 Start A, 104 Start B, 105 Start C) and of Stop
@@ -20,18 +22,34 @@ const WIDTHS = [
 ];
 const STOP = '2331112';
 const START_B = 104;
+const START_C = 105;
+// in set C: switch to set B for the next symbols
+const CODE_B = 100;
+const DIGITS = /^[0-9]{2,}$/;
 
-/** Printable ASCII only: the characters set B encodes. */
+/** Printable ASCII only: the characters Code 128 encodes here. */
 export const CODE128_B = /^[\x20-\x7E]+$/;
 
-/** Modules of a set B symbol of the text: 11 × (characters + 3) + 2. */
+const setB = (text: string) => [...text].map((char) => char.charCodeAt(0) - 32);
+
+/** The start symbol and the data values of the text: set C for digits, set B otherwise. */
+function symbolsOf(text: string): [number, number[]] {
+  if (!DIGITS.test(text)) return [START_B, setB(text)];
+  const even = text.length - (text.length % 2);
+  const values: number[] = [];
+  for (let i = 0; i < even; i += 2) values.push(Number(text.slice(i, i + 2)));
+  if (even < text.length) values.push(CODE_B, ...setB(text.slice(even)));
+  return [START_C, values];
+}
+
+/** Modules of a Code 128 symbol of printable ASCII: 11 × (data symbols + 2) + 13. */
 export function code128Modules(text: string): boolean[] {
-  const values = [...text].map((char) => char.charCodeAt(0) - 32);
+  const [start, values] = symbolsOf(text);
   const check =
-    values.reduce((sum, value, i) => sum + value * (i + 1), START_B) % 103;
+    values.reduce((sum, value, i) => sum + value * (i + 1), start) % 103;
   const modules: boolean[] = [];
   for (const widths of [
-    WIDTHS[START_B],
+    WIDTHS[start],
     ...values.map((value) => WIDTHS[value]),
     WIDTHS[check],
     STOP,

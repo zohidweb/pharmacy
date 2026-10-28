@@ -1,5 +1,6 @@
 'use client';
 
+import { countries } from '@pharmacy/shared-domain';
 import type { CatalogProductCard } from '@pharmacy/shared-dto';
 import { formatDateOnly, formatMoney, toAppDate } from '@pharmacy/shared-util';
 import {
@@ -125,20 +126,24 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
     enabled: can(session, 'pricing:view'),
   });
   const priced = (prices.data ?? []).filter((p) => p.priceMinor !== null);
+  // the button cannot work without the prices: it says why
+  const pricesError = useApiErrorMessage(prices.error);
   const chosen =
     priced.find((p) => p.storeId === tagStore) ??
     priced.find((p) => p.storeId === session?.currentStoreId) ??
     priced[0];
-  const country = refs.data?.countries.find(
-    (c) => c.code === card.countryCode,
-  )?.name;
+  // the country in the language of the interface, from the closed list of the domain
+  const country = countries.find((c) => c.code === card.countryCode)?.name;
+  // a product may have one name only (the form and the import allow either)
+  const name =
+    locale === 'tg' ? card.nameTj || card.nameRu : card.nameRu || card.nameTj;
   const tag =
     chosen && chosen.priceMinor !== null
       ? {
-          name: locale === 'tg' && card.nameTj ? card.nameTj : card.nameRu,
+          name,
           details: [
             card.manufacturer,
-            country,
+            country && (locale === 'tg' ? country.tj : country.ru),
             tTags('pack', { count: card.piecesPerPack }),
           ]
             .filter(Boolean)
@@ -184,7 +189,9 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
               iconStart="printer"
               disabled={priced.length === 0}
               aria-describedby={
-                prices.data && priced.length === 0 ? 'tag-no-price' : undefined
+                pricesError || (prices.data && priced.length === 0)
+                  ? 'tag-no-price'
+                  : undefined
               }
               onClick={() => setTagsOpen(true)}
             >
@@ -203,9 +210,9 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
             </Button>
           )}
         </div>
-        {prices.data && priced.length === 0 && (
+        {(pricesError || (prices.data && priced.length === 0)) && (
           <p id="tag-no-price" className="text-xs text-fg-subtle">
-            {tTags('noPrice')}
+            {pricesError ?? tTags('noPrice')}
           </p>
         )}
       </Card>

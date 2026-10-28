@@ -1,6 +1,6 @@
 import { cx } from '@pharmacy/ui';
 import type { CSSProperties } from 'react';
-import type { LinearBarcode } from '../lib/barcode';
+import type { LinearBarcode } from '@/shared/lib/barcode';
 
 // the quiet zone on each side, in modules
 const QUIET = 10;

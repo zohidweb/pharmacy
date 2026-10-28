@@ -11,13 +11,13 @@ export interface LinearBarcode {
 
 /**
  * The symbology of a product barcode on a price tag (plan 2026-10-28-price-tags-qr, T2): EAN-13, UPC-A as EAN-13 with
- * a leading 0 and EAN-8 when the check digit is right; other printable Latin up to `maxCode128` characters as
- * Code 128; else null — no bars, the code is printed as text. Digits with a wrong check digit become Code 128, never
- * an EAN with a check digit of its own.
+ * a leading 0 and EAN-8 when the check digit is right; other printable Latin as Code 128 when its bars take at most
+ * `maxModules`; else null — no bars, the code is printed as text. Digits with a wrong check digit become Code 128,
+ * never an EAN with a check digit of its own.
  */
 export function tagBarcode(
   value: string,
-  maxCode128: number,
+  maxModules: number,
 ): LinearBarcode | null {
   const code = value.trim();
   if (isValidEan(code, 13)) {
@@ -30,8 +30,9 @@ export function tagBarcode(
   if (isValidEan(code, 8)) {
     return { kind: 'ean8', modules: ean8Modules(code), text: code };
   }
-  if (code.length > 0 && code.length <= maxCode128 && CODE128_B.test(code)) {
-    return { kind: 'code128', modules: code128Modules(code), text: code };
-  }
-  return null;
+  if (!CODE128_B.test(code)) return null;
+  const modules = code128Modules(code);
+  return modules.length <= maxModules
+    ? { kind: 'code128', modules, text: code }
+    : null;
 }

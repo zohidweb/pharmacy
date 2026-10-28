@@ -69,6 +69,7 @@ export function IssueOwnerCode({ tenant }: { tenant: TenantDetails }) {
             code={issue.data.activationCode}
             expiresAt={issue.data.activationCodeExpiresAt}
             title={t('codeTitle')}
+            framed={false}
           />
         )}
       </Dialog>

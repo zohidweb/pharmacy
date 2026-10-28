@@ -6,6 +6,8 @@ import {
 } from '@/shared/api';
 
 export const siteKeys = {
+  /** Every page of the article list: for invalidation after a save or a status change. */
+  articlesAll: ['site', 'articles'] as const,
   articles: (query: ArticleListQuery) => ['site', 'articles', query] as const,
   article: (id: string) => ['site', 'article', id] as const,
   legal: ['site', 'legal'] as const,

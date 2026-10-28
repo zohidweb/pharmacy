@@ -92,8 +92,10 @@ export class ConnectionRequestsService {
   // ── The form ─────────────────────────────────────────────────────────────────────────────
 
   /**
-   * One answer for a new request, spam and a repeat: the bot is not told. 400 `validation_failed` (a phone that is not
-   * one, a bad e-mail); 409 `privacy_not_published` (the form is closed); 429 `too_many_requests` (the daily cap).
+   * One answer for a new request, spam and a repeat: the bot is not told. Order: the privacy policy, spam (kept, never
+   * capped), the daily cap, the duplicate phone, a new request. 400 `validation_failed` (a phone that is not one, a bad
+   * e-mail); 409 `privacy_not_published` (the form is closed); 429 `too_many_requests` (the daily cap, for a repeated
+   * phone too).
    */
   async submit(
     body: SubmitConnectionRequestDto,
@@ -142,9 +144,11 @@ export class ConnectionRequestsService {
           await this.repository.insert(trx, { ...row, status: 'spam' });
           return;
         }
-        if (await this.repository.hasOpenWithPhone(trx, phone.value)) return;
+        // the cap before the duplicate: at the cap every phone gets the same 429, so the answer never tells whether
+        // a phone has an open request (spec 7.3)
         if ((await this.repository.countRecentNotSpam(trx)) >= DAILY_CAP)
           throw new ProblemException(429, 'too_many_requests');
+        if (await this.repository.hasOpenWithPhone(trx, phone.value)) return;
         await this.repository.insert(trx, { ...row, status: 'new' });
       },
     );

@@ -115,7 +115,7 @@ export function seedSystem(): SystemDb {
         status: 'published',
       },
     ],
-    preferences: { billing: true, keys: true, services: true, sync: false },
+    preferences: { billing: true, keys: true, services: true, sync: false, leads: true },
     operatorAudit: [
       auditEntry(
         'oa-1',

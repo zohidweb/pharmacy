@@ -58,7 +58,7 @@ export class PlatformNotificationsService {
         (topic) => !muted.includes(topic),
       );
       const byKind = await this.repository.countsByKind(trx);
-      const counts = { all: 0, billing: 0, keys: 0, services: 0, sync: 0 };
+      const counts = { all: 0, billing: 0, keys: 0, services: 0, sync: 0, leads: 0 };
       for (const [kind, n] of byKind) {
         counts[topicOf(kind)] += n;
         counts.all += n;
@@ -120,6 +120,8 @@ export class PlatformNotificationsService {
         // the keys screen comes with the offline sync (stage 6)
         expiringLicenses: 0,
         unreadNotifications: page.unread,
+        // replaced by the count of new connection requests (ADR-0023)
+        connectionRequests: 0,
       };
     });
   }
@@ -152,5 +154,6 @@ function preferencesOf(
     keys: !muted.includes('keys'),
     services: !muted.includes('services'),
     sync: !muted.includes('sync'),
+    leads: !muted.includes('leads'),
   };
 }

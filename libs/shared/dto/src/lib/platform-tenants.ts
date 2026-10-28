@@ -244,6 +244,12 @@ export interface CreateTenantRequest {
   /** 9 digits. */
   inn: string;
   owner: TenantOwner;
+  /**
+   * The connection request of the public site this network is created from (ADR-0023): it becomes
+   * `connected` and gets `tenantId` in the same transaction. Errors: 404 `connection_request_not_found`;
+   * 409 `request_already_decided` (already connected, rejected or spam).
+   */
+  connectionRequestId?: string;
 }
 
 export type LicenseTerm = 'week' | 'quarter' | 'year';

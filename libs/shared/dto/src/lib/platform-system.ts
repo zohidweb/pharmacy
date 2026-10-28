@@ -15,6 +15,8 @@ export interface AttentionCounts {
   serviceRequests: number;
   expiringLicenses: number;
   unreadNotifications: number;
+  /** Connection requests of the public site with the status `new` (ADR-0023). */
+  connectionRequests: number;
 }
 
 export interface DashboardSummary {
@@ -43,7 +45,8 @@ export type EventKind =
   | 'service_requested'
   | 'sync_stale'
   | 'payment_recorded'
-  | 'update_available';
+  | 'update_available'
+  | 'connection_requested';
 
 /** Where an event or a queue item leads in the admin. */
 export type EventTarget =
@@ -149,7 +152,7 @@ export interface UsageStatsResponse {
  * invoice_overdue, payment_recorded; `keys` — key_expiring, key_revoked; `services` —
  * service_requested; `sync` — sync_stale, update_available.
  */
-export type NotificationTopic = 'billing' | 'keys' | 'services' | 'sync';
+export type NotificationTopic = 'billing' | 'keys' | 'services' | 'sync' | 'leads';
 
 /**
  * One operator notification (N1, N3, N4): a state (overdue invoice, expiring key, stale sync, pending

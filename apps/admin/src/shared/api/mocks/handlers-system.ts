@@ -114,6 +114,7 @@ export const systemHandlers: Pick<
     unreadNotifications: system().notifications.filter(
       (item) => !item.read && system().preferences[item.topic],
     ).length,
+    connectionRequests: 0,
   }),
   'dashboard.get': () => {
     const db = mockDb();
@@ -283,6 +284,7 @@ export const systemHandlers: Pick<
         keys: count('keys'),
         services: count('services'),
         sync: count('sync'),
+        leads: count('leads'),
       },
       unread: items.filter((item) => !item.read).length,
     };

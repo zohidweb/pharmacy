@@ -11,6 +11,7 @@ export const NOTIFICATION_TOPICS: readonly NotificationTopic[] = Object.freeze([
   'keys',
   'services',
   'sync',
+  'leads',
 ]);
 
 export const TOPIC_KINDS: Readonly<
@@ -20,6 +21,8 @@ export const TOPIC_KINDS: Readonly<
   keys: ['key_expiring', 'key_revoked'],
   services: ['service_requested'],
   sync: ['sync_stale', 'update_available'],
+  // the producer of `connection_requested` comes with the connection requests (ADR-0023)
+  leads: [],
 });
 
 /** Shown while they last; resolved when gone (N3). */

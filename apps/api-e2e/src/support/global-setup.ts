@@ -6,6 +6,7 @@ import {
   ADMIN_ORIGIN,
   API_BASE_URL,
   E2E_API_PORT,
+  SITE_ORIGIN,
   WEB_ORIGIN,
 } from './env';
 
@@ -95,6 +96,7 @@ module.exports = async function () {
       PORT: String(E2E_API_PORT),
       WEB_ORIGIN,
       ADMIN_ORIGIN,
+      SITE_ORIGIN,
       // The lock tests rely on these two values.
       LOGIN_MAX_FAILURES: '5',
       LOGIN_LOCK_SECONDS: '900',

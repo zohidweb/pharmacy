@@ -3,7 +3,8 @@ import { crc32 } from './crc32';
 export interface ZipFile {
   /** ASCII path inside the archive. */
   name: string;
-  data: Uint8Array;
+  /** Backed by an ArrayBuffer: a Blob of the browser takes no shared memory. */
+  data: Uint8Array<ArrayBuffer>;
 }
 
 const LOCAL = 0x04034b50;
@@ -16,7 +17,7 @@ const DOS_TIME = 0;
 const DOS_DATE = 0x0021;
 const MAX_SIZE = 0xffffffff;
 
-async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
+async function deflateRaw(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
   const stream = new Blob([data])
     .stream()
     .pipeThrough(new CompressionStream('deflate-raw'));

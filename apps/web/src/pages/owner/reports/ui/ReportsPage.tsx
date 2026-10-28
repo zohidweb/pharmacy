@@ -4,12 +4,14 @@ import type {
   ReportCell,
   ReportColumn,
   ReportKind,
+  ReportTable,
 } from '@pharmacy/shared-dto';
 import {
   formatDateOnly,
   formatDateTime,
   formatMoney,
   toAppDate,
+  xlsxFileName,
 } from '@pharmacy/shared-util';
 import {
   Alert,
@@ -29,8 +31,10 @@ import { useFormatter, useTranslations } from 'use-intl';
 import { can, useSession } from '@/entities/session';
 import { apiRequest, isApiRouteAvailable } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
+import { useXlsxExport } from '@/shared/lib/xlsx-export';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { reportSheet } from '../lib/report-sheet';
 import { Export1cDialog } from './Export1cDialog';
 
 const KINDS: ReportKind[] = [
@@ -52,6 +56,8 @@ const monthStart = () => `${toAppDate().slice(0, 8)}01`;
 /** Reports (UI mockup «Отчёты»): one table per report, the period and the store as filters. */
 function ReportsPageView() {
   const t = useTranslations('reports');
+  const tExport = useTranslations('export');
+  const xlsx = useXlsxExport();
   const format = useFormatter();
   const { data: session } = useSession();
   const [kind, setKind] = useState<ReportKind>('sales_by_store');
@@ -83,7 +89,11 @@ function ReportsPageView() {
     if (packs === 0) return sign + t('pieces', { count: rest });
     return `${sign}${t('packs', { count: packs })} ${t('pieces', { count: rest })}`;
   };
-  const cell = (column: ReportColumn, value: ReportCell, row: Row) => {
+  const cell = (
+    column: ReportColumn,
+    value: ReportCell,
+    row: Record<string, ReportCell>,
+  ) => {
     if (column.key === 'prescription' && row.prescriptionPurged) {
       return t('prescriptionPurged');
     }
@@ -115,20 +125,72 @@ function ReportsPageView() {
   const numeric = (column: ReportColumn) =>
     column.type !== 'text' && column.type !== 'reason';
 
+  // the report of the screen as an Excel file (plan 2026-10-27-excel-export, X9, X10)
+  const exportReport = (data: ReportTable) =>
+    xlsx.run(() => {
+      const name = t(`kindNames.${data.kind}`);
+      const storeName = storeId
+        ? (session?.stores.find((s) => s.id === storeId)?.name ?? null)
+        : null;
+      const notes = [
+        !can(session, 'finance:view-cost') && t('costHidden'),
+        data.kind === 'supplier_debts' && t('debtsToday'),
+        data.columns.some((c) => c.key === 'expenses') &&
+          t('networkExpensesInTotal'),
+        data.kind === 'controlled' && t('controlledHint'),
+      ].filter((note): note is string => typeof note === 'string');
+      const period = tExport('period', {
+        from: formatDateOnly(from),
+        to: formatDateOnly(to),
+      });
+      const store = tExport('store', {
+        name: storeName ?? tExport('allStores'),
+      });
+      return {
+        sheet: reportSheet(data, {
+          name,
+          heading: [
+            name,
+            `${period} · ${store}`,
+            tExport('madeAt', { at: formatDateTime(new Date().toISOString()) }),
+            ...notes,
+          ],
+          header: (column) => {
+            const header = t(`columns.${column.key}` as 'columns.store');
+            if (column.type === 'pieces') return tExport('pieces', { header });
+            if (column.type === 'quantity') return tExport('packs', { header });
+            return header;
+          },
+          cell,
+        }),
+        fileName: xlsxFileName(
+          name,
+          `${formatDateOnly(from)}–${formatDateOnly(to)}`,
+          storeName,
+        ),
+      };
+    });
+
   return (
     <>
       <PageHeader
         title={t('title')}
         actions={
           <>
-            <Button
-              variant="secondary"
-              iconStart="download"
-              disabled
-              aria-describedby="excel-pending"
-            >
-              {t('excel')}
-            </Button>
+            {can(session, 'reports:export') && (
+              <Button
+                variant="secondary"
+                iconStart="download"
+                loading={xlsx.busy}
+                // a table of the previous filter stays on the screen while the new one loads
+                disabled={
+                  !periodValid || !report.data || report.isPlaceholderData
+                }
+                onClick={() => report.data && void exportReport(report.data)}
+              >
+                {t('excel')}
+              </Button>
+            )}
             {/* the 1C export is not in the pilot: shown once its route is on the API (spec 2026-10-20-data-import, F22) */}
             {can(session, 'export-1c:view') &&
               isApiRouteAvailable('export1c.preview') && (
@@ -145,9 +207,7 @@ function ReportsPageView() {
         }
       />
       <div className="flex flex-col gap-4 px-6 pt-4">
-        <p id="excel-pending" className="text-xs text-fg-subtle">
-          {t('excelPending')}
-        </p>
+        {xlsx.message && <Alert tone="warning">{xlsx.message}</Alert>}
         <ChipGroup label={t('kinds')} className="flex-wrap">
           {KINDS.map((value) => (
             <Chip

@@ -15,6 +15,7 @@
   /* Cool gray ("cblack"): hairlines, fills, subtle text */
   --ph-slate-50: oklch(97.2% 0.003 228.8);
   --ph-slate-100: oklch(91.2% 0.006 255.5);
+  --ph-slate-150: oklch(86.9% 0.022 252.9); /* #cbd5e1 — field borders */
   --ph-slate-200: oklch(82.1% 0.014 258.4);
   --ph-slate-400: oklch(63% 0.032 259.6);
   --ph-slate-500: oklch(53.1% 0.041 258.8);

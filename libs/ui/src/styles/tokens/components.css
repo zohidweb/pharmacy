@@ -29,7 +29,7 @@
   --ph-input-ring-focus: 0 0 0 var(--ph-border-width-2)
     var(--ph-color-primary-subtle-hover);
 
-  /* The root font size in apps/admin: the operator's A−/A+ sets it on <html> (1 = 100 %). */
+  /* The root font size of apps/web and apps/admin: the user's A−/A+ (FontScaleControl) sets it on <html> (1 = 100 %). */
   --ph-root-font-scale: 1;
 
   --ph-switch-width: 2.75rem;
@@ -82,6 +82,8 @@
   /* Search rows: field | button, and field | date | button */
   --ph-search-columns: minmax(0, 1fr) auto;
   --ph-search-columns-2: minmax(0, 2fr) minmax(0, 1fr) auto;
+  /* A search field beside wrapping filters keeps this width; the filters move to the next line instead (QA 2026-10-28) */
+  --ph-search-min-width: 15rem;
 
   /* Area under the top bar of apps/web: sticky sidebar height */
   --ph-shell-body-height: calc(100dvh - var(--ph-size-topbar));

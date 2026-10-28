@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useTranslations } from 'use-intl';
 import { currentStoreOf, useSession } from '@/entities/session';
+import { FontScaleControl } from '@/features/font-scale';
 import { routes } from '@/shared/config';
 import { useShellChrome } from '@/shared/lib/shell-chrome';
 import { landingRoute } from '../config/navigation';
@@ -80,6 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 justify-end">
             <ConnectionStatus store={currentStoreOf(data)} />
           </div>
+          <FontScaleControl />
         </header>
       ) : (
         <header className="sticky top-0 z-(--ph-z-sticky) flex h-topbar items-center gap-4 border-b border-border bg-surface px-4">
@@ -102,6 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 justify-end">
             <ConnectionStatus store={currentStoreOf(data)} />
           </div>
+          <FontScaleControl />
           <NotificationsBell />
           <UserMenu session={data} />
         </header>

@@ -95,6 +95,15 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     platform_notifications: 'platform',
     platform_notification_reads: 'platform',
     platform_notification_refresh: 'platform',
+    // the public site (ADR-0023): open to pharmacy_platform only, no DELETE; the revisions of the legal
+    // documents are append-only by a trigger and select, insert (like platform_audit_log)
+    site_settings: 'platform',
+    site_media: 'platform',
+    articles: 'platform',
+    article_translations: 'platform',
+    legal_document_revisions: 'platform',
+    legal_document_drafts: 'platform',
+    connection_requests: 'platform',
     platform_settings: 'shared',
     services: 'shared',
     announcements: 'shared',

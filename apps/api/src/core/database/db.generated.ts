@@ -36,6 +36,29 @@ export interface Announcements {
   title: string;
 }
 
+export interface Articles {
+  coverMediaId: string | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  id: string;
+  publishedAt: Timestamp | null;
+  slug: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  updatedBy: string;
+  version: Generated<number>;
+}
+
+export interface ArticleTranslations {
+  articleId: string;
+  body: Generated<string>;
+  excerpt: Generated<string>;
+  locale: string;
+  seoDescription: Generated<string>;
+  seoTitle: Generated<string>;
+  title: string;
+}
+
 export interface AuditLog {
   actingOperatorId: string | null;
   action: string;
@@ -81,6 +104,31 @@ export interface Categories {
   status: Generated<string>;
   tenantId: string;
   updatedAt: Generated<Timestamp>;
+}
+
+export interface ConnectionRequests {
+  anonymizedAt: Timestamp | null;
+  assignedTo: string | null;
+  callTime: string | null;
+  city: string;
+  clientIp: string | null;
+  comment: string | null;
+  contactName: string | null;
+  createdAt: Generated<Timestamp>;
+  decidedAt: Timestamp | null;
+  decidedBy: string | null;
+  email: string | null;
+  id: string;
+  inn: string | null;
+  locale: string;
+  networkName: string;
+  operatorNote: string | null;
+  phone: string | null;
+  privacyDocumentId: string;
+  rejectReason: string | null;
+  status: Generated<string>;
+  storeCount: number;
+  tenantId: string | null;
 }
 
 export interface ControlledSaleRecords {
@@ -416,6 +464,27 @@ export interface Invoices {
   totalDirams: bigint;
   vatBp: number;
   vatDirams: bigint;
+}
+
+export interface LegalDocumentDrafts {
+  body: string;
+  effectiveFrom: string;
+  kind: string;
+  locale: string;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+  updatedBy: string;
+}
+
+export interface LegalDocumentRevisions {
+  body: string;
+  effectiveFrom: string;
+  id: string;
+  kind: string;
+  locale: string;
+  publishedAt: Generated<Timestamp>;
+  publishedBy: string;
+  title: string;
 }
 
 export interface LegalEntities {
@@ -810,6 +879,36 @@ export interface Shifts {
   terminalId: string;
   terminalTotals: Json | null;
   zReport: Json | null;
+}
+
+export interface SiteMedia {
+  alt: Generated<string>;
+  bytes: Buffer;
+  contentType: string;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  height: number;
+  id: string;
+  sha256: Buffer;
+  width: number;
+}
+
+export interface SiteSettings {
+  address: Generated<Json>;
+  email: Generated<string>;
+  faviconMediaId: string | null;
+  id: number;
+  logoMediaId: string | null;
+  name: Generated<Json>;
+  ogImageMediaId: string | null;
+  phone: Generated<string>;
+  seoDescription: Generated<Json>;
+  tagline: Generated<Json>;
+  telegramUrl: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  updatedBy: string | null;
+  whatsappUrl: Generated<string>;
+  workingHours: Generated<Json>;
 }
 
 export interface StockMovements {
@@ -1220,9 +1319,12 @@ export interface WriteOffLines {
 
 export interface DB {
   announcements: Announcements;
+  articles: Articles;
+  articleTranslations: ArticleTranslations;
   auditLog: AuditLog;
   batches: Batches;
   categories: Categories;
+  connectionRequests: ConnectionRequests;
   controlledSaleRecords: ControlledSaleRecords;
   customerReturnLines: CustomerReturnLines;
   customerReturnRefunds: CustomerReturnRefunds;
@@ -1245,6 +1347,8 @@ export interface DB {
   inventoryLines: InventoryLines;
   invoiceLines: InvoiceLines;
   invoices: Invoices;
+  legalDocumentDrafts: LegalDocumentDrafts;
+  legalDocumentRevisions: LegalDocumentRevisions;
   legalEntities: LegalEntities;
   licenseKeys: LicenseKeys;
   notificationReads: NotificationReads;
@@ -1273,6 +1377,8 @@ export interface DB {
   sessions: Sessions;
   shiftCashOperations: ShiftCashOperations;
   shifts: Shifts;
+  siteMedia: SiteMedia;
+  siteSettings: SiteSettings;
   stockMovements: StockMovements;
   storeProducts: StoreProducts;
   stores: Stores;

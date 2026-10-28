@@ -32,7 +32,7 @@ import {
 } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
-import { useFormatter, useTranslations } from 'use-intl';
+import { useTranslations } from 'use-intl';
 import { LicenseStatusPill, licenseStatusKey } from '@/entities/license';
 import { storeKeys, SYNC_STALE_DAYS } from '@/entities/store';
 import { tenantKeys } from '@/entities/tenant';
@@ -41,6 +41,7 @@ import {
   isApiRouteAvailable,
   useApiErrorMessage,
 } from '@/shared/api';
+import { useTimeAgo } from '@/shared/i18n';
 import { routes } from '@/shared/config';
 import { QueryState, StateScreen } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -297,7 +298,7 @@ function RevokeDialog({
 function LicensesPageView() {
   const t = useTranslations('licenses');
   const tTable = useTranslations('table');
-  const format = useFormatter();
+  const timeAgo = useTimeAgo();
   const today = toAppDate();
   const [filter, setFilter] = useState<LicenseListFilter>('all');
   const [sort, setSort] = useState<SortState<LicenseSortKey>>({
@@ -374,7 +375,7 @@ function LicensesPageView() {
           SYNC_STALE_DAYS;
         return (
           <span className={stale ? 'font-medium text-warning' : undefined}>
-            {format.relativeTime(new Date(row.lastSyncAt), new Date())}
+            {timeAgo(new Date(row.lastSyncAt))}
           </span>
         );
       },

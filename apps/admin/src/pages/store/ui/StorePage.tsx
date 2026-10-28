@@ -26,9 +26,10 @@ import {
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { useFormatter, useTranslations } from 'use-intl';
+import { useTranslations } from 'use-intl';
 import { StoreModePill, StoreStatusPill, useStore } from '@/entities/store';
 import { isApiRouteAvailable, useApiErrorMessage } from '@/shared/api';
+import { useTimeAgo } from '@/shared/i18n';
 import { routes } from '@/shared/config';
 import { AsOfNote, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
@@ -193,7 +194,7 @@ function MigrateToCloud({ store }: { store: StoreDetails }) {
 
 function StoreView() {
   const t = useTranslations('store');
-  const format = useFormatter();
+  const timeAgo = useTimeAgo();
   const id = useSearchParams()?.get('id') ?? '';
   const store = useStore(id);
 
@@ -289,10 +290,7 @@ function StoreView() {
                         label={t('kpi.lastSync')}
                         value={
                           data.lastSyncAt
-                            ? format.relativeTime(
-                                new Date(data.lastSyncAt),
-                                new Date(),
-                              )
+                            ? timeAgo(new Date(data.lastSyncAt))
                             : t('kpi.never')
                         }
                         hint={

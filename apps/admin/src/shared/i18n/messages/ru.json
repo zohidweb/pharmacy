@@ -2,7 +2,30 @@
   "common": {
     "close": "Закрыть",
     "cancel": "Отмена",
-    "required": "обязательно"
+    "required": "обязательно",
+    "monthYear": "{month} {year} г.",
+    "months": {
+      "1": "январь",
+      "2": "февраль",
+      "3": "март",
+      "4": "апрель",
+      "5": "май",
+      "6": "июнь",
+      "7": "июль",
+      "8": "август",
+      "9": "сентябрь",
+      "10": "октябрь",
+      "11": "ноябрь",
+      "12": "декабрь"
+    },
+    "ago": {
+      "now": "только что",
+      "minutes": "{count, plural, one {# минуту} few {# минуты} other {# минут}} назад",
+      "hours": "{count, plural, one {# час} few {# часа} other {# часов}} назад",
+      "days": "{count, plural, one {# день} few {# дня} other {# дней}} назад",
+      "months": "{count, plural, one {# месяц} few {# месяца} other {# месяцев}} назад",
+      "years": "{count, plural, one {# год} few {# года} other {# лет}} назад"
+    }
   },
   "shell": {
     "demoData": {

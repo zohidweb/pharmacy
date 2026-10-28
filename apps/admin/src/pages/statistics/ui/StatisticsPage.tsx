@@ -1,14 +1,26 @@
 'use client';
 
-import type { UsageStoreRow, UsageTenantRow } from '@pharmacy/shared-dto';
-import { daysBetween, formatMoney, toAppDate } from '@pharmacy/shared-util';
+import type {
+  UsageStatsResponse,
+  UsageStoreRow,
+  UsageTenantRow,
+} from '@pharmacy/shared-dto';
 import {
+  daysBetween,
+  formatDateTime,
+  formatMoney,
+  toAppDate,
+  xlsxFileName,
+} from '@pharmacy/shared-util';
+import {
+  Alert,
   Button,
   Card,
   Chip,
   ChipGroup,
   DataTable,
   KpiTile,
+  saveXlsx,
   Select,
   type DataTableColumn,
 } from '@pharmacy/ui';
@@ -20,6 +32,7 @@ import { useTenantList } from '@/entities/tenant';
 import { apiRequest } from '@/shared/api';
 import { AsOfNote, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { statsSheet } from '../lib/stats-sheet';
 
 type Row =
   | ({ kind: 'tenant'; key: string } & UsageTenantRow)
@@ -35,6 +48,7 @@ function recentPeriods(count: number): string[] {
 /** Usage statistics by company and store (UI mockup «Статистика»). */
 export function StatisticsPage() {
   const t = useTranslations('statistics');
+  const tMode = useTranslations('store.mode');
   const format = useFormatter();
   const periods = recentPeriods(6);
   const [period, setPeriod] = useState(periods[0]);
@@ -51,6 +65,54 @@ export function StatisticsPage() {
       month: 'long',
       year: 'numeric',
     });
+
+  // the table of the screen as an Excel file (plan 2026-10-27-excel-export, X9, X10)
+  const [exporting, setExporting] = useState(false);
+  const [exportFailed, setExportFailed] = useState(false);
+  const exportStats = async (data: UsageStatsResponse) => {
+    setExporting(true);
+    setExportFailed(false);
+    try {
+      const period = periodLabel(data.period);
+      const company = tenantId
+        ? (tenants.data?.items.find((tenant) => tenant.id === tenantId)?.name ??
+          null)
+        : null;
+      const sheet = statsSheet(data, {
+        name: t('title'),
+        heading: [
+          t('exportHeading', { period }),
+          company ? t('exportScope', { name: company }) : t('allTenants'),
+          ...(data.asOf
+            ? [t('exportAsOf', { at: formatDateTime(data.asOf) })]
+            : []),
+          t('exportKpi', {
+            receipts: format.number(data.kpi.receipts),
+            sales: formatMoney(data.kpi.salesMinor),
+            average: formatMoney(data.kpi.averageReceiptMinor),
+            cashiers: format.number(data.kpi.activeCashiers),
+          }),
+          t('note'),
+          t('exportMadeAt', { at: formatDateTime(new Date().toISOString()) }),
+        ],
+        columns: {
+          tenant: t('columns.tenant'),
+          store: t('columns.store'),
+          mode: t('columns.mode'),
+          receipts: t('columns.receipts'),
+          sales: t('columns.sales'),
+          average: t('columns.average'),
+          activity: t('columns.activity'),
+        },
+        mode: (mode) => tMode(mode),
+      });
+      await saveXlsx(sheet, xlsxFileName(t('title'), period, company));
+    } catch {
+      setExportFailed(true);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const activity = (row: Row) => {
     if (!row.lastActivityAt) return '—';
@@ -116,21 +178,19 @@ export function StatisticsPage() {
         title={t('title')}
         subtitle={t('subtitle')}
         actions={
-          // the export comes later, as in the reports of the owner (spec 2026-10-19-admin-dashboard-stats, D15)
           <Button
             variant="tertiary"
             iconStart="download"
-            disabled
-            aria-describedby="export-pending"
+            loading={exporting}
+            disabled={!stats.data}
+            onClick={() => stats.data && void exportStats(stats.data)}
           >
             {t('export')}
           </Button>
         }
       />
       <div className="flex flex-col gap-4 p-6">
-        <p id="export-pending" className="text-xs text-fg-subtle">
-          {t('exportPending')}
-        </p>
+        {exportFailed && <Alert tone="warning">{t('exportFailed')}</Alert>}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <ChipGroup label={t('scopeLabel')}>
             <Chip

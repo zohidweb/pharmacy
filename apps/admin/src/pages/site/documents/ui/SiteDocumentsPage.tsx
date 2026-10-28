@@ -28,7 +28,7 @@ import {
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { siteKeys, useLegalDocuments } from '@/entities/site-content';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
@@ -61,9 +61,14 @@ const sameValues = (a: Values, b: Values): boolean =>
 const editKey = (kind: LegalDocumentKind, locale: UiLocale): string =>
   `${kind}:${locale}`;
 
-/** The newest first: the order of publication, not of the day of entry into force. */
-const byPublication = (a: Revision, b: Revision): number =>
-  b.publishedAt.localeCompare(a.publishedAt);
+/**
+ * The order of the API (`currentRevisions`): the latest day of entry into force first, then the latest publication,
+ * then the id. The first of these whose day has come is the revision the site serves.
+ */
+const byForce = (a: Revision, b: Revision): number =>
+  b.effectiveFrom.localeCompare(a.effectiveFrom) ||
+  b.publishedAt.localeCompare(a.publishedAt) ||
+  b.id.localeCompare(a.id);
 
 /**
  * «Сайт → Документы» (spec 2026-10-28-public-site-design, S6): the offer and the privacy policy, one draft per
@@ -88,6 +93,7 @@ export function SiteDocumentsPage() {
 
 function Documents({ overview }: { overview: LegalDocumentsOverview }) {
   const t = useTranslations('siteDocuments');
+  const tLocales = useTranslations('locales');
   const [kind, setKind] = useState<LegalDocumentKind>('offer');
   const [locale, setLocale] = useState<UiLocale>('ru');
   const [edits, setEdits] = useState<Partial<Record<string, Values>>>({});
@@ -117,6 +123,7 @@ function Documents({ overview }: { overview: LegalDocumentsOverview }) {
                   options={locales.map((option) => ({
                     value: option,
                     label: option === 'tg' ? 'TJ' : 'RU',
+                    ariaLabel: tLocales(option),
                   }))}
                 />
                 {locale === 'tg' && (
@@ -134,7 +141,7 @@ function Documents({ overview }: { overview: LegalDocumentsOverview }) {
                   .filter(
                     (item) => item.kind === value && item.locale === locale,
                   )
-                  .sort(byPublication)}
+                  .sort(byForce)}
                 edit={edits[editKey(value, locale)]}
                 onEdit={(values) => setEdit(value, locale, values)}
               />
@@ -150,7 +157,7 @@ interface DocumentEditorProps {
   kind: LegalDocumentKind;
   locale: UiLocale;
   draft: LegalDocumentDraft | undefined;
-  /** The published revisions of the kind and language, newest first. */
+  /** The published revisions of the kind and language, in the order of `byForce`. */
   revisions: Revision[];
   /** The unsaved text; `undefined` — nothing is changed. */
   edit: Values | undefined;
@@ -173,14 +180,22 @@ function DocumentEditor({
   const [touched, setTouched] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  // Without a draft the form starts from the title of the last revision: the next edition is usually its edit.
+  // Without a draft the form starts from the title of the most recently published revision (not the one in force:
+  // the next edition is usually an edit of what the operator published last).
+  const lastPublished = revisions.reduce<Revision | undefined>(
+    (latest, item) =>
+      latest === undefined || item.publishedAt > latest.publishedAt
+        ? item
+        : latest,
+    undefined,
+  );
   const base: Values = draft
     ? {
         title: draft.title,
         body: draft.body,
         effectiveFrom: draft.effectiveFrom,
       }
-    : { title: revisions[0]?.title ?? '', body: '', effectiveFrom: today };
+    : { title: lastPublished?.title ?? '', body: '', effectiveFrom: today };
   const values = edit ?? base;
   const dirty = edit !== undefined && !sameValues(edit, base);
   const change = (patch: Partial<Values>) => {
@@ -255,6 +270,11 @@ function DocumentEditor({
   const saveError = useApiErrorMessage(save.error);
   const publishError = useApiErrorMessage(publish.error);
   const apiError = publishError ?? saveError;
+  // The error stands next to the buttons that caused it; the page may be scrolled to the text above.
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (apiError) errorRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [apiError]);
 
   const onSave = () => {
     setTouched(true);
@@ -306,7 +326,7 @@ function DocumentEditor({
       header: t('revisions.columns.status'),
       nowrap: true,
       cell: (row) => {
-        // The current one is the last published whose day of entry into force has come (Dushanbe).
+        // The one in force: the first in the API's order whose day of entry into force has come (Dushanbe).
         const current = revisions.find((item) => item.effectiveFrom <= today);
         if (row.effectiveFrom > today)
           return (
@@ -339,11 +359,6 @@ function DocumentEditor({
           titleId="draft-title"
           description={t('draftDescription')}
         />
-        {apiError && (
-          <Alert tone="danger" live="assertive">
-            {apiError}
-          </Alert>
-        )}
         <div className="grid grid-cols-[1fr_auto] items-start gap-4">
           <TextField
             label={t('fields.title')}
@@ -370,6 +385,13 @@ function DocumentEditor({
           value={values.body}
           onChange={(body) => change({ body })}
         />
+        {apiError && (
+          <div ref={errorRef}>
+            <Alert tone="danger" live="assertive">
+              {apiError}
+            </Alert>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <Button
             iconStart="check"

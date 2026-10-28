@@ -118,7 +118,8 @@ function renderBlock(block: SiteBlock, index: number): ReactNode {
         <figure key={index} className="m-0 flex flex-col gap-2">
           <img
             src={siteMediaContentUrl(block.mediaId)}
-            alt={block.caption}
+            // a caption is shown (and read) as the figcaption; without one the description is empty anyway
+            alt=""
             loading="lazy"
             className="max-w-full rounded-md border border-border"
           />

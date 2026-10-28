@@ -51,8 +51,16 @@ export function SiteMarkdownEditor({
               value={mode}
               onValueChange={setMode}
               options={[
-                { value: 'text', label: t('mode.text') },
-                { value: 'preview', label: t('mode.preview') },
+                {
+                  value: 'text',
+                  label: t('mode.text'),
+                  ariaLabel: t('mode.text'),
+                },
+                {
+                  value: 'preview',
+                  label: t('mode.preview'),
+                  ariaLabel: t('mode.preview'),
+                },
               ]}
             />
           </div>

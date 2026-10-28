@@ -40,12 +40,14 @@
 
   --ph-chip-height: var(--ph-size-touch-min);
   --ph-pill-padding-x: var(--ph-space-2);
+  /* Radii of the client mockups (QA 2026-10-28): status pills 6, cards 12, dialogs 16. */
+  --ph-pill-radius: var(--ph-radius-xs);
 
-  --ph-card-radius: var(--ph-radius-lg);
+  --ph-card-radius: var(--ph-radius-ms);
   --ph-card-padding: var(--ph-space-6);
   --ph-card-shadow: var(--ph-shadow-sm);
 
-  --ph-dialog-radius: var(--ph-radius-lg);
+  --ph-dialog-radius: var(--ph-radius-md);
   --ph-dialog-shadow: var(--ph-shadow-lg);
   --ph-dialog-max-block: calc(100dvh - var(--ph-space-8));
   --ph-dialog-max-inline: calc(100vw - var(--ph-space-8));
@@ -56,8 +58,9 @@
 
   --ph-nav-item-bg-active: var(--ph-color-primary-subtle);
   --ph-nav-item-fg-active: var(--ph-color-primary);
-  --ph-nav-counter-bg: var(--ph-color-danger-subtle);
-  --ph-nav-counter-fg: var(--ph-color-danger);
+  /* A solid counter, as in the client mockups (QA 2026-10-28) */
+  --ph-nav-counter-bg: var(--ph-color-danger);
+  --ph-nav-counter-fg: var(--ph-color-on-danger);
 
   --ph-receipt-preview-height: var(--ph-size-receipt-preview);
   /* Tables of a load from a file (columns, refused rows): they scroll inside, the page does not grow */

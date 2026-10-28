@@ -28,7 +28,7 @@ export function AuthCard({ title, subtitle, children }: AuthCardProps) {
 
   return (
     <main className="grid min-h-dvh place-items-center bg-bg p-6">
-      <div className="grid w-full max-w-(--ph-size-login) grid-cols-2 overflow-hidden rounded-lg bg-surface shadow-lg">
+      <div className="grid w-full max-w-(--ph-size-login) grid-cols-2 overflow-hidden rounded-md bg-surface shadow-lg">
         <section
           aria-labelledby="auth-title"
           className="flex flex-col gap-6 p-10"

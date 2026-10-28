@@ -36,7 +36,7 @@ export function SegmentedControl<T extends string>({
   return (
     <fieldset
       className={cx(
-        'm-0 inline-flex min-w-0 gap-0.5 rounded-sm border-0 bg-surface-sunken p-0.5',
+        'm-0 inline-flex min-w-0 gap-0.5 rounded-sm border-0 bg-surface-sunken p-1',
         className,
       )}
     >
@@ -45,7 +45,7 @@ export function SegmentedControl<T extends string>({
         <label
           key={option.value}
           className={cx(
-            'relative inline-flex min-h-8 cursor-pointer items-center rounded-sm px-3 text-xs font-medium',
+            'relative inline-flex min-h-8 cursor-pointer items-center rounded-sm px-3 text-sm font-medium',
             'text-fg-muted transition-colors has-checked:bg-surface has-checked:text-fg',
             'has-checked:shadow-sm has-focus-visible:outline-(length:--ph-focus-ring-width)',
             'has-focus-visible:outline-focus-ring has-focus-visible:outline-solid',

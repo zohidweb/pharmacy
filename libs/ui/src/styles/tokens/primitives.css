@@ -138,9 +138,11 @@
 
   /* Radii and borders */
   --ph-radius-none: 0;
+  --ph-radius-xs: 0.375rem; /* 6 — status pills */
   --ph-radius-sm: 0.5rem; /* 8 */
-  --ph-radius-md: 1rem; /* 16 — inputs, tiles */
-  --ph-radius-lg: 1.5rem; /* 24 — cards, dialogs */
+  --ph-radius-ms: 0.75rem; /* 12 — cards */
+  --ph-radius-md: 1rem; /* 16 — dialogs, sign-in cards */
+  --ph-radius-lg: 1.5rem; /* 24 */
   --ph-radius-full: 9999px;
   --ph-border-width-1: 1px;
   --ph-border-width-2: 2px;

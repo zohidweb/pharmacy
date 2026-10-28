@@ -26,8 +26,8 @@ export function LoginCard({
         aria-labelledby="login-title"
         className={
           wide
-            ? 'flex w-full max-w-(--ph-size-login) flex-col gap-6 rounded-lg bg-surface p-8 shadow-lg'
-            : 'flex w-full max-w-(--ph-size-dialog-md) flex-col gap-6 rounded-lg bg-surface p-8 shadow-lg'
+            ? 'flex w-full max-w-(--ph-size-login) flex-col gap-6 rounded-md bg-surface p-8 shadow-lg'
+            : 'flex w-full max-w-(--ph-size-dialog-md) flex-col gap-6 rounded-md bg-surface p-8 shadow-lg'
         }
       >
         <div className="flex items-center justify-between gap-4">

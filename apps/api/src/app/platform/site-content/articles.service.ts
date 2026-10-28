@@ -20,14 +20,17 @@ import { requireOperator } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
 import { type DB, isUniqueViolation, newId } from '../../../core/database';
-import { PlatformDatabase } from '../../../core/database/platform';
+import {
+  PlatformDatabase,
+  PublicSiteDatabase,
+} from '../../../core/database/platform';
+import { uiLocales } from '../../auth/dto/me.dto';
 import { PlatformAuditService } from '../audit/platform-audit.service';
 import {
   type ArticleState,
   SiteContentRepository,
 } from './site-content.repository';
 
-const LOCALES: UiLocale[] = ['ru', 'tg'];
 const notFound = () => new ProblemException(404, 'article_not_found');
 
 /** A translation with nothing in it: the language is not filled in, nothing is saved for it. */
@@ -45,6 +48,7 @@ const isBlank = (t: ArticleTranslation): boolean =>
 export class ArticlesService {
   constructor(
     private readonly db: PlatformDatabase,
+    private readonly publicDb: PublicSiteDatabase,
     private readonly repository: SiteContentRepository,
     private readonly audit: PlatformAuditService,
   ) {}
@@ -231,10 +235,12 @@ export class ArticlesService {
     given: SaveArticleRequest['translations'],
   ): [UiLocale, ArticleTranslation][] {
     const result: [UiLocale, ArticleTranslation][] = [];
-    for (const locale of LOCALES) {
+    for (const locale of uiLocales) {
       const t = given[locale];
-      if (t === undefined || isBlank(t)) continue;
-      if (t.title.length < 3)
+      // `null` is no language, like an absent one
+      if (t == null || isBlank(t)) continue;
+      // by code points, as `char_length` of the check of the table counts
+      if ([...t.title].length < 3)
         throw new FieldProblemException(400, 'validation_failed', [
           { field: `translations.${locale}.title`, code: 'min_length' },
         ]);
@@ -265,14 +271,14 @@ export class ArticlesService {
       : error;
   }
 
-  // ── Public (no session: a system actor reads) ─────────────────────────────────────────
+  // ── Public (no session: a system actor reads, on the pool of the public reads) ──────────
 
   publicList(
     locale: UiLocale,
     limit: number,
     offset: number,
   ): Promise<{ items: PublicArticleListItem[]; total: number }> {
-    return this.db.platformTransaction(
+    return this.publicDb.platformTransaction(
       { kind: 'system', job: 'site.public-read' },
       (trx) => this.repository.publicArticles(trx, locale, limit, offset),
     );
@@ -280,7 +286,7 @@ export class ArticlesService {
 
   /** 404 `article_not_found`: not published, or no text in the language (P11). */
   async publicArticle(slug: string, locale: UiLocale): Promise<PublicArticle> {
-    const found = await this.db.platformTransaction(
+    const found = await this.publicDb.platformTransaction(
       { kind: 'system', job: 'site.public-read' },
       (trx) => this.repository.publicArticle(trx, slug, locale),
     );
@@ -290,10 +296,11 @@ export class ArticlesService {
 
   /**
    * The published articles and the legal documents in force with their languages, for `sitemap.xml`. The date of a
-   * document is the publication of its newest current revision among the languages.
+   * document is the latest among its languages of the publication of the current revision or the start of the day it
+   * came into force (Dushanbe), whichever is later.
    */
   sitemap(): Promise<PublicSitemap> {
-    return this.db.platformTransaction(
+    return this.publicDb.platformTransaction(
       { kind: 'system', job: 'site.public-read' },
       async (trx) => {
         const articles = await this.repository.sitemapArticles(trx);
@@ -308,12 +315,12 @@ export class ArticlesService {
             legal.push({
               kind: revision.kind,
               locales: [revision.locale],
-              updatedAt: revision.publishedAt,
+              updatedAt: revision.updatedAt,
             });
           else {
             entry.locales.push(revision.locale);
-            if (revision.publishedAt > entry.updatedAt)
-              entry.updatedAt = revision.publishedAt;
+            if (revision.updatedAt > entry.updatedAt)
+              entry.updatedAt = revision.updatedAt;
           }
         }
         return { articles, legal };

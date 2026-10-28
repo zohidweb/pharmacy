@@ -7,7 +7,10 @@
 //                   `license_keys`;
 //                   `operators`, `operator_credentials`, `platform_audit_log`, `tenant_payments`
 //                   and `tenant_payment_allocations` are open to pharmacy_platform only, which
-//                   never deletes their rows (spec 2026-10-15-billing-services, B18);
+//                   never deletes their rows (spec 2026-10-15-billing-services, B18); so are the
+//                   tables of the public site (ADR-0023): `site_settings`, `site_media`, `articles`,
+//                   `article_translations`, `legal_document_revisions` (append-only),
+//                   `legal_document_drafts` and `connection_requests`;
 //   shared        - reference data shared by all tenants;
 //   system        - internal service tables (job queue).
 export type TableClass =

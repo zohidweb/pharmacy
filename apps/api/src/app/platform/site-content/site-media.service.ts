@@ -9,7 +9,10 @@ import { requireOperator } from '../../../common/context/request-context';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { newId } from '../../../core/database';
-import { PlatformDatabase } from '../../../core/database/platform';
+import {
+  PlatformDatabase,
+  PublicSiteDatabase,
+} from '../../../core/database/platform';
 import { PlatformAuditService } from '../audit/platform-audit.service';
 import { sniffImage } from './media-signature';
 import { SiteContentRepository } from './site-content.repository';
@@ -17,6 +20,8 @@ import { SiteContentRepository } from './site-content.repository';
 /** The biggest file (2 MiB), the biggest side of a picture (the check of the table). */
 export const MAX_MEDIA_BYTES = 2 * 1024 * 1024;
 const MAX_SIDE = 20000;
+// The biggest picture by its pixels: a small file may declare a huge canvas that a browser would decode into memory.
+const MAX_PIXELS = 50_000_000;
 // The base64 of the biggest file: three bytes make four characters, padded.
 const MAX_BASE64_LENGTH = Math.ceil(MAX_MEDIA_BYTES / 3) * 4;
 // Canonical base64 of the standard alphabet only (Buffer.from would silently skip anything else).
@@ -34,6 +39,7 @@ export interface MediaContent {
 export class SiteMediaService {
   constructor(
     private readonly db: PlatformDatabase,
+    private readonly publicDb: PublicSiteDatabase,
     private readonly repository: SiteContentRepository,
     private readonly audit: PlatformAuditService,
   ) {}
@@ -47,7 +53,7 @@ export class SiteMediaService {
 
   /**
    * 400 `validation_failed` (not base64), 413 `media_too_large`, 400 `unsupported_media_type` (the signature is not
-   * the declared type, not an image of an allowed type, or a side over 20 000). The stored one when the SHA-256 is
+   * the declared type, not an image of an allowed type, a side over 20 000 or over 50 000 000 pixels). The stored one when the SHA-256 is
    * the same: no new row, no journal entry.
    */
   async upload(body: UploadSiteMediaRequest): Promise<SiteMedia> {
@@ -65,7 +71,8 @@ export class SiteMediaService {
       image === null ||
       image.type !== body.contentType ||
       image.width > MAX_SIDE ||
-      image.height > MAX_SIDE
+      image.height > MAX_SIDE ||
+      image.width * image.height > MAX_PIXELS
     )
       throw new ProblemException(400, 'unsupported_media_type');
     const sha256 = createHash('sha256').update(bytes).digest();
@@ -117,9 +124,9 @@ export class SiteMediaService {
     return found;
   }
 
-  /** The file for the site; no session: a system actor reads. 404 `media_not_found`. */
+  /** The file for the site; no session: a system actor reads, on the pool of the public reads. 404 `media_not_found`. */
   async publicContent(id: string): Promise<MediaContent> {
-    const found = await this.db.platformTransaction(
+    const found = await this.publicDb.platformTransaction(
       { kind: 'system', job: 'site.public-read' },
       (trx) => this.repository.mediaContent(trx, id),
     );

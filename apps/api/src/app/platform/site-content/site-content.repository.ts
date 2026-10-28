@@ -19,7 +19,11 @@ import type {
   UpdateSiteSettingsRequest,
 } from '@pharmacy/shared-dto';
 import { sql, type Transaction } from 'kysely';
-import type { DB } from '../../../core/database';
+import {
+  type DB,
+  escapeLike,
+  PLATFORM_TIME_ZONE,
+} from '../../../core/database';
 
 const iso = (value: Date | string): string => new Date(value).toISOString();
 
@@ -127,10 +131,6 @@ const toArticleState = (row: ArticleRow): ArticleState => ({
 /** A translation counts for the readers only with a title and a text (the table cannot hold a removed translation). */
 const READABLE = sql`t.title <> '' and t.body <> ''`;
 
-/** `%`, `_` and the escape character itself are text in a LIKE pattern. */
-const likeEscape = (value: string): string =>
-  value.replace(/[\\%_]/g, (char) => `\\${char}`);
-
 // Everything but the bytes: lists and records never read the file (it is up to 2 MiB).
 const MEDIA_COLUMNS = sql`m.id, m.content_type, m.width, m.height, octet_length(m.bytes) as byte_size, m.alt,
   m.created_at`;
@@ -206,16 +206,26 @@ export class SiteContentRepository {
       .execute();
   }
 
-  /** The ids of `ids` that are not in `site_media`. */
+  /** The ids of `ids` that are not in `site_media` (the ids are lower-case, as the database prints them). */
   async missingMedia(trx: Transaction<DB>, ids: string[]): Promise<string[]> {
-    if (ids.length === 0) return [];
+    const found = await this.mediaTypes(trx, ids);
+    return ids.filter((id) => !found.has(id));
+  }
+
+  /** The type of each of `ids` that is stored, by its lower-case id. */
+  async mediaTypes(
+    trx: Transaction<DB>,
+    ids: string[],
+  ): Promise<Map<string, SiteMediaType>> {
+    if (ids.length === 0) return new Map();
     const rows = await trx
       .selectFrom('siteMedia')
-      .select('id')
+      .select(['id', 'contentType'])
       .where('id', 'in', ids)
       .execute();
-    const found = new Set(rows.map((row) => row.id));
-    return ids.filter((id) => !found.has(id));
+    return new Map(
+      rows.map((row) => [row.id, row.contentType as SiteMediaType]),
+    );
   }
 
   async mediaByHash(
@@ -325,17 +335,20 @@ export class SiteContentRepository {
     return rows.map(toLegalDraft);
   }
 
+  /** `lock` takes the row lock that serializes the publications of one kind and language. */
   async legalDraft(
     trx: Transaction<DB>,
     kind: LegalDocumentKind,
     locale: UiLocale,
+    lock = false,
   ): Promise<LegalDocumentDraft | null> {
-    const row = await trx
+    let query = trx
       .selectFrom('legalDocumentDrafts')
       .selectAll()
       .where('kind', '=', kind)
-      .where('locale', '=', locale)
-      .executeTakeFirst();
+      .where('locale', '=', locale);
+    if (lock) query = query.forUpdate();
+    const row = await query.executeTakeFirst();
     return row === undefined ? null : toLegalDraft(row);
   }
 
@@ -386,6 +399,24 @@ export class SiteContentRepository {
     );
   }
 
+  /** The revision of a kind and a language published last, in force or not; `null` before the first. */
+  async latestLegalRevision(
+    trx: Transaction<DB>,
+    kind: LegalDocumentKind,
+    locale: UiLocale,
+  ): Promise<LegalDocumentRevision | null> {
+    const row = await trx
+      .selectFrom('legalDocumentRevisions')
+      .selectAll()
+      .where('kind', '=', kind)
+      .where('locale', '=', locale)
+      .orderBy('publishedAt', 'desc')
+      .orderBy('id', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return row === undefined ? null : toLegalRevision(row);
+  }
+
   async insertLegalRevision(
     trx: Transaction<DB>,
     values: {
@@ -407,24 +438,33 @@ export class SiteContentRepository {
   }
 
   /**
-   * The revision in force on `today` (Dushanbe date): the latest by the date of entry into force, then by the time of
-   * the publication, among those whose date has come. `null` when there is none.
+   * The rule of the revision in force on `today` (Dushanbe date), the only one (spec 7.1–7.3): per kind and language
+   * the latest by the date of entry into force, then by the time of the publication (then by id, so a consent always
+   * points at the same row), among those whose date has come.
    */
+  private currentRevisions(trx: Transaction<DB>, today: string) {
+    return trx
+      .selectFrom('legalDocumentRevisions')
+      .distinctOn(['kind', 'locale'])
+      .where('effectiveFrom', '<=', today)
+      .orderBy('kind')
+      .orderBy('locale')
+      .orderBy('effectiveFrom', 'desc')
+      .orderBy('publishedAt', 'desc')
+      .orderBy('id', 'desc');
+  }
+
+  /** The revision in force of a kind and a language; `null` when there is none. */
   async currentLegalRevision(
     trx: Transaction<DB>,
     kind: LegalDocumentKind,
     locale: UiLocale,
     today: string,
   ): Promise<LegalDocumentRevision | null> {
-    const row = await trx
-      .selectFrom('legalDocumentRevisions')
+    const row = await this.currentRevisions(trx, today)
       .selectAll()
       .where('kind', '=', kind)
       .where('locale', '=', locale)
-      .where('effectiveFrom', '<=', today)
-      .orderBy('effectiveFrom', 'desc')
-      .orderBy('publishedAt', 'desc')
-      .limit(1)
       .executeTakeFirst();
     return row === undefined ? null : toLegalRevision(row);
   }
@@ -436,43 +476,37 @@ export class SiteContentRepository {
     locale: UiLocale,
     today: string,
   ): Promise<string | null> {
-    const row = await trx
-      .selectFrom('legalDocumentRevisions')
+    const row = await this.currentRevisions(trx, today)
       .select('id')
       .where('kind', '=', kind)
       .where('locale', '=', locale)
-      .where('effectiveFrom', '<=', today)
-      .orderBy('effectiveFrom', 'desc')
-      .orderBy('publishedAt', 'desc')
-      .limit(1)
       .executeTakeFirst();
     return row?.id ?? null;
   }
 
   /**
-   * The current revision of every kind and language that has one, by the same rule as `currentLegalRevision` (the
-   * latest by the date of entry into force, then by the time of the publication, among those whose date has come).
+   * The revision in force of every kind and language that has one. `updatedAt` — the later of its publication and the
+   * start of its day of entry into force in Dushanbe (a revision published ahead changes the page on that day).
    */
   async currentLegalRevisions(
     trx: Transaction<DB>,
     today: string,
   ): Promise<
-    { kind: LegalDocumentKind; locale: UiLocale; publishedAt: string }[]
+    { kind: LegalDocumentKind; locale: UiLocale; updatedAt: string }[]
   > {
-    const rows = await trx
-      .selectFrom('legalDocumentRevisions')
-      .select(['kind', 'locale', 'publishedAt'])
-      .distinctOn(['kind', 'locale'])
-      .where('effectiveFrom', '<=', today)
-      .orderBy('kind')
-      .orderBy('locale')
-      .orderBy('effectiveFrom', 'desc')
-      .orderBy('publishedAt', 'desc')
+    const rows = await this.currentRevisions(trx, today)
+      .select([
+        'kind',
+        'locale',
+        sql<Date>`greatest(published_at, effective_from::timestamp at time zone ${sql.lit(PLATFORM_TIME_ZONE)})`.as(
+          'updatedAt',
+        ),
+      ])
       .execute();
     return rows.map((row) => ({
       kind: row.kind as LegalDocumentKind,
       locale: row.locale as UiLocale,
-      publishedAt: iso(row.publishedAt),
+      updatedAt: iso(row.updatedAt),
     }));
   }
 
@@ -640,7 +674,7 @@ export class SiteContentRepository {
     const byTitle =
       filter.q === undefined || filter.q === ''
         ? sql`true`
-        : sql`r.title ilike ${`%${likeEscape(filter.q)}%`}`;
+        : sql`r.title ilike ${`%${escapeLike(filter.q)}%`}`;
     const { rows } = await sql<{
       id: string;
       slug: string;

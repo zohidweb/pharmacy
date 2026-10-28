@@ -92,39 +92,13 @@ export class SessionTokenService {
 
   /** Verified operator claims, or null; a token carrying a tenant is not an operator token. */
   async verifyOperator(token: string): Promise<VerifiedOperatorClaims | null> {
-    try {
-      const key = this.keyFor(token);
-      if (!key) return null;
-      const payload = await this.jwt.verifyAsync<Record<string, unknown>>(
-        token,
-        {
-          secret: key,
-          algorithms: [ALGORITHM],
-          issuer: SESSION_TOKEN_ISSUER,
-          audience: OPERATOR_AUDIENCE,
-        },
-      );
-      const { jti, sub, tid, aud, iat, exp } = payload;
-      if (
-        !isNonEmptyString(jti) ||
-        !isNonEmptyString(sub) ||
-        tid !== undefined ||
-        aud !== OPERATOR_AUDIENCE ||
-        !isTimestamp(iat) ||
-        !isTimestamp(exp)
-      ) {
-        return null;
-      }
-      return { jti, sub, aud: OPERATOR_AUDIENCE, iat, exp };
-    } catch {
-      return null;
-    }
+    return this.verifyOperatorNow(token);
   }
 
   /**
    * The operator check without a promise, for the body parser of the site image upload: it asks whether a request
    * carries a genuine operator token before it reads 3 MiB. HMAC only — the session record is still checked by the
-   * operator session resolver after the parse. The same rules as verifyOperator.
+   * operator session resolver after the parse. verifyOperator is this check behind a promise.
    */
   verifyOperatorNow(token: string): VerifiedOperatorClaims | null {
     try {

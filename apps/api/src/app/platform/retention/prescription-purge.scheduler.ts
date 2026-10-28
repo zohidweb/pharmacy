@@ -30,7 +30,8 @@ const errorCode = (error: unknown): string =>
 // no offline store reads grows without end. A timer of the API process, no scheduler library and no job queue;
 // several API instances do not clash (a try-lock per network, the advisory lock of the feed, an idempotent update). A
 // failure of one network is logged with its code and the loop goes on; no prescription data is ever logged. After the
-// networks the pass anonymizes the connection requests of the site past their term (ADR-0023), counts only.
+// networks, in its own step that their failure never skips, the pass anonymizes the connection requests of the site
+// past their term (ADR-0023), counts only.
 @Injectable()
 export class PrescriptionPurgeScheduler
   implements OnApplicationBootstrap, OnModuleDestroy
@@ -124,13 +125,17 @@ export class PrescriptionPurgeScheduler
             `Feed changes past the window dropped: ${changes} [correlationId=${correlationId}]`,
           );
         }
-        if (!this.stopping) await this.anonymizeRequests(correlationId);
       });
     } catch (error) {
       this.logger.warn(
         `The prescription purge pass failed (${errorCode(error)}) [correlationId=${correlationId}]`,
       );
     }
+    // outside the pass over the networks: a failure to read them never skips the anonymization
+    if (!this.stopping)
+      await runWithContext({ correlationId, principal: null }, () =>
+        this.anonymizeRequests(correlationId),
+      );
   }
 
   /**

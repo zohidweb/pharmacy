@@ -152,9 +152,11 @@ export interface UsageStatsResponse {
 /**
  * Topics of the operator notifications (spec 2026-10-19-operator-notifications, N5): `billing` —
  * invoice_overdue, payment_recorded; `keys` — key_expiring, key_revoked; `services` —
- * service_requested; `sync` — sync_stale, update_available.
+ * service_requested; `sync` — sync_stale, update_available; `leads` — connection_requested (a new
+ * connection request of the public site, ADR-0023).
  */
-export type NotificationTopic = 'billing' | 'keys' | 'services' | 'sync' | 'leads';
+export type NotificationTopic =
+  'billing' | 'keys' | 'services' | 'sync' | 'leads';
 
 /**
  * One operator notification (N1, N3, N4): a state (overdue invoice, expiring key, stale sync, pending

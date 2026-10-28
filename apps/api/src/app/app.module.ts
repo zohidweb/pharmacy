@@ -127,7 +127,7 @@ const EXPORT_THROTTLE = {
     ConditionalModule.registerWhen(PlatformNotificationsModule, cloudMode),
     // The hourly purge of the prescription data by the retention term (spec 2026-10-21-pos-offline-limits, P3).
     ConditionalModule.registerWhen(PlatformRetentionModule, cloudMode),
-    // The settings, pictures (and later the articles and legal documents) of the public site and its public contour.
+    // The settings, pictures, articles and legal documents of the public site and its public contour.
     ConditionalModule.registerWhen(SiteContentModule, cloudMode),
     // The connection requests of the site form and their review by the operators (ADR-0023).
     ConditionalModule.registerWhen(ConnectionRequestsModule, cloudMode),

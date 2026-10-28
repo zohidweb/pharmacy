@@ -21,6 +21,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { uiLocales } from '../../../auth/dto/me.dto';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -32,7 +33,6 @@ export const CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = [
   'rejected',
   'spam',
 ];
-const LOCALES: UiLocale[] = ['ru', 'tg'];
 
 /**
  * POST /api/v1/public/connection-requests (spec 2026-10-28-public-site-design, 6.4, 7.3). The lengths are the checks of
@@ -91,7 +91,7 @@ export class SubmitConnectionRequestDto implements SubmitConnectionRequest {
   @MaxLength(500)
   comment?: string;
 
-  @IsIn(LOCALES)
+  @IsIn(uiLocales)
   locale!: UiLocale;
 
   @Equals(true)

@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
-import { PlatformDatabaseModule } from '../../../core/database/platform';
+import {
+  PlatformDatabaseModule,
+  PublicSiteDatabaseModule,
+} from '../../../core/database/platform';
 import { PlatformAuditModule } from '../audit/platform-audit.module';
 import { ArticlesController } from './articles.controller';
 import { ArticlesService } from './articles.service';
@@ -16,7 +19,12 @@ import { SiteSettingsService } from './site-settings.service';
 // documents and the articles here. The operator screens of «Сайт» and the public contour
 // `/api/v1/public/*` (no session, reads only). Cloud only: an offline store has no site.
 @Module({
-  imports: [PlatformDatabaseModule, PlatformAuditModule],
+  // The public reads take their own pool (ruling R8): anonymous load never starves the operator admin.
+  imports: [
+    PlatformDatabaseModule,
+    PublicSiteDatabaseModule,
+    PlatformAuditModule,
+  ],
   controllers: [
     SiteSettingsController,
     SiteMediaController,
@@ -31,7 +39,7 @@ import { SiteSettingsService } from './site-settings.service';
     LegalDocumentsService,
     ArticlesService,
   ],
-  // Task 8 binds the consent of a connection request to the current privacy revision.
+  // The connection requests bind their consent to the current privacy revision.
   exports: [LegalDocumentsService],
 })
 export class SiteContentModule {}

@@ -1,15 +1,8 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  Query,
-  Res,
-} from '@nestjs/common';
-import type { SiteMedia } from '@pharmacy/shared-dto';
+import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
+import type { Page, SiteMedia } from '@pharmacy/shared-dto';
 import type { Response } from 'express';
+import { ProblemException } from '../../../common/errors/problem.exception';
+import { isUuid } from '../../../core/database';
 import { RequireOperatorPermission } from '../auth/decorators';
 import {
   SiteMediaListQueryDto,
@@ -33,21 +26,24 @@ export class SiteMediaController {
     return this.media.upload(body);
   }
 
+  /** The newest first; 20 by default, 100 at most. */
   @RequireOperatorPermission('content:manage')
   @Get()
-  list(
-    @Query() query: SiteMediaListQueryDto,
-  ): Promise<{ items: SiteMedia[]; total: number }> {
-    return this.media.list(query.limit ?? 50, query.offset ?? 0);
+  async list(@Query() query: SiteMediaListQueryDto): Promise<Page<SiteMedia>> {
+    const limit = query.limit ?? 20;
+    const offset = query.offset ?? 0;
+    const page = await this.media.list(limit, offset);
+    return { ...page, limit, offset };
   }
 
-  /** The file itself; 404 `media_not_found`. Not stored by the browser (the global `no-store`). */
+  /**
+   * The file itself; 404 `media_not_found` (also for a malformed id, like the public route). Not stored by the browser
+   * (the global `no-store`).
+   */
   @RequireOperatorPermission('content:manage')
   @Get(':id/content')
-  async content(
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Res() res: Response,
-  ): Promise<void> {
+  async content(@Param('id') id: string, @Res() res: Response): Promise<void> {
+    if (!isUuid(id)) throw new ProblemException(404, 'media_not_found');
     sendMedia(res, await this.media.content(id));
   }
 }

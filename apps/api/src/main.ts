@@ -43,7 +43,7 @@ async function bootstrap() {
   app.set('etag', false);
   // Every answer keeps this by default; the one image the public media route sends overrides it itself (ADR-0023, P3),
   // so a 404 or 429 of that route is not stored.
-  app.use((req: Request, res: Response, next: NextFunction) => {
+  app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });

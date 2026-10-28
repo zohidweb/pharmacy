@@ -37,6 +37,9 @@ const AddressDto = siteTextDto(300);
 const WorkingHoursDto = siteTextDto(200);
 
 const notNull = (_: unknown, value: unknown) => value !== null;
+// The database prints a uuid in lower case: the ids are compared as it does.
+const lowerCase = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.toLowerCase() : value;
 const notEmpty = (_: unknown, value: unknown) => value !== '';
 
 /** PUT /api/v1/operator/site-settings. */
@@ -66,14 +69,17 @@ export class UpdateSiteSettingsDto implements UpdateSiteSettingsRequest {
   @Type(() => WorkingHoursDto)
   workingHours!: SiteText;
 
+  @Transform(lowerCase)
   @ValidateIf(notNull)
   @IsUUID()
   logoMediaId!: string | null;
 
+  @Transform(lowerCase)
   @ValidateIf(notNull)
   @IsUUID()
   faviconMediaId!: string | null;
 
+  @Transform(lowerCase)
   @ValidateIf(notNull)
   @IsUUID()
   ogImageMediaId!: string | null;

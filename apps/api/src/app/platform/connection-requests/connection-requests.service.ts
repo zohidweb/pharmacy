@@ -6,7 +6,10 @@ import type {
 } from '@pharmacy/shared-dto';
 import type { Transaction } from 'kysely';
 import { requireOperator } from '../../../common/context/request-context';
-import { ProblemException } from '../../../common/errors/problem.exception';
+import {
+  LockedException,
+  ProblemException,
+} from '../../../common/errors/problem.exception';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
 import { type DB, newId } from '../../../core/database';
 import { PlatformDatabase } from '../../../core/database/platform';
@@ -23,11 +26,14 @@ import {
 import type { SubmitConnectionRequestDto } from './dto/connection-requests.dto';
 
 // The protection of the form (spec 2026-10-28-public-site-design, 7.3; P6): a form sent sooner than 3 seconds after it
-// opened is spam; 200 requests that are not spam a day in all.
+// opened is spam; 200 requests that are not spam a day in all; at most 1000 spam rows a day are kept (R11).
 const MIN_FILL_MS = 3_000;
 // a clock of the visitor a little ahead of the server is not a bot; further ahead the time is made up
 const CLOCK_SKEW_MS = 5 * 60_000;
 const DAILY_CAP = 200;
+const DAILY_SPAM_CAP = 1000;
+// the shortest Retry-After of the daily cap
+const MIN_RETRY_AFTER_SECONDS = 60;
 
 const OPEN: readonly ConnectionRequestStatus[] = ['new', 'in_progress'];
 
@@ -92,10 +98,10 @@ export class ConnectionRequestsService {
   // ── The form ─────────────────────────────────────────────────────────────────────────────
 
   /**
-   * One answer for a new request, spam and a repeat: the bot is not told. Order: the privacy policy, spam (kept, never
-   * capped), the daily cap, the duplicate phone, a new request. 400 `validation_failed` (a phone that is not one, a bad
-   * e-mail); 409 `privacy_not_published` (the form is closed); 429 `too_many_requests` (the daily cap, for a repeated
-   * phone too).
+   * One answer for a new request, spam and a repeat: the bot is not told. Order: the privacy policy, spam (kept up to
+   * 1000 a day, beyond that answered the same and dropped), the lock of the phone, the daily cap, the duplicate phone,
+   * a new request. 400 `validation_failed` (a phone that is not one, a bad e-mail); 409 `privacy_not_published` (the
+   * form is closed); 429 `too_many_requests` with Retry-After (the daily cap, for a repeated phone too).
    */
   async submit(
     body: SubmitConnectionRequestDto,
@@ -139,15 +145,25 @@ export class ConnectionRequestsService {
           privacyDocumentId,
           clientIp,
         };
-        // spam is kept (the operator may look at it) but never counted, never a duplicate and never notified
+        // spam is kept (the operator may look at it) but never counted in the cap of the requests, never a duplicate
+        // and never notified; a flood beyond its own cap is answered the same and not stored
         if (spam) {
-          await this.repository.insert(trx, { ...row, status: 'spam' });
+          const { count } = await this.repository.countRecent(trx, 'spam');
+          if (count < DAILY_SPAM_CAP)
+            await this.repository.insert(trx, { ...row, status: 'spam' });
           return;
         }
+        // two parallel submits of one phone: the second waits here and then finds the first as a duplicate
+        await this.repository.lockPhone(trx, phone.value);
         // the cap before the duplicate: at the cap every phone gets the same 429, so the answer never tells whether
         // a phone has an open request (spec 7.3)
-        if ((await this.repository.countRecentNotSpam(trx)) >= DAILY_CAP)
-          throw new ProblemException(429, 'too_many_requests');
+        const recent = await this.repository.countRecent(trx, 'notSpam');
+        if (recent.count >= DAILY_CAP)
+          throw new LockedException(
+            429,
+            'too_many_requests',
+            Math.max(MIN_RETRY_AFTER_SECONDS, recent.secondsToFree),
+          );
         if (await this.repository.hasOpenWithPhone(trx, phone.value)) return;
         await this.repository.insert(trx, { ...row, status: 'new' });
       },
@@ -198,7 +214,7 @@ export class ConnectionRequestsService {
       });
       await this.audit.append(trx, {
         action: 'connection-request.taken',
-        entityType: 'connection-request',
+        entityType: 'connection_request',
         entityId: id,
         details: { from: state.status },
       });
@@ -219,7 +235,7 @@ export class ConnectionRequestsService {
       });
       await this.audit.append(trx, {
         action: 'connection-request.rejected',
-        entityType: 'connection-request',
+        entityType: 'connection_request',
         entityId: id,
         details: { from: state.status },
       });
@@ -239,7 +255,7 @@ export class ConnectionRequestsService {
       });
       await this.audit.append(trx, {
         action: 'connection-request.marked-spam',
-        entityType: 'connection-request',
+        entityType: 'connection_request',
         entityId: id,
         details: { from: state.status },
       });
@@ -258,7 +274,7 @@ export class ConnectionRequestsService {
       });
       await this.audit.append(trx, {
         action: 'connection-request.noted',
-        entityType: 'connection-request',
+        entityType: 'connection_request',
         entityId: id,
       });
       return this.card(trx, id);
@@ -284,7 +300,7 @@ export class ConnectionRequestsService {
     await this.audit.append(trx, {
       action: 'connection-request.connected',
       tenantId,
-      entityType: 'connection-request',
+      entityType: 'connection_request',
       entityId: requestId,
       details: { from: state.status },
     });

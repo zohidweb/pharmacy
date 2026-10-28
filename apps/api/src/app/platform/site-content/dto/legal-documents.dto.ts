@@ -8,38 +8,30 @@ import {
   IsIn,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
   MinLength,
-  registerDecorator,
-  type ValidationOptions,
 } from 'class-validator';
+import { ProblemException } from '../../../../common/errors/problem.exception';
+import { IsCalendarDate } from '../../../../common/validation/calendar-date';
+import { uiLocales } from '../../../auth/dto/me.dto';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
-export const LEGAL_KINDS: LegalDocumentKind[] = ['offer', 'privacy'];
-export const LEGAL_LOCALES: UiLocale[] = ['ru', 'tg'];
+const LEGAL_KINDS: readonly LegalDocumentKind[] = ['offer', 'privacy'];
 
-/** `YYYY-MM-DD` that exists in the calendar (no 2026-02-31). */
-export function isCalendarDate(value: unknown): boolean {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
-    return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return (
-    !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value)
-  );
+/** The kind of a path; an unknown one is an unknown resource: 404 `not_found`. */
+export function legalKind(value: string): LegalDocumentKind {
+  const kind = LEGAL_KINDS.find((known) => known === value);
+  if (kind === undefined) throw new ProblemException(404, 'not_found');
+  return kind;
 }
 
-function IsCalendarDate(options?: ValidationOptions) {
-  return (target: object, propertyName: string) =>
-    registerDecorator({
-      name: 'isCalendarDate',
-      target: target.constructor,
-      propertyName,
-      options,
-      validator: { validate: isCalendarDate },
-    });
+/** The language of a path; an unknown one is an unknown resource: 404 `not_found`. */
+export function legalLocale(value: string): UiLocale {
+  const locale = uiLocales.find((known) => known === value);
+  if (locale === undefined) throw new ProblemException(404, 'not_found');
+  return locale;
 }
 
 /** PUT /api/v1/operator/legal-documents/{kind}/{locale}/draft. The lengths are the checks of the table. */
@@ -57,7 +49,7 @@ export class SaveLegalDocumentDraftDto implements SaveLegalDocumentDraftRequest 
   @MaxLength(200000)
   body!: string;
 
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  // A real calendar day `YYYY-MM-DD` (common/validation/calendar-date).
   @IsCalendarDate()
   effectiveFrom!: string;
 }
@@ -65,6 +57,6 @@ export class SaveLegalDocumentDraftDto implements SaveLegalDocumentDraftRequest 
 /** GET /api/v1/public/legal-documents/{kind}: the language of the text, `ru` when omitted. */
 export class PublicLegalQueryDto {
   @IsOptional()
-  @IsIn(LEGAL_LOCALES)
+  @IsIn(uiLocales)
   locale?: UiLocale;
 }

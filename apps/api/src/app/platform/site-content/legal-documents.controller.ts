@@ -1,32 +1,18 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Res } from '@nestjs/common';
 import type {
   LegalDocumentDraft,
-  LegalDocumentKind,
   LegalDocumentRevision,
   LegalDocumentsOverview,
-  UiLocale,
 } from '@pharmacy/shared-dto';
-import { ProblemException } from '../../../common/errors/problem.exception';
+import type { Response } from 'express';
+import { RequireFreshAuth } from '../../../common/guards/decorators';
 import { RequireOperatorPermission } from '../auth/decorators';
 import {
-  LEGAL_KINDS,
-  LEGAL_LOCALES,
+  legalKind,
+  legalLocale,
   SaveLegalDocumentDraftDto,
 } from './dto/legal-documents.dto';
 import { LegalDocumentsService } from './legal-documents.service';
-
-/** An unknown kind or language in the path is an unknown resource: 404 `not_found`. */
-export function legalKind(value: string): LegalDocumentKind {
-  const kind = LEGAL_KINDS.find((known) => known === value);
-  if (kind === undefined) throw new ProblemException(404, 'not_found');
-  return kind;
-}
-
-function legalLocale(value: string): UiLocale {
-  const locale = LEGAL_LOCALES.find((known) => known === value);
-  if (locale === undefined) throw new ProblemException(404, 'not_found');
-  return locale;
-}
 
 // The offer and the privacy policy (spec 2026-10-28-public-site-design, 7.1–7.3): «Сайт → Документы» of the admin.
 @Controller({ path: 'operator/legal-documents', version: '1' })
@@ -52,15 +38,24 @@ export class LegalDocumentsController {
   }
 
   /**
-   * 201 with the revision; 409 `draft_empty` (no draft); 400 `validation_failed` (`effectiveFrom` earlier than today in
-   * Dushanbe), 400 `media_not_found`; 404 `not_found`.
+   * 201 with the revision (200 with the latest one when the draft is that revision already: nothing is published
+   * twice); 409 `draft_empty` (no draft); 400 `validation_failed` (`effectiveFrom` earlier than today in Dushanbe), 400
+   * `media_not_found`; 403 `fresh_auth_required`; 404 `not_found`. The offer and the policy are legally weighty: the
+   * publication needs a recent sign-in, like the settings of the site.
    */
   @RequireOperatorPermission('content:manage')
+  @RequireFreshAuth()
   @Post(':kind/:locale/publish')
-  publish(
+  async publish(
     @Param('kind') kind: string,
     @Param('locale') locale: string,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<LegalDocumentRevision> {
-    return this.documents.publish(legalKind(kind), legalLocale(locale));
+    const { revision, created } = await this.documents.publish(
+      legalKind(kind),
+      legalLocale(locale),
+    );
+    if (!created) res.status(200);
+    return revision;
   }
 }

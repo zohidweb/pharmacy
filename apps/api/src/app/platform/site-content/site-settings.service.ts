@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import type {
   PublicSiteInfo,
+  SiteMediaType,
   SiteSettings,
   SiteText,
   UpdateSiteSettingsRequest,
 } from '@pharmacy/shared-dto';
 import { requireOperator } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
-import { PlatformDatabase } from '../../../core/database/platform';
+import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
+import {
+  PlatformDatabase,
+  PublicSiteDatabase,
+} from '../../../core/database/platform';
 import { PlatformAuditService } from '../audit/platform-audit.service';
 import { SiteContentRepository } from './site-content.repository';
 
@@ -27,6 +32,20 @@ const PLAIN_FIELDS = [
   'telegramUrl',
   'whatsappUrl',
 ] as const;
+
+// The pictures of the settings by the types they may have (H1): the logo and the favicon are shown small and need a
+// sharp transparent picture (PNG or WebP); the picture of a link preview may be any stored type.
+const IMAGE_FIELDS: readonly {
+  field: 'logoMediaId' | 'faviconMediaId' | 'ogImageMediaId';
+  types: readonly SiteMediaType[];
+}[] = [
+  { field: 'logoMediaId', types: ['image/png', 'image/webp'] },
+  { field: 'faviconMediaId', types: ['image/png', 'image/webp'] },
+  {
+    field: 'ogImageMediaId',
+    types: ['image/jpeg', 'image/png', 'image/webp'],
+  },
+];
 
 const sameText = (a: SiteText, b: SiteText): boolean =>
   a.ru === b.ru && a.tg === b.tg;
@@ -48,6 +67,7 @@ function changedFields(
 export class SiteSettingsService {
   constructor(
     private readonly db: PlatformDatabase,
+    private readonly publicDb: PublicSiteDatabase,
     private readonly repository: SiteContentRepository,
     private readonly audit: PlatformAuditService,
   ) {}
@@ -65,19 +85,34 @@ export class SiteSettingsService {
     );
   }
 
-  /** The whole settings; 400 `media_not_found` for an image that is not stored; an unchanged save writes nothing. */
+  /**
+   * The whole settings; 400 `media_not_found` for an image that is not stored, 400 `validation_failed` on the field
+   * of an image of a type it may not have; an unchanged save writes nothing.
+   */
   async update(next: UpdateSiteSettingsRequest): Promise<SiteSettings> {
     const actor = this.actor();
     return this.db.platformTransaction(actor, async (trx) => {
       const ids = [
         ...new Set(
-          [next.logoMediaId, next.faviconMediaId, next.ogImageMediaId].filter(
+          IMAGE_FIELDS.map(({ field }) => next[field]).filter(
             (id): id is string => id !== null,
           ),
         ),
       ];
-      if ((await this.repository.missingMedia(trx, ids)).length > 0)
+      const types = await this.repository.mediaTypes(trx, ids);
+      if (ids.some((id) => !types.has(id)))
         throw new ProblemException(400, 'media_not_found');
+      const wrongType = IMAGE_FIELDS.filter(({ field, types: allowed }) => {
+        const id = next[field];
+        const type = id === null ? undefined : types.get(id);
+        return type !== undefined && !allowed.includes(type);
+      });
+      if (wrongType.length > 0)
+        throw new FieldProblemException(
+          400,
+          'validation_failed',
+          wrongType.map(({ field }) => ({ field, code: 'media_type' })),
+        );
       const before = await this.repository.settings(trx);
       const fields = changedFields(before, next);
       if (fields.length === 0) return before;
@@ -91,9 +126,12 @@ export class SiteSettingsService {
     });
   }
 
-  /** The public answer: the settings (without the update time) and the tariffs. No session: a system actor reads. */
+  /**
+   * The public answer: the settings (without the update time) and the tariffs. No session: a system actor reads, on
+   * the pool of the public reads.
+   */
   async siteInfo(): Promise<PublicSiteInfo> {
-    return this.db.platformTransaction(
+    return this.publicDb.platformTransaction(
       { kind: 'system', job: 'site.public-read' },
       async (trx) => {
         return {

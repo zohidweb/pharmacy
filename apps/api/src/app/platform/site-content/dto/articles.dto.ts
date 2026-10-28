@@ -19,6 +19,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { uiLocales } from '../../../auth/dto/me.dto';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -29,7 +30,6 @@ export const ARTICLE_STATUSES: ArticleStatus[] = [
   'unpublished',
   'archived',
 ];
-export const ARTICLE_LOCALES: UiLocale[] = ['ru', 'tg'];
 
 /** One language of an article. The lengths are the checks of the table; the minimal title is checked by the service. */
 export class ArticleTranslationDto implements ArticleTranslation {
@@ -75,6 +75,9 @@ export class ArticleTranslationsDto {
 }
 
 const notNull = (_: unknown, value: unknown) => value !== null;
+// The database prints a uuid in lower case: the ids are compared as it does.
+const lowerCase = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.toLowerCase() : value;
 
 /** POST /api/v1/operator/articles (no `version`) and PUT /api/v1/operator/articles/{id} (with `version`). */
 export class SaveArticleDto implements SaveArticleRequest {
@@ -84,6 +87,7 @@ export class SaveArticleDto implements SaveArticleRequest {
   @Matches(/^[a-z0-9]+(-[a-z0-9]+)*$/)
   slug!: string;
 
+  @Transform(lowerCase)
   @ValidateIf(notNull)
   @IsUUID()
   coverMediaId!: string | null;
@@ -123,13 +127,14 @@ export class ArticleListQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(100000)
   offset?: number;
 }
 
 /** GET /api/v1/public/articles. */
 export class PublicArticleListQueryDto {
   @IsOptional()
-  @IsIn(ARTICLE_LOCALES)
+  @IsIn(uiLocales)
   locale?: UiLocale;
 
   @IsOptional()
@@ -143,12 +148,13 @@ export class PublicArticleListQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(100000)
   offset?: number;
 }
 
 /** GET /api/v1/public/articles/{slug}. */
 export class PublicArticleQueryDto {
   @IsOptional()
-  @IsIn(ARTICLE_LOCALES)
+  @IsIn(uiLocales)
   locale?: UiLocale;
 }

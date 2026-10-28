@@ -17,11 +17,33 @@ import { requireOperator } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
 import { type DB, newId } from '../../../core/database';
-import { PlatformDatabase } from '../../../core/database/platform';
+import {
+  PlatformDatabase,
+  PublicSiteDatabase,
+} from '../../../core/database/platform';
 import { PlatformAuditService } from '../audit/platform-audit.service';
 import { SiteContentRepository } from './site-content.repository';
 
 const notFound = () => new ProblemException(404, 'not_found');
+
+/** The RU fallback of the site (spec 7.2–7.3), the only one: what `read` finds in the language, else in RU. */
+async function inLocaleOrRu<T>(
+  locale: UiLocale,
+  read: (locale: UiLocale) => Promise<T | null>,
+): Promise<T | null> {
+  const own = await read(locale);
+  if (own !== null || locale === 'ru') return own;
+  return read('ru');
+}
+
+/** The draft is the revision already: the same title, text and date of entry into force. */
+const sameAs = (
+  draft: LegalDocumentDraft,
+  revision: LegalDocumentRevision,
+): boolean =>
+  draft.title === revision.title &&
+  draft.body === revision.body &&
+  draft.effectiveFrom === revision.effectiveFrom;
 
 // The offer and the privacy policy of the platform (spec 2026-10-28-public-site-design, 7.1–7.3; P4, P13): the operator
 // keeps one draft per kind and language and publishes it as a revision. A revision is append-only: a new edition is a new
@@ -31,6 +53,7 @@ const notFound = () => new ProblemException(404, 'not_found');
 export class LegalDocumentsService {
   constructor(
     private readonly db: PlatformDatabase,
+    private readonly publicDb: PublicSiteDatabase,
     private readonly repository: SiteContentRepository,
     private readonly audit: PlatformAuditService,
   ) {}
@@ -72,7 +95,7 @@ export class LegalDocumentsService {
       // No text in the details: the draft is not yet a decision of the platform.
       await this.audit.append(trx, {
         action: 'legal-document.draft-saved',
-        entityType: 'legal-document-draft',
+        entityType: 'legal_document_draft',
         details: { kind, locale },
       });
       return draft;
@@ -80,19 +103,28 @@ export class LegalDocumentsService {
   }
 
   /**
-   * The draft becomes a revision; the draft stays (the next edit starts from it). 409 `draft_empty` without a draft;
-   * 400 `validation_failed` (`effectiveFrom` earlier than today, Dushanbe); 400 `media_not_found` for a picture of the
-   * text that is not stored.
+   * The draft becomes a revision; the draft stays (the next edit starts from it). A draft equal to the revision
+   * published last (title, text, date) publishes nothing: that revision, `created: false`, no journal entry (R10). 409
+   * `draft_empty` without a draft; 400 `validation_failed` (`effectiveFrom` earlier than today, Dushanbe); 400
+   * `media_not_found` for a picture of the text that is not stored. The draft row is locked: two publications of one
+   * kind and language run one after the other.
    */
   async publish(
     kind: LegalDocumentKind,
     locale: UiLocale,
-  ): Promise<LegalDocumentRevision> {
+  ): Promise<{ revision: LegalDocumentRevision; created: boolean }> {
     const actor = this.actor();
     return this.db.platformTransaction(actor, async (trx) => {
-      const draft = await this.repository.legalDraft(trx, kind, locale);
-      if (draft === null || draft.title === '' || draft.body.trim() === '')
-        throw new ProblemException(409, 'draft_empty');
+      // the table keeps no empty draft (title 3+, body 1+ characters)
+      const draft = await this.repository.legalDraft(trx, kind, locale, true);
+      if (draft === null) throw new ProblemException(409, 'draft_empty');
+      const latest = await this.repository.latestLegalRevision(
+        trx,
+        kind,
+        locale,
+      );
+      if (latest !== null && sameAs(draft, latest))
+        return { revision: latest, created: false };
       if (draft.effectiveFrom < toAppDate())
         throw new FieldProblemException(400, 'validation_failed', [
           { field: 'effectiveFrom', code: 'is_not_in_the_past' },
@@ -111,31 +143,29 @@ export class LegalDocumentsService {
       });
       await this.audit.append(trx, {
         action: 'legal-document.published',
-        entityType: 'legal-document-revision',
+        entityType: 'legal_document_revision',
         entityId: revision.id,
         details: { kind, locale, effectiveFrom: revision.effectiveFrom },
       });
-      return revision;
+      return { revision, created: true };
     });
   }
 
-  /** The current revision of the language, else of RU, else 404 `not_found`. No session: a system actor reads. */
+  /**
+   * The current revision of the language, else of RU, else 404 `not_found`. No session: a system actor reads, on the
+   * pool of the public reads.
+   */
   async publicCurrent(
     kind: LegalDocumentKind,
     locale: UiLocale,
   ): Promise<LegalDocumentRevision> {
-    const found = await this.db.platformTransaction(
+    const found = await this.publicDb.platformTransaction(
       { kind: 'system', job: 'site.public-read' },
-      async (trx) => {
+      (trx) => {
         const today = toAppDate();
-        const own = await this.repository.currentLegalRevision(
-          trx,
-          kind,
-          locale,
-          today,
+        return inLocaleOrRu(locale, (asked) =>
+          this.repository.currentLegalRevision(trx, kind, asked, today),
         );
-        if (own !== null || locale === 'ru') return own;
-        return this.repository.currentLegalRevision(trx, kind, 'ru', today);
       },
     );
     if (found === null) throw notFound();
@@ -151,13 +181,8 @@ export class LegalDocumentsService {
     locale: UiLocale,
   ): Promise<string | null> {
     const today = toAppDate();
-    const own = await this.repository.currentLegalRevisionId(
-      trx,
-      'privacy',
-      locale,
-      today,
+    return inLocaleOrRu(locale, (asked) =>
+      this.repository.currentLegalRevisionId(trx, 'privacy', asked, today),
     );
-    if (own !== null || locale === 'ru') return own;
-    return this.repository.currentLegalRevisionId(trx, 'privacy', 'ru', today);
   }
 }

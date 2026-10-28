@@ -9,6 +9,10 @@
  * Supported: headings `##` and `###`; paragraphs; `**bold**`, `*italic*`, `[text](href)`; unordered and
  * ordered lists (no nesting); quotes; pipe tables; images `![caption](media:<uuid>)` on a line of their own.
  *
+ * Tables: a header row, then a separator row of exactly as many cells as the header, each cell of at least
+ * three dashes (`---`, `:---`, `---:`, `:---:`); at most 20 columns. Anything else stays text.
+ * No backslash escapes: a backslash is text as written and `\|` still ends a cell, so a cell cannot hold `|`.
+ *
  * The parser never throws and has no nested quantifiers or backtracking: the time is linear in the length
  * of the text (a text is limited to 100 000 characters by the API).
  */
@@ -69,13 +73,15 @@ export function siteMarkdownMediaIds(blocks: SiteBlock[]): string[] {
 
 /** Parses the restricted Markdown into blocks. Never throws; unknown syntax stays text. */
 export function parseSiteMarkdown(source: string): SiteBlock[] {
+  // not a string (a stored null, a bad caller) is an empty text: the parser never throws
+  const text = typeof source === 'string' ? source : '';
   try {
-    return parseBlocks(source);
+    return parseBlocks(text);
   } catch {
     // Defensive: the parser has no known failing input; a broken text must not break a page.
-    return source.trim() === ''
+    return text.trim() === ''
       ? []
-      : [{ kind: 'paragraph', children: [{ kind: 'text', text: source }] }];
+      : [{ kind: 'paragraph', children: [{ kind: 'text', text }] }];
   }
 }
 

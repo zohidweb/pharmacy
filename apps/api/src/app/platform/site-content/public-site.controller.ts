@@ -18,8 +18,7 @@ import {
   PublicArticleListQueryDto,
   PublicArticleQueryDto,
 } from './dto/articles.dto';
-import { PublicLegalQueryDto } from './dto/legal-documents.dto';
-import { legalKind } from './legal-documents.controller';
+import { legalKind, PublicLegalQueryDto } from './dto/legal-documents.dto';
 import { LegalDocumentsService } from './legal-documents.service';
 import { sendMedia } from './media-response';
 import { SiteMediaService } from './site-media.service';

@@ -70,15 +70,40 @@ export class ConnectionRequestsRepository {
     return row !== undefined;
   }
 
-  /** The requests that are not spam created within the last 24 hours (the daily cap of the form). */
-  async countRecentNotSpam(trx: Transaction<DB>): Promise<number> {
+  /**
+   * Serializes the submits of one phone to the end of the transaction, so two parallel submits of it make one request
+   * (the cap and the duplicate are checked after it).
+   */
+  async lockPhone(trx: Transaction<DB>, phone: string): Promise<void> {
+    const key = `connection-request:${phone}`;
+    await sql`select pg_advisory_xact_lock(hashtext(${key}))`.execute(trx);
+  }
+
+  /**
+   * The requests of the last 24 hours that are spam (`spam`) or not (`notSpam`), for the daily caps of the form, and
+   * the seconds until the oldest of them leaves the window.
+   */
+  async countRecent(
+    trx: Transaction<DB>,
+    kind: 'spam' | 'notSpam',
+  ): Promise<{ count: number; secondsToFree: number }> {
     const row = await trx
       .selectFrom('connectionRequests')
-      .select(sql<string>`count(*)`.as('n'))
-      .where('status', '<>', 'spam')
+      .select([
+        sql<string>`count(*)`.as('n'),
+        sql<
+          string | null
+        >`ceil(extract(epoch from min(created_at) + ${DAY} - now()))`.as(
+          'secondsToFree',
+        ),
+      ])
+      .where('status', kind === 'spam' ? '=' : '<>', 'spam')
       .where('createdAt', '>', sql<Date>`now() - ${DAY}`)
       .executeTakeFirstOrThrow();
-    return Number(row.n);
+    return {
+      count: Number(row.n),
+      secondsToFree: row.secondsToFree === null ? 0 : Number(row.secondsToFree),
+    };
   }
 
   private base(trx: Transaction<DB>) {
@@ -196,7 +221,8 @@ export class ConnectionRequestsRepository {
 
   /**
    * The personal data of the requests declined 180 days ago — `rejected` by the decision, `spam` by the decision or,
-   * for the spam of the form, by the creation — is set to null; the decision and the reason stay. The count.
+   * for the spam of the form, by the creation — is set to null, the reason of the refusal too (it may name the
+   * person); the decision stays. The count.
    */
   async anonymizeExpired(trx: Transaction<DB>): Promise<number> {
     const result = await trx
@@ -209,6 +235,7 @@ export class ConnectionRequestsRepository {
         comment: null,
         clientIp: null,
         operatorNote: null,
+        rejectReason: null,
         anonymizedAt: sql<Date>`now()`,
       })
       .where('anonymizedAt', 'is', null)

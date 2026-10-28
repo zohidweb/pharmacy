@@ -34,8 +34,10 @@ export interface SiteSettings {
 }
 
 /**
- * PUT /operator/site-settings (`content:manage`, fresh operator sign-in) → `SiteSettings`. Errors: 400
- * `validation_failed`; 400 `media_not_found` (a media id that is not stored); 403 `fresh_auth_required`.
+ * PUT /operator/site-settings (`content:manage`, fresh operator sign-in) → `SiteSettings`. The logo and
+ * the favicon must be `image/png` or `image/webp`, the link preview picture any `SiteMediaType`. Errors:
+ * 400 `validation_failed` (also `media_type` on the field of a picture of another type); 400
+ * `media_not_found` (a media id that is not stored); 403 `fresh_auth_required`.
  */
 export type UpdateSiteSettingsRequest = Omit<SiteSettings, 'updatedAt'>;
 
@@ -65,7 +67,10 @@ export interface PublicSiteInfo {
 /** SVG is not allowed; the type is checked by the file signature, not by the extension. */
 export type SiteMediaType = 'image/jpeg' | 'image/png' | 'image/webp';
 
-/** GET /operator/site-media (`content:manage`); the file itself — GET /operator/site-media/{id}/content. */
+/**
+ * GET /operator/site-media?limit&offset (`content:manage`) → `Page<SiteMedia>`, the newest first (20 by
+ * default, 100 at most); the file itself — GET /operator/site-media/{id}/content.
+ */
 export interface SiteMedia {
   id: string;
   contentType: SiteMediaType;
@@ -80,9 +85,11 @@ export interface SiteMedia {
  * POST /operator/site-media (`content:manage`) → 201 `SiteMedia`: JSON with the file in base64 (no
  * multipart in the API), up to 2 MiB of the file; the same file twice returns the stored one. Errors:
  * 400 `validation_failed` (also a `dataBase64` that is not base64); 400 `unsupported_media_type` (the
- * signature does not match the declared `SiteMediaType`, or a side is over 20 000 pixels); 413
+ * signature does not match the declared `SiteMediaType`, a side is over 20 000 pixels or the picture
+ * over 50 000 000 pixels); 413
  * `media_too_large` (the file is over 2 MiB), 413 `payload_too_large` (the body is over 3 MiB).
- * GET /operator/site-media/{id}/content and GET /public/media/{id} answer 404 `media_not_found`.
+ * GET /operator/site-media/{id}/content and GET /public/media/{id} answer 404 `media_not_found` (also
+ * for a malformed id).
  */
 export interface UploadSiteMediaRequest {
   contentType: SiteMediaType;
@@ -190,7 +197,13 @@ export interface PublicArticle extends PublicArticleListItem {
 
 export type LegalDocumentKind = 'offer' | 'privacy';
 
-/** A published revision: append-only, never changed or deleted (connection requests refer to it). */
+/**
+ * A published revision: append-only, never changed or deleted (connection requests refer to it).
+ *
+ * GET /public/legal-documents/{kind}?locale → the current revision of the language, else of RU. Errors:
+ * 400 `validation_failed` (a `locale` other than `ru` and `tg`); 404 `not_found` (an unknown `kind`, or
+ * nothing is published).
+ */
 export interface LegalDocumentRevision {
   id: string;
   kind: LegalDocumentKind;
@@ -214,9 +227,11 @@ export interface LegalDocumentDraft {
 
 /**
  * PUT /operator/legal-documents/{kind}/{locale}/draft (`content:manage`) → `LegalDocumentDraft`; then
- * POST .../publish → 201 `LegalDocumentRevision` (the draft stays). Errors: 400 `validation_failed` (on
- * publication: `effectiveFrom` earlier than today in Asia/Dushanbe); 400 `media_not_found` (a picture of
- * the text is not stored); 404 `not_found` (a `kind` or `locale` that does not exist); 409 `draft_empty`
+ * POST .../publish (`content:manage`, fresh operator sign-in) → 201 `LegalDocumentRevision` (the draft
+ * stays); a draft equal to the revision published last (title, body, `effectiveFrom`) publishes nothing
+ * and answers 200 with that revision. Errors: 400 `validation_failed` (on publication: `effectiveFrom`
+ * earlier than today in Asia/Dushanbe); 400 `media_not_found` (a picture of the text is not stored); 403
+ * `fresh_auth_required`; 404 `not_found` (a `kind` or `locale` that does not exist); 409 `draft_empty`
  * (publish without a draft).
  */
 export interface SaveLegalDocumentDraftRequest {
@@ -232,12 +247,9 @@ export interface LegalDocumentsOverview {
 }
 
 /**
- * GET /public/legal-documents/{kind}?locale → `LegalDocumentRevision` (the current one of the language,
- * else of RU). Errors: 400 `validation_failed` (a `locale` other than `ru` and `tg`); 404 `not_found`
- * (an unknown `kind`, or nothing is published).
- *
  * GET /public/sitemap: slugs and dates of the published articles and documents by language (for
- * `sitemap.xml`).
+ * `sitemap.xml`). The date of a document is the later of the publication of its current revision and
+ * the start of its day of entry into force (Asia/Dushanbe), the latest among its languages.
  */
 export interface PublicSitemap {
   articles: { slug: string; locales: UiLocale[]; updatedAt: string }[];
@@ -247,18 +259,15 @@ export interface PublicSitemap {
 // ── Connection requests ───────────────────────────────────────────────────────────────────
 
 export type ConnectionRequestStatus =
-  | 'new'
-  | 'in_progress'
-  | 'connected'
-  | 'rejected'
-  | 'spam';
+  'new' | 'in_progress' | 'connected' | 'rejected' | 'spam';
 
 /**
  * POST /public/connection-requests → 201 without a body (the same answer for a trap hit, a form
  * filled too fast and a duplicate: the bot is not told). `consent` — the policy of the personal data
  * is accepted. `website` — the hidden trap field, must be empty. `openedAt` — the ISO instant the form
  * was opened. Errors: 400 `validation_failed`; 409 `privacy_not_published` (no published policy);
- * 429 `too_many_requests` (3 per hour from an IP; 200 per day in all).
+ * 429 `too_many_requests` (3 per hour from an IP; 200 per day in all, with `Retry-After`). At most 1000
+ * spam requests a day are stored; beyond that a spam request is answered 201 and dropped.
  */
 export interface SubmitConnectionRequest {
   networkName: string;
@@ -281,8 +290,8 @@ export interface SubmitConnectionRequest {
 }
 
 /**
- * GET /operator/connection-requests/{id} (`tenants:view`). The personal data is `null` after the
- * anonymization (`anonymizedAt`): 180 days after the decision for `rejected` and `spam`. Errors: 404
+ * GET /operator/connection-requests/{id} (`tenants:view`). The personal data and `rejectReason` are
+ * `null` after the anonymization (`anonymizedAt`): 180 days after the decision for `rejected` and `spam`. Errors: 404
  * `connection_request_not_found`.
  */
 export interface ConnectionRequest {

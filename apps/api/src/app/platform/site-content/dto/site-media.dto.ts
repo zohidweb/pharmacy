@@ -49,5 +49,6 @@ export class SiteMediaListQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(100000)
   offset?: number;
 }

@@ -19,9 +19,8 @@ import type { Transaction } from 'kysely';
 import { requireOperator } from '../../../common/context/request-context';
 import { ProblemException } from '../../../common/errors/problem.exception';
 import { FieldProblemException } from '../../../common/errors/validation-failed.exception';
-import { type DB, newId } from '../../../core/database';
+import { type DB, isUniqueViolation, newId } from '../../../core/database';
 import { PlatformDatabase } from '../../../core/database/platform';
-import { isUniqueViolation } from '../../../core/database/unique-violation';
 import { PlatformAuditService } from '../audit/platform-audit.service';
 import {
   type ArticleState,

@@ -9,6 +9,7 @@ import {
   Card,
   CardHeader,
   DataTable,
+  saveFile,
   Spinner,
   type DataTableColumn,
 } from '@pharmacy/ui';
@@ -17,7 +18,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { ApiError, useApiErrorMessage } from '@/shared/api';
 import type { BuildResult } from '../model/build';
-import { issuesCsv, saveBlob } from '../model/csv-out';
+import { issuesCsv } from '../model/csv-out';
 import type { ImportKindKey } from '../model/fields';
 import {
   applyImport,
@@ -203,7 +204,7 @@ export function CheckStep(props: CheckStepProps) {
                 variant="tertiary"
                 iconStart="download"
                 onClick={() =>
-                  saveBlob(
+                  saveFile(
                     issuesCsv(
                       [
                         t('check.csvLine'),

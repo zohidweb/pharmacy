@@ -126,6 +126,8 @@ export {
   type InvoiceSheetTranslate,
 } from './lib/print/invoice-sheet-of';
 
+export { saveFile, saveXlsx } from './lib/file/save-file';
+
 export {
   BarChart,
   type BarChartItem,

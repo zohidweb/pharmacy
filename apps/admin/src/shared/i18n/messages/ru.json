@@ -82,6 +82,7 @@
     "siteArticles": "Статьи",
     "siteDocuments": "Документы",
     "siteMedia": "Картинки",
+    "siteSettings": "Настройки сайта",
     "invoices": "Счета и платежи",
     "services": "Услуги",
     "licenses": "Лицензионные ключи",
@@ -515,6 +516,58 @@
       "preview": "Предпросмотр"
     },
     "previewEmpty": "Текст пуст — предпросмотр покажет его, как только вы начнёте писать."
+  },
+  "siteSettings": {
+    "title": "Настройки сайта",
+    "subtitle": "Название, контакты, SEO и картинки публичного сайта",
+    "main": {
+      "title": "Название и описание",
+      "description": "Показываются в шапке сайта, в результатах поиска и в превью ссылки. Если язык оставить пустым, на сайте будет русский текст."
+    },
+    "contacts": {
+      "title": "Контакты",
+      "description": "Пустое поле на сайте не показывается."
+    },
+    "images": {
+      "title": "Картинки",
+      "description": "Выбираются из библиотеки; новую можно загрузить прямо в окне выбора.",
+      "logoMediaId": "Логотип",
+      "logoMediaIdHint": "PNG или WebP; JPEG не подходит",
+      "faviconMediaId": "Favicon",
+      "faviconMediaIdHint": "PNG или WebP, квадратная",
+      "ogImageMediaId": "Картинка для превью ссылки",
+      "ogImageMediaIdHint": "Open Graph: PNG, JPEG или WebP, лучше 1200 × 630",
+      "none": "Не выбрана",
+      "choose": "Выбрать",
+      "change": "Заменить",
+      "remove": "Убрать"
+    },
+    "fields": {
+      "name": "Название",
+      "tagline": "Слоган",
+      "seoDescription": "SEO-описание",
+      "address": "Адрес",
+      "workingHours": "Часы работы",
+      "phone": "Телефон",
+      "phoneHint": "Международный формат: + и 8–15 цифр, например +992900000000",
+      "email": "Электронная почта",
+      "emailHint": "Адрес для обращений с сайта",
+      "telegramUrl": "Telegram",
+      "telegramUrlHint": "Ссылка вида https://t.me/…",
+      "whatsappUrl": "WhatsApp",
+      "whatsappUrlHint": "Ссылка вида https://wa.me/…"
+    },
+    "limit": "До {max} знаков",
+    "errors": {
+      "tooLong": "Не длиннее {max} знаков",
+      "phone": "Телефон — + и от 8 до 15 цифр, например +992900000000",
+      "email": "Введите адрес электронной почты, например info@example.tj",
+      "telegram": "Ссылка должна начинаться с https://t.me/ и не содержать пробелов",
+      "whatsapp": "Ссылка должна начинаться с https://wa.me/ и не содержать пробелов"
+    },
+    "save": "Сохранить настройки",
+    "saveHint": "Сайт обновится в течение минуты",
+    "saved": "Настройки сайта сохранены"
   },
   "siteDocuments": {
     "title": "Документы сайта",

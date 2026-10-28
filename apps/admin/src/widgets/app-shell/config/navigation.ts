@@ -11,6 +11,7 @@ type NavLabelKey =
   | 'siteArticles'
   | 'siteDocuments'
   | 'siteMedia'
+  | 'siteSettings'
   | 'invoices'
   | 'services'
   | 'licenses'
@@ -66,6 +67,7 @@ export const navigation: NavSection[] = [
       { route: 'siteArticles', label: 'siteArticles', icon: 'newspaper' },
       { route: 'siteDocuments', label: 'siteDocuments', icon: 'file-text' },
       { route: 'siteMedia', label: 'siteMedia', icon: 'image' },
+      { route: 'siteSettings', label: 'siteSettings', icon: 'globe' },
     ],
   },
   {

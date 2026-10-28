@@ -24,7 +24,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import {
   ArticleStatusPill,
@@ -35,7 +35,12 @@ import {
 import { SiteMediaPickerDialog } from '@/features/site-media';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
-import { SLUG_MAX, SLUG_PATTERN, slugify } from '@/shared/lib';
+import {
+  SLUG_MAX,
+  SLUG_PATTERN,
+  slugify,
+  useScrollIntoViewOnError,
+} from '@/shared/lib';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { SiteMarkdownEditor } from '@/widgets/site-markdown-editor';
@@ -154,6 +159,15 @@ function SiteArticleView() {
   const id = useSearchParams()?.get('id') ?? '';
   const article = useArticle(id);
   if (id === '') return <ArticleEditor article={undefined} />;
+  // A copy kept in the cache may be older than the stored article: the editor starts from the fresh one only, or
+  // its first save would meet a `version_conflict` of somebody else's work.
+  if (article.isFetching && !article.isFetchedAfterMount) {
+    return (
+      <div className="grid place-items-center py-12 text-primary">
+        <Spinner size="xl" />
+      </div>
+    );
+  }
   return (
     <QueryState query={article}>
       {(data) => <ArticleEditor key={data.id} article={data} />}
@@ -217,8 +231,14 @@ function ArticleEditor({ article }: { article: Article | undefined }) {
   );
   const valid = firstProblem === undefined && !slugProblem;
 
+  // What the form holds now and what the request in flight carries: text typed during a save must survive it.
+  const current = useRef('');
+  current.current = snapshotOf(slug, form);
+  const sent = useRef('');
+
   const mutation = useMutation({
     mutationFn: (action: Action): Promise<Article> => {
+      sent.current = snapshotOf(slug, form);
       if (action === 'save') {
         const body = requestOf(slug, form);
         return saved === undefined
@@ -244,8 +264,11 @@ function ArticleEditor({ article }: { article: Article | undefined }) {
       queryClient.setQueryData(siteKeys.article(next.id), next);
       void queryClient.invalidateQueries({ queryKey: siteKeys.articlesAll });
       setSaved(next);
-      setForm(valuesOf(next));
-      setTouched(false);
+      // The form shows the stored article unless the operator typed on after the request had left.
+      if (current.current === sent.current) {
+        setForm(valuesOf(next));
+        setTouched(false);
+      }
       toast.show(
         action === 'save'
           ? t(created ? 'created' : 'saved')
@@ -266,10 +289,7 @@ function ArticleEditor({ article }: { article: Article | undefined }) {
 
   const apiError = useApiErrorMessage(mutation.error);
   // The error stands next to the buttons that caused it; the page may be scrolled to the text above.
-  const errorRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (apiError) errorRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [apiError]);
+  const errorRef = useScrollIntoViewOnError(mutation.error);
 
   const pending = (action: Action) =>
     mutation.isPending && mutation.variables === action;

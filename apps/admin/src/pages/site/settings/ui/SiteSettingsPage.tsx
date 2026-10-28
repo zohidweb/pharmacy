@@ -16,7 +16,7 @@ import {
   useToast,
 } from '@pharmacy/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
 import { z } from 'zod';
@@ -27,6 +27,7 @@ import {
 } from '@/entities/site-content';
 import { SiteMediaPickerDialog } from '@/features/site-media';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { useScrollIntoViewOnError } from '@/shared/lib';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
@@ -139,6 +140,8 @@ function SettingsForm({ settings }: { settings: SiteSettings }) {
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     values: toValues(settings),
+    // A background refetch must not wipe what the operator is typing.
+    resetOptions: { keepDirtyValues: true },
   });
 
   const save = useMutation({
@@ -147,18 +150,23 @@ function SettingsForm({ settings }: { settings: SiteSettings }) {
       const body: UpdateSiteSettingsRequest = schema.parse(values);
       return apiRequest('siteSettings.update', { body });
     },
-    onSuccess: (saved) => {
+    onSuccess: (saved, sent) => {
       queryClient.setQueryData<SiteSettings>(siteKeys.settings, saved);
-      form.reset(toValues(saved));
+      // Text typed while the request was in flight stays in the form (and shows as changed against `saved`).
+      const now = schema.safeParse(form.getValues());
+      const unchanged =
+        now.success &&
+        JSON.stringify(now.data) === JSON.stringify(schema.parse(sent));
+      form.reset(
+        toValues(saved),
+        unchanged ? undefined : { keepDirtyValues: true },
+      );
       toast.show(t('saved'));
     },
   });
   const apiError = useApiErrorMessage(save.error);
   // The error stands next to the button that caused it; the page may be scrolled to the cards above.
-  const errorRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (apiError) errorRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [apiError]);
+  const errorRef = useScrollIntoViewOnError(save.error);
 
   const messageOf = (message: string | undefined, max: number) =>
     message && errorKeys.includes(message)

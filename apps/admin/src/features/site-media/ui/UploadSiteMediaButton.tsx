@@ -52,6 +52,8 @@ export function UploadSiteMediaButton({
   const [rejected, setRejected] = useState<'type' | 'size' | null>(null);
   const [alt, setAlt] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // The dialog was closed while the file was on its way: the picture is stored, but nobody waits for it any more.
+  const cancelled = useRef(false);
 
   useEffect(() => {
     if (!file) {
@@ -77,6 +79,7 @@ export function UploadSiteMediaButton({
     onSuccess: (media) => {
       void queryClient.invalidateQueries({ queryKey: siteKeys.mediaAll });
       toast.show(t('uploaded'));
+      if (cancelled.current) return;
       close();
       onUploaded(media);
     },
@@ -84,6 +87,7 @@ export function UploadSiteMediaButton({
   const error = useApiErrorMessage(upload.error);
 
   const close = () => {
+    cancelled.current = true;
     setFile(null);
     setAlt('');
     upload.reset();
@@ -153,7 +157,9 @@ export function UploadSiteMediaButton({
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (file) upload.mutate(file);
+            if (!file) return;
+            cancelled.current = false;
+            upload.mutate(file);
           }}
         >
           {error && (

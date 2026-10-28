@@ -28,10 +28,11 @@ import {
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { siteKeys, useLegalDocuments } from '@/entities/site-content';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
+import { useScrollIntoViewOnError } from '@/shared/lib';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { SiteMarkdownEditor } from '@/widgets/site-markdown-editor';
@@ -214,18 +215,17 @@ function DocumentEditor({
   };
   const valid = !problems.title && !problems.body && !problems.date;
   const params = { kind, locale };
+  // What the form holds now: text typed while a save is in flight must not be thrown away by its answer.
+  const live = useRef<Values>({
+    ...trimmed,
+    effectiveFrom: values.effectiveFrom,
+  });
+  live.current = { ...trimmed, effectiveFrom: values.effectiveFrom };
 
   const save = useMutation({
-    mutationFn: () =>
-      apiRequest('legalDocuments.saveDraft', {
-        params,
-        body: {
-          title: trimmed.title,
-          body: trimmed.body,
-          effectiveFrom: values.effectiveFrom,
-        },
-      }),
-    onSuccess: (saved) => {
+    mutationFn: (sent: Values) =>
+      apiRequest('legalDocuments.saveDraft', { params, body: sent }),
+    onSuccess: (saved, sent) => {
       queryClient.setQueryData<LegalDocumentsOverview>(
         siteKeys.legal,
         (old) =>
@@ -239,8 +239,10 @@ function DocumentEditor({
             ],
           },
       );
-      onEdit(undefined);
-      setTouched(false);
+      if (sameValues(live.current, sent)) {
+        onEdit(undefined);
+        setTouched(false);
+      }
       toast.show(t('saved'));
     },
   });
@@ -271,16 +273,17 @@ function DocumentEditor({
   const publishError = useApiErrorMessage(publish.error);
   const apiError = publishError ?? saveError;
   // The error stands next to the buttons that caused it; the page may be scrolled to the text above.
-  const errorRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (apiError) errorRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [apiError]);
+  const errorRef = useScrollIntoViewOnError(publish.error ?? save.error);
 
   const onSave = () => {
     setTouched(true);
     if (!valid) return;
     publish.reset();
-    save.mutate();
+    save.mutate({
+      title: trimmed.title,
+      body: trimmed.body,
+      effectiveFrom: values.effectiveFrom,
+    });
   };
 
   const onPublish = () => {
@@ -291,7 +294,12 @@ function DocumentEditor({
   };
 
   const datePast = values.effectiveFrom < today && !problems.date;
-  const canPublish = draft !== undefined && !dirty;
+  // The draft is what the last published revision already says: publishing it again makes no new revision.
+  const published =
+    draft !== undefined &&
+    lastPublished !== undefined &&
+    draft.updatedAt <= lastPublished.publishedAt;
+  const canPublish = draft !== undefined && !dirty && !published;
 
   const titleError = touched && problems.title ? t('errors.title') : undefined;
   const dateError = touched
@@ -406,7 +414,11 @@ function DocumentEditor({
             {t('publish')}
           </Button>
           <p className="text-xs text-fg-subtle">
-            {canPublish ? t('publishHint') : t('publishNeedsSave')}
+            {canPublish
+              ? t('publishHint')
+              : published && !dirty
+                ? t('alreadyPublished')
+                : t('publishNeedsSave')}
           </p>
           <p className="ms-auto text-xs text-fg-subtle">
             {draft

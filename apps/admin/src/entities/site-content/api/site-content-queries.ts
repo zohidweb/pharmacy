@@ -35,6 +35,8 @@ export function useArticle(id: string) {
     queryFn: ({ signal }) =>
       apiRequest('articles.get', { params: { id }, signal }),
     enabled: id !== '',
+    // The editor starts from the stored article, never from a copy kept in the cache.
+    refetchOnMount: 'always',
   });
 }
 

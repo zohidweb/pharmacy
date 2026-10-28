@@ -24,8 +24,9 @@ export function siteMediaEmbed(media: Pick<SiteMedia, 'id' | 'alt'>): string {
 export function useSiteMediaSizeText(): (bytes: number) => string {
   const t = useTranslations('site.media.size');
   return (bytes) => {
-    const kib = bytes / 1024;
-    if (kib < 1024) return t('kib', { value: Math.max(1, Math.round(kib)) });
-    return t('mib', { value: Math.round((kib / 1024) * 10) / 10 });
+    // Round first, then choose the unit: 1023.7 КиБ is «1 МиБ», not «1024 КиБ».
+    const kib = Math.max(1, Math.round(bytes / 1024));
+    if (kib < 1024) return t('kib', { value: kib });
+    return t('mib', { value: Math.round((bytes / 1024 / 1024) * 10) / 10 });
   };
 }

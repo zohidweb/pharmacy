@@ -72,10 +72,15 @@ function CompanyCreateForm({ request }: { request?: ConnectionRequest }) {
   });
   const { register, control, handleSubmit, setError, formState } = form;
   const values = useWatch({ control });
+  // Only a request that is still open can become a network: the API refuses a decided one.
+  const decided =
+    request !== undefined &&
+    request.status !== 'new' &&
+    request.status !== 'in_progress';
 
   const create = useMutation({
-    mutationFn: (request: ReturnType<typeof toCreateTenantRequest>) =>
-      apiRequest('tenants.create', { body: request }),
+    mutationFn: (body: ReturnType<typeof toCreateTenantRequest>) =>
+      apiRequest('tenants.create', { body }),
     onSuccess: (response) => {
       void queryClient.invalidateQueries({ queryKey: tenantKeys.all });
       if (request) {
@@ -91,6 +96,15 @@ function CompanyCreateForm({ request }: { request?: ConnectionRequest }) {
     onError: (error) => {
       if (error instanceof ApiError && FIELD_CONFLICTS[error.code]) {
         setError(FIELD_CONFLICTS[error.code], { message: error.code });
+      }
+      // Somebody decided the request meanwhile: read it again, the form then shows the new state.
+      if (
+        error instanceof ApiError &&
+        error.code === 'request_already_decided'
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: connectionRequestKeys.all,
+        });
       }
     },
   });
@@ -157,18 +171,20 @@ function CompanyCreateForm({ request }: { request?: ConnectionRequest }) {
           >
             {request && (
               <Alert
-                tone="info"
+                tone={decided ? 'warning' : 'info'}
                 title={t('fromRequest.title', { name: request.networkName })}
               >
-                <span className="flex flex-col gap-1">
-                  {t('fromRequest.description')}
+                <div className="flex flex-col gap-1">
+                  {decided
+                    ? t('fromRequest.decided')
+                    : t('fromRequest.description')}
                   <Link
                     href={routes.siteRequest(request.id)}
                     className="text-primary hover:text-primary-hover"
                   >
                     {t('fromRequest.open')}
                   </Link>
-                </span>
+                </div>
               </Alert>
             )}
             {submitError && (
@@ -240,6 +256,7 @@ function CompanyCreateForm({ request }: { request?: ConnectionRequest }) {
                 type="submit"
                 iconStart="check"
                 loading={create.isPending}
+                disabled={decided}
               >
                 {t('submit')}
               </Button>

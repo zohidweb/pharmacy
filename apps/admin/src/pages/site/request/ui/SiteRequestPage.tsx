@@ -122,7 +122,7 @@ function SimilarTenants({ request }: { request: ConnectionRequest }) {
   if (request.similarTenants.length === 0) return null;
   return (
     <Alert tone="warning" title={t('title')}>
-      <span className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         {t('description')}
         <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
           {request.similarTenants.map((tenant) => (
@@ -136,7 +136,7 @@ function SimilarTenants({ request }: { request: ConnectionRequest }) {
             </li>
           ))}
         </ul>
-      </span>
+      </div>
     </Alert>
   );
 }

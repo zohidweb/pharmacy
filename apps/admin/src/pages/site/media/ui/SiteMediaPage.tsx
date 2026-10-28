@@ -8,6 +8,7 @@ import {
   DataTable,
   EmptyState,
   Pagination,
+  useToast,
   type DataTableColumn,
 } from '@pharmacy/ui';
 import { formatDateTime } from '@pharmacy/shared-util';
@@ -41,21 +42,23 @@ export function SiteMediaPage() {
   const tTable = useTranslations('table');
   const sizeText = useSiteMediaSizeText();
   const [offset, setOffset] = useState(0);
-  const [copied, setCopied] = useState<{ id: string; ok: boolean } | null>(
-    null,
-  );
+  const toast = useToast();
+  const [copyFailed, setCopyFailed] = useState(false);
   const list = useSiteMediaList({ limit: PAGE, offset });
 
   const copy = (media: SiteMedia) => {
     // No clipboard outside a secure context, or the permission is denied.
     const write = navigator.clipboard?.writeText(siteMediaEmbed(media));
     if (!write) {
-      setCopied({ id: media.id, ok: false });
+      setCopyFailed(true);
       return;
     }
     write.then(
-      () => setCopied({ id: media.id, ok: true }),
-      () => setCopied({ id: media.id, ok: false }),
+      () => {
+        setCopyFailed(false);
+        toast.show(t('copied'));
+      },
+      () => setCopyFailed(true),
     );
   };
 
@@ -114,11 +117,11 @@ export function SiteMediaPage() {
       cell: (row) => (
         <Button
           variant="tertiary"
-          iconStart={copied?.id === row.id && copied.ok ? 'check' : 'link'}
+          iconStart="link"
           onClick={() => copy(row)}
           aria-label={t('copyFor', { name: row.alt || tMedia('noCaption') })}
         >
-          {copied?.id === row.id && copied.ok ? t('copied') : t('copy')}
+          {t('copy')}
         </Button>
       ),
     },
@@ -132,7 +135,7 @@ export function SiteMediaPage() {
           variant="primary"
           onUploaded={() => setOffset(0)}
         />
-        {copied && !copied.ok && (
+        {copyFailed && (
           <Alert tone="danger" live="assertive">
             {t('copyFailed')}
           </Alert>

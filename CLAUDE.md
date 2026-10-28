@@ -449,8 +449,9 @@ npm run prod:build / prod:up / prod:down
   `docker/proxy/profiles/`. На `app.` — статика web и весь `/api`, кроме `/api/v1/operator/*` (404); на `admin.` — статика
   admin и только `/api/v1/operator/*` — и то лишь адресам `OPERATOR_ALLOW` (CIDR через пробел: офисы операторов, VPN;
   по адресу соединения, без `X-Forwarded-For`), остальным 403 (ревью безопасности 2026-10-22, A1; поправка ADR-0012
-  2026-10-23). Лимиты тела (MiB, как в API): `/api` 1, `/api/v1/sync/*` 4, загрузки `*-imports` 10, `site-media` 3 (только admin-хост);
-  сжатое тело (`Content-Encoding`) вне sync — 415; ответы `/api` — `Cache-Control: no-store` (эшелоны к A3 и P1 в API).
+  2026-10-23). Лимиты тела (MiB, как в API): `/api` 1, `/api/v1/sync/*` 4, загрузки `*-imports` 10, `site-media` 3
+  (только admin-хост); сжатое тело (`Content-Encoding`) вне sync — 415; ответы `/api` — `Cache-Control: no-store`
+  (эшелоны к A3 и P1 в API).
   Факт API (ADR-0023): JSON до 3 MiB у `POST /api/v1/operator/site-media` и до 1 MiB у сохранения статьи и черновика
   документа — только с токеном оператора. В proxy: у `POST /api/v1/operator/site-media` на admin-хосте предел 3 MiB
   (совпадает с API, правило до общего 1 MiB; внутри того же охвата `OPERATOR_ALLOW`); сохранение статьи и черновика

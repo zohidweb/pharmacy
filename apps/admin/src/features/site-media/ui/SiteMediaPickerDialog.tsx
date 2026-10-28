@@ -103,7 +103,10 @@ function PickerBody({
                   description={
                     page.total === 0
                       ? t('picker.emptyDescription')
-                      : t('picker.noMatchDescription')
+                      : // Pictures are there, but none of a type the caller can use: a new search will not help.
+                        needle === '' && page.items.length > 0
+                        ? t('picker.noTypeDescription')
+                        : t('picker.noMatchDescription')
                   }
                 />
               ) : (

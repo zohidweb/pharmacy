@@ -114,7 +114,10 @@ export const systemHandlers: Pick<
     unreadNotifications: system().notifications.filter(
       (item) => !item.read && system().preferences[item.topic],
     ).length,
-    connectionRequests: 0,
+    // the requests nobody has taken yet (ADR-0023)
+    connectionRequests: mockDb().site.requests.filter(
+      (item) => item.status === 'new',
+    ).length,
   }),
   'dashboard.get': () => {
     const db = mockDb();

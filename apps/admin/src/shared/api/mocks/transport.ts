@@ -16,6 +16,7 @@ import { passwordProblems } from '@pharmacy/shared-domain';
 import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { billingHandlers } from './handlers-billing';
+import { siteHandlers } from './handlers-site';
 import { systemHandlers } from './handlers-system';
 import { findStore, findTenant } from './helpers';
 import type { MockHandlers, MockRequest } from './types';
@@ -114,6 +115,7 @@ function mockCodeExpiresAt(): string {
 const handlers: MockHandlers = {
   ...billingHandlers,
   ...systemHandlers,
+  ...siteHandlers,
   'operator.sessions.create': ({ body, correlationId }) => {
     if (
       body?.login.trim().toLowerCase() !== demoOperator.login ||

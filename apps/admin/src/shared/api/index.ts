@@ -11,7 +11,13 @@ export {
   type ApiFieldError,
   type ApiTransport,
 } from './client';
-export { apiRoutes, type ApiRouteKey } from './routes';
+export {
+  apiRoutes,
+  type ApiRouteKey,
+  type ArticleListQuery,
+  type ConnectionRequestListQuery,
+  type SiteMediaListQuery,
+} from './routes';
 export { useApiErrorMessage } from './error-message';
 
 /**

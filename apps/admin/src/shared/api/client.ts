@@ -202,6 +202,27 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'announcements.cancel',
   'me.notificationPreferences',
   'me.updateNotificationPreferences',
+  // the public site: requests, articles, documents, pictures, settings (spec 2026-10-28-public-site-design)
+  'connectionRequests.list',
+  'connectionRequests.get',
+  'connectionRequests.take',
+  'connectionRequests.reject',
+  'connectionRequests.markSpam',
+  'connectionRequests.note',
+  'articles.list',
+  'articles.get',
+  'articles.create',
+  'articles.update',
+  'articles.publish',
+  'articles.unpublish',
+  'articles.archive',
+  'legalDocuments.overview',
+  'legalDocuments.saveDraft',
+  'legalDocuments.publish',
+  'siteMedia.list',
+  'siteMedia.upload',
+  'siteSettings.get',
+  'siteSettings.update',
 ]);
 
 /** The API for the routes it serves, the given mocks for the rest. */

@@ -50,7 +50,8 @@ export function Field({
       <label
         htmlFor={id}
         className={cx(
-          'text-sm font-medium text-fg',
+          // As in the client mockups (QA 2026-10-28): a quiet label, the value stands out.
+          'text-sm text-fg-muted',
           hideLabel && 'ph-visually-hidden',
         )}
       >

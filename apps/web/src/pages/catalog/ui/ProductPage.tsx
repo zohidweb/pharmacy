@@ -15,8 +15,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { useTranslations } from 'use-intl';
+import { useLocale, useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
+import { PrintTagsDialog } from '@/features/print-price-tags';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
@@ -110,8 +111,42 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
       (shownAtFields(statusFieldErrors) ? null : setStatus.error),
   );
   const problems = draftProblems(draft);
-  const valid =
-    !problems.name && !problems.piecesPerPack && !problems.maxPrice;
+  const valid = !problems.name && !problems.piecesPerPack && !problems.maxPrice;
+
+  // the price tag of a store (plan 2026-10-28-price-tags-qr, T6): the stores with a price, the current one first
+  const tTags = useTranslations('priceTags');
+  const locale = useLocale();
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [tagStore, setTagStore] = useState<string | null>(null);
+  const prices = useQuery({
+    queryKey: ['prices', 'product', card.id],
+    queryFn: ({ signal }) =>
+      apiRequest('prices.get', { params: { productId: card.id }, signal }),
+    enabled: can(session, 'pricing:view'),
+  });
+  const priced = (prices.data ?? []).filter((p) => p.priceMinor !== null);
+  const chosen =
+    priced.find((p) => p.storeId === tagStore) ??
+    priced.find((p) => p.storeId === session?.currentStoreId) ??
+    priced[0];
+  const country = refs.data?.countries.find(
+    (c) => c.code === card.countryCode,
+  )?.name;
+  const tag =
+    chosen && chosen.priceMinor !== null
+      ? {
+          name: locale === 'tg' && card.nameTj ? card.nameTj : card.nameRu,
+          details: [
+            card.manufacturer,
+            country,
+            tTags('pack', { count: card.piecesPerPack }),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          barcode: card.barcodes[0]?.code ?? null,
+          priceMinor: chosen.priceMinor,
+        }
+      : null;
 
   return (
     <div className="grid grid-cols-(--ph-return-columns) items-start gap-4">
@@ -143,14 +178,19 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
               {t(archived ? 'restore' : 'archive')}
             </Button>
           )}
-          <Button
-            variant="secondary"
-            iconStart="printer"
-            disabled
-            aria-describedby="tag-pending"
-          >
-            {t('printTag')}
-          </Button>
+          {can(session, 'pricing:view') && (
+            <Button
+              variant="secondary"
+              iconStart="printer"
+              disabled={priced.length === 0}
+              aria-describedby={
+                prices.data && priced.length === 0 ? 'tag-no-price' : undefined
+              }
+              onClick={() => setTagsOpen(true)}
+            >
+              {t('printTag')}
+            </Button>
+          )}
           {canEdit && (
             <Button
               loading={save.isPending}
@@ -163,10 +203,29 @@ function ProductCardBody({ card }: { card: CatalogProductCard }) {
             </Button>
           )}
         </div>
-        <p id="tag-pending" className="text-xs text-fg-subtle">
-          {t('tagPending')}
-        </p>
+        {prices.data && priced.length === 0 && (
+          <p id="tag-no-price" className="text-xs text-fg-subtle">
+            {tTags('noPrice')}
+          </p>
+        )}
       </Card>
+      <PrintTagsDialog
+        open={tagsOpen}
+        title={tTags('printOne')}
+        tags={tag ? [tag] : []}
+        store={{
+          options: priced.map((p) => ({
+            value: p.storeId,
+            label: tTags('storeOption', {
+              store: p.storeName,
+              price: formatMoney(p.priceMinor ?? 0),
+            }),
+          })),
+          value: chosen?.storeId ?? '',
+          onChange: setTagStore,
+        }}
+        onClose={() => setTagsOpen(false)}
+      />
       <div className="flex flex-col gap-4">
         {can(session, 'pricing:view') && <ProductPrices card={card} />}
         {can(session, 'inventory:view') && <ProductBatches card={card} />}

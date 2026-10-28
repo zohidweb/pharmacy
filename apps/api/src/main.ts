@@ -40,13 +40,10 @@ async function bootstrap() {
   // No API answer is stored by the browser: they carry personal and prescription data, and pharmacy PCs are shared
   // (security review 2026-10-22, P1). No ETag either — nothing is revalidated.
   app.set('etag', false);
-  // The exception: the public images of the site (GET /api/v1/public/media/…, ADR-0023, P3) — the controller sets the
-  // immutable header itself.
+  // Every answer keeps this by default; the one image the public media route sends overrides it itself (ADR-0023, P3),
+  // so a 404 or 429 of that route is not stored.
   app.use((req: Request, res: Response, next: NextFunction) => {
-    const path = (req.originalUrl ?? req.url).split('?')[0].toLowerCase();
-    if (req.method !== 'GET' || !path.startsWith('/api/v1/public/media/')) {
-      res.setHeader('Cache-Control', 'no-store');
-    }
+    res.setHeader('Cache-Control', 'no-store');
     next();
   });
   // Before the body parsers: the parser of the loads reads the session token from the cookie.

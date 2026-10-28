@@ -15,6 +15,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { IntlProvider } from 'use-intl';
 import { resetSession } from '@/entities/session';
+import { useApplyFontScale } from '@/features/font-scale';
 import {
   apiMocksEnabled,
   apiMocksMode,
@@ -95,6 +96,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
   const { locale, messages } = useMessages(useLocale());
   const apiReady = useApiReady();
+  useApplyFontScale();
 
   return (
     <QueryClientProvider client={queryClient}>

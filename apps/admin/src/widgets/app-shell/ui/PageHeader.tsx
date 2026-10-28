@@ -3,6 +3,7 @@
 import { SegmentedControl } from '@pharmacy/ui';
 import type { ReactNode } from 'react';
 import { useTranslations } from 'use-intl';
+import { FontScaleControl } from '@/features/font-scale';
 import type { ApiRouteKey } from '@/shared/api';
 import { locales, setLocale, useLocale } from '@/shared/i18n';
 import { DemoDataNotice } from '@/shared/ui';
@@ -17,7 +18,7 @@ export interface PageHeaderProps {
   demoRoutes?: readonly ApiRouteKey[];
 }
 
-/** Sticky header of every admin screen: page title, page actions, language and notifications. */
+/** Sticky header of every admin screen: page title, page actions, font size, language and notifications. */
 export function PageHeader({
   title,
   subtitle,
@@ -41,6 +42,7 @@ export function PageHeader({
         {actions && (
           <div className="flex flex-wrap items-center gap-2">{actions}</div>
         )}
+        <FontScaleControl />
         <SegmentedControl
           label={t('shell.localeLabel')}
           value={locale}

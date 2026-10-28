@@ -107,6 +107,11 @@ Caddy (proxy) ── /api/v1/public/* ─────────────►
   (`public/site-info`, `articles`, `legal-documents`, `sitemap`, `media`) получают свой throttler-бакет с повышенным
   лимитом по IP (ориентир — 1200 в минуту) для любого клиента, без привилегий сайту: данные публичны и кешируются.
   `POST public/connection-requests` — свой строгий лимит (7.3).
+- Пул БД публичного контура (решение R8 финального ревью): чтение `GET /api/v1/public/*` (site-info, media,
+  legal-documents, articles, sitemap) идёт отдельным небольшим пулом той же роли `pharmacy_platform` и того же
+  `PLATFORM_DATABASE_URL` — `PUBLIC_DB_POOL_MAX` (по умолчанию 2, от 1 до 10; `application_name` `api-public-site`),
+  чтобы всплеск анонимных запросов не занимал 3 соединения админки оператора (`PLATFORM_DB_POOL_MAX`). Приём заявки,
+  разделы оператора, сети, уведомления и проход хранения остаются на прежнем пуле.
 
 ### 5.1 Решение для ADR-0023 (что фиксирует ADR)
 
@@ -266,7 +271,7 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 |---|---|
 | `GET/POST operator/articles`, `GET/PUT operator/articles/{id}` | `content:manage` |
 | `POST operator/articles/{id}/publish`, `.../unpublish`, `.../archive` (только черновик) | `content:manage` |
-| `GET operator/legal-documents`, `PUT operator/legal-documents/{kind}/{locale}/draft`, `POST .../publish` | `content:manage` |
+| `GET operator/legal-documents`, `PUT operator/legal-documents/{kind}/{locale}/draft`, `POST .../publish` (со step-up, R9; черновик, равный последней редакции, ничего не публикует — 200 с ней, R10) | `content:manage` |
 | `POST operator/site-media` (JSON `{contentType, dataBase64, alt}`, файл до 2 МиБ; свой предел тела JSON 3 МиБ по пути, как у загрузок `*-imports`), `GET operator/site-media`, `GET operator/site-media/{id}/content` (картинка для предпросмотра в админке: публичный контур на домене админки закрыт) | `content:manage` |
 | `GET/PUT operator/site-settings` (PUT — со step-up) | `content:manage` |
 | `GET operator/connection-requests?status&q&limit&offset`, `GET .../{id}` | `tenants:view` |
@@ -283,8 +288,8 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 Все действия оператора — в `platform_audit_log`: `article.created`, `article.updated`, `article.published`,
 `article.unpublished`, `article.archived`, `legal-document.draft-saved`, `legal-document.published`,
 `site-media.uploaded`, `site-settings.updated`, `connection-request.taken`, `connection-request.rejected`,
-`connection-request.marked-spam`, `connection-request.noted`, `connection-request.connected` — без ПДн заявки в
-параметрах (только id и статус).
+`connection-request.marked-spam`, `connection-request.noted`, `connection-request.connected` — метаданные без ПДн
+заявки. Проход хранения пишет `connection-requests.anonymized` с одним числом обезличенных заявок.
 
 ### 7.3 Защита публичной формы
 
@@ -294,7 +299,12 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
   `@Throttle({ default: { limit: 1200, ttl: 60_000 } })`.
 - Порядок проверок формы: политика ПДн (`privacy_not_published`) → спам → суточный предел → дубль → новая заявка.
 - Поле-ловушка: заполнено — ответ `201` (боту не сообщаем), заявка сохраняется сразу со статусом `spam`; спам не
-  считается в суточный предел, не бывает дублем и не порождает уведомления.
+  считается в суточный предел, не бывает дублем и не порождает уведомления. Хранение спама тоже ограничено (решение
+  R11 финального ревью): не больше 1000 строк `spam` за 24 ч; сверх — тот же ответ `201`, но ничего не сохраняется.
+  Предел обычных заявок (200 не-спама) не меняется.
+- Две одновременные заявки одного телефона: перед проверкой предела и дубля сервис берёт
+  `pg_advisory_xact_lock(hashtext(…телефон…))`, поэтому создаётся одна строка. На суточном пределе 429 несёт
+  `Retry-After` — секунды, пока самая старая учтённая заявка не выйдет из 24-часового окна (не меньше 60).
 - Время заполнения: форма передаёт время открытия; меньше 3 с — `spam` тем же способом.
 - Суточный предел проверяется до дубля: на пределе любой телефон получает один и тот же 429, поэтому ответ не
   раскрывает, есть ли у телефона открытая заявка.
@@ -314,7 +324,8 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
 - Новая заявка (не спам) — уведомление оператору вида `connection_requested` (`platform_notifications`, тема для
   отключения — `leads`) и счётчик «Заявки» в меню админки (`platform/notifications`, число `new`).
 - Срок хранения ПДн: у заявок `rejected` и `spam` через 180 дней после решения/создания ПДн обезличиваются
-  (ФИО, телефон, e-mail, комментарий, удобное время, IP, заметка оператора — `null`, `anonymized_at` = сейчас) часовым
+  (ФИО, телефон, e-mail, комментарий, удобное время, IP, заметка оператора, причина отказа — `null`,
+  `anonymized_at` = сейчас) часовым
   проходом `platform/retention` (моё решение; срок указать в политике ПДн). Удаления строк нет — у класса `platform`
   нет DELETE. `connected` хранятся, пока существует сеть.
 
@@ -354,6 +365,9 @@ PNG/WebP; SVG запрещён), картинка Open Graph по умолчан
   `plain-body`, upstream 30 с; для `media` ответ кешируется браузером — исключение из общего `no-store`),
   остальное → `site:3000`; заголовки безопасности и CSP сайта (`img-src 'self' data:`; `connect-src 'self'`).
   `www.nurmed.online` — редирект на apex (нужна DNS-запись). На `app.` и `admin.` маршрут `/api/v1/public/*` — 404.
+- Предел тела 3 МиБ для `POST /api/v1/operator/site-media` на хосте `admin.` — правило Caddy админки (сейчас весь
+  `/api/v1/operator/*` — 1 МиБ, чего хватает статьям и черновикам документов): оно выкладывается вместе с экранами
+  «Сайт» админки (часть 2), а не с `apps/site`; API свой предел 3 МиБ по пути уже принимает.
 - Профиль `local` (test): адрес сайта — новая переменная `SITE_ADDR` (`https://pharmacy-test.localhost:8443`
   занят web — предлагаю `https://site.pharmacy-test.localhost:8443`); `SITE_ORIGIN` — тот же.
 - `stack build` собирает образ `pharmacy/site` с тем же тегом; `stack init` дописывает `SITE_ADDR`, `SITE_ORIGIN`.

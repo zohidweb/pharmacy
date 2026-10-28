@@ -131,6 +131,14 @@ Compose-файлы — те же, что в репозитории на этом
 scp docker/compose.yml docker/compose.prod.yml docker/compose.backup.yml docker/compose.secrets.yml deploy@<IP>:/opt/pharmacy/docker/
 ```
 
+`prod.env`, созданный до ADR-0023, без строки `SITE_ORIGIN`: новый `compose.yml` требует её (`${SITE_ORIGIN:?…}`), и
+без неё падает любая команда `dc` — даже `ps` и `logs`. Локально её допишет `npm run stack -- prod init`; на VPS
+добавить строку вручную до первой команды `dc` с новыми compose-файлами:
+
+```bash
+ssh deploy@<IP> "grep -q '^SITE_ORIGIN=' /opt/pharmacy/docker/env/prod.env || echo 'SITE_ORIGIN=https://nurmed.online' >> /opt/pharmacy/docker/env/prod.env"
+```
+
 ## 4. Запуск
 
 Если в выкладке есть миграции — сначала снимок диска в панели Contabo (откат миграций только так, ADR-0006: только Up).

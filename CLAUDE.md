@@ -31,7 +31,7 @@ Project class: Full
 | Слой | Технология | Статус |
 |---|---|---|
 | Backend | NestJS (Express adapter), TypeScript strict | ADR-0003 |
-| Frontend (web, admin) | Next.js (React, TypeScript), **static export (SPA)** | ADR-0004 |
+| Frontend (web, admin, site) | Next.js (React, TypeScript): web и admin — **static export (SPA)**; публичный сайт `apps/site` — Next.js с серверной отрисовкой | ADR-0004, ADR-0023 |
 | БД | PostgreSQL | ADR-0001 |
 | Кэш / сессии | Redis, клиент `redis` (node-redis): серверные сессии (запись по `jti`), версия прав, лимиты входа и throttler; на офлайн-точке Redis нет — сессии в PostgreSQL | ADR-0001, ADR-0008 |
 | API-стиль | REST | ADR-0001 |
@@ -339,6 +339,8 @@ npm run prod:build / prod:up / prod:down
   `SITE_ORIGIN` (ADR-0023) — разрешённый `Origin` публичного контура `/api/v1/public/*` (форма заявки на подключение);
   обязательна, в prod — `https://`: test — `https://site.pharmacy-test.localhost:8443`, prod — `https://nurmed.online`,
   dev — `http://127.0.0.1:4400`. Сам сайт (`apps/site`) и его адрес в proxy — часть 3.
+  Чтение публичного контура идёт отдельным пулом той же роли `pharmacy_platform` — `PUBLIC_DB_POOL_MAX` (необязательна,
+  2, от 1 до 10), чтобы анонимные запросы не занимали пул админки оператора (`PLATFORM_DB_POOL_MAX`, 3).
   `OPERATOR_ALLOW` обязателен: в test — `private_ranges` (локально клиенты приходят из сети Docker; на общем стенде —
   адреса тестировщиков), в prod — публичные IP офисов операторов или VPN.
   В env-файле, созданном до proxy, `stack init` допишет новые переменные (и `TRUST_PROXY=1` — закомментированная строка

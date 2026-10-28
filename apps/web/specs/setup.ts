@@ -1,3 +1,4 @@
+import { TextDecoder, TextEncoder } from 'node:util';
 import { deserialize, serialize } from 'node:v8';
 import { configure } from '@testing-library/react';
 import { toHaveNoViolations } from 'jest-axe';
@@ -9,6 +10,11 @@ import 'fake-indexeddb/auto';
 if (typeof globalThis.structuredClone !== 'function') {
   globalThis.structuredClone = <T>(value: T): T =>
     deserialize(serialize(value));
+}
+
+// jsdom has no TextEncoder; lean-qr (the QR of a receipt, ADR-0022) makes one when it loads
+if (typeof globalThis.TextEncoder === 'undefined') {
+  Object.assign(globalThis, { TextEncoder, TextDecoder });
 }
 
 expect.extend(toHaveNoViolations);

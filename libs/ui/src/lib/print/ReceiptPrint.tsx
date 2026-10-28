@@ -5,7 +5,7 @@
  * `receiptRow` & co. (@pharmacy/shared-util) are shown as an on-screen preview and printed from a
  * separate print root through the browser print dialog — the rest of the app is hidden in print.
  */
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../cx';
 
@@ -24,6 +24,8 @@ export interface ReceiptPreviewProps {
   label: string;
   /** Layout only. */
   className?: string;
+  /** A drawing after the lines, centred: the QR of a sale receipt (ADR-0022). */
+  after?: ReactNode;
 }
 
 /** On-screen paper: monospace, the same columns as the printout. */
@@ -32,6 +34,7 @@ export function ReceiptPreview({
   paperWidth,
   label,
   className,
+  after,
 }: ReceiptPreviewProps) {
   return (
     <figure
@@ -45,6 +48,7 @@ export function ReceiptPreview({
       <pre className="m-0 w-fit font-mono text-xs whitespace-pre text-fg">
         {lines.join('\n')}
       </pre>
+      {after}
     </figure>
   );
 }
@@ -52,10 +56,12 @@ export function ReceiptPreview({
 export interface ReceiptPrintProps {
   lines: readonly string[];
   paperWidth: PaperWidth;
+  /** A drawing after the lines, centred: the QR of a sale receipt (ADR-0022). */
+  after?: ReactNode;
 }
 
 /** Hidden on screen; in print it is the only visible element. */
-export function ReceiptPrint({ lines, paperWidth }: ReceiptPrintProps) {
+export function ReceiptPrint({ lines, paperWidth, after }: ReceiptPrintProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
@@ -70,6 +76,7 @@ export function ReceiptPrint({ lines, paperWidth }: ReceiptPrintProps) {
           {line || ' '}
         </div>
       ))}
+      {after}
     </div>,
     document.body,
   );

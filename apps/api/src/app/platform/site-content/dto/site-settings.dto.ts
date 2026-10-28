@@ -2,6 +2,7 @@ import type { SiteText, UpdateSiteSettingsRequest } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEmail,
+  IsObject,
   IsString,
   IsUUID,
   Matches,
@@ -40,22 +41,27 @@ const notEmpty = (_: unknown, value: unknown) => value !== '';
 
 /** PUT /api/v1/operator/site-settings. */
 export class UpdateSiteSettingsDto implements UpdateSiteSettingsRequest {
+  @IsObject()
   @ValidateNested()
   @Type(() => NameDto)
   name!: SiteText;
 
+  @IsObject()
   @ValidateNested()
   @Type(() => TaglineDto)
   tagline!: SiteText;
 
+  @IsObject()
   @ValidateNested()
   @Type(() => SeoDescriptionDto)
   seoDescription!: SiteText;
 
+  @IsObject()
   @ValidateNested()
   @Type(() => AddressDto)
   address!: SiteText;
 
+  @IsObject()
   @ValidateNested()
   @Type(() => WorkingHoursDto)
   workingHours!: SiteText;

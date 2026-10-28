@@ -136,7 +136,7 @@ export function Export1cDialog({
             <a
               href={result.downloadUrl}
               download={result.fileName}
-              className="inline-flex min-h-touch items-center gap-2 rounded-(--ph-button-radius) bg-primary px-(--ph-button-padding-x) text-sm font-medium text-on-primary hover:bg-primary-hover"
+              className="inline-flex min-h-touch items-center gap-2 rounded-(--ph-button-radius) bg-primary px-(--ph-button-padding-x) text-sm font-semibold text-on-primary hover:bg-primary-hover"
             >
               {t('download')}
             </a>

@@ -32,12 +32,16 @@ export function LoginPage() {
   return (
     <AuthCard title={t('title')} subtitle={t('subtitle')}>
       <LoginForm onSuccess={() => router.replace(routes.dashboard())} />
-      <Link
-        href={routes.activate()}
-        className="self-start text-sm text-primary hover:text-primary-hover"
-      >
-        {t('activateLink')}
-      </Link>
+      {/* the question, and the link under it, both centred (QA 2026-10-28) */}
+      <p className="flex flex-col items-center gap-1 text-center text-sm">
+        <span className="text-fg-muted">{t('activateQuestion')}</span>
+        <Link
+          href={routes.activate()}
+          className="font-medium text-primary hover:text-primary-hover"
+        >
+          {t('activateLink')}
+        </Link>
+      </p>
     </AuthCard>
   );
 }

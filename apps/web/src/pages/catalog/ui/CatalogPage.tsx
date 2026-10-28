@@ -251,8 +251,10 @@ function CatalogPageView() {
                 />
               </div>
               <Card padding="none">
-                <div className="grid grid-cols-(--ph-search-columns) gap-3 p-(--ph-card-padding)">
+                {/* the search keeps its width; with a larger font the filters wrap to the next line */}
+                <div className="flex flex-wrap items-start gap-3 p-(--ph-card-padding)">
                   <TextField
+                    className="min-w-(--ph-search-min-width) flex-1"
                     label={t('search')}
                     hideLabel
                     type="search"

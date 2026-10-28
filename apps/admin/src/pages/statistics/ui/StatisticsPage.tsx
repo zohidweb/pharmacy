@@ -30,6 +30,7 @@ import { useFormatter, useTranslations } from 'use-intl';
 import { StoreModePill } from '@/entities/store';
 import { useTenantList } from '@/entities/tenant';
 import { apiRequest } from '@/shared/api';
+import { useMonthYear, useTimeAgo } from '@/shared/i18n';
 import { AsOfNote, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import { statsSheet } from '../lib/stats-sheet';
@@ -50,6 +51,8 @@ export function StatisticsPage() {
   const t = useTranslations('statistics');
   const tMode = useTranslations('store.mode');
   const format = useFormatter();
+  const periodLabel = useMonthYear();
+  const timeAgo = useTimeAgo();
   const periods = recentPeriods(6);
   const [period, setPeriod] = useState(periods[0]);
   const [tenantId, setTenantId] = useState<string | undefined>(undefined);
@@ -60,11 +63,6 @@ export function StatisticsPage() {
       apiRequest('usage.stats', { query: { period, tenantId }, signal }),
   });
   const today = toAppDate();
-  const periodLabel = (value: string) =>
-    format.dateTime(new Date(`${value}-15T00:00:00Z`), {
-      month: 'long',
-      year: 'numeric',
-    });
 
   // the table of the screen as an Excel file (plan 2026-10-27-excel-export, X9, X10)
   const [exporting, setExporting] = useState(false);
@@ -123,7 +121,7 @@ export function StatisticsPage() {
       daysBetween(toAppDate(new Date(row.lastActivityAt)), today) >= 1;
     return (
       <span className={stale ? 'font-medium text-warning' : undefined}>
-        {format.relativeTime(new Date(row.lastActivityAt), new Date())}
+        {timeAgo(new Date(row.lastActivityAt))}
       </span>
     );
   };

@@ -317,6 +317,7 @@ function AddOperator({
           expiresAt={create.data.activationCodeExpiresAt}
           title={t('codeTitle', { name: create.data.operator.fullName })}
           recipient="operator"
+          framed={false}
         />
       ) : (
         <>
@@ -411,6 +412,7 @@ function IssueOperatorCode({
           expiresAt={issue.data.activationCodeExpiresAt}
           title={t('codeTitle', { name: operator.fullName })}
           recipient="operator"
+          framed={false}
         />
       )}
     </Dialog>

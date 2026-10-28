@@ -139,8 +139,10 @@ export function OtpField({
             className={cx(
               'size-(--ph-size-touch-pos) rounded-(--ph-input-radius) border border-(--ph-input-border)',
               'bg-(--ph-input-bg) text-center text-xl font-bold text-fg tabular-nums',
-              'focus-visible:border-(--ph-input-border-focus) focus-visible:bg-surface',
-              'aria-invalid:border-(--ph-input-border-invalid) disabled:text-fg-disabled',
+              'transition focus-visible:border-(--ph-input-border-focus)',
+              'focus-visible:shadow-(--ph-input-ring-focus) focus-visible:outline-hidden',
+              'aria-invalid:border-(--ph-input-border-invalid) disabled:bg-(--ph-input-bg-disabled)',
+              'disabled:text-fg-disabled',
             )}
           />
         ))}

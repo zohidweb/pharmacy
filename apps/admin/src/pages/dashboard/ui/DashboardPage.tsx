@@ -12,7 +12,7 @@ import {
 } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useFormatter, useTranslations } from 'use-intl';
+import { useTranslations } from 'use-intl';
 import {
   eventHref,
   eventIcon,
@@ -22,6 +22,7 @@ import {
 import { TenantStatusPill, useTenantList } from '@/entities/tenant';
 import { apiRequest, isOfflineSectionAvailable } from '@/shared/api';
 import { routes } from '@/shared/config';
+import { useMonthYear } from '@/shared/i18n';
 import { AsOfNote, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
@@ -37,7 +38,7 @@ const toneSurface: Record<StatusTone, string> = {
 /** Platform overview (UI mockup «Дашборд»). */
 export function DashboardPage() {
   const t = useTranslations('dashboard');
-  const format = useFormatter();
+  const monthYear = useMonthYear();
   const text = useEventText();
   const dashboard = useQuery({
     queryKey: ['dashboard'],
@@ -48,13 +49,7 @@ export function DashboardPage() {
     direction: 'desc',
     limit: 5,
   });
-  const month = format.dateTime(
-    new Date(`${toAppDate().slice(0, 7)}-15T00:00:00Z`),
-    {
-      month: 'long',
-      year: 'numeric',
-    },
-  );
+  const month = monthYear(toAppDate().slice(0, 7));
 
   return (
     <>
@@ -72,10 +67,7 @@ export function DashboardPage() {
               summary.attention.serviceRequests +
               summary.attention.staleSync;
             const accruedMonth = summary.accruedPeriod
-              ? format.dateTime(
-                  new Date(`${summary.accruedPeriod}-15T00:00:00Z`),
-                  { month: 'long', year: 'numeric' },
-                )
+              ? monthYear(summary.accruedPeriod)
               : null;
             return (
               <>

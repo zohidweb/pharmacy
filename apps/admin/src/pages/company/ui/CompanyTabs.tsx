@@ -21,7 +21,7 @@ import {
   type DataTableColumn,
 } from '@pharmacy/ui';
 import Link from 'next/link';
-import { useFormatter, useTranslations } from 'use-intl';
+import { useTranslations } from 'use-intl';
 import { InvoiceStatusPill } from '@/entities/invoice';
 import { StoreModePill, StoreStatusPill } from '@/entities/store';
 import {
@@ -38,11 +38,12 @@ import {
   TenantServiceStatusPill,
 } from '@/features/tenant-service-actions';
 import { routes } from '@/shared/config';
+import { useTimeAgo } from '@/shared/i18n';
 import { AsOfNote, QueryState } from '@/shared/ui';
 
 export function StoresTab({ tenantId }: { tenantId: string }) {
   const t = useTranslations('company.stores');
-  const format = useFormatter();
+  const timeAgo = useTimeAgo();
   const columns: DataTableColumn<StoreSummary>[] = [
     {
       key: 'name',
@@ -89,7 +90,7 @@ export function StoresTab({ tenantId }: { tenantId: string }) {
         store.mode === 'cloud'
           ? t('online')
           : store.lastSyncAt
-            ? format.relativeTime(new Date(store.lastSyncAt), new Date())
+            ? timeAgo(new Date(store.lastSyncAt))
             : t('never'),
     },
     {

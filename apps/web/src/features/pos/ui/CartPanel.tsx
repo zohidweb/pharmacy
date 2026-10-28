@@ -179,7 +179,7 @@ export function CartPanel(props: CartPanelProps) {
   return (
     <section
       aria-label={t('receipt')}
-      className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-lg bg-surface p-4 shadow-sm"
+      className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-(--ph-card-radius) bg-surface p-4 shadow-sm"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-md font-bold">{t('receipt')}</h2>

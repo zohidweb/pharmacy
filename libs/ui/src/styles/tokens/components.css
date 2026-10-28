@@ -8,17 +8,29 @@
   --ph-button-height-lg: var(--ph-size-control-lg);
   --ph-button-height-pos: var(--ph-size-touch-pos);
   --ph-button-height-primary: var(--ph-size-touch-primary);
-  --ph-button-padding-x: var(--ph-space-5);
-  --ph-button-radius: var(--ph-radius-full);
+  /* The button of the client mockups in apps/web and apps/admin (QA 2026-10-28); icon buttons stay round. */
+  --ph-button-padding-x: var(--ph-space-4);
+  --ph-button-radius: var(--ph-radius-sm);
   --ph-icon-button-size: var(--ph-size-touch-min);
 
+  /*
+   * Text-like controls look the same in apps/web and apps/admin (QA 2026-10-28: the input of the client mockups): a
+   * white field with a small radius; focus — the primary border and a soft ring instead of the offset outline. The
+   * border is the light --ph-color-border-input (#cbd5e1).
+   */
   --ph-input-height: var(--ph-size-touch-min);
-  --ph-input-padding-x: var(--ph-space-4);
-  --ph-input-radius: var(--ph-radius-md);
-  --ph-input-bg: var(--ph-color-surface-sunken);
-  --ph-input-border: var(--ph-color-border-control);
+  --ph-input-padding-x: var(--ph-space-3);
+  --ph-input-radius: var(--ph-radius-sm);
+  --ph-input-bg: var(--ph-color-surface);
+  --ph-input-bg-disabled: var(--ph-color-surface-sunken);
+  --ph-input-border: var(--ph-color-border-input);
   --ph-input-border-focus: var(--ph-color-primary);
   --ph-input-border-invalid: var(--ph-color-danger);
+  --ph-input-ring-focus: 0 0 0 var(--ph-border-width-2)
+    var(--ph-color-primary-subtle-hover);
+
+  /* The root font size of apps/web and apps/admin: the user's A−/A+ (FontScaleControl) sets it on <html> (1 = 100 %). */
+  --ph-root-font-scale: 1;
 
   --ph-switch-width: 2.75rem;
   --ph-switch-height: 1.625rem;
@@ -28,12 +40,14 @@
 
   --ph-chip-height: var(--ph-size-touch-min);
   --ph-pill-padding-x: var(--ph-space-2);
+  /* Radii of the client mockups (QA 2026-10-28): status pills 6, cards 12, dialogs 16. */
+  --ph-pill-radius: var(--ph-radius-xs);
 
-  --ph-card-radius: var(--ph-radius-lg);
+  --ph-card-radius: var(--ph-radius-ms);
   --ph-card-padding: var(--ph-space-6);
   --ph-card-shadow: var(--ph-shadow-sm);
 
-  --ph-dialog-radius: var(--ph-radius-lg);
+  --ph-dialog-radius: var(--ph-radius-md);
   --ph-dialog-shadow: var(--ph-shadow-lg);
   --ph-dialog-max-block: calc(100dvh - var(--ph-space-8));
   --ph-dialog-max-inline: calc(100vw - var(--ph-space-8));
@@ -44,8 +58,9 @@
 
   --ph-nav-item-bg-active: var(--ph-color-primary-subtle);
   --ph-nav-item-fg-active: var(--ph-color-primary);
-  --ph-nav-counter-bg: var(--ph-color-danger-subtle);
-  --ph-nav-counter-fg: var(--ph-color-danger);
+  /* A solid counter, as in the client mockups (QA 2026-10-28) */
+  --ph-nav-counter-bg: var(--ph-color-danger);
+  --ph-nav-counter-fg: var(--ph-color-on-danger);
 
   --ph-receipt-preview-height: var(--ph-size-receipt-preview);
   /* Tables of a load from a file (columns, refused rows): they scroll inside, the page does not grow */
@@ -67,6 +82,8 @@
   /* Search rows: field | button, and field | date | button */
   --ph-search-columns: minmax(0, 1fr) auto;
   --ph-search-columns-2: minmax(0, 2fr) minmax(0, 1fr) auto;
+  /* A search field beside wrapping filters keeps this width; the filters move to the next line instead (QA 2026-10-28) */
+  --ph-search-min-width: 15rem;
 
   /* Area under the top bar of apps/web: sticky sidebar height */
   --ph-shell-body-height: calc(100dvh - var(--ph-size-topbar));

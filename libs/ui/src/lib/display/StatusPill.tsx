@@ -47,8 +47,8 @@ export function StatusPill({
   return (
     <span
       className={cx(
-        'inline-flex max-w-full items-center gap-1 rounded-full px-(--ph-pill-padding-x) py-0.5',
-        'text-xs font-medium whitespace-nowrap',
+        'inline-flex max-w-full items-center gap-1 rounded-(--ph-pill-radius) px-(--ph-pill-padding-x) py-0.5',
+        'text-xs font-semibold whitespace-nowrap',
         toneClass[tone],
         className,
       )}

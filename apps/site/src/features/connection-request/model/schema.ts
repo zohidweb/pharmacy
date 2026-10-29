@@ -23,6 +23,7 @@ export const FIELD_MAX_LENGTH = {
   networkName: 120,
   city: 120,
   contactName: 120,
+  phone: 32,
   email: 254,
   callTime: 100,
   comment: 500,
@@ -74,6 +75,7 @@ export function connectionRequestSchema() {
     phone: z.string().check(
       z.trim(),
       filled(),
+      atMost(FIELD_MAX_LENGTH.phone),
       z.refine((value) => normalizeIdentifier(value)?.kind === 'phone', {
         error: 'phone',
       }),
@@ -92,8 +94,10 @@ export function connectionRequestSchema() {
     consent: z
       .boolean()
       .check(z.refine((value) => value, { error: 'consent' })),
-    // the trap: never checked here, the API makes a filled one spam (spec 7.3)
-    website: z.string(),
+    // The trap (spec 7.3): never checked here, the API makes a filled one spam. Its name says nothing to the
+    // autofill of password managers — a field named `website` would be filled with a real visitor's site; the body
+    // carries it as the API field `website` (toSubmitBody).
+    hp_note: z.string(),
   });
 }
 
@@ -113,7 +117,7 @@ export const EMPTY_CONNECTION_REQUEST: ConnectionRequestInput = {
   callTime: '',
   comment: '',
   consent: false,
-  website: '',
+  hp_note: '',
 };
 
 export function isConnectionRequestErrorKey(
@@ -132,11 +136,14 @@ export function isConnectionRequestErrorKey(
   );
 }
 
-/** The fields of the form the API may name in `errors[]` (the rest — locale, openedAt — are not the visitor's). */
+/**
+ * The fields of the form the API may name in `errors[]` (the rest — locale, openedAt, website — are not the
+ * visitor's).
+ */
 export function isConnectionRequestField(
   value: string,
-): value is Exclude<ConnectionRequestField, 'website'> {
-  return value !== 'website' && value in EMPTY_CONNECTION_REQUEST;
+): value is Exclude<ConnectionRequestField, 'hp_note'> {
+  return value !== 'hp_note' && value in EMPTY_CONNECTION_REQUEST;
 }
 
 /** The body of POST public/connection-requests; empty optional fields are left out. */
@@ -158,7 +165,7 @@ export function toSubmitBody(
     comment: optionalText(values.comment),
     locale,
     consent: true,
-    website: optionalText(values.website),
+    website: optionalText(values.hp_note),
     openedAt,
   };
 }

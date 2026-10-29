@@ -85,7 +85,8 @@ export function pageMetadata({
     description,
     url: links.canonical,
     siteName: siteNameOf(info, locale),
-    locale: OPEN_GRAPH_LOCALES[locale],
+    // the language of the canonical page: /tg/privacy that shows the RU text is a RU page (the description stays TG)
+    locale: OPEN_GRAPH_LOCALES[canonicalLocale],
     ...(image && { images: [absoluteUrl(mediaPath(image))] }),
   };
   return {

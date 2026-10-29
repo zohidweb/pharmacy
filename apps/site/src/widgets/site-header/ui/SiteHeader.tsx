@@ -97,7 +97,8 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
             <div className="absolute inset-x-0 top-full z-(--ph-z-dropdown) border-b border-border bg-surface shadow-lg">
               <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col gap-4 p-4">
                 <nav aria-label={t('nav.label')}>
-                  {/* plain links: a full navigation also closes the menu */}
+                  {/* plain links: a link to another page closes the menu by a full navigation; a same-page anchor
+                      (#contacts, #features on the home page) only scrolls and leaves it open */}
                   <ul className="flex flex-col">
                     {menu.map((item) => (
                       <li key={item.href}>

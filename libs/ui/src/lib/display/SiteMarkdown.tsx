@@ -40,11 +40,12 @@ function renderInline(
       return <Fragment key={index}>{children}</Fragment>;
     const newTab = opensInNewTab(node.href, links);
     // The preview keeps the rel on every link (mail included); the site only on the external ones.
+    const rel = newTab || links === 'new-tab' ? 'noopener nofollow' : undefined;
     return (
       <a
         key={index}
         href={node.href}
-        rel={newTab || links === 'new-tab' ? 'noopener nofollow' : undefined}
+        rel={rel}
         target={newTab ? '_blank' : undefined}
         className="text-primary underline hover:text-primary-hover"
       >

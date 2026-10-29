@@ -76,6 +76,10 @@ export function getArticles(
   locale: UiLocale,
   page: number,
 ): Promise<Page<PublicArticleListItem>> {
+  // the page route validates it already (blog/model/page-number.ts); a bad one must never become a negative offset
+  if (!Number.isInteger(page) || page < 1) {
+    return Promise.reject(new RangeError(`Invalid blog page: ${page}`));
+  }
   return required<Page<PublicArticleListItem>>('articles', {
     locale,
     limit: ARTICLES_PER_PAGE,

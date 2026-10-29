@@ -2,10 +2,10 @@
 
 /*
  * The connection request form (spec 6.4, 7.3) — the only client-heavy part of the site. Its own IntlProvider carries
- * only `connect` and `apiErrors`, so the bundle holds no other texts. Protection: the trap field `website` and the
- * time the form was opened (`openedAt`, set on mount, not during the server render). One request at a time: the
- * button is busy while it is sent and a second submit is ignored (Review Focus 3). Nothing typed is cleared on any
- * error.
+ * only `connect` and `apiErrors`, so the bundle holds no other texts. Protection: the trap field (`hp_note` in the
+ * DOM, `website` in the body) and the time the form was opened (`openedAt`, set on mount, not during the server
+ * render). One request at a time: the button is busy while it is sent and a second submit is ignored (Review Focus 3).
+ * Nothing typed is cleared on any error; an edit hides the failure alert.
  */
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { UiLocale } from '@pharmacy/shared-dto';
@@ -75,7 +75,9 @@ function RequestForm({
     ConnectionRequestValues
   >({
     resolver: zodResolver(schema),
-    mode: 'onTouched',
+    // errors appear on submit, not on blur: an error shown on blur moves the consent checkbox from under the click
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
     defaultValues: EMPTY_CONNECTION_REQUEST,
   });
   const { register, control, handleSubmit, setError, formState } = form;
@@ -156,7 +158,14 @@ function RequestForm({
             minutes: Math.max(1, Math.ceil(problem.retryAfterSeconds / 60)),
           });
     }
-    if (problem.status === 400) return tApi('validation_failed');
+    // a 400 that names none of the visitor's fields (openedAt, locale, …) has nothing to point at
+    if (problem.status === 400) {
+      return problem.fields.some((error) =>
+        isConnectionRequestField(error.field),
+      )
+        ? tApi('validation_failed')
+        : tApi('unexpected');
+    }
     return tApi('unexpected');
   };
 
@@ -204,6 +213,8 @@ function RequestForm({
         noValidate
         className="relative flex flex-col gap-5"
         onSubmit={handleSubmit(onValid)}
+        // an edit answers the failure: the alert would otherwise describe a request that is no longer the one typed
+        onChange={() => setFailure(null)}
       >
         <TextField
           label={t('fields.networkName')}
@@ -276,7 +287,8 @@ function RequestForm({
           label={t('fields.comment')}
           rows={4}
           hint={t('fields.commentCounter', {
-            count: comment.length,
+            // the trimmed length, as the validation counts it
+            count: comment.trim().length,
             max: FIELD_MAX_LENGTH.comment,
           })}
           error={errorOf('comment')}
@@ -319,10 +331,11 @@ function RequestForm({
           style={{ position: 'absolute', left: '-10000px' }}
         >
           <input
+            id="hp_note"
             type="text"
             tabIndex={-1}
             autoComplete="off"
-            {...register('website')}
+            {...register('hp_note')}
           />
         </div>
 

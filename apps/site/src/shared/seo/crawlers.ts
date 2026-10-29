@@ -31,15 +31,21 @@ export function siteRobots(): MetadataRoute.Robots {
 /** The pages that exist in both languages and do not come from the API. */
 const STATIC_PATHS = ['/', '/tariffs', '/blog', '/connect'] as const;
 
-/** One entry per language of a page, each with the hreflang of all the page's languages. */
+/**
+ * One entry per language of a page, each with the hreflang of all the page's languages and `x-default` — RU
+ * when RU is among them (as `alternates()` of the page metadata).
+ */
 function entries(
   path: string,
   available: readonly UiLocale[],
   lastModified?: string,
 ): MetadataRoute.Sitemap {
-  const languages = Object.fromEntries(
+  const languages: Record<string, string> = Object.fromEntries(
     available.map((locale) => [locale, absoluteUrl(localePath(locale, path))]),
   );
+  if (available.includes('ru')) {
+    languages['x-default'] = absoluteUrl(localePath('ru', path));
+  }
   return available.map((locale) => ({
     url: absoluteUrl(localePath(locale, path)),
     ...(lastModified && { lastModified }),

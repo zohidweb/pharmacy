@@ -9,3 +9,8 @@
 @source '../../';
 @source '../../../app';
 @source '../../../../../libs/ui/src/lib';
+
+/* the header menu (<details>): old Safari draws its own marker besides `list-none` */
+summary::-webkit-details-marker {
+  display: none;
+}

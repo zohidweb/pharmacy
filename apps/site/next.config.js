@@ -2,7 +2,7 @@
 const path = require('node:path');
 
 /**
- * Public site (ADR-0023): Next.js with server rendering (`next start` of the standalone output) and
+ * Public site (ADR-0023): Next.js with server rendering (the standalone `server.js`) and
  * time-based ISR. No Server Actions, middleware/proxy or Route Handlers other than the metadata routes;
  * data comes only from the public API `/api/v1/public/*`.
  * @type {import('next').NextConfig}
@@ -14,6 +14,9 @@ const nextConfig = {
   // no next/image optimizer: it needs sharp, a new dependency (ADR-0023)
   images: { unoptimized: true },
   poweredByHeader: false,
+  // Caddy encodes the answers (zstd/gzip, docker/proxy/Caddyfile): gzip of Next would make Caddy skip them and spend
+  // the CPU of the small site container.
+  compress: false,
   // The container is read-only (S3): ISR pages would be written under .next/server/route-cache, outside the tmpfs
   // .next/cache, and that fails there. Pages and fetch answers stay in the memory cache of Next (cacheMaxMemorySize,
   // 50 MB by default) and are rendered again after a restart (spec 9, W16).

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { createTranslator } from 'use-intl/core';
 import type { Messages } from '@/shared/i18n';
 import { loadMessages } from '@/shared/i18n/load-messages';
+import { stateScreenClassName } from '@/shared/ui';
 import '@/app/styles/global.css';
 
 /**
@@ -36,12 +37,12 @@ export default function GlobalError() {
     <html lang={loaded?.locale ?? locale}>
       <body>
         {failed && (
-          <main className="mx-auto flex max-w-(--ph-size-dialog-md) flex-col items-center gap-4 px-6 py-16 text-center">
-            <p className="text-4xl font-bold text-border-strong">500</p>
+          <main className={stateScreenClassName}>
+            <p className="text-4xl font-bold text-fg-muted">500</p>
           </main>
         )}
         {t && (
-          <main className="mx-auto flex max-w-(--ph-size-dialog-md) flex-col items-center gap-4 px-6 py-16 text-center">
+          <main className={stateScreenClassName}>
             <h1 className="text-xl font-bold tracking-tight">
               {t('errors.unavailable.title')}
             </h1>

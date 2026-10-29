@@ -1,0 +1,358 @@
+'use client';
+
+/*
+ * The connection request form (spec 6.4, 7.3) — the only client-heavy part of the site. Its own IntlProvider carries
+ * only `connect` and `apiErrors`, so the bundle holds no other texts. Protection: the trap field `website` and the
+ * time the form was opened (`openedAt`, set on mount, not during the server render). One request at a time: the
+ * button is busy while it is sent and a second submit is ignored (Review Focus 3). Nothing typed is cleared on any
+ * error.
+ */
+import { zodResolver } from '@hookform/resolvers/zod';
+import type { UiLocale } from '@pharmacy/shared-dto';
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Icon,
+  TextareaField,
+  TextField,
+} from '@pharmacy/ui';
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
+import { IntlProvider, useTranslations } from 'use-intl';
+import type { Messages } from '@/shared/i18n';
+import { localePath } from '@/shared/lib';
+import { submitConnectionRequest, type SubmitResult } from '../api/submit';
+import {
+  connectionRequestSchema,
+  EMPTY_CONNECTION_REQUEST,
+  FIELD_MAX_LENGTH,
+  isConnectionRequestErrorKey,
+  isConnectionRequestField,
+  toSubmitBody,
+  type ConnectionRequestField,
+  type ConnectionRequestInput,
+  type ConnectionRequestValues,
+} from '../model/schema';
+
+type Failure = Extract<SubmitResult, { ok: false }>;
+
+export interface ConnectionRequestFormProps {
+  locale: UiLocale;
+  /** Only the groups the form needs: the page passes them from the server dictionary. */
+  messages: Pick<Messages, 'connect' | 'apiErrors'>;
+  /** Working hours from the site settings in the page's language; empty — not shown. */
+  workingHours: string;
+}
+
+/** Form order: the first field the API refused gets the focus. */
+const FIELD_ORDER = Object.keys(
+  EMPTY_CONNECTION_REQUEST,
+) as ConnectionRequestField[];
+
+/** The field codes of a 400 with their own text; any other code is «Проверьте поле». */
+const SERVER_FIELD_CODES: Readonly<Record<string, 'phone' | 'email'>> = {
+  phone_format: 'phone',
+  email_format: 'email',
+};
+
+function hasMaxLength(field: string): field is keyof typeof FIELD_MAX_LENGTH {
+  return field in FIELD_MAX_LENGTH;
+}
+
+function RequestForm({
+  locale,
+  workingHours,
+}: Omit<ConnectionRequestFormProps, 'messages'>) {
+  const t = useTranslations('connect');
+  const tApi = useTranslations('apiErrors');
+  const schema = useMemo(() => connectionRequestSchema(), []);
+  const form = useForm<
+    ConnectionRequestInput,
+    unknown,
+    ConnectionRequestValues
+  >({
+    resolver: zodResolver(schema),
+    mode: 'onTouched',
+    defaultValues: EMPTY_CONNECTION_REQUEST,
+  });
+  const { register, control, handleSubmit, setError, formState } = form;
+  const comment = useWatch({ control, name: 'comment' });
+
+  const openedAt = useRef<string | null>(null);
+  useEffect(() => {
+    openedAt.current = new Date().toISOString();
+  }, []);
+
+  // the ref, not the state: a second click before the re-render must not send a second request
+  const inFlight = useRef(false);
+  const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [done, setDone] = useState(false);
+  const doneTitle = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (done) doneTitle.current?.focus();
+  }, [done]);
+
+  const onValid = async (values: ConnectionRequestValues) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setSending(true);
+    setFailure(null);
+    try {
+      const result = await submitConnectionRequest(
+        toSubmitBody(
+          values,
+          locale,
+          openedAt.current ?? new Date().toISOString(),
+        ),
+      );
+      if (result.ok) {
+        setDone(true);
+        return;
+      }
+      if (result.status === 400) {
+        const refused = FIELD_ORDER.filter((field) =>
+          result.fields.some((error) => error.field === field),
+        ).filter(isConnectionRequestField);
+        refused.forEach((field, index) => {
+          const code = result.fields.find(
+            (error) => error.field === field,
+          )?.code;
+          setError(
+            field,
+            { message: (code && SERVER_FIELD_CODES[code]) ?? 'invalid' },
+            { shouldFocus: index === 0 },
+          );
+        });
+      }
+      setFailure(result);
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+    }
+  };
+
+  const errorOf = (field: ConnectionRequestField) => {
+    const message = formState.errors[field]?.message;
+    if (!isConnectionRequestErrorKey(message)) return undefined;
+    if (message === 'tooLong' && hasMaxLength(field)) {
+      return t('errors.tooLong', { max: FIELD_MAX_LENGTH[field] });
+    }
+    return t(`errors.${message}`);
+  };
+
+  const failureText = (problem: Failure): string => {
+    if (problem.status === 0 || problem.status >= 500) return tApi('network');
+    if (problem.status === 409 && problem.code === 'privacy_not_published') {
+      return tApi('privacy_not_published');
+    }
+    if (problem.status === 429) {
+      return problem.retryAfterSeconds === null
+        ? tApi('too_many_requests_later')
+        : tApi('too_many_requests', {
+            minutes: Math.max(1, Math.ceil(problem.retryAfterSeconds / 60)),
+          });
+    }
+    if (problem.status === 400) return tApi('validation_failed');
+    return tApi('unexpected');
+  };
+
+  if (done) {
+    return (
+      <Card
+        as="section"
+        aria-labelledby="request-done"
+        className="flex flex-col items-start gap-3"
+      >
+        <span className="text-success">
+          <Icon name="circle-check" size="lg" />
+        </span>
+        <h2
+          id="request-done"
+          ref={doneTitle}
+          tabIndex={-1}
+          className="text-xl font-bold tracking-tight outline-hidden"
+        >
+          {t('done.title')}
+        </h2>
+        <p>{t('done.text')}</p>
+        {workingHours && (
+          <p className="text-sm text-fg-muted">
+            {t('done.hours', { hours: workingHours })}
+          </p>
+        )}
+        <Link
+          href={localePath(locale, '/')}
+          className="text-sm text-primary hover:underline"
+        >
+          {t('done.home')}
+        </Link>
+      </Card>
+    );
+  }
+
+  const requiredText = t('required');
+  return (
+    <Card as="section" aria-labelledby="request-form-title">
+      <h2 id="request-form-title" className="ph-visually-hidden">
+        {t('formTitle')}
+      </h2>
+      <form
+        noValidate
+        className="relative flex flex-col gap-5"
+        onSubmit={handleSubmit(onValid)}
+      >
+        <TextField
+          label={t('fields.networkName')}
+          required
+          requiredText={requiredText}
+          autoComplete="organization"
+          error={errorOf('networkName')}
+          {...register('networkName')}
+        />
+        <TextField
+          label={t('fields.city')}
+          required
+          requiredText={requiredText}
+          autoComplete="address-level2"
+          error={errorOf('city')}
+          {...register('city')}
+        />
+        <TextField
+          label={t('fields.storeCount')}
+          required
+          requiredText={requiredText}
+          inputMode="numeric"
+          autoComplete="off"
+          hint={t('fields.storeCountHint')}
+          error={errorOf('storeCount')}
+          {...register('storeCount')}
+        />
+        <TextField
+          label={t('fields.contactName')}
+          required
+          requiredText={requiredText}
+          autoComplete="name"
+          error={errorOf('contactName')}
+          {...register('contactName')}
+        />
+        <TextField
+          label={t('fields.phone')}
+          required
+          requiredText={requiredText}
+          type="tel"
+          autoComplete="tel"
+          placeholder="+992 00 000 00 00"
+          hint={t('fields.phoneHint')}
+          error={errorOf('phone')}
+          {...register('phone')}
+        />
+        <TextField
+          label={t('fields.email')}
+          type="email"
+          autoComplete="email"
+          error={errorOf('email')}
+          {...register('email')}
+        />
+        <TextField
+          label={t('fields.inn')}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="000000000"
+          hint={t('fields.innHint')}
+          error={errorOf('inn')}
+          {...register('inn')}
+        />
+        <TextField
+          label={t('fields.callTime')}
+          hint={t('fields.callTimeHint')}
+          error={errorOf('callTime')}
+          {...register('callTime')}
+        />
+        <TextareaField
+          label={t('fields.comment')}
+          rows={4}
+          hint={t('fields.commentCounter', {
+            count: comment.length,
+            max: FIELD_MAX_LENGTH.comment,
+          })}
+          error={errorOf('comment')}
+          {...register('comment')}
+        />
+        <div className="flex flex-col gap-1">
+          <Checkbox
+            label={t.rich('consent', {
+              link: (chunks) => (
+                <a
+                  href={localePath(locale, '/privacy')}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-primary hover:underline"
+                >
+                  {chunks}
+                </a>
+              ),
+            })}
+            aria-invalid={formState.errors.consent ? true : undefined}
+            aria-describedby={
+              formState.errors.consent ? 'consent-error' : undefined
+            }
+            {...register('consent')}
+          />
+          {formState.errors.consent && (
+            <p
+              id="consent-error"
+              className="flex items-start gap-1 text-xs text-danger"
+            >
+              <Icon name="circle-alert" size="xs" className="mt-0.5" />
+              <span>{errorOf('consent')}</span>
+            </p>
+          )}
+        </div>
+
+        {/* The trap (spec 7.3): out of sight and out of the tab order; a person never fills it. */}
+        <div
+          aria-hidden="true"
+          style={{ position: 'absolute', left: '-10000px' }}
+        >
+          <input
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            {...register('website')}
+          />
+        </div>
+
+        {failure && (
+          <Alert tone="danger" live="assertive">
+            {failureText(failure)}
+          </Alert>
+        )}
+        <div>
+          <Button
+            type="submit"
+            size="lg"
+            loading={sending || formState.isSubmitting}
+          >
+            {t('submit')}
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+export function ConnectionRequestForm({
+  locale,
+  messages,
+  workingHours,
+}: ConnectionRequestFormProps) {
+  return (
+    <IntlProvider locale={locale} messages={messages}>
+      <RequestForm locale={locale} workingHours={workingHours} />
+    </IntlProvider>
+  );
+}

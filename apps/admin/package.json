@@ -28,6 +28,9 @@
           },
           {
             "env": "SITE_ORIGIN"
+          },
+          {
+            "env": "NEXT_PUBLIC_SITE_ORIGIN"
           }
         ],
         "outputs": [

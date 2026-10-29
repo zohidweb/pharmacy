@@ -20,6 +20,14 @@ function pathWithoutLocale(pathname: string): string {
   return pathname.replace(/^\/(?:ru|tg)(?=\/|$)/, '') || '/';
 }
 
+/**
+ * The page to open in the other language. An article may have no translation, and the layout cannot know:
+ * the switch leads to the blog of the other language (the article itself links its translation).
+ */
+function otherLanguagePath(path: string): string {
+  return /^\/blog\/[^/]+/.test(path) ? '/blog' : path;
+}
+
 export interface LocaleSwitchProps {
   locale: UiLocale;
   /** Accessible name of the group («Язык сайта»). */
@@ -27,7 +35,7 @@ export interface LocaleSwitchProps {
 }
 
 export function LocaleSwitch({ locale, label }: LocaleSwitchProps) {
-  const path = pathWithoutLocale(usePathname() ?? '/');
+  const path = otherLanguagePath(pathWithoutLocale(usePathname() ?? '/'));
   return (
     <nav aria-label={label}>
       <ul className="flex items-center gap-1 rounded-sm bg-surface-sunken p-0.5">

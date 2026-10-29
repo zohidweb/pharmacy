@@ -1,3 +1,4 @@
+export { siteRobots, siteSitemap } from './crawlers';
 export {
   alternates,
   pageMetadata,

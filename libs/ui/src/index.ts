@@ -62,6 +62,10 @@ export {
   type KpiTone,
 } from './lib/display/KpiTile';
 export {
+  SiteMarkdown,
+  type SiteMarkdownProps,
+} from './lib/display/SiteMarkdown';
+export {
   StatusPill,
   type StatusPillProps,
   type StatusTone,

@@ -4,18 +4,26 @@
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import type { MetadataRoute } from 'next';
-import { getSitemap } from '@/shared/api';
+import { getSitemap, mediaPath } from '@/shared/api';
 import { absoluteUrl, siteEnv } from '@/shared/config';
 import { locales } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
 
-/** Prod indexes everything but the API; any other stand (`SITE_INDEXING` unset) is closed to crawlers. */
+/**
+ * Prod indexes everything but the API; any other stand (`SITE_INDEXING` unset) is closed to crawlers. The
+ * pictures of the site (covers, article images, the link preview picture) live under the API
+ * (`mediaPath`), so their path stays open: the longest matching rule wins.
+ */
 export function siteRobots(): MetadataRoute.Robots {
   if (!siteEnv().indexing) {
     return { rules: { userAgent: '*', disallow: '/' } };
   }
   return {
-    rules: { userAgent: '*', allow: '/', disallow: '/api/' },
+    rules: {
+      userAgent: '*',
+      allow: ['/', mediaPath('')],
+      disallow: '/api/',
+    },
     sitemap: absoluteUrl('/sitemap.xml'),
   };
 }

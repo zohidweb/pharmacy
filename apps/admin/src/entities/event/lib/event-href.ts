@@ -23,7 +23,6 @@ export function eventHref(target: EventTarget): string | null {
         ? routes.versions()
         : null;
     case 'connectionRequests':
-      // the screen «Сайт → Заявки» comes with the admin part of the public site (ADR-0023)
-      return null;
+      return routes.siteRequests();
   }
 }

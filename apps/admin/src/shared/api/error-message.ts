@@ -37,6 +37,22 @@ const knownCodes = [
   'password_policy',
   'login_locked',
   'not_active',
+  'version_conflict',
+  'slug_taken',
+  'slug_locked',
+  'translation_required',
+  'not_published',
+  'not_draft',
+  'archived',
+  'already_published',
+  'draft_empty',
+  'media_not_found',
+  'media_too_large',
+  'payload_too_large',
+  'unsupported_media_type',
+  'request_already_decided',
+  'article_not_found',
+  'connection_request_not_found',
 ] as const;
 type KnownCode = (typeof knownCodes)[number];
 

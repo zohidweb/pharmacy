@@ -9,6 +9,9 @@ export const routes = {
   statistics: () => '/statistics',
   companies: () => '/companies',
   companyCreate: () => '/companies/new',
+  /** «Новая компания» prefilled from a connection request of the site. */
+  companyCreateFromRequest: (requestId: string) =>
+    `/companies/new?request=${encodeURIComponent(requestId)}`,
   company: (id: string) => `/companies/view?id=${encodeURIComponent(id)}`,
   store: (id: string) => `/stores/view?id=${encodeURIComponent(id)}`,
   invoices: () => '/billing',
@@ -23,6 +26,18 @@ export const routes = {
     `/audit-log?tenantId=${encodeURIComponent(tenantId)}`,
   settings: () => '/settings',
   profile: () => '/profile',
+  // «Сайт» block (ADR-0023): ids in the query; an article without `id` is a new one
+  siteRequests: () => '/site/requests',
+  siteRequest: (id: string) =>
+    `/site/requests/view?id=${encodeURIComponent(id)}`,
+  siteArticles: () => '/site/articles',
+  siteArticle: (id?: string) =>
+    id === undefined
+      ? '/site/articles/edit'
+      : `/site/articles/edit?id=${encodeURIComponent(id)}`,
+  siteDocuments: () => '/site/documents',
+  siteMedia: () => '/site/media',
+  siteSettings: () => '/site/settings',
 } as const;
 
 export type RouteName = keyof typeof routes;

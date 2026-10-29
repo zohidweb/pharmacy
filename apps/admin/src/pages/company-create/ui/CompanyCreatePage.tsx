@@ -1,25 +1,35 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { CreateTenantResponse } from '@pharmacy/shared-dto';
+import type {
+  ConnectionRequest,
+  CreateTenantResponse,
+} from '@pharmacy/shared-dto';
 import {
   Alert,
   Button,
   Card,
   CardHeader,
   Icon,
+  Spinner,
   TextField,
   useToast,
 } from '@pharmacy/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useTranslations } from 'use-intl';
+import {
+  connectionRequestKeys,
+  useConnectionRequest,
+} from '@/entities/connection-request';
+import { attentionKeys } from '@/entities/event';
 import { tenantKeys } from '@/entities/tenant';
 import { ApiError, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { routes } from '@/shared/config';
-import { ActivationCodeCard } from '@/shared/ui';
+import { ActivationCodeCard, QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import {
   createTenantSchema,
@@ -30,10 +40,13 @@ import {
 } from '../model/create-tenant-schema';
 
 /**
- * «Новая компания»: the operator creates a network and its owner (spec 2026-10-05-tenants-module,
- * T2: the owner adds stores after activation). The owner's one-time activation code is shown once.
+ * The form of «Новая компания»: the operator creates a network and its owner (spec 2026-10-05-tenants-module,
+ * T2: the owner adds stores after activation). The owner's one-time activation code is shown once. With a
+ * connection request of the site the fields are filled from it and the request becomes `connected` with the
+ * network (ADR-0023, S3). The login is not taken from the phone: a login shaped like a phone is refused
+ * (ADR-0008), so the operator sets it.
  */
-export function CompanyCreatePage() {
+function CompanyCreateForm({ request }: { request?: ConnectionRequest }) {
   const t = useTranslations('companyCreate');
   const tErrors = useTranslations('validation');
   const tCommon = useTranslations('common');
@@ -48,29 +61,50 @@ export function CompanyCreatePage() {
     resolver: zodResolver(schema),
     mode: 'onTouched',
     defaultValues: {
-      name: '',
-      city: '',
-      inn: '',
-      ownerFullName: '',
-      ownerPhone: '',
+      name: request?.networkName ?? '',
+      city: request?.city ?? '',
+      inn: request?.inn ?? '',
+      ownerFullName: request?.contactName ?? '',
+      ownerPhone: request?.phone ?? '',
       ownerLogin: '',
-      ownerEmail: '',
+      ownerEmail: request?.email ?? '',
     },
   });
   const { register, control, handleSubmit, setError, formState } = form;
   const values = useWatch({ control });
+  // Only a request that is still open can become a network: the API refuses a decided one.
+  const decided =
+    request !== undefined &&
+    request.status !== 'new' &&
+    request.status !== 'in_progress';
 
   const create = useMutation({
-    mutationFn: (request: ReturnType<typeof toCreateTenantRequest>) =>
-      apiRequest('tenants.create', { body: request }),
+    mutationFn: (body: ReturnType<typeof toCreateTenantRequest>) =>
+      apiRequest('tenants.create', { body }),
     onSuccess: (response) => {
       void queryClient.invalidateQueries({ queryKey: tenantKeys.all });
+      if (request) {
+        // the request is `connected` now and the menu counter drops
+        void queryClient.invalidateQueries({
+          queryKey: connectionRequestKeys.all,
+        });
+        void queryClient.invalidateQueries({ queryKey: attentionKeys.counts });
+      }
       toast.show(t('created'));
       setCreated(response);
     },
     onError: (error) => {
       if (error instanceof ApiError && FIELD_CONFLICTS[error.code]) {
         setError(FIELD_CONFLICTS[error.code], { message: error.code });
+      }
+      // Somebody decided the request meanwhile: read it again, the form then shows the new state.
+      if (
+        error instanceof ApiError &&
+        error.code === 'request_already_decided'
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: connectionRequestKeys.all,
+        });
       }
     },
   });
@@ -132,9 +166,27 @@ export function CompanyCreatePage() {
             noValidate
             className="flex flex-col gap-5"
             onSubmit={handleSubmit((data) =>
-              create.mutate(toCreateTenantRequest(data)),
+              create.mutate(toCreateTenantRequest(data, request?.id)),
             )}
           >
+            {request && (
+              <Alert
+                tone={decided ? 'warning' : 'info'}
+                title={t('fromRequest.title', { name: request.networkName })}
+              >
+                <div className="flex flex-col gap-1">
+                  {decided
+                    ? t('fromRequest.decided')
+                    : t('fromRequest.description')}
+                  <Link
+                    href={routes.siteRequest(request.id)}
+                    className="text-primary hover:text-primary-hover"
+                  >
+                    {t('fromRequest.open')}
+                  </Link>
+                </div>
+              </Alert>
+            )}
             {submitError && (
               <Alert tone="danger" live="assertive">
                 {submitError}
@@ -204,6 +256,7 @@ export function CompanyCreatePage() {
                 type="submit"
                 iconStart="check"
                 loading={create.isPending}
+                disabled={decided}
               >
                 {t('submit')}
               </Button>
@@ -250,5 +303,36 @@ export function CompanyCreatePage() {
         </aside>
       </div>
     </>
+  );
+}
+
+/** `?request=<id>` — the connection request to take the fields from; waits for it before showing the form. */
+function CompanyCreateView() {
+  const t = useTranslations('companyCreate');
+  const requestId = useSearchParams()?.get('request') ?? '';
+  const request = useConnectionRequest(requestId);
+  if (requestId === '') return <CompanyCreateForm />;
+  if (request.data) return <CompanyCreateForm request={request.data} />;
+  return (
+    <>
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <div className="p-6">
+        <QueryState query={request}>{() => null}</QueryState>
+      </div>
+    </>
+  );
+}
+
+export function CompanyCreatePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="grid min-h-dvh place-items-center text-primary">
+          <Spinner size="xl" />
+        </div>
+      }
+    >
+      <CompanyCreateView />
+    </Suspense>
   );
 }

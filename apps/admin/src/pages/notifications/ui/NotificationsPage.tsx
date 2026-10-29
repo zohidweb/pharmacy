@@ -43,10 +43,11 @@ import {
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 
-// keys and sync, the offline-only scope — only with the offline section (spec 2026-10-26-pilot-small-gaps, P8)
+// keys and sync, the offline-only scope — only with the offline section (spec 2026-10-26-pilot-small-gaps, P8);
+// leads — connection requests of the public site (ADR-0023), cloud only
 const topics: NotificationTopic[] = isOfflineSectionAvailable()
-  ? ['billing', 'keys', 'services', 'sync']
-  : ['billing', 'services'];
+  ? ['billing', 'keys', 'services', 'sync', 'leads']
+  : ['billing', 'services', 'leads'];
 const scopes: AnnouncementScope[] = isOfflineSectionAvailable()
   ? ['all', 'cloud', 'offline']
   : ['all', 'cloud'];

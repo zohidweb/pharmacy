@@ -333,6 +333,7 @@ export function ProfilePage() {
                           'licenses',
                           'services',
                           'settings',
+                          'site',
                         ] as const
                       )
                         .filter(

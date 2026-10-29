@@ -4,6 +4,24 @@
  */
 import type {
   AddTenantServiceRequest,
+  Article,
+  ArticleListItem,
+  ArticleStatus,
+  ConnectionRequest,
+  ConnectionRequestListItem,
+  ConnectionRequestNoteRequest,
+  LegalDocumentDraft,
+  LegalDocumentKind,
+  LegalDocumentRevision,
+  LegalDocumentsOverview,
+  RejectConnectionRequestRequest,
+  SaveArticleRequest,
+  SaveLegalDocumentDraftRequest,
+  SiteMedia,
+  SiteSettings,
+  UiLocale,
+  UpdateSiteSettingsRequest,
+  UploadSiteMediaRequest,
   Announcement,
   ApproveServiceRequest,
   AttentionCounts,
@@ -111,6 +129,32 @@ function route<
 }
 
 const id = (params: { id: string }) => encodeURIComponent(params.id);
+
+/** `status` — one or several statuses separated by commas; without it the API lists the open ones. */
+export interface ConnectionRequestListQuery {
+  status?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Without `status` the API leaves the archived articles out; `q` — a part of the RU title. */
+export interface ArticleListQuery {
+  status?: ArticleStatus;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SiteMediaListQuery {
+  limit?: number;
+  offset?: number;
+}
+
+interface LegalDocumentParams {
+  kind: LegalDocumentKind;
+  locale: UiLocale;
+}
 
 export const apiRoutes = {
   'operator.sessions.create': route<OperatorSession, OperatorLoginRequest>(
@@ -444,6 +488,112 @@ export const apiRoutes = {
   'operators.disable': route<PlatformOperator, undefined, { id: string }>(
     'POST',
     (p) => `/operator/operators/${id(p)}/deactivation`,
+  ),
+
+  // the public site (ADR-0023, spec 2026-10-28-public-site-design): «Сайт»
+  'connectionRequests.list': route<
+    Page<ConnectionRequestListItem>,
+    undefined,
+    undefined,
+    ConnectionRequestListQuery
+  >('GET', () => '/operator/connection-requests'),
+  'connectionRequests.get': route<ConnectionRequest, undefined, { id: string }>(
+    'GET',
+    (p) => `/operator/connection-requests/${id(p)}`,
+  ),
+  'connectionRequests.take': route<
+    ConnectionRequest,
+    undefined,
+    { id: string }
+  >('POST', (p) => `/operator/connection-requests/${id(p)}/take`),
+  'connectionRequests.reject': route<
+    ConnectionRequest,
+    RejectConnectionRequestRequest,
+    { id: string }
+  >('POST', (p) => `/operator/connection-requests/${id(p)}/reject`),
+  'connectionRequests.markSpam': route<
+    ConnectionRequest,
+    undefined,
+    { id: string }
+  >('POST', (p) => `/operator/connection-requests/${id(p)}/mark-spam`),
+  'connectionRequests.note': route<
+    ConnectionRequest,
+    ConnectionRequestNoteRequest,
+    { id: string }
+  >('PUT', (p) => `/operator/connection-requests/${id(p)}/note`),
+
+  'articles.list': route<
+    Page<ArticleListItem>,
+    undefined,
+    undefined,
+    ArticleListQuery
+  >('GET', () => '/operator/articles'),
+  'articles.get': route<Article, undefined, { id: string }>(
+    'GET',
+    (p) => `/operator/articles/${id(p)}`,
+  ),
+  'articles.create': route<Article, SaveArticleRequest>(
+    'POST',
+    () => '/operator/articles',
+  ),
+  'articles.update': route<Article, SaveArticleRequest, { id: string }>(
+    'PUT',
+    (p) => `/operator/articles/${id(p)}`,
+  ),
+  'articles.publish': route<Article, undefined, { id: string }>(
+    'POST',
+    (p) => `/operator/articles/${id(p)}/publish`,
+  ),
+  'articles.unpublish': route<Article, undefined, { id: string }>(
+    'POST',
+    (p) => `/operator/articles/${id(p)}/unpublish`,
+  ),
+  'articles.archive': route<Article, undefined, { id: string }>(
+    'POST',
+    (p) => `/operator/articles/${id(p)}/archive`,
+  ),
+
+  'legalDocuments.overview': route<LegalDocumentsOverview>(
+    'GET',
+    () => '/operator/legal-documents',
+  ),
+  'legalDocuments.saveDraft': route<
+    LegalDocumentDraft,
+    SaveLegalDocumentDraftRequest,
+    LegalDocumentParams
+  >(
+    'PUT',
+    (p) =>
+      `/operator/legal-documents/${encodeURIComponent(p.kind)}/${encodeURIComponent(p.locale)}/draft`,
+  ),
+  'legalDocuments.publish': route<
+    LegalDocumentRevision,
+    undefined,
+    LegalDocumentParams
+  >(
+    'POST',
+    (p) =>
+      `/operator/legal-documents/${encodeURIComponent(p.kind)}/${encodeURIComponent(p.locale)}/publish`,
+  ),
+
+  'siteMedia.list': route<
+    Page<SiteMedia>,
+    undefined,
+    undefined,
+    SiteMediaListQuery
+  >('GET', () => '/operator/site-media'),
+  'siteMedia.upload': route<SiteMedia, UploadSiteMediaRequest>(
+    'POST',
+    () => '/operator/site-media',
+  ),
+
+  'siteSettings.get': route<SiteSettings>(
+    'GET',
+    () => '/operator/site-settings',
+  ),
+  'siteSettings.update': route<SiteSettings, UpdateSiteSettingsRequest>(
+    'PUT',
+    () => '/operator/site-settings',
   ),
 
   'me.get': route<OperatorMe>('GET', () => '/operator/me'),

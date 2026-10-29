@@ -166,7 +166,8 @@ npx nx dev admin                     # http://localhost:4300 (все запро�
 npx nx run admin:dev-api             # то же, но готовые маршруты (вход оператора, сети, журнал операторов,
                                      #   команда и профиль, настройки платформы, услуги, счета, платежи,
                                      #   скидки, печать счёта, дашборд, статистика, уведомления, объявления,
-                                     #   карточка точки) — в apps/api
+                                     #   карточка точки, сайт: заявки, статьи, документы, картинки, настройки)
+                                     #   — в apps/api
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
 npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
@@ -448,10 +449,13 @@ npm run prod:build / prod:up / prod:down
   `docker/proxy/profiles/`. На `app.` — статика web и весь `/api`, кроме `/api/v1/operator/*` (404); на `admin.` — статика
   admin и только `/api/v1/operator/*` — и то лишь адресам `OPERATOR_ALLOW` (CIDR через пробел: офисы операторов, VPN;
   по адресу соединения, без `X-Forwarded-For`), остальным 403 (ревью безопасности 2026-10-22, A1; поправка ADR-0012
-  2026-10-23). Лимиты тела (MiB, как в API): `/api` 1, `/api/v1/sync/*` 4, загрузки `*-imports` 10; сжатое тело
-  (`Content-Encoding`) вне sync — 415; ответы `/api` — `Cache-Control: no-store` (эшелоны к A3 и P1 в API).
+  2026-10-23). Лимиты тела (MiB, как в API): `/api` 1, `/api/v1/sync/*` 4, загрузки `*-imports` 10, `site-media` 3
+  (только admin-хост); сжатое тело (`Content-Encoding`) вне sync — 415; ответы `/api` — `Cache-Control: no-store`
+  (эшелоны к A3 и P1 в API).
   Факт API (ADR-0023): JSON до 3 MiB у `POST /api/v1/operator/site-media` и до 1 MiB у сохранения статьи и черновика
-  документа — только с токеном оператора; предел на стороне Caddy — часть 3.
+  документа — только с токеном оператора. В proxy: у `POST /api/v1/operator/site-media` на admin-хосте предел 3 MiB
+  (совпадает с API, правило до общего 1 MiB; внутри того же охвата `OPERATOR_ALLOW`); сохранение статьи и черновика
+  документа укладываются в общий предел `/api` 1 MiB.
   Без SPA-fallback: маршрут — свой HTML, неизвестный путь — `404.html` со статусом 404. HSTS ставит только proxy
   (`acme`/`files`), helmet API его не шлёт. В dev proxy не запускается (compose-профиль `proxy`). Образ сначала собирает
   декларации библиотек (`typecheck`): `next build` проверяет типы по `libs/*/dist`, а в контексте сборки их нет.

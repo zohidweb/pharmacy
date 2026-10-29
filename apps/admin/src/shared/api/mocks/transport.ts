@@ -16,6 +16,7 @@ import { passwordProblems } from '@pharmacy/shared-domain';
 import { ApiError, type ApiTransport } from '../client';
 import type { ApiBody, ApiParams, ApiQuery, ApiResponse } from '../routes';
 import { billingHandlers } from './handlers-billing';
+import { siteHandlers } from './handlers-site';
 import { systemHandlers } from './handlers-system';
 import { findStore, findTenant } from './helpers';
 import type { MockHandlers, MockRequest } from './types';
@@ -114,6 +115,7 @@ function mockCodeExpiresAt(): string {
 const handlers: MockHandlers = {
   ...billingHandlers,
   ...systemHandlers,
+  ...siteHandlers,
   'operator.sessions.create': ({ body, correlationId }) => {
     if (
       body?.login.trim().toLowerCase() !== demoOperator.login ||
@@ -219,7 +221,23 @@ const handlers: MockHandlers = {
     if (db.tenants.some((t) => t.owner.phone === body.owner.phone)) {
       throw conflict('phone_taken', 'owner.phone');
     }
+    // the request the network comes from: nothing is created for a missing or decided one (ADR-0023)
+    const linked =
+      body.connectionRequestId === undefined
+        ? undefined
+        : db.site.requests.find((item) => item.id === body.connectionRequestId);
+    if (body.connectionRequestId !== undefined) {
+      if (!linked)
+        throw new ApiError(404, 'connection_request_not_found', correlationId);
+      if (linked.status !== 'new' && linked.status !== 'in_progress')
+        throw new ApiError(409, 'request_already_decided', correlationId);
+    }
     const id = `t-${db.tenants.length + 1}-${Date.now()}`;
+    if (linked) {
+      linked.status = 'connected';
+      linked.tenantId = id;
+      linked.decidedAt = new Date().toISOString();
+    }
     // The owner adds stores after activation (spec 2026-10-05-tenants-module, T2).
     db.tenants.push({
       id,

@@ -32,10 +32,11 @@ const nextConfig = {
           ]
         : []),
       { source: '/', destination: '/ru' },
-      // every other address without a language segment is a Russian page (app/[locale]/...)
+      // every other address without a language segment is a Russian page (app/[locale]/...);
+      // it runs before public files, so every file of apps/site/public lives under /images/ (or is favicon.ico)
       {
         source:
-          '/:path((?!tg(?:/|$)|ru(?:/|$)|_next/|api/|robots\\.txt$|sitemap\\.xml$).+)',
+          '/:path((?!tg(?:/|$)|ru(?:/|$)|_next/|api/|images/|robots\\.txt$|sitemap\\.xml$|favicon\\.ico$).+)',
         destination: '/ru/:path',
       },
     ],

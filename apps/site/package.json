@@ -1,0 +1,56 @@
+{
+  "name": "@pharmacy/site",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "site",
+    "sourceRoot": "apps/site/src",
+    "tags": [
+      "scope:site",
+      "type:app"
+    ],
+    "targets": {
+      "build": {
+        "inputs": [
+          "default",
+          "^default",
+          {
+            "externalDependencies": [
+              "next"
+            ]
+          },
+          {
+            "dependentTasksOutputFiles": "**/*.d.ts",
+            "transitive": true
+          }
+        ],
+        "outputs": [
+          "{projectRoot}/.next/!(cache)/**/*",
+          "{projectRoot}/.next/!(cache)"
+        ]
+      },
+      "dev": {
+        "options": {
+          "command": "next dev -H 127.0.0.1 -p 4400"
+        }
+      },
+      "fsd": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          "{projectRoot}/src/**/*",
+          "{projectRoot}/steiger.config.mjs"
+        ],
+        "options": {
+          "command": "steiger ./src",
+          "cwd": "{projectRoot}"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "next": "~16.4.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

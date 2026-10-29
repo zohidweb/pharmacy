@@ -1,0 +1,11 @@
+/*
+ * Global styles (ADR-0007): Tailwind preflight + utilities generated only from libs/ui tokens.
+ * No implicit scanning: sources are listed explicitly so libs/ui classes are always found.
+ */
+@import 'tailwindcss' source(none);
+@import '../../../../../libs/ui/src/styles/index.css' layer(base);
+@import '../../../../../libs/ui/src/styles/tailwind-theme.css';
+
+@source '../../';
+@source '../../../app';
+@source '../../../../../libs/ui/src/lib';

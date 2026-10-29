@@ -222,4 +222,5 @@ node --env-file=.env apps/api/scripts/create-operator.mjs --login qa-operator@ex
 5. `https://pharmacy-test.localhost:8443/api/v1/public/site-info` — 404: публичный контур открыт только на хосте
    сайта.
 6. Статья, опубликованная в админке, появляется в «Блоге» в течение минуты; «Открыть на сайте» в её карточке открывает
-   её на сайте.
+   её на сайте. В prod кнопка заработает после `APEX_MODE=site`: до этого apex перенаправляет на `app.`, и статья там —
+   404.

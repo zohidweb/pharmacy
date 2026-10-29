@@ -39,10 +39,10 @@ Project class: Full
 | Авторизация | RBAC: динамические роли тенанта, каталог прав `модуль:действие` (`libs/shared/domain`), одна роль + охват точек, запрет эскалации, проверка только на сервере | ADR-0018 |
 | Архитектура фронтенда | Feature-Sliced Design в `apps/web`, `apps/admin` и `apps/site` («pages first», Steiger) | ADR-0017, ADR-0023 |
 | Фронтенд-библиотеки | TanStack Query, Zustand, React Hook Form + zod, use-intl, idb, uuid, lean-qr (QR на чеке, только web); свои: API-клиент, Service Worker, сканер, чтение xlsx/csv, запись xlsx, штрихкоды ценников (EAN, Code 128) | ADR-0015, ADR-0022 |
-| UI и стили (web, admin, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей | ADR-0007 |
+| UI и стили (web, admin, site, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей (и у публичного сайта `apps/site`) | ADR-0007, ADR-0023 |
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
-| Reverse proxy и статика | Caddy 2.11 (`docker/proxy`): TLS, статика web/admin в образе `pharmacy/proxy`, `/api` на тот же origin | ADR-0012 |
+| Reverse proxy и статика | Caddy 2.11 (`docker/proxy`): TLS, статика web/admin в образе `pharmacy/proxy`, `/api` на тот же origin; публичный сайт `apps/site` — на apex-хосте (`APEX_MODE=site`; в test — `SITE_ADDR`) через `reverse_proxy` на сервис `site` | ADR-0012, ADR-0023 |
 | Хостинг (пилот) | Один VPS Contabo (EU), домен `nurmed.online`; копии БД вне хоста — `age` + `rclone` | ADR-0020 |
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
 | Runtime / тесты | Node.js 22 LTS (≥ 22.20) или 24 LTS (`.nvmrc` — 24, Docker — 24), npm, Jest; e2e фронтенда — Playwright | ADR-0008, ADR-0009 |
@@ -430,7 +430,8 @@ npm run prod:build / prod:up / prod:down
   запросе и кешируются на 60 с (ISR). Контейнер только для чтения, без capabilities, `no-new-privileges`, `/tmp` и
   `.next/cache` — tmpfs; кеш ISR — в памяти процесса (`experimental.isrFlushToDisk: false`: Next 16 пишет страницы в
   `.next/server/route-cache`), после перезапуска страницы отрисуются заново. Healthcheck — `GET /robots.txt`. Сайт ждёт
-  `api` (`service_healthy`); `proxy` от `site` не зависит: упавший сайт — 502 только на его хосте.
+  `api` (`service_healthy`); `proxy` от `site` не зависит: упавший сайт — 502 только на его хосте. Но `stack up` (`--wait`),
+  а значит и выкладка, ждёт, пока `site` станет healthy: не поднявшийся сайт останавливает выкладку.
 - Роли БД (ADR-0006, ADR-0013): база принадлежит `pharmacy_owner`. API в рантайме подключается ролями
   `pharmacy_app` (tenant-путь, `DATABASE_URL`) и `pharmacy_platform` (только `app/platform/**` и
   `app/sync/**`, `PLATFORM_DATABASE_URL`); `pharmacy_resolver` — NOLOGIN (владелец резолверов SECURITY DEFINER,

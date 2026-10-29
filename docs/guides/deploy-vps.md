@@ -221,7 +221,9 @@ for f in compose.yml compose.prod.yml compose.backup.yml compose.secrets.yml; do
 ## Публичный сайт
 
 Сервис `site` (образ `pharmacy/site`, ADR-0023) работает с каждой выкладкой, но корневой домен до запуска сайта
-перенаправляет на `app.` (`APEX_MODE=redirect`): хоста, который вёл бы на сайт, в prod нет.
+перенаправляет на `app.` (`APEX_MODE=redirect`): хоста, который вёл бы на сайт, в prod нет. Поэтому кнопка «Открыть на
+сайте» в карточке статьи админки (собранной с `SITE_ORIGIN=https://nurmed.online`) до `APEX_MODE=site` ведёт через
+перенаправление apex на `app.…/blog/<slug>` — 404; кнопка заработает после включения сайта.
 
 **До слияния ветки сайта (один раз).** Выкладка (`.github/workflows/deploy.yml`) перед `prod:build` выполняет
 `npm run stack -- prod init`: он дописывает в `prod.env` на VPS каждую переменную примера, которой в файле нет, со
@@ -248,7 +250,8 @@ sed -nE 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' docker/env/prod.env.example | sort
    зашифрованные копии вне сервера.
 5. В `/opt/pharmacy/docker/env/prod.env`: `SITE_INDEXING=true` (иначе `robots.txt` — `Disallow: /`) и
    `APEX_MODE=site`.
-6. На VPS в `/opt/pharmacy`: `npm run prod:up` — compose пересоздаёт `proxy` и `site` с новыми переменными.
+6. На VPS в `/opt/pharmacy`: `source ~/.nvm/nvm.sh && nvm use && npm run prod:up` (nvm загружается, как в
+   `deploy.yml`; или `dc up -d --no-build --wait`) — compose пересоздаёт `proxy` и `site` с новыми переменными.
 
 Проверка:
 
@@ -261,7 +264,7 @@ curl -s https://nurmed.online/robots.txt   # Allow: /, Disallow: /api/, Sitemap:
 ```
 
 Затем в браузере: форма `https://nurmed.online/connect` — заявка появляется в админке, «Сайт → Заявки». Выключение —
-`APEX_MODE=redirect` и `npm run prod:up`.
+`APEX_MODE=redirect` и тот же `npm run prod:up` (с nvm, шаг 6).
 
 ## Ежедневно, пока нет мониторинга
 

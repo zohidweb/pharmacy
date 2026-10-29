@@ -81,6 +81,8 @@ jobs:
           git merge --ff-only "$1"
           nvm install "$(cat .nvmrc)"
           npm ci
+          # Appends the variables the example gained (e.g. APEX_MODE, SITE_INDEXING); existing ones stay as they are.
+          npm run stack -- prod init
           npm run prod:build
           npm run prod:up
           npm run stack -- prod ps

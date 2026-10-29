@@ -1,4 +1,5 @@
-# Base stack shared by all environments (ADR-0005): PostgreSQL + Redis + API + reverse proxy (ADR-0012).
+# Base stack shared by all environments (ADR-0005): PostgreSQL + Redis + API + public site (ADR-0023) + reverse proxy
+# (ADR-0012).
 # Do not run this file alone — use the environment scripts (CLAUDE.md, "Environments"):
 #   npm run stack -- <dev|test|prod> <up|down|ps|logs|build>
 # Environment overrides: compose.dev.yml, compose.test.yml, compose.prod.yml.
@@ -135,7 +136,35 @@ services:
         condition: service_completed_successfully
     logging: *logging
 
+  # Public site (ADR-0023): Next.js server rendering with ISR by time. No database, Redis or secrets — it reads the
+  # public contour of the API (/api/v1/public/*) over the compose network. Reached only through the proxy.
+  site:
+    <<: *hardened
+    # The ISR cache lives on a tmpfs: after a restart the pages are rendered again (spec 9, W16).
+    tmpfs:
+      - /tmp
+      - /app/apps/site/.next/cache:size=64m,mode=1777
+    build:
+      context: ..
+      dockerfile: apps/site/Dockerfile
+    image: pharmacy/site:${IMAGE_TAG:-local}
+    pull_policy: never
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=160
+      SITE_API_INTERNAL_URL: http://api:3000
+      # canonical, hreflang and sitemap are absolute from SITE_ORIGIN; «Войти» leads to WEB_ORIGIN
+      SITE_ORIGIN: ${SITE_ORIGIN:?set in the env file}
+      WEB_ORIGIN: ${WEB_ORIGIN:?set in the env file}
+      # robots.txt: Disallow: / unless true (prod only), so a stand never reaches the search engines
+      SITE_INDEXING: ${SITE_INDEXING:-false}
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
   # The single entry point (ADR-0012): TLS, static web/admin, /api to the API on the same origin.
+  # It does not depend on site: a broken site does not stop app. and admin. (Caddy answers 502 for the site alone).
   proxy:
     <<: *hardened
     # Caddy runs as root in its image: of the capabilities it keeps only binding 80 and 443.
@@ -143,6 +172,9 @@ services:
     build:
       context: ..
       dockerfile: docker/proxy/Dockerfile
+      args:
+        # The address of the public site for the admin build (W15): the «open on the site» link; empty — no link.
+        SITE_ORIGIN: ${SITE_ORIGIN:-}
     image: pharmacy/proxy:${IMAGE_TAG:-local}
     pull_policy: never
     volumes:

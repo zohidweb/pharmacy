@@ -1,9 +1,12 @@
 # Reverse proxy of Pharmacy (ADR-0012): TLS, static web/admin, /api on the same origin.
 # One file for every place; the place is chosen by environment variables (docker/env/*.env):
-#   PROXY_PROFILE  cloud (web, admin, apex redirect) | local (web, admin) | offline (http://localhost, web only)
+#   PROXY_PROFILE  cloud (web, admin, apex by APEX_MODE) | local (web, admin, site on SITE_ADDR) |
+#                  offline (http://localhost, web only)
+#   APEX_MODE      cloud only: redirect (apex → WEB_ORIGIN, the default) | site (the public site, www. → apex; ADR-0023)
 #   TLS_MODE       acme (Let's Encrypt, ACME_EMAIL) | internal (Caddy's local CA, *.localhost) |
 #                  files (/certs/cert.pem, /certs/key.pem) | off (plain http:// addresses)
-#   WEB_ADDR, ADMIN_ADDR, APEX_ADDR, WEB_ORIGIN, PROXY_HTTP_PORT, PROXY_HTTPS_PORT, API_UPSTREAM,
+#   WEB_ADDR, ADMIN_ADDR, APEX_ADDR, SITE_ADDR, WEB_ORIGIN, PROXY_HTTP_PORT, PROXY_HTTPS_PORT, API_UPSTREAM,
+#   SITE_UPSTREAM,
 #   OPERATOR_ALLOW (addresses that reach the admin host, CIDR, space-separated)
 # {$VAR} is substituted before the file is parsed.
 {
@@ -61,6 +64,17 @@
 	}
 }
 
+# The same upstream for answers the browser may keep: the API sets their Cache-Control itself (spec 7.3 — the pictures
+# of the public site, public, max-age=31536000, immutable: their id never changes); args[0] — response header timeout.
+(upstream-cacheable) {
+	reverse_proxy {$API_UPSTREAM:api:3000} {
+		transport http {
+			dial_timeout 5s
+			response_header_timeout {args[0]}
+		}
+	}
+}
+
 # A compressed request body only on the sync contour (security review 2026-10-22, A3 and 7.2); the API refuses it too.
 (plain-body) {
 	@encoded header Content-Encoding *
@@ -72,6 +86,11 @@
 (api-tenant) {
 	@operator path /api/v1/operator /api/v1/operator/*
 	handle @operator {
+		respond 404
+	}
+	# The public contour of the site lives on the site host only (ADR-0023); the admin host answers 404 to it as well.
+	@public path /api/v1/public /api/v1/public/*
+	handle @public {
 		respond 404
 	}
 	# Sizes in MiB, as the API counts them (a cap below the API's would answer an empty 413 instead of its problem).
@@ -193,6 +212,48 @@
 		import static-files
 	}
 	import static-errors
+}
+
+# Public site (ADR-0023, spec 9): the public contour of the API on the same origin, everything else to the Next.js server
+# of the site. Only the public contour: the tenant and operator API answer 404 here.
+(public-site) {
+	import tls-{$TLS_MODE}
+	import access-log
+	# pictures: the browser keeps them (immutable id), unlike every other API answer
+	@media path_regexp ^/api/v1/public/media/[^/]+$
+	handle @media {
+		import upstream-cacheable 30s
+	}
+	# the connection request form posts JSON here (the API checks Origin against SITE_ORIGIN)
+	handle /api/v1/public/* {
+		import plain-body
+		request_body {
+			max_size 1MiB
+		}
+		encode zstd gzip
+		import upstream 30s
+	}
+	handle /api/* {
+		respond 404
+	}
+	handle {
+		# The headers of static-files; no blob: in img-src — the site shows no local files. Cache-Control is the one of
+		# Next.js (immutable /_next/static, ISR pages).
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+			X-Content-Type-Options nosniff
+			Referrer-Policy strict-origin-when-cross-origin
+			Cross-Origin-Opener-Policy same-origin
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		}
+		encode zstd gzip
+		reverse_proxy {$SITE_UPSTREAM:site:3000} {
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 30s
+			}
+		}
+	}
 }
 
 # Container health (Dockerfile HEALTHCHECK); not published.

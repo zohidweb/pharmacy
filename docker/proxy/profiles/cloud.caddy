@@ -1,4 +1,5 @@
-# Cloud (ADR-0020): app.<domain> — web and /api, admin.<domain> — the operator admin, apex — redirect to web.
+# Cloud (ADR-0020): app.<domain> — web and /api, admin.<domain> — the operator admin, apex — by APEX_MODE (W13):
+# a redirect to web (the default) or the public site (ADR-0023).
 {$WEB_ADDR} {
 	import web-site
 }
@@ -7,7 +8,4 @@
 	import admin-site
 }
 
-{$APEX_ADDR} {
-	import tls-{$TLS_MODE}
-	redir {$WEB_ORIGIN}{uri} permanent
-}
+import /etc/caddy/profiles/apex/{$APEX_MODE:redirect}.caddy

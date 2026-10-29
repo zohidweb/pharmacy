@@ -14,6 +14,10 @@ const nextConfig = {
   // no next/image optimizer: it needs sharp, a new dependency (ADR-0023)
   images: { unoptimized: true },
   poweredByHeader: false,
+  // The container is read-only (S3): ISR pages would be written under .next/server/route-cache, outside the tmpfs
+  // .next/cache, and that fails there. Pages and fetch answers stay in the memory cache of Next (cacheMaxMemorySize,
+  // 50 MB by default) and are rendered again after a restart (spec 9, W16).
+  experimental: { isrFlushToDisk: false },
   // Russian has no prefix, Tajik lives under /tg (spec 6.1). `/ru/...` addresses would duplicate the
   // Russian pages for search engines: they move to the address without the prefix.
   redirects: async () => [

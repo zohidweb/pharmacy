@@ -24,7 +24,7 @@ WORKDIR /app
 # traced node_modules at /app; the static files and public/ are not part of it and are copied next to the server.
 # The code stays root-owned: the runtime user `node` reads it and cannot rewrite it; source maps and the package
 # managers of the base image (npm, corepack, yarn) are not shipped (security review 2026-10-22, S3 — compose runs the
-# container read-only, the ISR cache lives on a tmpfs).
+# container read-only; the ISR cache lives in the memory of Next, W16, and .next/cache is a tmpfs safety net).
 COPY --from=build /workspace/apps/site/.next/standalone ./
 COPY --from=build /workspace/apps/site/.next/static ./apps/site/.next/static
 COPY --from=build /workspace/apps/site/public ./apps/site/public

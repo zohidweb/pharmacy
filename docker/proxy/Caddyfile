@@ -222,6 +222,10 @@
 	# pictures: the browser keeps them (immutable id), unlike every other API answer
 	@media path_regexp ^/api/v1/public/media/[^/]+$
 	handle @media {
+		import plain-body
+		request_body {
+			max_size 1MiB
+		}
 		import upstream-cacheable 30s
 	}
 	# the connection request form posts JSON here (the API checks Origin against SITE_ORIGIN)
@@ -237,6 +241,11 @@
 		respond 404
 	}
 	handle {
+		# Next.js takes no request bodies (no Server Actions or Route Handlers): a small cap is enough.
+		import plain-body
+		request_body {
+			max_size 64KiB
+		}
 		# The headers of static-files; no blob: in img-src — the site shows no local files. Cache-Control is the one of
 		# Next.js (immutable /_next/static, ISR pages).
 		header {

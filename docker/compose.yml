@@ -140,7 +140,8 @@ services:
   # public contour of the API (/api/v1/public/*) over the compose network. Reached only through the proxy.
   site:
     <<: *hardened
-    # The ISR cache lives on a tmpfs: after a restart the pages are rendered again (spec 9, W16).
+    # The ISR cache lives in the memory of Next (experimental.isrFlushToDisk: false, W16): after a restart the pages
+    # are rendered again (spec 9). The tmpfs on .next/cache is a safety net for anything Next still writes there.
     tmpfs:
       - /tmp
       - /app/apps/site/.next/cache:size=64m,mode=1777

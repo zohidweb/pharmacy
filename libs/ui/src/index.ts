@@ -3,14 +3,13 @@ export { Icon, type IconProps, type IconSize } from './lib/icon/Icon';
 export { icons, type IconName, type IconNode } from './lib/icon/icons';
 export { Spinner, type SpinnerProps } from './lib/spinner/Spinner';
 
+export { Button, type ButtonProps } from './lib/button/Button';
 export {
-  Button,
   buttonClassName,
-  type ButtonProps,
   type ButtonSize,
   type ButtonStyleOptions,
   type ButtonVariant,
-} from './lib/button/Button';
+} from './lib/button/button-class-name';
 export {
   IconButton,
   type IconButtonProps,

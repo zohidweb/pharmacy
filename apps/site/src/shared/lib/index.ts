@@ -1,2 +1,2 @@
-export { absoluteUrl, localePath } from './paths';
+export { localePath } from './paths';
 export { pickText } from './site-text';

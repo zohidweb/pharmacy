@@ -1,5 +1,6 @@
 export {
   ARTICLES_PER_PAGE,
+  findSiteInfo,
   getArticle,
   getArticles,
   getLegalDocument,

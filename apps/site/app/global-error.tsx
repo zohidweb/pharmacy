@@ -15,14 +15,31 @@ import '@/app/styles/global.css';
 export default function GlobalError() {
   const locale: UiLocale =
     useParams<{ locale?: string }>()?.locale === 'tg' ? 'tg' : 'ru';
-  const [messages, setMessages] = useState<Messages | null>(null);
+  const [loaded, setLoaded] = useState<{
+    locale: UiLocale;
+    messages: Messages;
+  } | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    void loadMessages(locale).then(setMessages);
+    const other: UiLocale = locale === 'tg' ? 'ru' : 'tg';
+    // the chunk of the page's dictionary may fail too (the network is what broke): then the other one,
+    // and if both fail — a neutral status code instead of a blank screen
+    loadMessages(locale)
+      .then((messages) => ({ locale, messages }))
+      .catch(() =>
+        loadMessages(other).then((messages) => ({ locale: other, messages })),
+      )
+      .then(setLoaded, () => setFailed(true));
   }, [locale]);
-  const t = messages && createTranslator({ locale, messages });
+  const t = loaded && createTranslator(loaded);
   return (
-    <html lang={locale}>
+    <html lang={loaded?.locale ?? locale}>
       <body>
+        {failed && (
+          <main className="mx-auto flex max-w-(--ph-size-dialog-md) flex-col items-center gap-4 px-6 py-16 text-center">
+            <p className="text-4xl font-bold text-border-strong">500</p>
+          </main>
+        )}
         {t && (
           <main className="mx-auto flex max-w-(--ph-size-dialog-md) flex-col items-center gap-4 px-6 py-16 text-center">
             <h1 className="text-xl font-bold tracking-tight">

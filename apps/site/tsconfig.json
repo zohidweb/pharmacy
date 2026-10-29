@@ -56,6 +56,12 @@
   ],
   "references": [
     {
+      "path": "../../libs/shared/domain"
+    },
+    {
+      "path": "../../libs/shared/util"
+    },
+    {
       "path": "../../libs/shared/dto"
     },
     {

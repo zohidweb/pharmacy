@@ -63,6 +63,14 @@ export function getSiteInfo(): Promise<PublicSiteInfo> {
   return required<PublicSiteInfo>('site-info');
 }
 
+/**
+ * The settings for the parts that must never fail — header, footer, metadata (W2): `null` when the API
+ * is unavailable. The page body uses getSiteInfo, so the failure still reaches error.tsx.
+ */
+export function findSiteInfo(): Promise<PublicSiteInfo | null> {
+  return getSiteInfo().catch(() => null);
+}
+
 /** `page` starts at 1. */
 export function getArticles(
   locale: UiLocale,

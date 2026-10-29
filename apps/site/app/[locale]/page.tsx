@@ -1,27 +1,26 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getSiteInfo } from '@/shared/api';
-import { getTranslator, isLocale } from '@/shared/i18n';
-import { pickText } from '@/shared/lib';
+import { HomePage, homeMetadata } from '@/pages/home';
+import { findSiteInfo, getSiteInfo } from '@/shared/api';
+import { isLocale } from '@/shared/i18n';
 
 export const revalidate = 60;
 
-// Placeholder of the home page until its sections arrive (Task 3); it already reads the site
-// settings, so an unavailable API shows error.tsx.
-export default async function HomeRoute({
-  params,
-}: {
+interface HomeRouteProps {
   params: Promise<{ locale: string }>;
-}) {
+}
+
+export async function generateMetadata({
+  params,
+}: HomeRouteProps): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isLocale(locale)) return {};
+  return homeMetadata(locale, await findSiteInfo());
+}
+
+// the body reads the settings with getSiteInfo: an unavailable API shows error.tsx (W2)
+export default async function HomeRoute({ params }: HomeRouteProps) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const t = getTranslator(locale);
-  const tagline = pickText((await getSiteInfo()).settings.tagline, locale);
-  return (
-    <main className="mx-auto flex max-w-(--ph-size-dialog-md) flex-col gap-4 px-6 py-16">
-      <h1 className="text-2xl font-bold tracking-tight">
-        {t('home.hero.title')}
-      </h1>
-      {tagline && <p className="text-fg-muted">{tagline}</p>}
-    </main>
-  );
+  return <HomePage locale={locale} info={await getSiteInfo()} />;
 }

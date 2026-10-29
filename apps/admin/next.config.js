@@ -9,7 +9,13 @@ const nextConfig = {
   output: 'export',
   images: { unoptimized: true },
   // Always defined so the bundler can fold mock-only code away; the dev target sets it to true.
-  env: { NEXT_PUBLIC_API_MOCKS: process.env.NEXT_PUBLIC_API_MOCKS ?? 'false' },
+  env: {
+    NEXT_PUBLIC_API_MOCKS: process.env.NEXT_PUBLIC_API_MOCKS ?? 'false',
+    // The public site for «Открыть на сайте» (ADR-0023, W15): SITE_ORIGIN of `.env` in dev, the build arg of
+    // the proxy image; empty — the link is hidden.
+    NEXT_PUBLIC_SITE_ORIGIN:
+      process.env.NEXT_PUBLIC_SITE_ORIGIN ?? process.env.SITE_ORIGIN ?? '',
+  },
 };
 
 // Dev only: proxy /api/* to apps/api so the browser sees a single origin (as behind the

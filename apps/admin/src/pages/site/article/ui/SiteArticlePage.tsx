@@ -11,6 +11,7 @@ import { formatDateTime } from '@pharmacy/shared-util';
 import {
   Alert,
   Button,
+  buttonClassName,
   Card,
   CardHeader,
   Dialog,
@@ -34,7 +35,7 @@ import {
 } from '@/entities/site-content';
 import { SiteMediaPickerDialog } from '@/features/site-media';
 import { apiRequest, useApiErrorMessage } from '@/shared/api';
-import { routes } from '@/shared/config';
+import { routes, siteArticleUrl } from '@/shared/config';
 import {
   SLUG_MAX,
   SLUG_PATTERN,
@@ -322,6 +323,18 @@ function ArticleEditor({ article }: { article: Article | undefined }) {
   const bodyError = shown?.body ? t('errors.body') : undefined;
   const slugError = touched && slugProblem ? t('errors.slug') : undefined;
 
+  // «Открыть на сайте» (W15): only a published article, in the language of the open tab, and only when that language
+  // is readable on the site (title and text, as the API's public contour has it) — otherwise the link would be a 404.
+  const savedFields = saved?.translations[locale];
+  const siteUrl =
+    status === 'published' &&
+    saved !== undefined &&
+    savedFields !== undefined &&
+    savedFields.title !== '' &&
+    savedFields.body !== ''
+      ? siteArticleUrl(locale, saved.slug)
+      : null;
+
   const title =
     saved === undefined
       ? t('titleNew')
@@ -518,6 +531,17 @@ function ArticleEditor({ article }: { article: Article | undefined }) {
                       >
                         {t('archive')}
                       </Button>
+                    )}
+                    {siteUrl !== null && (
+                      <a
+                        href={siteUrl}
+                        target="_blank"
+                        rel="noopener"
+                        className={buttonClassName({ variant: 'secondary' })}
+                      >
+                        <Icon name="eye" size="sm" />
+                        <span>{t('openOnSite')}</span>
+                      </a>
                     )}
                   </div>
                   <p className="text-xs text-fg-subtle">

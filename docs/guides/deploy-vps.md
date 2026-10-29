@@ -119,10 +119,10 @@ PIN недействительны (ADR-0008).
 npm run prod:build
 ```
 
-Тег образов — короткий sha коммита (`git rev-parse --short HEAD`). Перенос четырёх образов:
+Тег образов — короткий sha коммита (`git rev-parse --short HEAD`). Перенос пяти образов:
 
 ```bash
-docker save pharmacy/api:<sha> pharmacy/postgres:<sha> pharmacy/redis:<sha> pharmacy/proxy:<sha> | gzip | ssh deploy@<IP> "gunzip | docker load"
+docker save pharmacy/api:<sha> pharmacy/postgres:<sha> pharmacy/redis:<sha> pharmacy/site:<sha> pharmacy/proxy:<sha> | gzip | ssh deploy@<IP> "gunzip | docker load"
 ```
 
 Compose-файлы — те же, что в репозитории на этом коммите:
@@ -183,7 +183,7 @@ dc ps
 curl -fsS https://app.nurmed.online/api/v1/health
 curl -sI https://app.nurmed.online/ | grep -i strict-transport
 curl -s -o /dev/null -w '%{http_code}\n' https://app.nurmed.online/api/v1/operator/session   # 404
-curl -s -o /dev/null -w '%{http_code}\n' https://nurmed.online/                             # 301 → app.
+curl -s -o /dev/null -w '%{http_code}\n' https://nurmed.online/                             # 301 → app. (200 — после «Публичный сайт»)
 curl -s -o /dev/null -w '%{http_code}\n' https://admin.nurmed.online/       # 403 не с адресов OPERATOR_ALLOW, 200 — с них
 ```
 
@@ -217,6 +217,51 @@ for f in compose.yml compose.prod.yml compose.backup.yml compose.secrets.yml; do
 
 Затем на хосте `export IMAGE_TAG=<прежний sha>` и `dc up -d --no-build --wait && echo "$IMAGE_TAG" > /opt/pharmacy/image-tag`. Если новая версия применила миграции —
 откат кода без отката БД возможен не всегда: восстановить снимок диска из шага 4.
+
+## Публичный сайт
+
+Сервис `site` (образ `pharmacy/site`, ADR-0023) работает с каждой выкладкой, но корневой домен до запуска сайта
+перенаправляет на `app.` (`APEX_MODE=redirect`): хоста, который вёл бы на сайт, в prod нет.
+
+**До слияния ветки сайта (один раз).** Выкладка (`.github/workflows/deploy.yml`) перед `prod:build` выполняет
+`npm run stack -- prod init`: он дописывает в `prod.env` на VPS каждую переменную примера, которой в файле нет, со
+значением из примера. Ожидаемо это только `APEX_MODE=redirect` и `SITE_INDEXING=true`. Сверка имён (значения не
+печатаются), на своей машине в ветке сайта:
+
+```bash
+ssh deploy@<IP> "sed -nE 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=.*/\2/p' /opt/pharmacy/docker/env/prod.env | sort -u" > prod-env-names.txt
+sed -nE 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' docker/env/prod.env.example | sort -u | comm -13 prod-env-names.txt -
+```
+
+Любое другое имя в выводе `init` тоже допишет — до слияния задайте его на VPS нужным значением. Файл
+`prod-env-names.txt` затем удалить.
+
+**Включение сайта на `nurmed.online`** — только когда выполнен чек-лист:
+
+1. DNS зоны `nurmed.online`: A-записи `@` и `www` → IPv4 сервера (`www.` перенаправляет на apex, сертификат Let's
+   Encrypt нужен и ему; AAAA — как в разделе 1, шаг 2).
+2. В админке «Сайт → Настройки»: название и логотип заполнены (без названия шапка и заголовки страниц показывают
+   запасное «Сервис для сети аптек»).
+3. «Сайт → Документы»: оферта и политика ПДн опубликованы — тексты юриста (решение 7.3). Без политики форма заявки
+   закрыта.
+4. `BACKUP_OFFSITE_BUCKET` задан и разовая проверка копий вне хоста (раздел 5) пройдена: главная сайта обещает
+   зашифрованные копии вне сервера.
+5. В `/opt/pharmacy/docker/env/prod.env`: `SITE_INDEXING=true` (иначе `robots.txt` — `Disallow: /`) и
+   `APEX_MODE=site`.
+6. На VPS в `/opt/pharmacy`: `npm run prod:up` — compose пересоздаёт `proxy` и `site` с новыми переменными.
+
+Проверка:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://nurmed.online/                             # 200 — сайт
+curl -s -o /dev/null -w '%{http_code}\n' https://www.nurmed.online/                         # 301 → nurmed.online
+curl -s -o /dev/null -w '%{http_code}\n' https://nurmed.online/api/v1/public/site-info      # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://app.nurmed.online/api/v1/public/site-info  # 404
+curl -s https://nurmed.online/robots.txt   # Allow: /, Disallow: /api/, Sitemap: https://nurmed.online/sitemap.xml
+```
+
+Затем в браузере: форма `https://nurmed.online/connect` — заявка появляется в админке, «Сайт → Заявки». Выключение —
+`APEX_MODE=redirect` и `npm run prod:up`.
 
 ## Ежедневно, пока нет мониторинга
 

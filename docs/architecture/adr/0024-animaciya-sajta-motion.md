@@ -1,6 +1,6 @@
 # ADR-0024: Анимация публичного сайта — библиотека `motion`, только в `apps/site`
 
-- **Статус:** proposed
+- **Статус:** accepted (2026-11-02, архитектор проекта — APPROVAL.md)
 - **Дата:** 2026-11-02
 - **Авторы:** Zohid Saidov (z.saidov@eskhata.com), команда проекта Pharmacy (текст подготовлен с помощью AI)
 - **Принимает:** архитектор проекта (docs/architecture/APPROVAL.md)

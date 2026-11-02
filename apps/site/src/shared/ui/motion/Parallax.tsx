@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  motion,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-} from 'motion/react';
+import { m, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { useRef, useSyncExternalStore, type ReactNode } from 'react';
 
 /** Parallax only on wide screens (spec 4.5, 4.7): it costs too much on a phone. */
@@ -45,12 +40,12 @@ export function Parallax({ children, speed, className }: ParallaxProps) {
   });
   const y = useTransform(scrollYProgress, [0, 1], [-speed * 100, speed * 100]);
   return (
-    <motion.div
+    <m.div
       ref={ref}
       className={className}
       style={{ y: wide && !reduce ? y : 0 }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }

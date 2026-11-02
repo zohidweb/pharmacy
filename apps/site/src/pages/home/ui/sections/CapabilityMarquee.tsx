@@ -1,12 +1,14 @@
 /*
  * The capability line of the home page (spec 4.5, п. 3; R7), the only one on the site: eight capabilities of the cloud
- * pilot (no 1C export, no offline stores) move slowly to the left and stop under the pointer. Pure CSS
- * (`.site-marquee` in site-theme.css), no JavaScript. The track holds the list twice so the loop has no seam; the copy
- * is hidden from assistive technology. With reduce the copy is gone and the list wraps in place, still.
+ * pilot (no 1C export, no offline stores) move slowly to the left; they stop under the pointer and by the pause button
+ * of MarqueeFrame (WCAG 2.2.2). The movement is pure CSS (`.site-marquee` in site-theme.css). The track holds the list
+ * twice so the loop has no seam; the copy is hidden from assistive technology. With reduce the copy is gone and the
+ * list wraps in place, still.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx } from '@pharmacy/ui';
 import { getTranslator } from '@/shared/i18n';
+import { MarqueeFrame } from './MarqueeFrame';
 
 const CAPABILITIES = [
   'pos',
@@ -60,12 +62,14 @@ export function CapabilityMarquee({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   const labels = CAPABILITIES.map((key) => t(`home.marquee.items.${key}`));
   return (
-    // clip, not a scroll container: the moving track never widens the page (375 px)
-    <div className="overflow-x-clip border-y border-site-line py-8 motion-safe:mask-x-from-90%">
-      <div className="site-marquee flex w-max motion-reduce:mx-auto motion-reduce:w-full motion-reduce:max-w-(--ph-size-dialog-xl) motion-reduce:px-4">
-        <CapabilityList labels={labels} label={t('home.marquee.label')} />
-        <CapabilityList labels={labels} copy />
+    <MarqueeFrame pauseLabel={t('home.marquee.pause')}>
+      {/* clip, not a scroll container: the moving track never widens the page (375 px) */}
+      <div className="min-w-0 flex-1 overflow-x-clip py-8 motion-safe:mask-x-from-90%">
+        <div className="site-marquee flex w-max motion-reduce:mx-auto motion-reduce:w-full motion-reduce:max-w-(--ph-size-dialog-xl) motion-reduce:px-4">
+          <CapabilityList labels={labels} label={t('home.marquee.label')} />
+          <CapabilityList labels={labels} copy />
+        </div>
       </div>
-    </div>
+    </MarqueeFrame>
   );
 }

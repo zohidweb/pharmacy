@@ -1,20 +1,20 @@
 'use client';
 
-import { motion, stagger, useReducedMotion, type Variants } from 'motion/react';
+import { m, stagger, useReducedMotion, type Variants } from 'motion/react';
 import type { ReactNode } from 'react';
 import { REVEAL_VIEWPORT, revealVariants, STAGGER } from './transitions';
 
 const groups = {
-  div: motion.div,
-  section: motion.section,
-  ul: motion.ul,
-  ol: motion.ol,
+  div: m.div,
+  section: m.section,
+  ul: m.ul,
+  ol: m.ol,
 } as const;
 
 const items = {
-  div: motion.div,
-  li: motion.li,
-  article: motion.article,
+  div: m.div,
+  li: m.li,
+  article: m.article,
 } as const;
 
 export type RevealGroupElement = keyof typeof groups;

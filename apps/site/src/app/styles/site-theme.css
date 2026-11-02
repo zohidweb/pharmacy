@@ -162,12 +162,22 @@
   --text-lead: var(--ph-font-size-lg); /* 18 */
   --text-lead--line-height: var(--ph-line-height-lg); /* 28 */
 
-  --spacing-site-header: var(--ph-site-header-height); /* h-site-header, top-site-header */
-  --blur-site-header: var(--ph-site-header-blur); /* backdrop-blur-site-header */
-  --spacing-site-first-screen: var(--ph-site-first-screen); /* min-h-site-first-screen */
+  --spacing-site-header: var(
+    --ph-site-header-height
+  ); /* h-site-header, top-site-header */
+  --blur-site-header: var(
+    --ph-site-header-blur
+  ); /* backdrop-blur-site-header */
+  --spacing-site-first-screen: var(
+    --ph-site-first-screen
+  ); /* min-h-site-first-screen */
   --spacing-site-sticky: var(--ph-site-sticky-top); /* top-site-sticky */
-  --grid-template-columns-site-hero: var(--ph-site-grid-hero); /* grid-cols-site-hero */
-  --grid-template-columns-site-aside: var(--ph-site-grid-aside); /* grid-cols-site-aside */
+  --grid-template-columns-site-hero: var(
+    --ph-site-grid-hero
+  ); /* grid-cols-site-hero */
+  --grid-template-columns-site-aside: var(
+    --ph-site-grid-aside
+  ); /* grid-cols-site-aside */
 
   --radius-site-card: var(--ph-radius-lg); /* 24 */
   --radius-site-field: var(--ph-radius-ms); /* 12 */
@@ -223,8 +233,9 @@
 
   /*
    * The capability line of the home page (R7): a track of two equal lists moves by one list, so the copy takes the
-   * place of the original and the loop has no seam. It stops under the pointer. With reduce there is no track: the
-   * list wraps in place and its copy is hidden (CapabilityMarquee).
+   * place of the original and the loop has no seam. It stops under the pointer, while focus is inside it, and by the
+   * pause button (MarqueeFrame sets data-marquee-paused). With reduce there is no track: the list wraps in place and its
+   * copy is hidden (CapabilityMarquee).
    */
   @keyframes site-marquee {
     to {
@@ -236,7 +247,9 @@
     animation: site-marquee var(--ph-site-marquee-duration) linear infinite;
   }
 
-  .site-marquee:hover {
+  .site-marquee:hover,
+  .site-marquee:focus-within,
+  [data-marquee-paused] .site-marquee {
     animation-play-state: paused;
   }
 }

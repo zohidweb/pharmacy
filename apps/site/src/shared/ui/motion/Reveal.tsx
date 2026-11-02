@@ -1,14 +1,14 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { REVEAL_VIEWPORT, revealVariants } from './transitions';
 
 const elements = {
-  div: motion.div,
-  section: motion.section,
-  li: motion.li,
-  article: motion.article,
+  div: m.div,
+  section: m.section,
+  li: m.li,
+  article: m.article,
 } as const;
 
 export type RevealElement = keyof typeof elements;

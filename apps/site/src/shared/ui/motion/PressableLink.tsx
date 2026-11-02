@@ -1,12 +1,12 @@
 'use client';
 
 import { buttonClassName, cx } from '@pharmacy/ui';
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { SPRING } from './transitions';
 
-const MotionLink = motion.create(Link);
+const MotionLink = m.create(Link);
 
 export interface PressableLinkProps {
   href: string;

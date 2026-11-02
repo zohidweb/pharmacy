@@ -84,6 +84,8 @@
   --ph-site-stagger-step: 60ms; /* cascade of revealed items (4.7) */
   --ph-site-enter-distance: 1rem; /* 16 */
   --ph-site-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Revealed items show without hydration after this long (Review Focus 2) */
+  --ph-site-reveal-fallback-delay: 2.5s;
 }
 
 :root[data-theme='site'] {
@@ -181,7 +183,7 @@
 /*
  * Utilities of the site (R3, R4): only links to the tokens above.
  * bg-site-canvas, bg-site-block, border-site-line, text-accent-site · text-display(-sm), text-section, text-lead ·
- * rounded-site-card, rounded-site-field · shadow-shot · h-site-header, backdrop-blur-site-header ·
+ * rounded-site-card · shadow-shot · h-site-header, backdrop-blur-site-header ·
  * min-h-site-first-screen, top-site-sticky, h-site-steps, max-w-site-reading, grid-cols-site-hero, grid-cols-site-aside,
  * grid-cols-site-main.
  * md: is 1024 px, the site's desktop threshold (4.2, 4.5).
@@ -236,7 +238,6 @@
   ); /* grid-cols-site-main */
 
   --radius-site-card: var(--ph-radius-lg); /* 24 */
-  --radius-site-field: var(--ph-radius-ms); /* 12 */
   --shadow-shot: var(--ph-site-shadow-shot);
 }
 
@@ -337,6 +338,27 @@
 
   .site-accordion[open]::details-content {
     block-size: auto;
+  }
+}
+
+/*
+ * Slow hydration (Review Focus 2): JavaScript is on but the page has not hydrated yet, so motion's hidden start (inline
+ * opacity 0 and the 24 px lift) would keep the sections blank. After 2.5 s an animation shows them; an animation
+ * outranks inline styles. MotionScope marks <html data-motion-ready> once it has mounted: from then on the rule no longer
+ * matches, the animation and its `forwards` end are dropped, and motion's own inline styles and reveal take over (an
+ * element revealed this way plays its reveal again when it enters the viewport).
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes site-reveal-fallback {
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  html:not([data-motion-ready]) [data-reveal] {
+    animation: site-reveal-fallback 0s var(--ph-site-reveal-fallback-delay)
+      forwards;
   }
 }
 

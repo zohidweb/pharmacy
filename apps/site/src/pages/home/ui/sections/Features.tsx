@@ -1,8 +1,9 @@
 /*
  * Возможности (spec 4.5, п. 5): exactly six tiles of different sizes, no empty cell. From 1024 px a grid of six columns:
- * the till is the large tile on the left (four columns, three rows), batches and expiry dates, purchasing (the colour
- * block) and prices stack in the two columns on its right, transfers and reports share the last row. On a phone one
- * column in the same order. Only what works in the cloud pilot: no 1C export, no offline stores (spec 2, anti-goals).
+ * the till is the large tile on the left (four columns, three rows), batches and expiry dates, purchasing (on the
+ * raised emerald-900 surface, so the column on the right does not read as one block) and prices stack in the two columns
+ * on its right, transfers and reports share the last row. On a phone one column in the same order. No tile is a colour
+ * block: emerald-700 is only the pricing block and the final call (spec 4.5, п. 7). Only what works in the cloud pilot: no 1C export, no offline stores (spec 2, anti-goals).
  *
  * The tiles appear one after another (RevealGroup). Under the pointer the product screen of a tile rises by 4 px: a CSS
  * transform, only where the device can hover and without reduce (`motion-safe:group-hover:`).
@@ -42,7 +43,8 @@ type Tile =
   | {
       key: 'purchasing' | 'pricing' | 'reports';
       icon: IconName;
-      block?: boolean;
+      /** The raised surface (emerald-900) instead of the page surface (emerald-950). */
+      raised?: boolean;
       span: string;
     };
 
@@ -55,7 +57,7 @@ const TILES: readonly Tile[] = [
     span: 'md:col-span-4 md:row-span-3',
   },
   { key: 'stock', shot: 'stock', frame: 'narrow', span: 'md:col-span-2' },
-  { key: 'purchasing', icon: 'truck', block: true, span: 'md:col-span-2' },
+  { key: 'purchasing', icon: 'truck', raised: true, span: 'md:col-span-2' },
   { key: 'pricing', icon: 'tag', span: 'md:col-span-2' },
   { key: 'transfers', shot: 'transfers', frame: 'half', span: 'md:col-span-3' },
   { key: 'reports', icon: 'download', span: 'md:col-span-3' },
@@ -120,10 +122,10 @@ export function Features({ locale }: { locale: UiLocale }) {
               key={tile.key}
               as="li"
               className={cx(
-                'group flex flex-col overflow-hidden rounded-site-card',
-                'block' in tile && tile.block
-                  ? 'bg-site-block'
-                  : 'border border-site-line bg-surface',
+                'group flex flex-col overflow-hidden rounded-site-card border border-site-line',
+                'raised' in tile && tile.raised
+                  ? 'bg-surface-sunken'
+                  : 'bg-surface',
                 tile.span,
               )}
             >
@@ -145,14 +147,7 @@ export function Features({ locale }: { locale: UiLocale }) {
                 </>
               ) : (
                 <div className="flex flex-1 flex-col gap-8 p-6 md:p-8">
-                  {/* mint is never text or a sign on the colour block (spec 4.1): there the icon takes the text colour */}
-                  <span
-                    className={
-                      'block' in tile && tile.block
-                        ? 'text-fg'
-                        : 'text-accent-site'
-                    }
-                  >
+                  <span className="text-accent-site">
                     <Icon name={tile.icon} size="xl" />
                   </span>
                   <div className="mt-auto flex flex-col gap-3">

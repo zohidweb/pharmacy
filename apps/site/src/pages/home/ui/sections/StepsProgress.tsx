@@ -50,11 +50,16 @@ export function StepsProgress({ header, children }: StepsProgressProps) {
   });
   const progress = useTransform(scrollYProgress, FILL, [0, 1]);
 
-  /** Writes the state of the steps for a progress value, only when the reached step changes; with reduce, all reached. */
+  /**
+   * Writes the state of the steps for a progress value, only when the reached step changes; with reduce, all reached.
+   * At progress 0 the section has not reached its range yet: no step is lit, though the first marker sits at 0.
+   */
   const mark = (value: number) => {
     const last = reduce
       ? Infinity
-      : thresholds.current.findLastIndex((at) => value >= at - 0.01);
+      : value <= 0
+        ? -1
+        : thresholds.current.findLastIndex((at) => value >= at - 0.01);
     if (last === reached.current) return;
     reached.current = last;
     track.current?.querySelectorAll('[data-step]').forEach((step, index) => {

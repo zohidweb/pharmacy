@@ -26,19 +26,16 @@ export const REVEAL_VIEWPORT = { once: true, amount: 0.15 } as const;
 const FADE: Transition = { duration: 0.4, ease: 'easeOut' };
 
 /**
- * Hidden start and visible end of an element that appears. `delay` goes into the transitions only when it is given:
- * an item of RevealGroup gets its stagger from the group as the inherited delay, and an own `delay: 0` would replace it.
+ * Hidden start and visible end of an element that appears. The transitions carry no delay of their own: an item of
+ * RevealGroup gets its stagger from the group as the inherited delay, and an own `delay` would replace it.
  */
-export function revealVariants(reduce: boolean, delay?: number): Variants {
-  const own = delay ? { delay } : {};
+export function revealVariants(reduce: boolean): Variants {
   return {
     hidden: { opacity: 0, y: REVEAL_OFFSET },
     visible: {
       opacity: 1,
       y: 0,
-      transition: reduce
-        ? INSTANT
-        : { y: { ...SPRING, ...own }, opacity: { ...FADE, ...own } },
+      transition: reduce ? INSTANT : { y: { ...SPRING }, opacity: { ...FADE } },
     },
   };
 }

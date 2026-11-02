@@ -9,8 +9,9 @@
  * its top style. Nothing moves here: the background only fades (CSS opacity, none with reduce).
  *
  * It also closes the phone menu (<details>) the way people expect from a full-screen menu: on a link, so a same-page
- * anchor (#contacts, #features on the home page) does not stay covered by it; on Escape, back to its button; and when
- * the focus leaves the header, so the keyboard never lands on the page hidden under the panel.
+ * anchor (#contacts, #features on the home page) does not stay covered by it; on Escape, back to its button, from
+ * anywhere while it is open (a click on blank panel space moves the focus to the body, out of the header); and when the
+ * focus leaves the header, so the keyboard never lands on the page hidden under the panel.
  * Without JavaScript the menu still opens and closes by its button.
  */
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -58,6 +59,11 @@ export function HeaderScrollState({
       menu.open = false;
       menu.querySelector('summary')?.focus();
     };
+    // Escape is heard on the whole document only while the menu is open; `toggle` does not bubble, so it is caught
+    const onToggle = () => {
+      if (openMenuOf(header)) document.addEventListener('keydown', onKeyDown);
+      else document.removeEventListener('keydown', onKeyDown);
+    };
     // Tab past the last item would focus the page under the panel, out of sight: the menu closes instead
     const onFocusOut = (event: FocusEvent) => {
       const next = event.relatedTarget;
@@ -66,12 +72,14 @@ export function HeaderScrollState({
       if (menu) menu.open = false;
     };
     header.addEventListener('click', onClick);
-    header.addEventListener('keydown', onKeyDown);
+    header.addEventListener('toggle', onToggle, true);
     header.addEventListener('focusout', onFocusOut);
+    onToggle(); // a menu opened before hydration
     return () => {
       header.removeEventListener('click', onClick);
-      header.removeEventListener('keydown', onKeyDown);
+      header.removeEventListener('toggle', onToggle, true);
       header.removeEventListener('focusout', onFocusOut);
+      document.removeEventListener('keydown', onKeyDown);
     };
   }, []);
 

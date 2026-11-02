@@ -6,15 +6,12 @@ import { REVEAL_VIEWPORT, revealVariants, STAGGER } from './transitions';
 
 const groups = {
   div: m.div,
-  section: m.section,
   ul: m.ul,
-  ol: m.ol,
 } as const;
 
 const items = {
   div: m.div,
   li: m.li,
-  article: m.article,
 } as const;
 
 export type RevealGroupElement = keyof typeof groups;

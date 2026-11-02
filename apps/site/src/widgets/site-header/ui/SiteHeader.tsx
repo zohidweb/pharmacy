@@ -136,7 +136,7 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
               {t('nav.menu')}
             </summary>
             {/* Full screen below the header line; it scrolls on its own if a short screen cannot hold it. */}
-            <div className="fixed inset-x-0 top-site-header bottom-0 overflow-y-auto border-t border-site-line bg-site-canvas">
+            <div className="fixed inset-x-0 top-site-header bottom-0 overflow-y-auto overscroll-contain border-t border-site-line bg-site-canvas">
               <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col gap-8 px-4 py-8">
                 <nav aria-label={t('nav.label')}>
                   <ul className="flex flex-col gap-2">

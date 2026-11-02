@@ -35,7 +35,7 @@ export default function GlobalError() {
   useEffect(() => {
     const other: UiLocale = locale === 'tg' ? 'ru' : 'tg';
     // the chunk of the page's dictionary may fail too (the network is what broke): then the other one,
-    // and if both fail, a neutral status code instead of a blank screen
+    // and if both fail, a neutral status code and a bilingual way home instead of a blank screen
     loadMessages(locale)
       .then((messages) => ({ locale, messages }))
       .catch(() =>
@@ -50,6 +50,20 @@ export default function GlobalError() {
         {failed && (
           <main className={stateScreenClassName}>
             <p className={stateScreenCodeClassName}>500</p>
+            {/* no dictionary loaded: a static label in both languages of the site */}
+            <div className={stateScreenActionsClassName}>
+              <a
+                href={localePath(locale, '/')}
+                className={buttonClassName({
+                  size: 'lg',
+                  className: pressClassName,
+                })}
+              >
+                <span lang="ru">На главную</span>
+                {' / '}
+                <span lang="tg">Ба саҳифаи асосӣ</span>
+              </a>
+            </div>
           </main>
         )}
         {loaded && t && (

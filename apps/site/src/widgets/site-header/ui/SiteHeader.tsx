@@ -1,6 +1,9 @@
 /*
- * Header of every page (spec 6.2, п. 1): logo or name (W3), menu, RU/TJ, «Войти» (W4) and the request
- * button. On a narrow screen the menu folds into <details> — no JavaScript needed to open it.
+ * Header of every page (spec 4.5, п. 1): one line of 72 px from 1024 px — the name or logo (W3), «Возможности»,
+ * «Тарифы», «Блог», «Контакты», RU/TJ, «Войти» (W4) and «Оставить заявку». It stays on top while the page scrolls
+ * (sticky: it keeps its place in the flow, so no page goes under it); over the first screen it is transparent, after
+ * 24 px of scroll it gets the raised surface, a blur and the line below (HeaderScrollState, R5).
+ * Below 1024 px the menu is a full-screen <details>: it opens without JavaScript, its items appear one after another.
  */
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import { buttonClassName, Icon } from '@pharmacy/ui';
@@ -9,7 +12,9 @@ import { mediaPath } from '@/shared/api';
 import { siteEnv } from '@/shared/config';
 import { getTranslator } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
+import { PressableLink, RevealGroup, RevealItem } from '@/shared/ui/motion';
 import { siteNameOf } from '@/shared/seo';
+import { HeaderScrollState } from './HeaderScrollState';
 import { LocaleSwitch } from './LocaleSwitch';
 
 export interface SiteHeaderProps {
@@ -19,7 +24,16 @@ export interface SiteHeaderProps {
 }
 
 const menuLinkClass =
-  'flex min-h-touch items-center rounded-sm px-3 text-sm font-medium text-fg hover:bg-surface-sunken';
+  'flex min-h-touch items-center rounded-full px-3 text-sm font-medium whitespace-nowrap text-fg-muted ' +
+  'transition-colors hover:text-fg';
+
+const signInClass =
+  'flex min-h-touch items-center rounded-full px-3 text-sm font-semibold whitespace-nowrap text-fg ' +
+  'transition-colors hover:text-accent-site';
+
+const panelLinkClass =
+  'flex min-h-touch-primary items-center rounded-full text-2xl font-bold tracking-tight text-fg ' +
+  'transition-colors hover:text-accent-site';
 
 export function SiteHeader({ locale, info }: SiteHeaderProps) {
   const t = getTranslator(locale);
@@ -38,11 +52,21 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
   ];
 
   return (
-    <header className="@container relative border-b border-border bg-surface">
-      <div className="mx-auto flex min-h-topbar w-full max-w-(--ph-size-dialog-xl) items-center gap-4 px-4">
+    <HeaderScrollState className="group/header @container sticky top-0 z-(--ph-z-sticky)">
+      {/* The background is its own layer, not the header's: a backdrop-filter on the header would become the
+          containing block of the fixed menu panel and cut it to 72 px. It fades in, nothing moves. */}
+      <div
+        aria-hidden="true"
+        className={
+          'pointer-events-none absolute inset-0 border-b border-site-line bg-surface-highlight/80 ' +
+          'backdrop-blur-site-header opacity-0 transition-opacity motion-reduce:transition-none ' +
+          'group-data-scrolled/header:opacity-100 max-md:group-has-open/header:opacity-100'
+        }
+      />
+      <div className="relative mx-auto flex h-site-header w-full max-w-(--ph-size-dialog-xl) items-center gap-4 px-4">
         <Link
           href={home}
-          className="flex min-h-touch min-w-0 items-center text-md font-bold tracking-tight text-fg"
+          className="flex min-h-touch min-w-0 items-center rounded-full text-md font-bold tracking-tight text-fg"
         >
           {logoId ? (
             // a plain <img>: no next/image on the site (ADR-0023)
@@ -56,7 +80,7 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
           )}
         </Link>
 
-        <nav aria-label={t('nav.label')} className="hidden lg:block">
+        <nav aria-label={t('nav.label')} className="hidden md:block">
           <ul className="flex items-center gap-1">
             {menu.map((item) => (
               <li key={item.href}>
@@ -69,65 +93,83 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          <div className="hidden items-center gap-3 lg:flex">
+          <div className="hidden items-center gap-2 md:flex">
             <LocaleSwitch locale={locale} label={t('nav.language')} />
-            <a
-              href={signIn}
-              className={buttonClassName({ variant: 'tertiary' })}
-            >
+            <a href={signIn} className={signInClass}>
               {t('nav.signIn')}
             </a>
           </div>
           <div className="hidden @2xl:block">
-            <Link href={connect} className={buttonClassName()}>
+            <PressableLink href={connect} variant="primary">
               {t('nav.connect')}
-            </Link>
+            </PressableLink>
           </div>
 
-          <details className="lg:hidden">
+          <details className="group/menu md:hidden">
             <summary
               className={buttonClassName({
                 variant: 'secondary',
                 className: 'list-none',
               })}
             >
-              <Icon name="menu" size="sm" />
+              <Icon
+                name="menu"
+                size="sm"
+                className="group-open/menu:hidden"
+              />
+              <Icon
+                name="x"
+                size="sm"
+                className="hidden group-open/menu:block"
+              />
               {t('nav.menu')}
             </summary>
-            <div className="absolute inset-x-0 top-full z-(--ph-z-dropdown) border-b border-border bg-surface shadow-lg">
-              <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col gap-4 p-4">
+            {/* Full screen below the header line; it scrolls on its own if a short screen cannot hold it. */}
+            <div className="fixed inset-x-0 top-site-header bottom-0 overflow-y-auto border-t border-site-line bg-site-canvas">
+              <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col gap-8 px-4 py-8">
                 <nav aria-label={t('nav.label')}>
-                  {/* plain links: a link to another page closes the menu by a full navigation; a same-page anchor
-                      (#contacts, #features on the home page) only scrolls and leaves it open */}
-                  <ul className="flex flex-col">
+                  <RevealGroup as="ul" className="flex flex-col gap-2">
                     {menu.map((item) => (
-                      <li key={item.href}>
-                        <a href={item.href} className={menuLinkClass}>
+                      <RevealItem as="li" key={item.href}>
+                        <Link href={item.href} className={panelLinkClass}>
                           {item.label}
-                        </a>
-                      </li>
+                        </Link>
+                      </RevealItem>
                     ))}
-                  </ul>
+                  </RevealGroup>
                 </nav>
-                <div className="flex flex-wrap items-center gap-3">
-                  <LocaleSwitch locale={locale} label={t('nav.language')} />
-                  <a
-                    href={signIn}
-                    className={buttonClassName({ variant: 'secondary' })}
-                  >
-                    {t('nav.signIn')}
-                  </a>
-                  <div className="@2xl:hidden">
-                    <a href={connect} className={buttonClassName()}>
-                      {t('nav.connect')}
+                <RevealGroup className="flex flex-col items-start gap-4">
+                  <RevealItem>
+                    <LocaleSwitch locale={locale} label={t('nav.language')} />
+                  </RevealItem>
+                  <RevealItem className="w-full">
+                    <a
+                      href={signIn}
+                      className={buttonClassName({
+                        variant: 'secondary',
+                        size: 'lg',
+                        block: true,
+                      })}
+                    >
+                      {t('nav.signIn')}
                     </a>
-                  </div>
-                </div>
+                  </RevealItem>
+                  <RevealItem className="w-full">
+                    <PressableLink
+                      href={connect}
+                      variant="primary"
+                      size="lg"
+                      className="w-full"
+                    >
+                      {t('nav.connect')}
+                    </PressableLink>
+                  </RevealItem>
+                </RevealGroup>
               </div>
             </div>
           </details>
         </div>
       </div>
-    </header>
+    </HeaderScrollState>
   );
 }

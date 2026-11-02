@@ -1,17 +1,27 @@
 'use client';
 
 import type { UiLocale } from '@pharmacy/shared-dto';
+import { buttonClassName } from '@pharmacy/ui';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createTranslator } from 'use-intl/core';
 import type { Messages } from '@/shared/i18n';
 import { loadMessages } from '@/shared/i18n/load-messages';
-import { stateScreenClassName } from '@/shared/ui';
+import { localePath } from '@/shared/lib';
+import {
+  stateScreenActionsClassName,
+  stateScreenClassName,
+  stateScreenCodeClassName,
+  stateScreenTextClassName,
+  stateScreenTitleClassName,
+} from '@/shared/ui';
 import '@/app/styles/global.css';
 
 /**
  * The last line (W2): the layout of the language itself failed, so this renders its own document.
  * Next renders it in the browser; the dictionary loads as its own chunk, not with every page.
+ * No motion here (ADR-0024): the way home is a plain link styled as the button, a full page load, which is also what
+ * a broken layout needs.
  */
 export default function GlobalError() {
   const locale: UiLocale =
@@ -35,20 +45,31 @@ export default function GlobalError() {
   const t = loaded && createTranslator(loaded);
   return (
     <html lang={loaded?.locale ?? locale} data-theme="site">
-      <body className="bg-site-canvas text-fg">
+      <body className="flex min-h-dvh flex-col bg-site-canvas text-fg">
         {failed && (
           <main className={stateScreenClassName}>
-            <p className="text-4xl font-bold text-fg-muted">500</p>
+            <p className={stateScreenCodeClassName}>500</p>
           </main>
         )}
-        {t && (
+        {loaded && t && (
           <main className={stateScreenClassName}>
-            <h1 className="text-xl font-bold tracking-tight">
+            <p aria-hidden="true" className={stateScreenCodeClassName}>
+              500
+            </p>
+            <h1 className={stateScreenTitleClassName}>
               {t('errors.unavailable.title')}
             </h1>
-            <p className="text-sm text-fg-muted">
+            <p className={stateScreenTextClassName}>
               {t('errors.unavailable.description')}
             </p>
+            <div className={stateScreenActionsClassName}>
+              <a
+                href={localePath(loaded.locale, '/')}
+                className={buttonClassName({ size: 'lg' })}
+              >
+                {t('nav.home')}
+              </a>
+            </div>
           </main>
         )}
       </body>

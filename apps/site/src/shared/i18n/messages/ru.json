@@ -15,6 +15,7 @@
     "language": "Язык сайта"
   },
   "footer": {
+    "sections": "Разделы",
     "contacts": "Контакты",
     "documents": "Документы",
     "offer": "Публичная оферта",
@@ -25,7 +26,7 @@
     "hours": "Часы работы",
     "telegram": "Telegram",
     "whatsapp": "WhatsApp",
-    "noContacts": "Оставьте заявку на подключение — оператор позвонит вам."
+    "noContacts": "Оставьте заявку на подключение, и оператор позвонит вам."
   },
   "errors": {
     "unavailable": {

@@ -41,6 +41,10 @@
   /* Product screens only (4.3) */
   --ph-site-shadow-shot: 0 24px 64px var(--ph-site-shadow-color);
 
+  /* Header (4.5, п. 1): one line of 72 px; behind it, once scrolled, the page is blurred */
+  --ph-site-header-height: 4.5rem; /* 72 */
+  --ph-site-header-blur: 1rem; /* 16 */
+
   /* Entrance of the first screen (R1): lift and fade, line by line */
   --ph-site-enter-duration: 600ms;
   --ph-site-enter-step: 100ms;
@@ -50,6 +54,8 @@
 
 :root[data-theme='site'] {
   color-scheme: dark; /* native parts (checkbox, scrollbars, autofill) follow the dark page */
+  /* an anchor (#features, #contacts) stops below the header that stays on top */
+  scroll-padding-top: var(--ph-site-header-height);
 
   --ph-color-bg: var(--ph-emerald-975);
   --ph-color-surface: var(--ph-emerald-950);
@@ -115,7 +121,7 @@
 /*
  * Utilities of the site (R3, R4): only links to the tokens above.
  * bg-site-canvas, bg-site-block, border-site-line, text-accent-site · text-display(-sm), text-section, text-lead ·
- * rounded-site-card, rounded-site-field · shadow-shot. md: — 1024 px, the site's desktop threshold (4.2, 4.5).
+ * rounded-site-card, rounded-site-field · shadow-shot · h-site-header, backdrop-blur-site-header. md: — 1024 px, the site's desktop threshold (4.2, 4.5).
  */
 @theme {
   --breakpoint-md: 64rem; /* 1024 */
@@ -141,6 +147,9 @@
   --text-section--letter-spacing: var(--ph-letter-spacing-tight);
   --text-lead: var(--ph-font-size-lg); /* 18 */
   --text-lead--line-height: var(--ph-line-height-lg); /* 28 */
+
+  --spacing-site-header: var(--ph-site-header-height); /* h-site-header, top-site-header */
+  --blur-site-header: var(--ph-site-header-blur); /* backdrop-blur-site-header */
 
   --radius-site-card: var(--ph-radius-lg); /* 24 */
   --radius-site-field: var(--ph-radius-ms); /* 12 */

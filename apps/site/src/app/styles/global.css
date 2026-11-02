@@ -1,10 +1,12 @@
 /*
  * Global styles (ADR-0007): Tailwind preflight + utilities generated only from libs/ui tokens.
  * No implicit scanning: sources are listed explicitly so libs/ui classes are always found.
+ * The site theme (ADR-0023, ADR-0024) comes last and outside the base layer: it overrides the kit's tokens.
  */
 @import 'tailwindcss' source(none);
 @import '../../../../../libs/ui/src/styles/index.css' layer(base);
 @import '../../../../../libs/ui/src/styles/tailwind-theme.css';
+@import './site-theme.css';
 
 @source '../../';
 @source '../../../app';

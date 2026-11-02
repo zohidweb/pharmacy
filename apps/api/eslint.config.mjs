@@ -1,4 +1,5 @@
 import baseConfig from '../../eslint.config.mjs';
+import { motionImportBan } from '../../tools/eslint-rules/motion-imports.mjs';
 
 export default [
   ...baseConfig,
@@ -19,6 +20,7 @@ export default [
         'error',
         {
           paths: [
+            ...motionImportBan,
             {
               name: 'pg',
               message:

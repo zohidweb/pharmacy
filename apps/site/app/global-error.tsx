@@ -34,8 +34,8 @@ export default function GlobalError() {
   }, [locale]);
   const t = loaded && createTranslator(loaded);
   return (
-    <html lang={loaded?.locale ?? locale}>
-      <body>
+    <html lang={loaded?.locale ?? locale} data-theme="site">
+      <body className="bg-site-canvas text-fg">
         {failed && (
           <main className={stateScreenClassName}>
             <p className="text-4xl font-bold text-fg-muted">500</p>

@@ -1,0 +1,80 @@
+'use client';
+
+import { motion, stagger, useReducedMotion, type Variants } from 'motion/react';
+import type { ReactNode } from 'react';
+import { REVEAL_VIEWPORT, revealVariants, STAGGER } from './transitions';
+
+const groups = {
+  div: motion.div,
+  section: motion.section,
+  ul: motion.ul,
+  ol: motion.ol,
+} as const;
+
+const items = {
+  div: motion.div,
+  li: motion.li,
+  article: motion.article,
+} as const;
+
+export type RevealGroupElement = keyof typeof groups;
+export type RevealItemElement = keyof typeof items;
+
+export interface RevealGroupProps {
+  children: ReactNode;
+  as?: RevealGroupElement;
+  className?: string;
+}
+
+export interface RevealItemProps {
+  children: ReactNode;
+  as?: RevealItemElement;
+  className?: string;
+}
+
+/**
+ * A group whose `RevealItem` children appear one after another, 0.06 s apart (spec 4.7), when the group enters the
+ * viewport. The group itself does not move.
+ */
+export function RevealGroup({
+  children,
+  as = 'div',
+  className,
+}: RevealGroupProps) {
+  const reduce = useReducedMotion() ?? false;
+  const Element = groups[as];
+  const variants: Variants = {
+    hidden: {},
+    visible: { transition: { delayChildren: reduce ? 0 : stagger(STAGGER) } },
+  };
+  return (
+    <Element
+      className={className}
+      variants={variants}
+      initial="hidden"
+      whileInView="visible"
+      viewport={REVEAL_VIEWPORT}
+    >
+      {children}
+    </Element>
+  );
+}
+
+/** An item of `RevealGroup`: takes the group's state, so it needs no viewport of its own. */
+export function RevealItem({
+  children,
+  as = 'div',
+  className,
+}: RevealItemProps) {
+  const reduce = useReducedMotion() ?? false;
+  const Element = items[as];
+  return (
+    <Element
+      data-reveal=""
+      className={className}
+      variants={revealVariants(reduce)}
+    >
+      {children}
+    </Element>
+  );
+}

@@ -1,0 +1,192 @@
+/*
+ * The theme of the public site (spec 2026-11-02-public-site-redesign, 4.1–4.3, 4.7; ADR-0023, ADR-0024): one dark
+ * emerald theme, no light/dark switch. The only place the site's colour values live. It overrides the kit's
+ * semantic layer (and four component tokens of shape) on <html data-theme="site">, so libs/ui components (buttons,
+ * fields, cards, alerts) take the site palette without changes to the kit.
+ *
+ * WCAG 2.1 contrast, measured on the sRGB values below (text ≥ 4.5:1, large text, controls and focus ≥ 3:1):
+ *   fg (mint-50)        on 975 15.5 · 950 13.1 · 900 10.8 · 700 5.7
+ *   fg-muted (mint-300) on 975 9.1  · 950 7.7  · 900 6.3  · 700 3.3 → remapped to fg on the colour block (below)
+ *   primary (mint-400)  on 975 8.4  · 950 7.1  · 900 5.9  · 700 3.1 (on the block: button fill and large text only)
+ *   on-primary (975)    on mint-400 8.4 · mint-200 (hover) 10.1 · mint-300 (active) 9.1
+ *   danger (red-200)    on 975 11.7 · 950 9.9  · 900 8.2
+ *   field border (mint-300) on 950 7.7 · focus ring (mint-400) on 950 7.1, on 700 3.1
+ *   hairline (emerald-800) is decorative only (1.6–1.9:1), never the only boundary of a control.
+ */
+
+/* Primitives of the site: spec 4.1 (hex as approved). Read only by this file: the semantic layer and @theme below. */
+:root {
+  --ph-emerald-975: #04211b;
+  --ph-emerald-950: #06302a;
+  --ph-emerald-900: #0a3f37;
+  --ph-emerald-800: #11524a;
+  --ph-emerald-700: #0f6e56;
+  --ph-mint-50: #ecf7f2;
+  --ph-mint-200: #7fd9ba; /* the accent on hover */
+  --ph-mint-300: #9cc7b8;
+  --ph-mint-400: #5dcaa5;
+  --ph-site-shadow-color: rgb(
+    1 20 16 / 0.5
+  ); /* tinted with the page, no black shadows (4.3) */
+
+  /* Type scale of the site (4.2): sizes in rem (WCAG 1.4.4) */
+  --ph-site-font-size-display: 3.5rem; /* 56 — first screen from 1024 px */
+  --ph-site-line-height-display: 3.75rem; /* 60 */
+  --ph-site-font-size-display-sm: 2.25rem; /* 36 — first screen on a phone */
+  --ph-site-line-height-display-sm: 2.5rem; /* 40 */
+  --ph-site-font-size-section: 2.5rem; /* 40 — section headings */
+  --ph-site-line-height-section: 2.75rem; /* 44 */
+
+  /* Product screens only (4.3) */
+  --ph-site-shadow-shot: 0 24px 64px var(--ph-site-shadow-color);
+
+  /* Entrance of the first screen (R1): lift and fade, line by line */
+  --ph-site-enter-duration: 600ms;
+  --ph-site-enter-step: 100ms;
+  --ph-site-enter-distance: 1rem; /* 16 */
+  --ph-site-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root[data-theme='site'] {
+  color-scheme: dark; /* native parts (checkbox, scrollbars, autofill) follow the dark page */
+
+  --ph-color-bg: var(--ph-emerald-975);
+  --ph-color-surface: var(--ph-emerald-950);
+  /* "Sunken" on a dark page is the lighter shade: hovers, insets, image placeholders */
+  --ph-color-surface-sunken: var(--ph-emerald-900);
+  --ph-color-surface-highlight: var(--ph-emerald-900);
+
+  --ph-color-fg: var(--ph-mint-50);
+  --ph-color-fg-muted: var(--ph-mint-300);
+  --ph-color-fg-subtle: var(--ph-mint-300);
+  --ph-color-fg-disabled: var(--ph-emerald-700);
+
+  /* One line colour (4.3): the kit's secondary button outline is the site line too */
+  --ph-color-border: var(--ph-emerald-800);
+  --ph-color-border-strong: var(--ph-emerald-800);
+  --ph-color-border-control: var(--ph-mint-300);
+  /* Fields keep a 3:1 boundary on the dark surfaces (Review Focus 5), unlike the kit's light field border */
+  --ph-color-border-input: var(--ph-mint-300);
+
+  --ph-color-primary: var(--ph-mint-400);
+  --ph-color-primary-hover: var(--ph-mint-200);
+  --ph-color-primary-active: var(--ph-mint-300);
+  --ph-color-on-primary: var(--ph-emerald-975);
+  --ph-color-primary-subtle: var(--ph-emerald-900);
+  --ph-color-primary-subtle-hover: var(--ph-emerald-700);
+  --ph-color-accent: var(--ph-mint-400);
+
+  --ph-color-focus-ring: var(--ph-mint-400);
+  --ph-color-disabled: var(--ph-emerald-800);
+  --ph-color-on-disabled: var(--ph-mint-300);
+
+  /* Statuses of the form: success is the accent itself; the error is the kit's light red (no new hue) */
+  --ph-color-success: var(--ph-mint-400);
+  --ph-color-success-subtle: var(--ph-emerald-900);
+  --ph-color-success-border: var(--ph-mint-400);
+  --ph-color-success-hover: var(--ph-mint-200);
+  --ph-color-on-success: var(--ph-emerald-975);
+
+  --ph-color-danger: var(--ph-red-200);
+  --ph-color-danger-hover: var(--ph-red-100);
+  --ph-color-on-danger: var(--ph-emerald-975);
+  --ph-color-danger-subtle: var(--ph-emerald-900);
+  --ph-color-danger-surface: var(--ph-emerald-975);
+  --ph-color-danger-border: var(--ph-red-200);
+
+  /* Shape (4.3): buttons fully rounded, fields 12, cards and tiles 24; no shadow but on product screens */
+  --ph-button-radius: var(--ph-radius-full);
+  --ph-input-radius: var(--ph-radius-ms);
+  --ph-card-radius: var(--ph-radius-lg);
+  --ph-card-shadow: none;
+}
+
+/*
+ * The colour block (emerald-700: tariffs, the final call): mint-300 is 3.3:1 there, so secondary text becomes the main
+ * text colour inside it. Primary stays the button fill (3.1:1 to the block, a non-text boundary); text links on the
+ * block use text-fg.
+ */
+.bg-site-block {
+  --ph-color-fg-muted: var(--ph-mint-50);
+  --ph-color-fg-subtle: var(--ph-mint-50);
+}
+
+/*
+ * Utilities of the site (R3, R4): only links to the tokens above.
+ * bg-site-canvas, bg-site-block, border-site-line, text-accent-site · text-display(-sm), text-section, text-lead ·
+ * rounded-site-card, rounded-site-field · shadow-shot. md: — 1024 px, the site's desktop threshold (4.2, 4.5).
+ */
+@theme {
+  --breakpoint-md: 64rem; /* 1024 */
+}
+
+@theme inline {
+  --color-site-canvas: var(--ph-emerald-975);
+  --color-site-block: var(--ph-emerald-700);
+  --color-site-line: var(--ph-emerald-800);
+  --color-accent-site: var(--ph-mint-400);
+
+  --text-display: var(--ph-site-font-size-display);
+  --text-display--line-height: var(--ph-site-line-height-display);
+  --text-display--font-weight: var(--ph-font-weight-bold);
+  --text-display--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-display-sm: var(--ph-site-font-size-display-sm);
+  --text-display-sm--line-height: var(--ph-site-line-height-display-sm);
+  --text-display-sm--font-weight: var(--ph-font-weight-bold);
+  --text-display-sm--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-section: var(--ph-site-font-size-section);
+  --text-section--line-height: var(--ph-site-line-height-section);
+  --text-section--font-weight: var(--ph-font-weight-bold);
+  --text-section--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-lead: var(--ph-font-size-lg); /* 18 */
+  --text-lead--line-height: var(--ph-line-height-lg); /* 28 */
+
+  --radius-site-card: var(--ph-radius-lg); /* 24 */
+  --radius-site-field: var(--ph-radius-ms); /* 12 */
+  --shadow-shot: var(--ph-site-shadow-shot);
+}
+
+/*
+ * Entrance of the first screen (R1): plain CSS, so the largest paint does not wait for hydration. Without the
+ * preference (reduce, or a browser that does not say) the text is simply there.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes site-enter {
+    from {
+      opacity: 0;
+      transform: translateY(var(--ph-site-enter-distance));
+    }
+  }
+
+  .site-enter {
+    animation: site-enter var(--ph-site-enter-duration)
+      var(--ph-site-ease-enter) both;
+  }
+
+  .site-enter-delay-1 {
+    animation-delay: var(--ph-site-enter-step);
+  }
+
+  .site-enter-delay-2 {
+    animation-delay: calc(var(--ph-site-enter-step) * 2);
+  }
+
+  .site-enter-delay-3 {
+    animation-delay: calc(var(--ph-site-enter-step) * 3);
+  }
+
+  .site-enter-delay-4 {
+    animation-delay: calc(var(--ph-site-enter-step) * 4);
+  }
+}
+
+/*
+ * Reveal (shared/ui/motion) renders its hidden start on the server. With reduce everything is visible at once, before
+ * and after hydration (Review Focus 1); without JavaScript the <noscript> style of SiteLayout does the same (R2).
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important; /* ignore-design: beats the inline start style of motion */
+    transform: none !important; /* ignore-design: beats the inline start style of motion */
+  }
+}

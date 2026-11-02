@@ -10,5 +10,10 @@ export default [
   {
     ignores: ['.next/**/*', '**/out-tsc'],
   },
-  ...fsdLayerRules(),
+  // ADR-0024: the site is the one place `motion` is allowed (the root config bans it)
+  {
+    files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
+    rules: { 'no-restricted-imports': 'off' },
+  },
+  ...fsdLayerRules({ allowMotion: true }),
 ];

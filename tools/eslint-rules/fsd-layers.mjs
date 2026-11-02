@@ -1,18 +1,24 @@
-// Feature-Sliced Design import rules for apps/web and apps/admin (ADR-0017).
+// Feature-Sliced Design import rules for apps/web, apps/admin and apps/site (ADR-0017).
 // Editor-time complement to Steiger (`nx fsd <app>`): blocks imports into higher
 // layers and deep imports that bypass a slice's public API (index.ts).
+import { motionImportBan } from './motion-imports.mjs';
 
 const LAYERS = ['app', 'pages', 'widgets', 'features', 'entities', 'shared'];
 const SLICED_LAYERS = ['pages', 'widgets', 'features', 'entities'];
 
-/** @returns {import('eslint').Linter.Config[]} */
-export function fsdLayerRules() {
+/**
+ * @param {{ allowMotion?: boolean }} [options] `allowMotion` — only apps/site (ADR-0024); elsewhere these rules keep
+ *   the root config's ban of `motion`, which they would otherwise replace.
+ * @returns {import('eslint').Linter.Config[]}
+ */
+export function fsdLayerRules({ allowMotion = false } = {}) {
   return LAYERS.map((layer, index) => ({
     files: [`src/${layer}/**/*.{ts,tsx}`],
     rules: {
       'no-restricted-imports': [
         'error',
         {
+          paths: allowMotion ? [] : motionImportBan,
           patterns: [
             ...LAYERS.slice(0, index).map((higher) => ({
               group: [`@/${higher}`, `@/${higher}/*`],

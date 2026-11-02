@@ -1,5 +1,8 @@
 import nx from '@nx/eslint-plugin';
-import { motionImportBan } from './tools/eslint-rules/motion-imports.mjs';
+import {
+  motionBanFiles,
+  motionImportPatterns,
+} from './tools/eslint-rules/motion-imports.mjs';
 
 export default [
   ...nx.configs['flat/base'],
@@ -32,10 +35,10 @@ export default [
     },
   },
   {
-    // ADR-0024: motion only in apps/site (its config turns this off; see tools/eslint-rules/motion-imports.mjs)
-    files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
+    // ADR-0024: motion only in apps/site (its config replaces this; see tools/eslint-rules/motion-imports.mjs)
+    files: motionBanFiles,
     rules: {
-      'no-restricted-imports': ['error', { paths: motionImportBan }],
+      'no-restricted-imports': ['error', { patterns: motionImportPatterns }],
     },
   },
   {

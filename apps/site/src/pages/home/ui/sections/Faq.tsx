@@ -33,9 +33,14 @@ export function Faq({ locale }: { locale: UiLocale }) {
                   <Icon name="plus" size="md" />
                 </span>
               </summary>
-              <p className="max-w-(--ph-size-dialog-md) pb-6 text-lead text-fg-muted">
-                {t(`home.faq.items.${key}.answer`)}
-              </p>
+              {/* an answer longer than one paragraph (25 words) keeps its paragraphs apart by a blank line */}
+              <div className="flex max-w-(--ph-size-dialog-md) flex-col gap-3 pb-6 text-lead text-fg-muted">
+                {t(`home.faq.items.${key}.answer`)
+                  .split('\n\n')
+                  .map((paragraph) => (
+                    <p key={paragraph}>{paragraph}</p>
+                  ))}
+              </div>
             </details>
           ))}
         </div>

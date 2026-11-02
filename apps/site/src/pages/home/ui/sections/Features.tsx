@@ -113,7 +113,8 @@ export function Features({ locale }: { locale: UiLocale }) {
             {t('home.features.subtitle')}
           </p>
         </header>
-        <RevealGroup as="ul" className="grid gap-4 md:grid-cols-6">
+        {/* a column of tiles on a phone is far taller than the screen: it plays as soon as it enters */}
+        <RevealGroup as="ul" amount={0} className="grid gap-4 md:grid-cols-6">
           {TILES.map((tile) => (
             <RevealItem
               key={tile.key}

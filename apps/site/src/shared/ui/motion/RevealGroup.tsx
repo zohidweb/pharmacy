@@ -23,6 +23,11 @@ export type RevealItemElement = keyof typeof items;
 export interface RevealGroupProps {
   children: ReactNode;
   as?: RevealGroupElement;
+  /**
+   * Share of the group that must be in view before it plays (0.15 by default). A group much taller than the screen
+   * (a column of tiles on a phone) takes `0`: it plays as soon as its top edge enters, so no blank space waits on screen.
+   */
+  amount?: number;
   className?: string;
 }
 
@@ -39,10 +44,13 @@ export interface RevealItemProps {
 export function RevealGroup({
   children,
   as = 'div',
+  amount,
   className,
 }: RevealGroupProps) {
   const reduce = useReducedMotion() ?? false;
   const Element = groups[as];
+  const viewport =
+    amount === undefined ? REVEAL_VIEWPORT : { ...REVEAL_VIEWPORT, amount };
   const variants: Variants = {
     hidden: {},
     visible: { transition: { delayChildren: reduce ? 0 : stagger(STAGGER) } },
@@ -53,7 +61,7 @@ export function RevealGroup({
       variants={variants}
       initial="hidden"
       whileInView="visible"
-      viewport={REVEAL_VIEWPORT}
+      viewport={viewport}
     >
       {children}
     </Element>

@@ -66,7 +66,7 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
       <div
         aria-hidden="true"
         className={
-          'pointer-events-none absolute inset-0 border-b border-site-line bg-surface-highlight/80 ' +
+          'pointer-events-none absolute inset-0 border-b border-site-line bg-surface-highlight/90 ' +
           'backdrop-blur-site-header opacity-0 transition-opacity motion-reduce:transition-none ' +
           'group-data-scrolled/header:opacity-100 max-md:group-has-open/header:opacity-100'
         }

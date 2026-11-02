@@ -2,6 +2,7 @@ import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import { pickText } from '@/shared/lib';
 import { Audience } from './sections/Audience';
 import { CallToAction } from './sections/CallToAction';
+import { CapabilityMarquee } from './sections/CapabilityMarquee';
 import { Faq } from './sections/Faq';
 import { Features } from './sections/Features';
 import { Hero } from './sections/Hero';
@@ -14,7 +15,10 @@ export interface HomePageProps {
   info: PublicSiteInfo;
 }
 
-/** The home page: blocks 2–9 of spec 6.2, top to bottom (header and footer come from the layout). */
+/**
+ * The home page: sections 2–10 of the redesign spec 4.5, top to bottom (the header and the footer come from the
+ * layout).
+ */
 export function HomePage({ locale, info }: HomePageProps) {
   return (
     <main>
@@ -22,6 +26,7 @@ export function HomePage({ locale, info }: HomePageProps) {
         locale={locale}
         tagline={pickText(info.settings.tagline, locale).trim()}
       />
+      <CapabilityMarquee locale={locale} />
       <Audience locale={locale} />
       <Features locale={locale} />
       <Steps locale={locale} />

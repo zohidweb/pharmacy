@@ -1,7 +1,7 @@
 /*
  * The theme of the public site (spec 2026-11-02-public-site-redesign, 4.1 to 4.3, 4.7; ADR-0023, ADR-0024): one dark
  * emerald theme, no light/dark switch. The only place the site's colour values live. It overrides the kit's
- * semantic layer (and four component tokens of shape) on <html data-theme="site">, so libs/ui components (buttons,
+ * semantic layer (four component tokens of shape and the field focus ring) on <html data-theme="site">, so libs/ui components (buttons,
  * fields, cards, alerts) take the site palette without changes to the kit.
  *
  * WCAG 2.1 contrast, measured on the sRGB values below (text ≥ 4.5:1, large text, controls and focus ≥ 3:1):
@@ -140,6 +140,14 @@
   --ph-input-radius: var(--ph-radius-ms);
   --ph-card-radius: var(--ph-radius-lg);
   --ph-card-shadow: none;
+
+  /*
+   * The focus ring of text fields (TextField, TextareaField): the kit draws it in primary-subtle-hover, here emerald-700,
+   * 1.9:1 on the form's emerald-900 (WCAG 1.4.11). On the site it is the focus colour (mint-400: 5.9 on 900, 7.1 on
+   * 950), the same 2 px; it shows on a valid field (mint border) and on an invalid one (red border) alike.
+   */
+  --ph-input-ring-focus: 0 0 0 var(--ph-border-width-2)
+    var(--ph-color-focus-ring);
 }
 
 /*

@@ -55,6 +55,8 @@
   --ph-site-grid-hero: minmax(0, 5fr) minmax(0, 6fr); /* text : product screens */
   --ph-site-grid-aside: minmax(0, 4fr) minmax(0, 7fr); /* pinned heading : content */
   --ph-site-marquee-duration: 48s; /* one pass of the capability line, slow (4.5, п. 3) */
+  /* «Как подключиться» (4.5, п. 6; R6): the scroll track of the pinned steps, from 1024 px; the line fills along it */
+  --ph-site-steps-track: 220dvh;
 
   /* Entrance of the first screen (R1): lift and fade, line by line */
   --ph-site-enter-duration: 600ms;
@@ -134,8 +136,8 @@
  * Utilities of the site (R3, R4): only links to the tokens above.
  * bg-site-canvas, bg-site-block, border-site-line, text-accent-site · text-display(-sm), text-section, text-lead ·
  * rounded-site-card, rounded-site-field · shadow-shot · h-site-header, backdrop-blur-site-header ·
- * min-h-site-first-screen, top-site-sticky, grid-cols-site-hero, grid-cols-site-aside. md: — 1024 px, the site's
- * desktop threshold (4.2, 4.5).
+ * min-h-site-first-screen, top-site-sticky, h-site-steps, grid-cols-site-hero, grid-cols-site-aside. md: — 1024 px, the
+ * site's desktop threshold (4.2, 4.5).
  */
 @theme {
   --breakpoint-md: 64rem; /* 1024 */
@@ -172,6 +174,7 @@
     --ph-site-first-screen
   ); /* min-h-site-first-screen */
   --spacing-site-sticky: var(--ph-site-sticky-top); /* top-site-sticky */
+  --spacing-site-steps: var(--ph-site-steps-track); /* h-site-steps */
   --grid-template-columns-site-hero: var(
     --ph-site-grid-hero
   ); /* grid-cols-site-hero */
@@ -251,6 +254,26 @@
   .site-marquee:focus-within,
   [data-marquee-paused] .site-marquee {
     animation-play-state: paused;
+  }
+
+  /*
+   * The questions of the home page (R8): a native <details> whose answer opens and closes by its height. A browser
+   * without `::details-content` or `interpolate-size` simply opens it at once; with reduce it opens at once too.
+   */
+  .site-accordion {
+    interpolate-size: allow-keywords;
+  }
+
+  .site-accordion::details-content {
+    block-size: 0;
+    overflow-y: clip;
+    transition:
+      block-size var(--ph-duration-slow) var(--ph-ease-out),
+      content-visibility var(--ph-duration-slow) allow-discrete;
+  }
+
+  .site-accordion[open]::details-content {
+    block-size: auto;
   }
 }
 

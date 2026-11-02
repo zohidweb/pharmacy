@@ -1,12 +1,17 @@
+/*
+ * Тарифы (spec 4.5, п. 7): the colour block across the page, one of the two (with the final call). The price of a store
+ * per month comes from the billing settings (the same figure as in the invoices), large; under it «НДС N % сверху» and
+ * the link to /tariffs. The figure rises in as the block enters. On the block text and links take the main text colour
+ * only (fg): mint would fall below 4.5:1 there (site-theme.css).
+ */
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import { formatMoney, formatPercentBp } from '@pharmacy/shared-util';
-import { buttonClassName, Card } from '@pharmacy/ui';
+import { Icon } from '@pharmacy/ui';
 import Link from 'next/link';
 import { getTranslator } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
-import { PageSection } from '@/shared/ui';
+import { Reveal } from '@/shared/ui/motion';
 
-/** spec 6.2, п. 6: the price of a store from the billing settings — the same figure as in the invoices. */
 export function PricingTeaser({
   locale,
   pricing,
@@ -16,26 +21,36 @@ export function PricingTeaser({
 }) {
   const t = getTranslator(locale);
   return (
-    <PageSection id="pricing" tone="surface" title={t('home.pricing.title')}>
-      <Card className="flex flex-col gap-4 @2xl:flex-row @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="flex flex-wrap items-baseline gap-2">
-            <span className="text-3xl font-bold tabular-nums">
-              {formatMoney(pricing.storeMonthlyPriceDirams)}
-            </span>
-            <span className="text-fg-muted">{t('home.pricing.perMonth')}</span>
-          </p>
-          <p className="text-sm text-fg-muted">
+    <section
+      id="pricing"
+      aria-labelledby="pricing-title"
+      className="scroll-mt-4 bg-site-block text-fg"
+    >
+      <div className="mx-auto grid w-full max-w-(--ph-size-dialog-xl) gap-10 px-4 py-16 md:grid-cols-2 md:items-end md:gap-16">
+        <h2 id="pricing-title" className="text-section text-balance">
+          {t('home.pricing.title')}
+        </h2>
+        <div className="flex flex-col items-start gap-4">
+          <Reveal>
+            <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span className="text-display-sm whitespace-nowrap tabular-nums md:text-display">
+                {formatMoney(pricing.storeMonthlyPriceDirams)}
+              </span>
+              <span className="text-lead">{t('home.pricing.perMonth')}</span>
+            </p>
+          </Reveal>
+          <p className="max-w-(--ph-size-dialog-md) text-lead">
             {t('home.pricing.vat', { vat: formatPercentBp(pricing.vatBp) })}
           </p>
+          <Link
+            href={localePath(locale, '/tariffs')}
+            className="inline-flex min-h-touch items-center gap-2 font-semibold text-fg underline underline-offset-4"
+          >
+            {t('home.pricing.more')}
+            <Icon name="chevron-right" size="sm" />
+          </Link>
         </div>
-        <Link
-          href={localePath(locale, '/tariffs')}
-          className={buttonClassName({ variant: 'secondary' })}
-        >
-          {t('home.pricing.more')}
-        </Link>
-      </Card>
-    </PageSection>
+      </div>
+    </section>
   );
 }

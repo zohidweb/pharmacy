@@ -1,26 +1,35 @@
+/*
+ * The final call (spec 4.5, п. 10): the colour block across the page, a large heading and the same button as in the
+ * header and on the first screen, «Оставить заявку» (one label for one action). On the block the text is the main text
+ * colour; mint is only the fill of the button (site-theme.css).
+ */
 import type { UiLocale } from '@pharmacy/shared-dto';
-import { buttonClassName } from '@pharmacy/ui';
-import Link from 'next/link';
 import { getTranslator } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
+import { PressableLink, Reveal } from '@/shared/ui/motion';
 
-/** spec 6.2, п. 9: the request button once more, at the end of the page. */
 export function CallToAction({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   return (
-    <section aria-labelledby="cta-title" className="bg-primary text-on-primary">
-      <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col items-start gap-4 px-4 py-12">
-        <h2 id="cta-title" className="text-2xl font-bold tracking-tight">
-          {t('home.cta.title')}
-        </h2>
-        <p className="max-w-(--ph-size-dialog-lg)">{t('home.cta.text')}</p>
-        <Link
+    <section aria-labelledby="cta-title" className="bg-site-block text-fg">
+      <Reveal className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col items-start gap-8 px-4 py-16 md:flex-row md:items-end md:justify-between md:gap-16">
+        <div className="flex max-w-(--ph-size-dialog-lg) flex-col gap-4">
+          <h2 id="cta-title" className="text-section text-balance">
+            {t('home.cta.title')}
+          </h2>
+          <p className="max-w-(--ph-size-dialog-md) text-lead">
+            {t('home.cta.text')}
+          </p>
+        </div>
+        <PressableLink
           href={localePath(locale, '/connect')}
-          className={buttonClassName({ variant: 'secondary', size: 'lg' })}
+          variant="primary"
+          size="lg"
+          className="shrink-0"
         >
           {t('nav.connect')}
-        </Link>
-      </div>
+        </PressableLink>
+      </Reveal>
     </section>
   );
 }

@@ -1,36 +1,57 @@
-import type { UiLocale } from '@pharmacy/shared-dto';
-import { Icon } from '@pharmacy/ui';
-import { getTranslator } from '@/shared/i18n';
-import { PageSection } from '@/shared/ui';
-
 /*
- * spec 6.2, п. 7 — exactly these five statements, each true of the deployment: own server (ADR-0020),
- * nightly copies checked by a restore (ADR-0019), encrypted copies off the host (ADR-0020 amendment),
- * HTTPS (ADR-0012), roles checked on the server (ADR-0018).
+ * Безопасность (spec 4.5, п. 8): two columns from 1024 px, the heading with a short text on the left, five statements
+ * with icons on the right. Exactly these five, each true of the deployment (spec 4.8, without general denials): own
+ * server (ADR-0020), nightly copies checked by a restore (ADR-0019), encrypted copies off the host (ADR-0020
+ * amendment), HTTPS (ADR-0012), roles checked on the server (ADR-0018).
  */
-const CLAIMS = ['server', 'backups', 'offsite', 'https', 'roles'] as const;
+import type { UiLocale } from '@pharmacy/shared-dto';
+import { Icon, type IconName } from '@pharmacy/ui';
+import { getTranslator } from '@/shared/i18n';
+import { RevealGroup, RevealItem } from '@/shared/ui/motion';
+
+const CLAIMS = [
+  { key: 'server', icon: 'cloud' },
+  { key: 'backups', icon: 'refresh-cw' },
+  { key: 'offsite', icon: 'key-round' },
+  { key: 'https', icon: 'lock' },
+  { key: 'roles', icon: 'user-check' },
+] as const satisfies readonly { key: string; icon: IconName }[];
 
 export function Security({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   return (
-    <PageSection id="security" title={t('home.security.title')}>
-      <ul className="grid gap-6 @xl:max-lg:grid-cols-2 lg:grid-cols-3">
-        {CLAIMS.map((key) => (
-          <li key={key} className="flex gap-3">
-            <span className="flex size-avatar-sm shrink-0 items-center justify-center rounded-full bg-success-subtle text-success">
-              <Icon name="check" size="md" />
-            </span>
-            <div className="flex flex-col gap-1">
-              <h3 className="text-md font-semibold">
-                {t(`home.security.items.${key}.title`)}
-              </h3>
-              <p className="text-sm text-fg-muted">
-                {t(`home.security.items.${key}.text`)}
-              </p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </PageSection>
+    <section
+      id="security"
+      aria-labelledby="security-title"
+      className="scroll-mt-4"
+    >
+      <div className="mx-auto grid w-full max-w-(--ph-size-dialog-xl) gap-10 px-4 py-16 md:grid-cols-site-aside md:gap-16">
+        <header className="flex flex-col gap-4 md:self-start">
+          <h2 id="security-title" className="text-section text-balance">
+            {t('home.security.title')}
+          </h2>
+          <p className="text-lead text-fg-muted">
+            {t('home.security.subtitle')}
+          </p>
+        </header>
+        <RevealGroup as="ul" className="flex flex-col gap-8">
+          {CLAIMS.map(({ key, icon }) => (
+            <RevealItem key={key} as="li" className="flex gap-5">
+              <span className="flex size-avatar-md shrink-0 items-center justify-center rounded-full border border-site-line bg-surface text-accent-site">
+                <Icon name={icon} size="lg" />
+              </span>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-xl font-bold tracking-tight">
+                  {t(`home.security.items.${key}.title`)}
+                </h3>
+                <p className="max-w-(--ph-size-dialog-md) text-lead text-fg-muted">
+                  {t(`home.security.items.${key}.text`)}
+                </p>
+              </div>
+            </RevealItem>
+          ))}
+        </RevealGroup>
+      </div>
+    </section>
   );
 }

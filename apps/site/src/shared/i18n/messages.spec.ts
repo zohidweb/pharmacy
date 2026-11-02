@@ -28,6 +28,22 @@ describe('site dictionaries', () => {
     }
   });
 
+  // spec 4.2 of the redesign: the site's texts use a full stop, a colon or a comma instead of a dash
+  it('have no em or en dashes', () => {
+    for (const dictionary of [ru, tg]) {
+      const dashed = keyPaths(dictionary).filter((path) => {
+        const value = path
+          .split('.')
+          .reduce<unknown>(
+            (node, key) => (node as Record<string, unknown>)[key],
+            dictionary,
+          );
+        return typeof value === 'string' && /[\u2013\u2014]/.test(value);
+      });
+      expect(dashed).toEqual([]);
+    }
+  });
+
   it('use NFC-normalized Tajik letters', () => {
     const text = JSON.stringify(tg);
     expect(text).toBe(text.normalize('NFC'));

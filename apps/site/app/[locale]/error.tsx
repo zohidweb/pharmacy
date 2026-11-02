@@ -1,18 +1,19 @@
 'use client';
 
 import { buttonClassName } from '@pharmacy/ui';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { useLocale, useTranslations } from 'use-intl';
 import { localePath } from '@/shared/lib';
 import {
+  pressClassName,
   stateScreenActionsClassName,
   stateScreenClassName,
   stateScreenCodeClassName,
   stateScreenTextClassName,
   stateScreenTitleClassName,
 } from '@/shared/ui';
-import { PressableLink } from '@/shared/ui/motion';
 
 /**
  * A page failed, e.g. the API is unavailable on its first render (W2, Review Focus 1): the layout
@@ -39,17 +40,20 @@ export default function LocaleError({ reset }: { reset: () => void }) {
         <button
           type="button"
           onClick={retry}
-          className={buttonClassName({ size: 'lg' })}
+          className={buttonClassName({ size: 'lg', className: pressClassName })}
         >
           {t('retry')}
         </button>
-        <PressableLink
+        <Link
           href={localePath(locale, '/')}
-          variant="secondary"
-          size="lg"
+          className={buttonClassName({
+            variant: 'secondary',
+            size: 'lg',
+            className: pressClassName,
+          })}
         >
           {nav('home')}
-        </PressableLink>
+        </Link>
       </div>
     </main>
   );

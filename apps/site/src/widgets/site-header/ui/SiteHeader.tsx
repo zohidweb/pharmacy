@@ -4,16 +4,19 @@
  * (sticky: it keeps its place in the flow, so no page goes under it); over the first screen it is transparent, after
  * 24 px of scroll it gets the raised surface, a blur and the line below (HeaderScrollState, R5).
  * Below 1024 px the menu is a full-screen <details>: it opens without JavaScript, its items appear one after another.
+ * No `motion` here (controller ruling on Task 3): the header is on every page, so its animation is CSS only: the
+ * menu items take the `site-enter` keyframes, the request button gives on press (`pressClassName`).
  */
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import { buttonClassName, Icon } from '@pharmacy/ui';
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import { mediaPath } from '@/shared/api';
 import { siteEnv } from '@/shared/config';
 import { getTranslator } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
-import { PressableLink, RevealGroup, RevealItem } from '@/shared/ui/motion';
 import { siteNameOf } from '@/shared/seo';
+import { pressClassName } from '@/shared/ui';
 import { HeaderScrollState } from './HeaderScrollState';
 import { LocaleSwitch } from './LocaleSwitch';
 
@@ -34,6 +37,11 @@ const signInClass =
 const panelLinkClass =
   'flex min-h-touch-primary items-center rounded-full text-2xl font-bold tracking-tight text-fg ' +
   'transition-colors hover:text-accent-site';
+
+/** An item of the phone menu: it rises in at its place in the cascade when the menu opens (site-theme.css). */
+function enterAt(index: number): CSSProperties {
+  return { '--ph-site-enter-index': index } as CSSProperties;
+}
 
 export function SiteHeader({ locale, info }: SiteHeaderProps) {
   const t = getTranslator(locale);
@@ -100,9 +108,12 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
             </a>
           </div>
           <div className="hidden @2xl:block">
-            <PressableLink href={connect} variant="primary">
+            <Link
+              href={connect}
+              className={buttonClassName({ className: pressClassName })}
+            >
               {t('nav.connect')}
-            </PressableLink>
+            </Link>
           </div>
 
           <details className="group/menu md:hidden">
@@ -128,21 +139,31 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
             <div className="fixed inset-x-0 top-site-header bottom-0 overflow-y-auto border-t border-site-line bg-site-canvas">
               <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col gap-8 px-4 py-8">
                 <nav aria-label={t('nav.label')}>
-                  <RevealGroup as="ul" className="flex flex-col gap-2">
-                    {menu.map((item) => (
-                      <RevealItem as="li" key={item.href}>
+                  <ul className="flex flex-col gap-2">
+                    {menu.map((item, index) => (
+                      <li
+                        key={item.href}
+                        className="site-enter-open"
+                        style={enterAt(index)}
+                      >
                         <Link href={item.href} className={panelLinkClass}>
                           {item.label}
                         </Link>
-                      </RevealItem>
+                      </li>
                     ))}
-                  </RevealGroup>
+                  </ul>
                 </nav>
-                <RevealGroup className="flex flex-col items-start gap-4">
-                  <RevealItem>
+                <div className="flex flex-col items-start gap-4">
+                  <div
+                    className="site-enter-open"
+                    style={enterAt(menu.length)}
+                  >
                     <LocaleSwitch locale={locale} label={t('nav.language')} />
-                  </RevealItem>
-                  <RevealItem className="w-full">
+                  </div>
+                  <div
+                    className="site-enter-open w-full"
+                    style={enterAt(menu.length + 1)}
+                  >
                     <a
                       href={signIn}
                       className={buttonClassName({
@@ -153,18 +174,23 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
                     >
                       {t('nav.signIn')}
                     </a>
-                  </RevealItem>
-                  <RevealItem className="w-full">
-                    <PressableLink
+                  </div>
+                  <div
+                    className="site-enter-open w-full"
+                    style={enterAt(menu.length + 2)}
+                  >
+                    <Link
                       href={connect}
-                      variant="primary"
-                      size="lg"
-                      className="w-full"
+                      className={buttonClassName({
+                        size: 'lg',
+                        block: true,
+                        className: pressClassName,
+                      })}
                     >
                       {t('nav.connect')}
-                    </PressableLink>
-                  </RevealItem>
-                </RevealGroup>
+                    </Link>
+                  </div>
+                </div>
               </div>
             </div>
           </details>

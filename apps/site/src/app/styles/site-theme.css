@@ -48,6 +48,7 @@
   /* Entrance of the first screen (R1): lift and fade, line by line */
   --ph-site-enter-duration: 600ms;
   --ph-site-enter-step: 100ms;
+  --ph-site-stagger-step: 60ms; /* cascade of revealed items (4.7) */
   --ph-site-enter-distance: 1rem; /* 16 */
   --ph-site-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -187,6 +188,20 @@
 
   .site-enter-delay-4 {
     animation-delay: calc(var(--ph-site-enter-step) * 4);
+  }
+
+  /*
+   * Items of the phone menu (header): the same entrance when its <details> opens, 0.06 s apart (4.7). The item gives
+   * its place as --ph-site-enter-index. While the menu is closed the item has no animation, so the first opening starts
+   * it; Chrome keeps the finished animation across later openings (the closed content is only content-visibility
+   * hidden), so those show the items at once, like Reveal's `once`.
+   */
+  details[open] .site-enter-open {
+    animation: site-enter var(--ph-site-enter-duration)
+      var(--ph-site-ease-enter) both;
+    animation-delay: calc(
+      var(--ph-site-enter-index, 0) * var(--ph-site-stagger-step)
+    );
   }
 }
 

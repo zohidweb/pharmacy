@@ -1,21 +1,19 @@
 'use client';
 
 /*
- * The <header> element of the site header (spec 4.5, п. 1; R5). After 24 px of scroll it gets `data-scrolled`, and CSS
- * shows its background by the attribute: `useScroll` + `useMotionValueEvent` write the attribute straight to the
- * element, with no scroll listener and no React render per frame. Nothing moves here: the background only fades
- * (CSS opacity, none with reduce), so there is no motion to switch off.
+ * The <header> element of the site header (spec 4.5, п. 1; R5 without the library, controller ruling on Task 3). After
+ * 24 px of scroll it gets `data-scrolled`, and CSS shows its background by the attribute. The scroll is seen by an
+ * IntersectionObserver on a 1 px sentinel 24 px below the top of the page: when the sentinel leaves the viewport the
+ * attribute is written straight to the element. No scroll listener, no React render per frame, no `motion`: the header
+ * is on every page, and pages without their own animation load no motion chunk. Without JavaScript the header keeps
+ * its top style. Nothing moves here: the background only fades (CSS opacity, none with reduce).
  *
  * It also closes the phone menu (<details>) the way people expect from a full-screen menu: on a link, so a same-page
  * anchor (#contacts, #features on the home page) does not stay covered by it; on Escape, back to its button; and when
  * the focus leaves the header, so the keyboard never lands on the page hidden under the panel.
  * Without JavaScript the menu still opens and closes by its button.
  */
-import { useMotionValueEvent, useScroll } from 'motion/react';
 import { useEffect, useRef, type ReactNode } from 'react';
-
-/** Scroll, px, after which the header gets its background. */
-const SCROLLED_AFTER = 24;
 
 export interface HeaderScrollStateProps {
   className?: string;
@@ -31,23 +29,19 @@ export function HeaderScrollState({
   children,
 }: HeaderScrollStateProps) {
   const ref = useRef<HTMLElement>(null);
-  const scrolled = useRef(false);
-  const { scrollY } = useScroll();
+  const sentinel = useRef<HTMLDivElement>(null);
 
-  const mark = (y: number) => {
-    const next = y > SCROLLED_AFTER;
-    if (next === scrolled.current) return;
-    scrolled.current = next;
-    ref.current?.toggleAttribute('data-scrolled', next);
-  };
-
-  // a page opened in the middle (reload, back) is already scrolled before the first change
   useEffect(() => {
-    const y = scrollY.get();
-    scrolled.current = y > SCROLLED_AFTER;
-    ref.current?.toggleAttribute('data-scrolled', scrolled.current);
-  }, [scrollY]);
-  useMotionValueEvent(scrollY, 'change', mark);
+    const header = ref.current;
+    const mark = sentinel.current;
+    if (!header || !mark) return;
+    // the first callback reports the current state too: a page opened in the middle (reload, back) is marked at once
+    const observer = new IntersectionObserver(([entry]) => {
+      header.toggleAttribute('data-scrolled', !entry.isIntersecting);
+    });
+    observer.observe(mark);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const header = ref.current;
@@ -82,8 +76,16 @@ export function HeaderScrollState({
   }, []);
 
   return (
-    <header ref={ref} className={className}>
-      {children}
-    </header>
+    <>
+      {/* 24 px from the top of the document (the body is not positioned): out of view = scrolled past 24 px */}
+      <div
+        ref={sentinel}
+        aria-hidden="true"
+        className="pointer-events-none absolute top-6 left-0 h-px w-px"
+      />
+      <header ref={ref} className={className}>
+        {children}
+      </header>
+    </>
   );
 }

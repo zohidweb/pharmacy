@@ -9,6 +9,7 @@ import type { Messages } from '@/shared/i18n';
 import { loadMessages } from '@/shared/i18n/load-messages';
 import { localePath } from '@/shared/lib';
 import {
+  pressClassName,
   stateScreenActionsClassName,
   stateScreenClassName,
   stateScreenCodeClassName,
@@ -65,7 +66,10 @@ export default function GlobalError() {
             <div className={stateScreenActionsClassName}>
               <a
                 href={localePath(loaded.locale, '/')}
-                className={buttonClassName({ size: 'lg' })}
+                className={buttonClassName({
+                  size: 'lg',
+                  className: pressClassName,
+                })}
               >
                 {t('nav.home')}
               </a>

@@ -5,7 +5,7 @@
  *
  * The press eases in and out by `transition`: in Tailwind v4 its list is the kit button's colours plus transform and
  * `scale`. Not `transition-transform`: it comes after the kit's `transition-colors` in the CSS and would drop the colour
- * fade of the button's hover. With reduce there is no transition at all.
+ * fade of the button's hover. With reduce the scale is off and the kit's colour fade stays, as on every kit button.
  */
 export const pressClassName =
-  'motion-safe:transition motion-reduce:transition-none motion-safe:active:scale-98';
+  'motion-safe:transition motion-safe:active:scale-98';

@@ -10,9 +10,10 @@ EU (Германия) со всем Compose-проектом `pharmacy-prod`, д
 
 | Контейнер | Среда | Контур сети | Примечание |
 |---|---|---|---|
-| Reverse proxy / TLS-терминация — Caddy 2.11, образ `pharmacy/proxy` (ADR-0012) | VPS | Публичная зона: 80/tcp, 443/tcp, 443/udp — единственная точка входа | Let's Encrypt для `app.nurmed.online`, `admin.nurmed.online`, apex → `app.`; отдаёт статику web/admin из образа и проксирует `/api` на тот же origin (cookie сессии, ADR-0008); маршруты-экраны по `try_files {path} {path}.html {path}/index.html` без SPA-fallback; `/_next/static/*` — `immutable`, HTML, `*.txt` и `sw.js` — `no-cache`; на `admin.` — только `/api/v1/operator/*`, на `app.` — всё, кроме него. Том `/data` — ключи ACME и сертификаты |
+| Reverse proxy / TLS-терминация — Caddy 2.11, образ `pharmacy/proxy` (ADR-0012) | VPS | Публичная зона: 80/tcp, 443/tcp, 443/udp — единственная точка входа | Let's Encrypt для `app.nurmed.online`, `admin.nurmed.online` и apex `nurmed.online`: при `APEX_MODE=redirect` (по умолчанию) apex → `app.`, при `APEX_MODE=site` — публичный сайт, `www.` → apex (ADR-0023); отдаёт статику web/admin из образа и проксирует `/api` на тот же origin (cookie сессии, ADR-0008); маршруты-экраны по `try_files {path} {path}.html {path}/index.html` без SPA-fallback; `/_next/static/*` — `immutable`, HTML, `*.txt` и `sw.js` — `no-cache`; на `admin.` — только `/api/v1/operator/*`, на `app.` — всё, кроме него и `/api/v1/public/*`; на хосте сайта из `/api` — только `/api/v1/public/*`, остальное — в `site`. Том `/data` — ключи ACME и сертификаты |
 | Клиентское веб-приложение (Next.js) | VPS, в образе proxy | Публичная (через proxy) | Статическая сборка `apps/web/out`, предсжатые br/gz |
 | Админка оператора (Next.js) | VPS, в образе proxy | Публичная (через proxy) | Статическая сборка `apps/admin/out`; поддомен `admin.` |
+| Публичный сайт (Next.js, `pharmacy/site`, ADR-0023) | VPS | Приватная сеть compose (только за proxy, порт наружу не публикуется) | Серверная отрисовка, ISR 60 с, кеш страниц в памяти процесса; к API — по сети compose, только публичный контур; без БД, Redis и секретов; контейнер только для чтения. В test — свой хост `site.pharmacy-test.localhost` |
 | API (NestJS) | VPS | Приватная сеть compose (только за proxy, порт наружу не публикуется) | Stateless (сессии в Redis); `TRUST_PROXY=1` |
 | PostgreSQL | VPS | Только сеть compose, снаружи недоступна | Ежедневная проверенная копия (ADR-0019) в `BACKUP_DIR`; вне хоста — шифрование `age` и выгрузка `rclone` в Object Storage другого региона, 30 дней (ADR-0020, до prod); RPO 24 ч / RTO 4 ч |
 | Резервное копирование (`backup`, ADR-0019) | VPS | Только сеть compose | `pg_dump` ролью `pharmacy_backup` раз в сутки через общий локальный сокет, проверка каждой копии восстановлением во временный экземпляр, копии в `BACKUP_DIR` (отдельный диск или сетевой том); копия вне хоста (`age` + `rclone`, ADR-0020) — до prod; восстановление — `stack restore` |
@@ -51,6 +52,7 @@ flowchart TB
     direction TB
     pos["POS/ПК облачной точки<br/>(браузер + буфер перебоев)<br/>app.nurmed.online"]
     opws["Рабочее место оператора<br/>(браузер)<br/>admin.nurmed.online"]
+    visitor["Посетитель сайта, поисковик<br/>(браузер)<br/>nurmed.online"]
   end
 
   subgraph cloudEnv["Облако платформы — VPS Contabo, EU (ADR-0020)"]
@@ -58,6 +60,7 @@ flowchart TB
     subgraph vmApp["Один VPS: Compose-проект pharmacy-prod"]
       proxy["Caddy (pharmacy/proxy)<br/>TLS Let's Encrypt + статика web/admin"]
       api["API (NestJS)"]
+      site["Сайт (pharmacy/site)<br/>Next.js, серверная отрисовка"]
       pg[("PostgreSQL")]
       rd[("Redis")]
       bk["backup: pg_dump +<br/>проверка восстановления (ADR-0019)"]
@@ -74,7 +77,10 @@ flowchart TB
 
   pos -- "HTTPS (80/443)" --> proxy
   opws -- "HTTPS (80/443)" --> proxy
+  visitor -- "HTTPS (80/443)" --> proxy
   proxy -- "/api/*" --> api
+  proxy -- "nurmed.online, кроме /api/*<br/>(APEX_MODE=site)" --> site
+  site -- "/api/v1/public/*<br/>(только чтение)" --> api
   api --> pg
   api --> rd
   bk -. ежедневно .-> pg

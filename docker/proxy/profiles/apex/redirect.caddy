@@ -1,0 +1,5 @@
+# Apex of the cloud profile, APEX_MODE=redirect (the default, W13): the bare domain leads to the web app.
+{$APEX_ADDR} {
+	import tls-{$TLS_MODE}
+	redir {$WEB_ORIGIN}{uri} permanent
+}

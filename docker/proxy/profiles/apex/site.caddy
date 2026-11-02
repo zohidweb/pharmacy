@@ -1,0 +1,11 @@
+# Apex of the cloud profile, APEX_MODE=site (ADR-0023, W13): the bare domain serves the public site, www. leads to it
+# (one address for search engines; the DNS record of www. is needed as well). Switched on in prod once the name, the
+# offer and the privacy policy are published (launch checklist).
+{$APEX_ADDR} {
+	import public-site
+}
+
+www.{$APEX_ADDR} {
+	import tls-{$TLS_MODE}
+	redir https://{$APEX_ADDR}{uri} permanent
+}

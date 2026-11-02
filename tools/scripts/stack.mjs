@@ -7,7 +7,8 @@
 //   commands: init    create the env file from its example (test, prod); on an existing file, append the variables
 //                     the example gained since. test: secrets still in the env file move into the secret files of
 //                     SECRETS_DIR with the same values (ADR-0021); prod: they are named, to be deleted
-//             build   quality gate (lint, test) + Docker images (the proxy image builds web/admin, ADR-0012)
+//             build   quality gate (lint, test) + Docker images (the proxy image builds web/admin, ADR-0012; the site
+//                     image — the public site apps/site, ADR-0023)
 //             up      start containers (detached) and wait until they are healthy; test and prod first create the
 //                     missing secret files and check them (`secrets init`, `secrets check` of docker/compose.secrets.yml)
 //             down    stop containers (data volumes are kept)
@@ -438,8 +439,11 @@ function build(envName, env, skipChecks) {
   }
   // The static exports of web/admin are built inside the proxy image (docker/proxy/Dockerfile, ADR-0012), never with
   // the API mocks: the flag is pinned off there and a bundle that still carries them stops the build (F1).
+  // The public site is an image of its own (apps/site/Dockerfile, ADR-0023): the standalone server of Next.js.
   run('docker', [...composeArgs(envName, env), 'build']);
-  console.log(`\n✔ ${envName}: images tagged ${process.env.IMAGE_TAG} (api, postgres, redis, proxy with web/admin)`);
+  console.log(
+    `\n✔ ${envName}: images tagged ${process.env.IMAGE_TAG} (api, postgres, redis, site, proxy with web/admin)`,
+  );
 }
 
 const [envName, command, ...rest] = process.argv.slice(2);
@@ -458,6 +462,14 @@ if (!existsSync(join(root, env.envFile))) {
   fail(`${relative(root, join(root, env.envFile))} not found. Run: npm run stack -- ${envName} init`);
 }
 if (envName === 'prod' && skipChecks) fail('--skip-checks is not allowed for prod.');
+// The cloud profile of the proxy imports profiles/apex/<APEX_MODE>.caddy (W13): an unknown value makes Caddy refuse the
+// whole config and takes app. and admin. down with the apex. Checked before the quality gate and any docker command.
+if (envName === 'prod' && ['build', 'up'].includes(command)) {
+  const apexMode = envValue(env, 'APEX_MODE', '');
+  if (!['', 'redirect', 'site'].includes(apexMode)) {
+    fail(`APEX_MODE (shell or ${env.envFile}) must be empty, redirect or site, not "${apexMode}": the proxy would not start.`);
+  }
+}
 if (BACKUP_COMMANDS.includes(command) && !BACKUP_ENVS.includes(envName)) {
   fail(`${command}: backups exist in ${BACKUP_ENVS.join(' and ')} only (ADR-0019).`);
 }

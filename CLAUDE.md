@@ -37,12 +37,12 @@ Project class: Full
 | API-стиль | REST | ADR-0001 |
 | Аутентификация | Самописная: логин+пароль, PIN терминала; scrypt из `node:crypto`; токен — JWT (`@nestjs/jwt`, HS256) в HttpOnly-cookie `__Host-sid` **с проверкой серверной сессии** (Redis; офлайн — PostgreSQL); контекст запроса строит `SessionMiddleware`, guard'ы только решают; вход «от имени» не реализуется (решение пересматривается) | ADR-0001, ADR-0008 |
 | Авторизация | RBAC: динамические роли тенанта, каталог прав `модуль:действие` (`libs/shared/domain`), одна роль + охват точек, запрет эскалации, проверка только на сервере | ADR-0018 |
-| Архитектура фронтенда | Feature-Sliced Design в `apps/web` и `apps/admin` («pages first», Steiger) | ADR-0017 |
+| Архитектура фронтенда | Feature-Sliced Design в `apps/web`, `apps/admin` и `apps/site` («pages first», Steiger) | ADR-0017, ADR-0023 |
 | Фронтенд-библиотеки | TanStack Query, Zustand, React Hook Form + zod, use-intl, idb, uuid, lean-qr (QR на чеке, только web); свои: API-клиент, Service Worker, сканер, чтение xlsx/csv, запись xlsx, штрихкоды ценников (EAN, Code 128) | ADR-0015, ADR-0022 |
-| UI и стили (web, admin, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей | ADR-0007 |
+| UI и стили (web, admin, site, libs/ui) | Tailwind CSS v4 поверх токенов `--ph-*`; собственный кит `libs/ui` без UI-зависимостей (и у публичного сайта `apps/site`) | ADR-0007, ADR-0023 |
 | Доступ к данным / миграции | Kysely + `pg` (CamelCasePlugin), SQL-миграции node-pg-migrate (только Up) | ADR-0006 |
 | Контейнеризация | Docker (офлайн-дистрибутив, test/prod, локальная среда) | ADR-0005 |
-| Reverse proxy и статика | Caddy 2.11 (`docker/proxy`): TLS, статика web/admin в образе `pharmacy/proxy`, `/api` на тот же origin | ADR-0012 |
+| Reverse proxy и статика | Caddy 2.11 (`docker/proxy`): TLS, статика web/admin в образе `pharmacy/proxy`, `/api` на тот же origin; публичный сайт `apps/site` — на apex-хосте (`APEX_MODE=site`; в test — `SITE_ADDR`) через `reverse_proxy` на сервис `site` | ADR-0012, ADR-0023 |
 | Хостинг (пилот) | Один VPS Contabo (EU), домен `nurmed.online`; копии БД вне хоста — `age` + `rclone` | ADR-0020 |
 | Организация кода | Nx-монорепо, единый репозиторий | ADR-0002, ADR-0010 |
 | Runtime / тесты | Node.js 22 LTS (≥ 22.20) или 24 LTS (`.nvmrc` — 24, Docker — 24), npm, Jest; e2e фронтенда — Playwright | ADR-0008, ADR-0009 |
@@ -75,14 +75,17 @@ pharmacy/
 │   ├── api-e2e/      # e2e-тесты API (Jest)
 │   ├── web/          # Next.js: клиентский продукт (касса, склад, кабинет владельца)
 │   │                 #   app/ — маршруты (реэкспорты), pages/ — пустая; src/{app,pages,widgets,features,entities,shared} — FSD (ADR-0017)
-│   └── admin/        # Next.js: админка оператора платформы — та же структура FSD
-│   ├── web-e2e/      # e2e web (Playwright + axe): сборка out/ + фейковый /api/v1; admin-e2e — позже
+│   ├── admin/        # Next.js: админка оператора платформы — та же структура FSD
+│   ├── site/         # Next.js с серверной отрисовкой (ADR-0023): публичный сайт — главная, тарифы, блог, оферта и
+│   │                 #   политика, форма заявки; app/[locale]/ — маршруты RU (без префикса) и TJ (/tg), src/ — FSD;
+│   │                 #   данные — только публичный контур API /api/v1/public/*, без БД, Redis и секретов
+│   └── web-e2e/      # e2e web (Playwright + axe): сборка out/ + фейковый /api/v1; admin-e2e — позже
 ├── libs/
 │   ├── shared/dto/     # @pharmacy/shared-dto — DTO и контракты REST API (единственный источник типов API)
 │   ├── shared/domain/  # @pharmacy/shared-domain — Tenant, Store, Batch, Receipt, StockMovement…
 │   ├── shared/util/    # @pharmacy/shared-util — деньги (integer дирамы), даты, i18n RU/TJ
-│   └── ui/             # @pharmacy/ui — общий UI-кит web и admin (сенсорные экраны от 10″)
-├── docker/           # compose.yml (+ compose.backup.yml и compose.secrets.yml для test/prod) + образы postgres/, redis/, proxy/ (Caddy + статика, ADR-0012); apps/api/Dockerfile
+│   └── ui/             # @pharmacy/ui — общий UI-кит web, admin и site (сенсорные экраны от 10″)
+├── docker/           # compose.yml (+ compose.backup.yml и compose.secrets.yml для test/prod) + образы postgres/, redis/, proxy/ (Caddy + статика, ADR-0012); apps/api/Dockerfile, apps/site/Dockerfile
 ├── docs/architecture/, templates/   # архитектура, ADR; шаблоны ai-project-start
 └── nx.json / package.json / tsconfig.base.json / eslint.config.mjs
 ```
@@ -152,7 +155,7 @@ pharmacy/
 npm ci                               # установка строго по lock-файлу
 npx nx run-many -t build test lint fsd   # всё (= npm run check)
 npx nx affected -t build test lint fsd   # только затронутое изменением
-npx nx fsd web / admin               # Steiger — слои FSD (ADR-0017)
+npx nx fsd web / admin / site        # Steiger — слои FSD (ADR-0017)
 npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)
 npx nx run web:dev-api               # то же, но готовые маршруты (вход, точки, сотрудники, роли, каталог, цены, скидки,
@@ -168,6 +171,8 @@ npx nx run admin:dev-api             # то же, но готовые маршр
                                      #   скидки, печать счёта, дашборд, статистика, уведомления, объявления,
                                      #   карточка точки, сайт: заявки, статьи, документы, картинки, настройки)
                                      #   — в apps/api
+npx nx dev site                      # http://127.0.0.1:4400 — публичный сайт; страницы читают API на SITE_API_INTERNAL_URL,
+                                     #   браузер — /api/v1/public/* через dev-rewrite на API_PROXY_TARGET (оба — :3000)
 npx nx e2e api-e2e                   # e2e API (поднимает api сам; БД из .env должна быть мигрирована: api:migrate)
 npx nx e2e web-e2e                   # e2e web: собирает web, браузеры — установленные Chrome/Edge
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
@@ -280,9 +285,9 @@ Only these. Financial operations require idempotency and a correlation ID.
 
 | Среда | Env-файл (не в git) | Compose-проект | Вход (proxy) | API напрямую | PostgreSQL / Redis наружу |
 |---|---|---|---|---|---|
-| dev | `.env` ← `.env.example` | `pharmacy-dev` | нет — `next dev` на 4200/4300 | `127.0.0.1:3000` | `5432` / `6379` на localhost |
-| test | `docker/env/test.env` | `pharmacy-test` | `https://pharmacy-test.localhost:8443`, `https://admin.pharmacy-test.localhost:8443` | `127.0.0.1:3100` (диагностика) | PostgreSQL `127.0.0.1:5433` (по TCP — только роли API), Redis — нет |
-| prod | `docker/env/prod.env` | `pharmacy-prod` | `https://app.nurmed.online`, `https://admin.nurmed.online` (VPS, ADR-0020) | нет | нет (только сеть compose, C4) |
+| dev | `.env` ← `.env.example` | `pharmacy-dev` | нет — `next dev` на 4200/4300/4400 (сайт) | `127.0.0.1:3000` | `5432` / `6379` на localhost |
+| test | `docker/env/test.env` | `pharmacy-test` | `https://pharmacy-test.localhost:8443`, `https://admin.pharmacy-test.localhost:8443`, сайт — `https://site.pharmacy-test.localhost:8443` | `127.0.0.1:3100` (диагностика) | PostgreSQL `127.0.0.1:5433` (по TCP — только роли API), Redis — нет |
+| prod | `docker/env/prod.env` | `pharmacy-prod` | `https://app.nurmed.online`, `https://admin.nurmed.online` (VPS, ADR-0020), сайт — `https://nurmed.online` при `APEX_MODE=site` | нет | нет (только сеть compose, C4) |
 
 ```
 npm run stack -- <dev|test|prod> <init|build|up|down|ps|logs> [service…] [--skip-checks]
@@ -339,7 +344,19 @@ npm run prod:build / prod:up / prod:down
   `WEB_ORIGIN`/`ADMIN_ORIGIN` (проверка `Origin` в API) должны совпадать с адресами proxy, `TRUST_PROXY=1`.
   `SITE_ORIGIN` (ADR-0023) — разрешённый `Origin` публичного контура `/api/v1/public/*` (форма заявки на подключение);
   обязательна, в prod — `https://`: test — `https://site.pharmacy-test.localhost:8443`, prod — `https://nurmed.online`,
-  dev — `http://127.0.0.1:4400`. Сам сайт (`apps/site`) и его адрес в proxy — часть 3.
+  dev — `http://127.0.0.1:4400`.
+  Сайт (`apps/site`, сервис `site`, ADR-0023): в test — свой хост `SITE_ADDR` (`site.pharmacy-test.localhost`, профиль
+  `local`); в prod корневой домен выбирает `APEX_MODE` (профиль `cloud` подключает `profiles/apex/{$APEX_MODE}.caddy`):
+  `redirect` (по умолчанию) — apex перенаправляет на `app.`, `site` — apex отдаёт сайт, `www.` перенаправляет на apex.
+  `site` включается только по чек-листу запуска (`docs/guides/deploy-vps.md`, «Публичный сайт»). `SITE_INDEXING`
+  (по умолчанию `false`, в prod — `true`): без `true` `robots.txt` сайта — `Disallow: /`, стенд не попадает в поиск.
+  Окружение `site` — только `SITE_API_INTERNAL_URL=http://api:3000`, `SITE_ORIGIN`, `WEB_ORIGIN` («Войти»),
+  `SITE_INDEXING`; секретов и портов нет. В dev в Docker он не запускается (compose-профиль `site`, `dev:deps` его
+  пропускает) — `npx nx dev site`. `SITE_ORIGIN` получает и сборка admin («Открыть на сайте» у опубликованной статьи;
+  пусто — кнопки нет): в dev — из `.env`, в образе proxy — build-arg. В env-файлах, созданных раньше, `stack <env> init`
+  допишет `SITE_ADDR` и `SITE_INDEXING` (test), `APEX_MODE` и `SITE_INDEXING` (prod); выкладка `deploy.yml` выполняет
+  `npm run stack -- prod init` перед `prod:build`, поэтому до слияния ветки с новыми переменными имена `prod.env` на
+  VPS сверяют с примером: `init` допишет любую переменную примера, которой в файле нет.
   Чтение публичного контура идёт отдельным пулом той же роли `pharmacy_platform` — `PUBLIC_DB_POOL_MAX` (необязательна,
   2, от 1 до 10), чтобы анонимные запросы не занимали пул админки оператора (`PLATFORM_DB_POOL_MAX`, 3).
   `OPERATOR_ALLOW` обязателен: в test — `private_ranges` (локально клиенты приходят из сети Docker; на общем стенде —
@@ -406,8 +423,15 @@ npm run prod:build / prod:up / prod:down
   npm), `docker/postgres`
   (роли `pharmacy_owner` / `pharmacy_app` / `pharmacy_platform` / `pharmacy_resolver` / `pharmacy_provisioner`, схема
   `pharmacy`, `pg_trgm`; скрипт копий `pharmacy-backup`, ADR-0019; `pharmacy-secrets` и `pharmacy-psql`, ADR-0021),
-  `docker/redis` (без персистентности). Контекст сборки — корень репозитория
-  (`.dockerignore`).
+  `docker/redis` (без персистентности), `apps/site/Dockerfile` (образ `pharmacy/site`, ADR-0023). Контекст сборки —
+  корень репозитория (`.dockerignore`).
+- Сайт `pharmacy/site`: Next `standalone`, `node apps/site/server.js`, non-root, код принадлежит root, без source map и
+  npm. Сборка API не видит: при `next build` не пререндерится ни одна страница с данными, они отрисовываются при первом
+  запросе и кешируются на 60 с (ISR). Контейнер только для чтения, без capabilities, `no-new-privileges`, `/tmp` и
+  `.next/cache` — tmpfs; кеш ISR — в памяти процесса (`experimental.isrFlushToDisk: false`: Next 16 пишет страницы в
+  `.next/server/route-cache`), после перезапуска страницы отрисуются заново. Healthcheck — `GET /robots.txt`. Сайт ждёт
+  `api` (`service_healthy`); `proxy` от `site` не зависит: упавший сайт — 502 только на его хосте. Но `stack up` (`--wait`),
+  а значит и выкладка, ждёт, пока `site` станет healthy: не поднявшийся сайт останавливает выкладку.
 - Роли БД (ADR-0006, ADR-0013): база принадлежит `pharmacy_owner`. API в рантайме подключается ролями
   `pharmacy_app` (tenant-путь, `DATABASE_URL`) и `pharmacy_platform` (только `app/platform/**` и
   `app/sync/**`, `PLATFORM_DATABASE_URL`); `pharmacy_resolver` — NOLOGIN (владелец резолверов SECURITY DEFINER,
@@ -456,6 +480,10 @@ npm run prod:build / prod:up / prod:down
   документа — только с токеном оператора. В proxy: у `POST /api/v1/operator/site-media` на admin-хосте предел 3 MiB
   (совпадает с API, правило до общего 1 MiB; внутри того же охвата `OPERATOR_ALLOW`); сохранение статьи и черновика
   документа укладываются в общий предел `/api` 1 MiB.
+  Хост сайта (apex при `APEX_MODE=site`, в test — `SITE_ADDR`): всё, кроме `/api/*`, — в `site:3000` с CSP сайта;
+  `/api/v1/public/*` — в API (тело до 1 MiB, сжатое — 415; картинки `/api/v1/public/media/*` — с долгим кешем ответа
+  API вместо `no-store`), прочий `/api/*` — 404. На `app.` и `admin.` `/api/v1/public/*` — 404. Адрес сайта для кнопки
+  «Открыть на сайте» admin получает build-arg `SITE_ORIGIN` образа proxy.
   Без SPA-fallback: маршрут — свой HTML, неизвестный путь — `404.html` со статусом 404. HSTS ставит только proxy
   (`acme`/`files`), helmet API его не шлёт. В dev proxy не запускается (compose-профиль `proxy`). Образ сначала собирает
   декларации библиотек (`typecheck`): `next build` проверяет типы по `libs/*/dist`, а в контексте сборки их нет.

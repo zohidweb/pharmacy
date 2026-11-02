@@ -26,6 +26,12 @@ services:
     deploy:
       resources:
         limits: { cpus: '1', memory: 512m }
+  # Not published: the proxy serves it on SITE_ADDR.
+  site:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 256m }
   # Defined in compose.backup.yml (ADR-0019); the stack script always adds it for test.
   backup:
     deploy:
@@ -38,6 +44,8 @@ services:
       TLS_MODE: ${TLS_MODE:?set in the env file}
       WEB_ADDR: ${WEB_ADDR:?set in the env file}
       ADMIN_ADDR: ${ADMIN_ADDR:?set in the env file}
+      # The public site (ADR-0023): the local profile serves it on its own host.
+      SITE_ADDR: ${SITE_ADDR:?set in the env file}
       # The addresses that reach the admin host (security review 2026-10-22, A1): CIDR, space-separated.
       OPERATOR_ALLOW: ${OPERATOR_ALLOW:?set in the env file}
       PROXY_HTTP_PORT: ${PROXY_HTTP_PORT:?set in the env file}

@@ -25,6 +25,12 @@
           },
           {
             "env": "NEXT_PUBLIC_API_MOCKS"
+          },
+          {
+            "env": "SITE_ORIGIN"
+          },
+          {
+            "env": "NEXT_PUBLIC_SITE_ORIGIN"
           }
         ],
         "outputs": [

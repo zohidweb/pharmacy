@@ -17,7 +17,7 @@ export interface HomePageProps {
 }
 
 /**
- * The home page: sections 2–10 of the redesign spec 4.5, top to bottom (the header and the footer come from the
+ * The home page: sections 2 to 10 of the redesign spec 4.5, top to bottom (the header and the footer come from the
  * layout).
  */
 export function HomePage({ locale, info }: HomePageProps) {

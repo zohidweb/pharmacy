@@ -26,7 +26,7 @@ export function Hero({
     >
       <div className="mx-auto grid w-full max-w-(--ph-size-dialog-xl) items-center gap-12 px-4 py-10 md:grid-cols-site-hero md:py-12">
         <div className="flex flex-col items-start gap-6">
-          {/* the one small label of sections 1–3 (Global Constraints): the tagline the operator sets for the site */}
+          {/* the one small label of sections 1 to 3 (Global Constraints): the tagline the operator sets for the site */}
           {tagline && (
             <p className="site-enter text-sm font-semibold tracking-wide text-accent-site uppercase">
               {tagline}

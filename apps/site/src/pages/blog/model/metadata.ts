@@ -5,7 +5,7 @@ import { pageMetadata, siteNameOf } from '@/shared/seo';
 import { blogPagePath } from './page-number';
 
 /**
- * «Блог — <name>»; a further page has its own title and canonical and no hreflang of the other language:
+ * «Блог | <name>»; a further page has its own title and canonical and no hreflang of the other language:
  * the languages have their own articles, so page N of one is not page N of the other.
  */
 export function blogMetadata(
@@ -20,7 +20,7 @@ export function blogMetadata(
     path: blogPagePath(page),
     info,
     title,
-    openGraphTitle: `${title} — ${siteNameOf(info, locale)}`,
+    openGraphTitle: `${title} | ${siteNameOf(info, locale)}`,
     description: t('blog.description'),
     ...(page > 1 && { available: [locale] }),
   });

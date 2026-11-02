@@ -5,7 +5,7 @@ import { pickText } from '@/shared/lib';
 import { pageMetadata, siteNameOf } from '@/shared/seo';
 
 /**
- * Title «<name> — <tagline>» without the layout's template, description — the SEO description of the
+ * Title «<name> | <tagline>» without the layout's template; the description is the SEO description of the
  * settings (an i18n text while it is empty), canonical and hreflang of `/` and `/tg`, Open Graph.
  */
 export function homeMetadata(
@@ -17,7 +17,7 @@ export function homeMetadata(
   const seoDescription = info
     ? pickText(info.settings.seoDescription, locale).trim()
     : '';
-  const title = tagline ? `${name} — ${tagline}` : name;
+  const title = tagline ? `${name} | ${tagline}` : name;
   return pageMetadata({
     locale,
     path: '/',

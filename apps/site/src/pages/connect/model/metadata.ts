@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { getTranslator } from '@/shared/i18n';
 import { pageMetadata, siteNameOf } from '@/shared/seo';
 
-/** «Заявка на подключение — <name>» (the layout's template), canonical and hreflang of `/connect`, Open Graph. */
+/** «Заявка на подключение | <name>» (the layout's template), canonical and hreflang of `/connect`, Open Graph. */
 export function connectMetadata(
   locale: UiLocale,
   info: PublicSiteInfo | null,
@@ -15,7 +15,7 @@ export function connectMetadata(
     path: '/connect',
     info,
     title,
-    openGraphTitle: `${title} — ${siteNameOf(info, locale)}`,
+    openGraphTitle: `${title} | ${siteNameOf(info, locale)}`,
     description: t('connect.description'),
   });
 }

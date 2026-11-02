@@ -1,5 +1,5 @@
 /*
- * The state screens of the site — error, 404, the last-resort error page (spec 4.6): a narrow centred column in the
+ * The state screens of the site, the error, 404 and the last-resort error page (spec 4.6): a narrow centred column in the
  * middle of the free height, with a large mint number above the text.
  */
 

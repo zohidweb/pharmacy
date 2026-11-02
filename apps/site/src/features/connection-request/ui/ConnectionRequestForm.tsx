@@ -1,18 +1,19 @@
 'use client';
 
 /*
- * The connection request form (spec 6.4, 7.3) — the only client-heavy part of the site. Its own IntlProvider carries
+ * The connection request form (spec 6.4, 7.3), the only client-heavy part of the site. Its own IntlProvider carries
  * only `connect` and `apiErrors`, so the bundle holds no other texts. Protection: the trap field (`hp_note` in the
  * DOM, `website` in the body) and the time the form was opened (`openedAt`, set on mount, not during the server
  * render). One request at a time: the button is busy while it is sent and a second submit is ignored (Review Focus 3).
  * Nothing typed is cleared on any error; an edit hides the failure alert.
+ * Look (redesign 4.6): the form and the «Заявка принята» screen lie on the raised surface of the site; the screen
+ * rises in by the CSS entrance (no `motion` on this page; at once with reduce).
  */
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { UiLocale } from '@pharmacy/shared-dto';
 import {
   Alert,
   Button,
-  Card,
   Checkbox,
   Icon,
   TextareaField,
@@ -43,7 +44,7 @@ export interface ConnectionRequestFormProps {
   locale: UiLocale;
   /** Only the groups the form needs: the page passes them from the server dictionary. */
   messages: Pick<Messages, 'connect' | 'apiErrors'>;
-  /** Working hours from the site settings in the page's language; empty — not shown. */
+  /** Working hours from the site settings in the page's language; empty: not shown. */
   workingHours: string;
 }
 
@@ -57,6 +58,10 @@ const SERVER_FIELD_CODES: Readonly<Record<string, 'phone' | 'email'>> = {
   phone_format: 'phone',
   email_format: 'email',
 };
+
+/** The raised surface of the site (spec 4.1: emerald-900) under the form and the done screen, a tile of 24 px. */
+const surfaceClass =
+  'min-w-0 rounded-site-card bg-surface-highlight p-6 md:p-10';
 
 function hasMaxLength(field: string): field is keyof typeof FIELD_MAX_LENGTH {
   return field in FIELD_MAX_LENGTH;
@@ -171,41 +176,40 @@ function RequestForm({
 
   if (done) {
     return (
-      <Card
-        as="section"
+      <section
         aria-labelledby="request-done"
-        className="flex flex-col items-start gap-3"
+        className={`site-enter flex flex-col items-start gap-4 ${surfaceClass}`}
       >
         <span className="text-success">
-          <Icon name="circle-check" size="lg" />
+          <Icon name="circle-check" size="xl" />
         </span>
         <h2
           id="request-done"
           ref={doneTitle}
           tabIndex={-1}
-          className="text-xl font-bold tracking-tight outline-hidden"
+          className="text-section text-balance outline-hidden"
         >
           {t('done.title')}
         </h2>
-        <p>{t('done.text')}</p>
+        <p className="text-lead">{t('done.text')}</p>
         {workingHours && (
-          <p className="text-sm text-fg-muted">
+          <p className="text-lead text-fg-muted">
             {t('done.hours', { hours: workingHours })}
           </p>
         )}
         <Link
           href={localePath(locale, '/')}
-          className="text-sm text-primary hover:underline"
+          className="inline-flex min-h-touch items-center font-semibold text-accent-site transition-colors hover:text-primary-hover hover:underline"
         >
           {t('done.home')}
         </Link>
-      </Card>
+      </section>
     );
   }
 
   const requiredText = t('required');
   return (
-    <Card as="section" aria-labelledby="request-form-title">
+    <section aria-labelledby="request-form-title" className={surfaceClass}>
       <h2 id="request-form-title" className="ph-visually-hidden">
         {t('formTitle')}
       </h2>
@@ -302,7 +306,8 @@ function RequestForm({
                   href={localePath(locale, '/privacy')}
                   target="_blank"
                   rel="noopener"
-                  className="text-primary hover:underline"
+                  // underlined: in a sentence a link must not differ by colour alone (mint to mint-50 is 1.8:1)
+                  className="text-primary underline underline-offset-2 hover:text-primary-hover"
                 >
                   {chunks}
                 </a>
@@ -354,7 +359,7 @@ function RequestForm({
           </Button>
         </div>
       </form>
-    </Card>
+    </section>
   );
 }
 

@@ -21,7 +21,7 @@ export async function generateMetadata({
   return articleMetadata(locale, slug, await findSiteInfo());
 }
 
-// no article in this language — 404 (Review Focus 2); an unavailable API shows error.tsx (W2)
+// no article in this language: 404 (Review Focus 2); an unavailable API shows error.tsx (W2)
 export default async function ArticleRoute({ params }: ArticleRouteProps) {
   const { locale, slug } = await params;
   if (!isLocale(locale)) notFound();

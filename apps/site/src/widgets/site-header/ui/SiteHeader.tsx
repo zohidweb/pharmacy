@@ -1,5 +1,5 @@
 /*
- * Header of every page (spec 4.5, п. 1): one line of 72 px from 1024 px — the name or logo (W3), «Возможности»,
+ * Header of every page (spec 4.5, п. 1): one line of 72 px from 1024 px: the name or logo (W3), «Возможности»,
  * «Тарифы», «Блог», «Контакты», RU/TJ, «Войти» (W4) and «Оставить заявку». It stays on top while the page scrolls
  * (sticky: it keeps its place in the flow, so no page goes under it); over the first screen it is transparent, after
  * 24 px of scroll it gets the raised surface, a blur and the line below (HeaderScrollState, R5).

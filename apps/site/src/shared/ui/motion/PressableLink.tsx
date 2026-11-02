@@ -12,7 +12,7 @@ export interface PressableLinkProps {
   href: string;
   children: ReactNode;
   /**
-   * `primary` — the mint button; `secondary` — the kit's outline button, its border is the site line in the site
+   * `primary`: the mint button; `secondary`: the kit's outline button, its border is the site line in the site
    * theme.
    */
   variant: 'primary' | 'secondary';

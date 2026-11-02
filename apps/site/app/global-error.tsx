@@ -35,7 +35,7 @@ export default function GlobalError() {
   useEffect(() => {
     const other: UiLocale = locale === 'tg' ? 'ru' : 'tg';
     // the chunk of the page's dictionary may fail too (the network is what broke): then the other one,
-    // and if both fail — a neutral status code instead of a blank screen
+    // and if both fail, a neutral status code instead of a blank screen
     loadMessages(locale)
       .then((messages) => ({ locale, messages }))
       .catch(() =>

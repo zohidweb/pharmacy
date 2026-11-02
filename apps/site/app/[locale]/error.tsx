@@ -17,7 +17,7 @@ import {
 
 /**
  * A page failed, e.g. the API is unavailable on its first render (W2, Review Focus 1): the layout
- * stays, the body says so — no stack. A page already in the ISR cache keeps being served instead.
+ * stays, the body says so, with no stack. A page already in the ISR cache keeps being served instead.
  */
 export default function LocaleError({ reset }: { reset: () => void }) {
   const t = useTranslations('errors.unavailable');

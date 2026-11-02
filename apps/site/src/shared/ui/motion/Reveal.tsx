@@ -28,7 +28,7 @@ export interface RevealProps {
 export function Reveal({
   children,
   as = 'div',
-  delay = 0,
+  delay,
   className,
 }: RevealProps) {
   const reduce = useReducedMotion() ?? false;

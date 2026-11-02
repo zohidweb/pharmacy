@@ -7,7 +7,8 @@
  * WCAG 2.1 contrast, measured on the sRGB values below (text ≥ 4.5:1, large text, controls and focus ≥ 3:1):
  *   fg (mint-50)        on 975 15.5 · 950 13.1 · 900 10.8 · 700 5.7
  *   fg-muted (mint-300) on 975 9.1  · 950 7.7  · 900 6.3  · 700 3.3 → remapped to fg on the colour block (below)
- *   primary (mint-400)  on 975 8.4  · 950 7.1  · 900 5.9  · 700 3.1 (on the block: button fill and large text only)
+ *   primary (mint-400)  on 975 8.4  · 950 7.1  · 900 5.9  · 700 3.1 → on the colour block mint is the button fill
+ *                       only; text and links there use text-fg
  *   on-primary (975)    on mint-400 8.4 · mint-200 (hover) 10.1 · mint-300 (active) 9.1
  *   danger (red-200)    on 975 11.7 · 950 9.9  · 900 8.2
  *   field border (mint-300) on 950 7.7 · focus ring (mint-400) on 950 7.1, on 700 3.1

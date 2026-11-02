@@ -60,7 +60,10 @@ export function RevealGroup({
   );
 }
 
-/** An item of `RevealGroup`: takes the group's state, so it needs no viewport of its own. */
+/**
+ * An item of `RevealGroup`; it must be a descendant of one. It takes the group's state and its place in the stagger, so
+ * it has no viewport of its own: outside a group it stays hidden (but with reduce or without JavaScript).
+ */
 export function RevealItem({
   children,
   as = 'div',

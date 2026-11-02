@@ -25,8 +25,12 @@ export const REVEAL_VIEWPORT = { once: true, amount: 0.15 } as const;
 /** Opacity has no spring: a short ease-out makes the text readable sooner than the spring settles. */
 const FADE: Transition = { duration: 0.4, ease: 'easeOut' };
 
-/** Hidden start and visible end of an element that appears. */
-export function revealVariants(reduce: boolean, delay = 0): Variants {
+/**
+ * Hidden start and visible end of an element that appears. `delay` goes into the transitions only when it is given:
+ * an item of RevealGroup gets its stagger from the group as the inherited delay, and an own `delay: 0` would replace it.
+ */
+export function revealVariants(reduce: boolean, delay?: number): Variants {
+  const own = delay ? { delay } : {};
   return {
     hidden: { opacity: 0, y: REVEAL_OFFSET },
     visible: {
@@ -34,7 +38,7 @@ export function revealVariants(reduce: boolean, delay = 0): Variants {
       y: 0,
       transition: reduce
         ? INSTANT
-        : { y: { ...SPRING, delay }, opacity: { ...FADE, delay } },
+        : { y: { ...SPRING, ...own }, opacity: { ...FADE, ...own } },
     },
   };
 }

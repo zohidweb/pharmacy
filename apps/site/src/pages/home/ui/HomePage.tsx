@@ -22,7 +22,9 @@ export interface HomePageProps {
  */
 export function HomePage({ locale, info }: HomePageProps) {
   return (
-    <main>
+    // the rhythm of the page (L6): blocks 16 and 24 px apart, no lines; MotionScope renders no element, so the sections
+    // are the direct children of main
+    <main className="flex flex-col gap-4 md:gap-6">
       {/* the page animates: its sections get the motion features (the layout never does) */}
       <MotionScope>
         <Hero

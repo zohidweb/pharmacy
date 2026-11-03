@@ -28,7 +28,7 @@ export function MarqueeFrame({ pauseLabel, children }: MarqueeFrameProps) {
   return (
     <div
       data-marquee-paused={paused ? '' : undefined}
-      className="flex items-center border-y border-site-line"
+      className="flex items-center"
     >
       {children}
       <div className="shrink-0 pr-4 pl-2 motion-reduce:hidden">

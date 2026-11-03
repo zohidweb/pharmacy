@@ -1,11 +1,12 @@
 'use client';
 
 /*
- * Three product screens of the first screen (spec 4.4, 4.5, п. 2): the till in front, stock by batches and the sales
- * report behind it, shifted and slightly tilted. They come in one after another with the CSS entrance (R1) and part at
- * their own speed while the page scrolls (Parallax: from 1024 px, never with reduce). Each layer moves on its own
- * element: Parallax → entrance → tilt, so the transforms never fight. The shots are viewport crops; their lower edge
- * fades into the page instead of ending in a cut.
+ * Three product screens of the first screen (spec 4.4, 4.5, п. 2; amendment 4.4, п. 2): the till in front, stock by
+ * batches and the sales report behind it, shifted. They come in one after another with the CSS entrance (R1); from
+ * 1024 px they part at their own speed while the page scrolls and straighten from their tilt (Parallax, L7), never with
+ * reduce. Each layer moves on its own element: Parallax (shift and tilt) → entrance, so the transforms never fight. On
+ * the dark panel the screens have no border, only the shadow (L3). The shots are viewport crops; their lower edge fades
+ * instead of ending in a cut.
  */
 import { cx } from '@pharmacy/ui';
 import { Parallax } from '@/shared/ui/motion';
@@ -31,18 +32,19 @@ interface ShotProps {
   speed: number;
   /** Place in the stack (absolute position and width inside the 5 : 4 frame). */
   place: string;
-  /** Entrance delay class and tilt. */
+  /** Entrance delay class. */
   enter: string;
-  tilt: string;
+  /** Tilt in degrees before the page scrolls (L7): the farther the screen, the more it leans. */
+  tilt: number;
   priority?: boolean;
 }
 
 function Shot({ shot, alt, speed, place, enter, tilt, priority }: ShotProps) {
   const { src, width, height } = SHOTS[shot];
   return (
-    <Parallax speed={speed} className={cx('absolute', place)}>
+    <Parallax speed={speed} tilt={tilt} className={cx('absolute', place)}>
       <div className={cx('site-enter', enter)}>
-        <div className={cx('rounded-site-card shadow-shot', tilt)}>
+        <div className="rounded-site-card shadow-shot">
           {/* a plain <img>: no next/image on the site (ADR-0023) */}
           <img
             src={src}
@@ -63,16 +65,17 @@ function Shot({ shot, alt, speed, place, enter, tilt, priority }: ShotProps) {
 
 export function HeroShots({ alts }: HeroShotsProps) {
   return (
-    // A square frame; from 1024 px it reaches 48 px past its column into the page margin (the section clips it). A grid
-    // item with an aspect ratio does not stretch by default (nor with an auto margin), hence justify-self and ml-0.
-    <div className="relative mx-auto aspect-square w-full max-w-(--ph-size-dialog-lg) md:-mr-12 md:ml-0 md:w-auto md:max-w-none md:justify-self-stretch">
+    // A square frame. From 1024 px it sits at the bottom of the panel and hangs 64 px below its lower edge (the negative
+    // margin: the row does not grow, the section keeps that much room under the panel); on a phone it stays inside. A
+    // grid item with an aspect ratio does not stretch by default (nor with an auto margin), hence justify-self and mx-0.
+    <div className="relative mx-auto aspect-square w-full max-w-(--ph-size-dialog-lg) md:mx-0 md:-mb-16 md:w-auto md:max-w-none md:self-end md:justify-self-stretch">
       <Shot
         shot="stock"
         alt={alts.stock}
         speed={0.15}
         place="top-0 left-0 w-3/4"
         enter="site-enter-delay-3"
-        tilt="-rotate-3"
+        tilt={-6}
       />
       <Shot
         shot="report"
@@ -80,7 +83,7 @@ export function HeroShots({ alts }: HeroShotsProps) {
         speed={0.1}
         place="top-1/8 right-0 w-3/4"
         enter="site-enter-delay-4"
-        tilt="rotate-2"
+        tilt={-4}
       />
       <Shot
         shot="pos"
@@ -88,7 +91,7 @@ export function HeroShots({ alts }: HeroShotsProps) {
         speed={0.05}
         place="bottom-0 left-1/12 w-5/6"
         enter="site-enter-delay-2"
-        tilt=""
+        tilt={-2}
         priority
       />
     </div>

@@ -1,9 +1,9 @@
 /*
- * The capability line of the home page (spec 4.5, п. 3; R7), the only one on the site: eight capabilities of the cloud
- * pilot (no 1C export, no offline stores) move slowly to the left; they stop under the pointer and by the pause button
- * of MarqueeFrame (WCAG 2.2.2). The movement is pure CSS (`.site-marquee` in site-theme.css). The track holds the list
- * twice so the loop has no seam; the copy is hidden from assistive technology. With reduce the copy is gone and the
- * list wraps in place, still.
+ * The capability line of the home page (spec 4.5, п. 3; R7; amendment 4.4, п. 3), the only one on the site: eight
+ * capabilities of the cloud pilot in large green type on the light page, mint dots between them, no panel and no
+ * lines. They move slowly to the left and stop under the pointer and by the pause button of MarqueeFrame (WCAG 2.2.2).
+ * The movement is pure CSS (`.site-marquee` in site-theme.css). The track holds the list twice so the loop has no seam;
+ * the copy is hidden from assistive technology. With reduce the copy is gone and the list wraps in place, still.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx } from '@pharmacy/ui';
@@ -46,10 +46,10 @@ function CapabilityList({
         <li key={index} className="flex min-w-0 items-center gap-8">
           <span
             aria-hidden="true"
-            className="size-2 shrink-0 rounded-full bg-accent-site"
+            className="size-2 shrink-0 rounded-full bg-site-mint"
           />
           {/* one line on the moving track; the still list (reduce) may break a long label on a phone */}
-          <span className="text-3xl font-bold tracking-tight whitespace-nowrap motion-reduce:whitespace-normal md:text-section">
+          <span className="text-site-marquee-sm font-bold whitespace-nowrap text-accent-site motion-reduce:whitespace-normal md:text-site-marquee">
             {text}
           </span>
         </li>

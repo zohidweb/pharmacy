@@ -56,7 +56,8 @@ function ArticleCard({
         // no cover: the colour tile of the site (the text colour on it, never mint: site-theme.css)
         <div
           aria-hidden="true"
-          className="flex aspect-16/9 shrink-0 items-end bg-site-block p-6 text-fg"
+          data-surface="green"
+          className="flex aspect-16/9 shrink-0 items-end p-6 text-fg"
         >
           <Icon name="newspaper" size="xl" />
         </div>

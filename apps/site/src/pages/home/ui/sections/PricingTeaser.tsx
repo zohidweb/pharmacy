@@ -24,9 +24,10 @@ export function PricingTeaser({
     <section
       id="pricing"
       aria-labelledby="pricing-title"
-      className="scroll-mt-4 bg-site-block text-fg"
+      data-surface="green"
+      className="scroll-mt-4 text-fg"
     >
-      <div className="mx-auto grid w-full max-w-(--ph-size-dialog-xl) gap-10 px-4 py-16 md:grid-cols-2 md:items-end md:gap-16">
+      <div className="mx-auto grid w-full max-w-site-content gap-10 px-4 md:px-8 py-16 md:grid-cols-2 md:items-end md:gap-16">
         <h2 id="pricing-title" className="text-section text-balance">
           {t('home.pricing.title')}
         </h2>

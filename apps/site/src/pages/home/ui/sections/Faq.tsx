@@ -20,7 +20,7 @@ export function Faq({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   return (
     <section id="faq" aria-labelledby="faq-title" className="scroll-mt-4">
-      <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col gap-10 px-4 py-16">
+      <div className="mx-auto flex w-full max-w-site-content flex-col gap-10 px-4 md:px-8 py-16">
         <h2 id="faq-title" className="text-section text-balance">
           {t('home.faq.title')}
         </h2>

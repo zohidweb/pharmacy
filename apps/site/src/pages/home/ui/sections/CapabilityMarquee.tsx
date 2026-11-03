@@ -65,7 +65,7 @@ export function CapabilityMarquee({ locale }: { locale: UiLocale }) {
     <MarqueeFrame pauseLabel={t('home.marquee.pause')}>
       {/* clip, not a scroll container: the moving track never widens the page (375 px) */}
       <div className="min-w-0 flex-1 overflow-x-clip py-8 motion-safe:mask-x-from-90%">
-        <div className="site-marquee flex w-max motion-reduce:mx-auto motion-reduce:w-full motion-reduce:max-w-(--ph-size-dialog-xl) motion-reduce:px-4">
+        <div className="site-marquee flex w-max motion-reduce:mx-auto motion-reduce:w-full motion-reduce:max-w-site-content motion-reduce:px-4 motion-reduce:md:px-8">
           <CapabilityList labels={labels} label={t('home.marquee.label')} />
           <CapabilityList labels={labels} copy />
         </div>

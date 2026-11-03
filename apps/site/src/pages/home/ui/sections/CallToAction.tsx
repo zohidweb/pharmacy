@@ -11,8 +11,12 @@ import { PressableLink, Reveal } from '@/shared/ui/motion';
 export function CallToAction({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   return (
-    <section aria-labelledby="cta-title" className="bg-site-block text-fg">
-      <Reveal className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col items-start gap-8 px-4 py-16 md:flex-row md:items-end md:justify-between md:gap-16">
+    <section
+      aria-labelledby="cta-title"
+      data-surface="green"
+      className="text-fg"
+    >
+      <Reveal className="mx-auto flex w-full max-w-site-content flex-col items-start gap-8 px-4 md:px-8 py-16 md:flex-row md:items-end md:justify-between md:gap-16">
         <div className="flex max-w-(--ph-size-dialog-lg) flex-col gap-4">
           <h2 id="cta-title" className="text-section text-balance">
             {t('home.cta.title')}

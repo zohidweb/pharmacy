@@ -1,7 +1,8 @@
 /*
  * Footer of every page (spec 4.5, п. 11), the target of the «Контакты» menu item: four columns from 1024 px (brand,
- * sections, documents, contacts), one on a phone, on the page background; no decorative lines, no versions. Contacts
- * come from the site settings, only those that are filled. No supplier requisites: they are not in PublicSiteInfo (W5).
+ * sections, documents, contacts), one on a phone, on a dark panel with gaps to the window edges (amendment 4.4, п. 11;
+ * L6), its content in the width of the page; no decorative lines, no versions. Contacts come from the site settings,
+ * only those that are filled. No supplier requisites: they are not in PublicSiteInfo (W5).
  */
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import Link from 'next/link';
@@ -9,6 +10,11 @@ import type { ReactNode } from 'react';
 import { getTranslator } from '@/shared/i18n';
 import { localePath, pickText } from '@/shared/lib';
 import { siteNameOf } from '@/shared/seo';
+import {
+  contentClassName,
+  panelBodyClassName,
+  panelClassName,
+} from '@/shared/ui';
 
 export interface SiteFooterProps {
   locale: UiLocale;
@@ -123,9 +129,12 @@ export function SiteFooter({ locale, info }: SiteFooterProps) {
   return (
     <footer
       id="contacts"
-      className="border-t border-site-line bg-site-canvas text-sm"
+      data-surface="dark"
+      className={`${panelClassName} mt-4 mb-2 text-sm md:mt-6 md:mb-4`}
     >
-      <div className="mx-auto grid w-full max-w-(--ph-size-dialog-xl) gap-10 px-4 py-16 md:grid-cols-4 md:gap-8">
+      <div
+        className={`${contentClassName} ${panelBodyClassName} grid gap-10 md:grid-cols-4 md:gap-8`}
+      >
         <div className="flex flex-col gap-3">
           <Link
             href={home}

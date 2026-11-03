@@ -20,8 +20,8 @@ const NO_SCRIPT_REVEAL =
   '[data-reveal]{opacity:1!important;transform:none!important}';
 
 /**
- * The document of a language (W2): `<html lang>` in the site theme (dark emerald, ADR-0024), header, the page,
- * footer.
+ * The document of a language (W2): `<html lang>` in the site theme (a light page with colour panels, ADR-0024),
+ * header, the page, footer.
  */
 export function SiteLayout({ locale, info, children }: SiteLayoutProps) {
   const { errors, nav } = getMessages(locale);
@@ -32,7 +32,7 @@ export function SiteLayout({ locale, info, children }: SiteLayoutProps) {
           <style>{NO_SCRIPT_REVEAL}</style>
         </noscript>
       </head>
-      <body className="flex min-h-dvh flex-col bg-site-canvas text-fg">
+      <body className="flex min-h-dvh flex-col bg-bg text-fg">
         <IntlClientProvider
           locale={locale}
           messages={{ errors, nav }}

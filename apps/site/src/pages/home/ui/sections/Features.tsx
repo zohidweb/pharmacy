@@ -1,9 +1,9 @@
 /*
  * Возможности (spec 4.5, п. 5): exactly six tiles of different sizes, no empty cell. From 1024 px a grid of six columns:
  * the till is the large tile on the left (four columns, three rows), batches and expiry dates, purchasing (on the
- * raised emerald-900 surface, so the column on the right does not read as one block) and prices stack in the two columns
+ * sunken surface, so the column on the right does not read as one block) and prices stack in the two columns
  * on its right, transfers and reports share the last row. On a phone one column in the same order. No tile is a colour
- * block: emerald-700 is only the pricing block and the final call (spec 4.5, п. 7). Only what works in the cloud pilot: no 1C export, no offline stores (spec 2, anti-goals).
+ * panel: the colour panels are the pricing block and the final call (spec 4.5, п. 7). Only what works in the cloud pilot: no 1C export, no offline stores (spec 2, anti-goals).
  *
  * The tiles appear one after another (RevealGroup). Under the pointer the product screen of a tile rises by 4 px: a CSS
  * transform, only where the device can hover and without reduce (`motion-safe:group-hover:`).
@@ -43,7 +43,7 @@ type Tile =
   | {
       key: 'purchasing' | 'pricing' | 'reports';
       icon: IconName;
-      /** The raised surface (emerald-900) instead of the page surface (emerald-950). */
+      /** The sunken surface instead of the tile surface. */
       raised?: boolean;
       span: string;
     };
@@ -106,7 +106,7 @@ export function Features({ locale }: { locale: UiLocale }) {
       aria-labelledby="features-title"
       className="scroll-mt-4"
     >
-      <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col gap-10 px-4 py-16">
+      <div className="mx-auto flex w-full max-w-site-content flex-col gap-10 px-4 md:px-8 py-16">
         <header className="flex max-w-(--ph-size-dialog-lg) flex-col gap-4">
           <h2 id="features-title" className="text-section text-balance">
             {t('home.features.title')}

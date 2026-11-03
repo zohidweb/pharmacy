@@ -46,7 +46,7 @@ export default function GlobalError() {
   const t = loaded && createTranslator(loaded);
   return (
     <html lang={loaded?.locale ?? locale} data-theme="site">
-      <body className="flex min-h-dvh flex-col bg-site-canvas text-fg">
+      <body className="flex min-h-dvh flex-col bg-bg text-fg">
         {failed && (
           <main className={stateScreenClassName}>
             <p className={stateScreenCodeClassName}>500</p>

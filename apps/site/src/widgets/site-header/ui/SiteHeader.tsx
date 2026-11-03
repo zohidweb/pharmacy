@@ -1,8 +1,9 @@
 /*
  * Header of every page (spec 4.5, п. 1): one line of 72 px from 1024 px: the name or logo (W3), «Возможности»,
  * «Тарифы», «Блог», «Контакты», RU/TJ, «Войти» (W4) and «Оставить заявку». It stays on top while the page scrolls
- * (sticky: it keeps its place in the flow, so no page goes under it); over the first screen it is transparent, after
- * 24 px of scroll it gets the raised surface, a blur and the line below (HeaderScrollState, R5).
+ * (sticky: it keeps its place in the flow, so no page goes under it); on the light page it is transparent, after 24 px
+ * of scroll it gets the surface, a blur and the line below (HeaderScrollState, R5; amendment 4.4, п. 1). Its content
+ * takes the width of the page (1320 px); the phone menu is light, on the page background.
  * Below 1024 px the menu is a full-screen <details>: it opens without JavaScript, its items appear one after another.
  * No `motion` here (controller ruling on Task 3): the header is on every page, so its animation is CSS only: the
  * menu items take the `site-enter` keyframes, the request button gives on press (`pressClassName`).
@@ -16,7 +17,7 @@ import { siteEnv } from '@/shared/config';
 import { getTranslator } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
 import { siteNameOf } from '@/shared/seo';
-import { pressClassName } from '@/shared/ui';
+import { contentClassName, pressClassName } from '@/shared/ui';
 import { HeaderScrollState } from './HeaderScrollState';
 import { LocaleSwitch } from './LocaleSwitch';
 
@@ -66,12 +67,14 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
       <div
         aria-hidden="true"
         className={
-          'pointer-events-none absolute inset-0 border-b border-site-line bg-surface-highlight/90 ' +
+          'pointer-events-none absolute inset-0 border-b border-site-line bg-surface/90 ' +
           'backdrop-blur-site-header opacity-0 transition-opacity motion-reduce:transition-none ' +
           'group-data-scrolled/header:opacity-100 max-md:group-has-open/header:opacity-100'
         }
       />
-      <div className="relative mx-auto flex h-site-header w-full max-w-(--ph-size-dialog-xl) items-center gap-4 px-4">
+      <div
+        className={`${contentClassName} relative flex h-site-header items-center gap-4`}
+      >
         <Link
           href={home}
           className="flex min-h-touch min-w-0 items-center rounded-full text-md font-bold tracking-tight text-fg"
@@ -136,8 +139,8 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
               {t('nav.menu')}
             </summary>
             {/* Full screen below the header line; it scrolls on its own if a short screen cannot hold it. */}
-            <div className="fixed inset-x-0 top-site-header bottom-0 overflow-y-auto overscroll-contain border-t border-site-line bg-site-canvas">
-              <div className="mx-auto flex w-full max-w-(--ph-size-dialog-xl) flex-col gap-8 px-4 py-8">
+            <div className="fixed inset-x-0 top-site-header bottom-0 overflow-y-auto overscroll-contain border-t border-site-line bg-bg">
+              <div className={`${contentClassName} flex flex-col gap-8 py-8`}>
                 <nav aria-label={t('nav.label')}>
                   <ul className="flex flex-col gap-2">
                     {menu.map((item, index) => (

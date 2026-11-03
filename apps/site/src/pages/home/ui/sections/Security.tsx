@@ -25,7 +25,7 @@ export function Security({ locale }: { locale: UiLocale }) {
       aria-labelledby="security-title"
       className="scroll-mt-4"
     >
-      <div className="mx-auto grid w-full max-w-(--ph-size-dialog-xl) gap-10 px-4 py-16 md:grid-cols-site-aside md:gap-16">
+      <div className="mx-auto grid w-full max-w-site-content gap-10 px-4 md:px-8 py-16 md:grid-cols-site-aside md:gap-16">
         <header className="flex flex-col gap-4 md:self-start">
           <h2 id="security-title" className="text-section text-balance">
             {t('home.security.title')}

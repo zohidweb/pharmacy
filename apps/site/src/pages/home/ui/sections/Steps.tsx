@@ -15,7 +15,7 @@ export function Steps({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   return (
     <section id="steps" aria-labelledby="steps-title" className="scroll-mt-4">
-      <div className="mx-auto w-full max-w-(--ph-size-dialog-xl) px-4">
+      <div className="mx-auto w-full max-w-site-content px-4 md:px-8">
         <StepsProgress
           header={
             <header className="flex max-w-(--ph-size-dialog-lg) flex-col gap-4">

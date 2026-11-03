@@ -27,6 +27,7 @@ export function ProductSearch({
   disabled = false,
   initialQuery = '',
   create,
+  scanEnabled = true,
 }: {
   storeId: string;
   /** Only the batches of this supplier (a supplier return). */
@@ -37,6 +38,11 @@ export function ProductSearch({
   initialQuery?: string;
   /** «Завести товар»: `allowed` — the session may create products (`catalog:create`). */
   create?: { allowed: boolean; onCreate: (seed: ProductSeed) => void };
+  /**
+   * The scanner of the page goes to this search. False while a dialog over it takes the scan itself (the barcode field
+   * of «Новый товар»): the scanner listens on the window and would add a line behind the dialog.
+   */
+  scanEnabled?: boolean;
 }) {
   const t = useTranslations('stockDocs.search');
   const [query, setQuery] = useState(initialQuery);
@@ -61,7 +67,7 @@ export function ProductSearch({
       if (found[0]) onPick(found[0]);
       else setQuery(code);
     },
-    { enabled: !disabled },
+    { enabled: !disabled && scanEnabled },
   );
 
   return (

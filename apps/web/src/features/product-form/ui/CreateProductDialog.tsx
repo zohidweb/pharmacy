@@ -113,7 +113,9 @@ function CreateProductForm({
       const product: CatalogProduct = await apiRequest('catalog.create', {
         body: inputOf(draft),
       });
+      // the catalog and the document searches: a search that found nothing before must find the new product now
       void queryClient.invalidateQueries({ queryKey: ['catalog'] });
+      void queryClient.invalidateQueries({ queryKey: ['stock-products'] });
       const options = await apiRequest('stock.products', {
         params: { storeId },
         query: {

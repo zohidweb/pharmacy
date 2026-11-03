@@ -122,6 +122,8 @@ export function GoodsReceiptEditor({
   // «Завести товар» from the search of a line (spec 2026-11-03-pos-store-ideas, D9–D11)
   const { data: session } = useSession();
   const [seed, setSeed] = useState<ProductSeed | null>(null);
+  // a new key empties the search once the created product is a line: it must not offer «Завести товар» again
+  const [searchKey, setSearchKey] = useState(0);
   const editable = (!doc || doc.status === 'draft') && access.canUpdate;
 
   const suppliers = useQuery({
@@ -547,12 +549,14 @@ export function GoodsReceiptEditor({
             </div>
             {editable && draft.storeId && (
               <ProductSearch
+                key={searchKey}
                 storeId={draft.storeId}
                 onPick={addProduct}
                 create={{
                   allowed: canWrite(session, 'catalog:create'),
                   onCreate: setSeed,
                 }}
+                scanEnabled={!seed}
               />
             )}
             {seed && (
@@ -561,6 +565,7 @@ export function GoodsReceiptEditor({
                 storeId={draft.storeId}
                 onCreated={(product) => {
                   setSeed(null);
+                  setSearchKey((key) => key + 1);
                   addProduct(product);
                 }}
                 onClose={() => setSeed(null)}

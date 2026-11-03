@@ -42,6 +42,7 @@ import type {
   LegalEntityInput,
   UpdateLegalEntityRequest,
   UpdateOwnerStoreRequest,
+  UpdatePaymentQrRequest,
   StoresOverview,
   SyncRunResult,
   TenantBilling,
@@ -576,6 +577,10 @@ export const apiRoutes = {
   'stores.update': route<OwnerStore, UpdateOwnerStoreRequest, { id: string }>(
     'PUT',
     (p) => `/stores/${id(p)}`,
+  ),
+  'stores.paymentQr': route<OwnerStore, UpdatePaymentQrRequest, { id: string }>(
+    'PUT',
+    (p) => `/stores/${id(p)}/payment-qr`,
   ),
   'legalEntities.list': route<LegalEntitiesResponse>(
     'GET',

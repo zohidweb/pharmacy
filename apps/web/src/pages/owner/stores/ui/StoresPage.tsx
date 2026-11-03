@@ -38,6 +38,7 @@ import { routes } from '@/shared/config';
 import { WithMessages } from '@/shared/i18n';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
+import { PaymentQrDialog } from './PaymentQrDialog';
 import { ServicesSection } from './ServicesSection';
 import {
   CancelClosingDialog,
@@ -62,6 +63,7 @@ function StoresTab() {
   const [editing, setEditing] = useState<OwnerStore | 'new' | null>(null);
   const [closing, setClosing] = useState<OwnerStore | null>(null);
   const [cancelling, setCancelling] = useState<OwnerStore | null>(null);
+  const [paymentQr, setPaymentQr] = useState<OwnerStore | null>(null);
   const overview = useQuery({
     queryKey: ['stores', 'overview'],
     queryFn: ({ signal }) => apiRequest('stores.overview', { signal }),
@@ -218,6 +220,16 @@ function StoresTab() {
                 setEditing(null);
                 setClosing(store);
               }}
+              onPaymentQr={(store) => {
+                setEditing(null);
+                setPaymentQr(store);
+              }}
+            />
+          )}
+          {paymentQr && (
+            <PaymentQrDialog
+              store={paymentQr}
+              onClose={() => setPaymentQr(null)}
             />
           )}
           {closing && (

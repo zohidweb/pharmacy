@@ -26,12 +26,15 @@ export function StoreDialog({
   canClose,
   onClose,
   onCloseStore,
+  onPaymentQr,
 }: {
   store: OwnerStore | null;
   canEdit: boolean;
   canClose: boolean;
   onClose: () => void;
   onCloseStore: (store: OwnerStore) => void;
+  /** «QR для оплаты» of the store (spec 2026-11-03-pos-store-ideas, R12). */
+  onPaymentQr: (store: OwnerStore) => void;
 }) {
   const t = useTranslations('ownerStores.dialog');
   const tStores = useTranslations('ownerStores');
@@ -84,6 +87,15 @@ export function StoreDialog({
           onSaved={onClose}
           actions={
             <>
+              {store?.status === 'active' && canEdit && (
+                <Button
+                  variant="secondary"
+                  iconStart="qr-code"
+                  onClick={() => onPaymentQr(store)}
+                >
+                  {tStores('paymentQr.open')}
+                </Button>
+              )}
               {store?.status === 'active' && canClose && (
                 <Button
                   variant="destructive"
@@ -99,6 +111,15 @@ export function StoreDialog({
             </>
           }
         />
+        {store?.status === 'active' && (
+          <p className="text-xs text-fg-subtle">
+            {store.paymentQr
+              ? tStores('paymentQr.status', {
+                  recipient: store.paymentQr.recipient,
+                })
+              : tStores('paymentQr.statusNone')}
+          </p>
+        )}
         {store?.status === 'active' && canClose && (
           <p className="text-xs text-fg-subtle">{t('closeHint')}</p>
         )}

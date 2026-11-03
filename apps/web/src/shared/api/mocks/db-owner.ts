@@ -125,6 +125,12 @@ function templateRole(key: RoleTemplateKey): MockRole {
   };
 }
 
+/** A synthetic payment link of the mocks (spec 2026-11-03-pos-store-ideas, D37): no real account. */
+const DEMO_PAYMENT_QR = {
+  template: 'https://pay.example.com/qr?sum={amount}&ref={ref}',
+  recipient: 'ООО «Шифо» (демо)',
+};
+
 const details = (
   code: string,
   legalEntityId: string,
@@ -201,7 +207,8 @@ export function createOwnerDb(): OwnerMockDb {
     storeDetails: {
       'store-1': details('DSH1', 'le-1'),
       'store-2': details('DSH2', 'le-1'),
-      'store-3': details('RDK1', 'le-2'),
+      // the terminal of the mocks sells here: its payment QR is set (synthetic link, ADR-0011)
+      'store-3': { ...details('RDK1', 'le-2'), paymentQr: DEMO_PAYMENT_QR },
       'store-4': details('KHJ1', 'le-2', dateIn(14)),
     },
     // Synthetic requisites (ADR-0011: no real client data).

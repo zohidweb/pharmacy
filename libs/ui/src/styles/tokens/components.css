@@ -87,6 +87,13 @@
 
   /* Area under the top bar of apps/web: sticky sidebar height */
   --ph-shell-body-height: calc(100dvh - var(--ph-size-topbar));
+
+  /*
+   * Payment QR on screen (ADR-0022, amendment 2026-11-03): in a dialog of the POS and the owner's check, and on the
+   * customer display — large enough for a phone camera at arm's length. Starting values, checked on the store monitor.
+   */
+  --ph-pay-qr-size: 18rem;
+  --ph-pay-qr-display-size: min(60dvh, 32rem);
 }
 
 /* Admin (mouse): smaller controls and rows. Touch-screen apps/web never sets it. */

@@ -408,6 +408,32 @@
     "problemsFilter": "Фильтр цен",
     "problemsOnly": "Только с проблемами",
     "problemsOnlyAt": "Только с проблемами: {store}",
-    "problemsEmpty": "Проблем с ценами нет"
+    "problemsEmpty": "Проблем с ценами нет",
+    "history": {
+      "open": "История цен — {name}",
+      "title": "История цен — {name}",
+      "storeFilter": "Точка",
+      "allStores": "Все точки",
+      "caption": "Изменения цены",
+      "at": "Дата",
+      "store": "Точка",
+      "old": "Было",
+      "new": "Стало",
+      "change": "Изменение",
+      "author": "Кто",
+      "source": "Источник",
+      "sources": {
+        "manual": "Вручную",
+        "goodsReceipt": "Приход № {number}",
+        "openingBalance": "Начальные остатки № {number}",
+        "transfer": "Перемещение № {number}",
+        "document": "Документ № {number}",
+        "offlineStore": "На точке"
+      },
+      "empty": "Цена не менялась",
+      "more": "Показать ещё",
+      "loading": "Загружаем историю…",
+      "close": "Закрыть"
+    }
   }
 }

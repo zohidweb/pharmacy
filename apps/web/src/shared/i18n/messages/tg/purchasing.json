@@ -408,6 +408,32 @@
     "problemsFilter": "Филтри нархҳо",
     "problemsOnly": "Танҳо бо мушкилот",
     "problemsOnlyAt": "Танҳо бо мушкилот: {store}",
-    "problemsEmpty": "Мушкилии нарх нест"
+    "problemsEmpty": "Мушкилии нарх нест",
+    "history": {
+      "open": "Таърихи нархҳо — {name}",
+      "title": "Таърихи нархҳо — {name}",
+      "storeFilter": "Нуқта",
+      "allStores": "Ҳамаи нуқтаҳо",
+      "caption": "Тағйироти нарх",
+      "at": "Сана",
+      "store": "Нуқта",
+      "old": "Буд",
+      "new": "Шуд",
+      "change": "Тағйирот",
+      "author": "Кӣ",
+      "source": "Манбаъ",
+      "sources": {
+        "manual": "Дастӣ",
+        "goodsReceipt": "Қабули мол № {number}",
+        "openingBalance": "Бақияи ибтидоӣ № {number}",
+        "transfer": "Интиқол № {number}",
+        "document": "Ҳуҷҷат № {number}",
+        "offlineStore": "Дар нуқта"
+      },
+      "empty": "Нарх тағйир наёфтааст",
+      "more": "Боз нишон додан",
+      "loading": "Таърих бор мешавад…",
+      "close": "Пӯшидан"
+    }
   }
 }

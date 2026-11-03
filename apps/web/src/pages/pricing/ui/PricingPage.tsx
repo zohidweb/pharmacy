@@ -34,6 +34,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
+import { PriceHistoryButton } from '@/features/price-history';
 import {
   apiRequest,
   isApiRouteAvailable,
@@ -289,16 +290,24 @@ function PricesTab({ initial }: { initial: ProblemsFilter }) {
               header: (
                 <span className="ph-visually-hidden">{tDocs('actions')}</span>
               ),
-              cell: (row) =>
-                canEdit ? (
-                  <Button
-                    variant="secondary"
-                    iconStart="pencil"
-                    onClick={() => setEditing(row)}
-                  >
-                    {t('editAction')}
-                  </Button>
-                ) : null,
+              cell: (row) => (
+                <div className="flex items-center justify-end gap-2">
+                  <PriceHistoryButton
+                    productId={row.productId}
+                    productName={row.productName}
+                    stores={data.stores}
+                  />
+                  {canEdit && (
+                    <Button
+                      variant="secondary"
+                      iconStart="pencil"
+                      onClick={() => setEditing(row)}
+                    >
+                      {t('editAction')}
+                    </Button>
+                  )}
+                </div>
+              ),
             },
           ];
           return (

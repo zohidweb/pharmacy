@@ -64,6 +64,8 @@ import type {
   DiscountRuleDefinition,
   DiscountRuleInput,
   PriceConflict,
+  PriceHistoryPage,
+  PriceHistoryQuery,
   PriceListQuery,
   PriceListResponse,
   StorePrice,
@@ -486,6 +488,13 @@ export const apiRoutes = {
     'GET',
     (p) => `/prices/${encodeURIComponent(p.productId)}`,
   ),
+  // spec 2026-11-03-pos-store-ideas, D16
+  'prices.history': route<
+    PriceHistoryPage,
+    undefined,
+    { productId: string },
+    PriceHistoryQuery
+  >('GET', (p) => `/prices/${encodeURIComponent(p.productId)}/history`),
   'prices.update': route<
     PriceListResponse['items'][number],
     UpdatePricesRequest,

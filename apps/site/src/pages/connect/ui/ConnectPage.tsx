@@ -1,7 +1,7 @@
 /*
  * «Оставить заявку» (spec 6.4, W11; redesign 4.6). The server part checks the privacy policy the visitor consents to
  * (the page's language, the API falls back to RU: the same check the API makes on submit). With it, two columns from
- * 1024 px: on the left what happens after the request (three points), on the right the form on the raised surface.
+ * 1024 px: on the left what happens after the request (three points) on a dark panel, on the right the form on the surface of the light page.
  * None published: «Приём заявок скоро откроется» and the contacts from the settings instead of the form.
  * No `motion` on this page: the heading and the «Заявка принята» screen rise in by CSS.
  */
@@ -39,7 +39,11 @@ const NEXT_STEPS: readonly {
 function NextSteps({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   return (
-    <section aria-labelledby="request-next" className="flex flex-col gap-8">
+    <section
+      aria-labelledby="request-next"
+      data-surface="dark"
+      className="flex flex-col gap-8 rounded-site-panel p-6 md:p-10"
+    >
       <h2 id="request-next" className="text-section text-balance">
         {t('connect.next.title')}
       </h2>
@@ -73,7 +77,7 @@ function ClosedForm({ locale, info }: ConnectPageProps) {
   return (
     <section
       aria-labelledby="request-closed"
-      className="flex max-w-(--ph-size-dialog-lg) flex-col gap-6 rounded-site-card bg-surface-highlight p-6 md:p-10"
+      className="flex max-w-(--ph-size-dialog-lg) flex-col gap-6 rounded-site-card border border-site-line bg-surface p-6 md:p-10"
     >
       <h2
         id="request-closed"

@@ -6,7 +6,7 @@
  * DOM, `website` in the body) and the time the form was opened (`openedAt`, set on mount, not during the server
  * render). One request at a time: the button is busy while it is sent and a second submit is ignored (Review Focus 3).
  * Nothing typed is cleared on any error; an edit hides the failure alert.
- * Look (redesign 4.6): the form and the «Заявка принята» screen lie on the raised surface of the site; the screen
+ * Look (amendment 2026-11-02-public-site-light-panels 4.5): the form and the «Заявка принята» screen lie on the surface of the light page, with a line border; the screen
  * rises in by the CSS entrance (no `motion` on this page; at once with reduce).
  */
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -59,9 +59,12 @@ const SERVER_FIELD_CODES: Readonly<Record<string, 'phone' | 'email'>> = {
   email_format: 'email',
 };
 
-/** The raised surface of the site (spec 4.1: emerald-900) under the form and the done screen, a tile of 24 px. */
+/**
+ * The surface of the light page (mint-0) under the form and the done screen: a tile of 24 px with the line border of
+ * the site (mint-150), so it reads on the page. The fields stay on this surface, none sits in a colour panel.
+ */
 const surfaceClass =
-  'min-w-0 rounded-site-card bg-surface-highlight p-6 md:p-10';
+  'min-w-0 rounded-site-card border border-site-line bg-surface p-6 md:p-10';
 
 function hasMaxLength(field: string): field is keyof typeof FIELD_MAX_LENGTH {
   return field in FIELD_MAX_LENGTH;

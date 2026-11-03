@@ -53,10 +53,10 @@ function ArticleCard({
           className="aspect-16/9 w-full shrink-0 bg-surface-sunken object-cover"
         />
       ) : (
-        // no cover: the colour tile of the site (the text colour on it, never mint: site-theme.css)
+        // no cover: the mint tile of the site (dark text on it: site-theme.css)
         <div
           aria-hidden="true"
-          data-surface="green"
+          data-surface="mint"
           className="flex aspect-16/9 shrink-0 items-end p-6 text-fg"
         >
           <Icon name="newspaper" size="xl" />

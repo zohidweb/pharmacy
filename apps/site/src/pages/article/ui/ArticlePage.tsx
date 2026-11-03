@@ -66,7 +66,7 @@ export async function ArticlePage({ locale, slug }: ArticlePageProps) {
               // decorative: the title above names the article
               alt=""
               decoding="async"
-              className="aspect-16/9 w-full rounded-site-card bg-surface-sunken object-cover"
+              className="aspect-16/9 w-full rounded-site-card border border-site-shot bg-surface-sunken object-cover shadow-shot"
             />
           )}
           <div className="site-prose">

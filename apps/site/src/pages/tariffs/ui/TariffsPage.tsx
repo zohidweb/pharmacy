@@ -1,6 +1,7 @@
 /*
- * Tariffs and services (spec 6.3, W6; redesign 4.6): the price of a store large, «НДС N % сверху» and the price with
- * VAT, the billing rule beside it, the one-time services as tiles (not a table) and the call to request. No calculator
+ * Tariffs and services (spec 6.3, W6; redesign 4.6; amendment 2026-11-02-public-site-light-panels 4.5): the price of a store huge on a green panel, «НДС N %
+ * сверху» and the price with VAT under it, the billing rule beside it as a tile, the one-time services as tiles (not a
+ * table) and the call to request on a mint panel. No calculator
  * (W6). Figures come from the billing settings, so they match invoices. No `motion` on this page: the heading rises in
  * by CSS, the request link gives on press (pressClassName).
  */
@@ -41,18 +42,19 @@ export function TariffsPage({ locale, info }: TariffsPageProps) {
         aria-labelledby="store-title"
         className="grid gap-4 md:grid-cols-site-main"
       >
-        {/* the price: the wide tile, first in the reading order; the billing rule beside it */}
-        <div className={`${tileClass} flex flex-col gap-6 p-6 md:p-10`}>
+        {/* the price: the green panel, first in the reading order; the billing rule beside it as a tile */}
+        <div
+          data-surface="green"
+          className="flex flex-col gap-6 rounded-site-panel p-6 md:p-10"
+        >
           <h2 id="store-title" className="text-2xl font-bold tracking-tight">
             {t('tariffs.store.title')}
           </h2>
           <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="text-display-sm whitespace-nowrap tabular-nums md:text-display">
+            <span className="text-site-figure-sm whitespace-nowrap tabular-nums md:text-site-figure">
               {formatMoney(price)}
             </span>
-            <span className="text-lead text-fg-muted">
-              {t('tariffs.store.perMonth')}
-            </span>
+            <span className="text-lead">{t('tariffs.store.perMonth')}</span>
           </p>
           <div className="flex flex-col gap-1 border-t border-site-line pt-6">
             <p className="text-lead font-semibold text-accent-site">
@@ -65,7 +67,7 @@ export function TariffsPage({ locale, info }: TariffsPageProps) {
             </p>
           </div>
         </div>
-        <div className="flex flex-col gap-4 rounded-site-card bg-surface-highlight p-6 md:p-10">
+        <div className={`${tileClass} flex flex-col gap-4 p-6 md:p-10`}>
           <span className="text-accent-site">
             <Icon name="calendar-check" size="xl" />
           </span>
@@ -116,7 +118,10 @@ export function TariffsPage({ locale, info }: TariffsPageProps) {
       )}
 
       {/* the call to request: a sentence, not a section heading (headings stay within 8 words) */}
-      <div className="flex flex-col items-start gap-6 rounded-site-card bg-surface-highlight p-6 md:flex-row md:items-center md:justify-between md:gap-16 md:p-10">
+      <div
+        data-surface="mint"
+        className="flex flex-col items-start gap-6 rounded-site-panel p-6 md:flex-row md:items-center md:justify-between md:gap-16 md:p-10"
+      >
         <p className="max-w-(--ph-size-dialog-md) text-2xl font-bold tracking-tight text-balance">
           {t('tariffs.cta')}
         </p>

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { hasPermissions, priceWarnings } from '@pharmacy/shared-domain';
 import type {
+  PriceHistoryPage,
+  PriceHistoryQuery,
   PriceListQuery,
   PriceListResponse,
   PriceRow,
@@ -12,6 +14,7 @@ import { ProblemException } from '../../common/errors/problem.exception';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
 import { DEFAULT_PAGE_LIMIT } from '../../common/pagination';
 import { TenantDatabase, type TenantTransaction } from '../../core/database';
+import { PriceHistory } from '../audit/price-history';
 import {
   type PricingProduct,
   ProductsReader,
@@ -47,6 +50,7 @@ export class PricesService {
     private readonly purchasePrices: PurchasePrices,
     private readonly stocked: StockedProducts,
     private readonly problems: PriceProblems,
+    private readonly history: PriceHistory,
   ) {}
 
   async list(query: PriceListQuery): Promise<PriceListResponse> {
@@ -108,6 +112,42 @@ export class PricesService {
       );
       const [row] = await this.rows(trx, tenantId, [product], stores);
       return row.prices;
+    });
+  }
+
+  /**
+   * The changes of the prices of a product at the stores of the scope, the newest first (spec
+   * 2026-11-03-pos-store-ideas, D14–D16). A store outside the scope — 403 `store_not_in_scope`; the closed stores of
+   * the scope stay in the history.
+   */
+  async priceHistory(
+    productId: string,
+    query: PriceHistoryQuery,
+  ): Promise<PriceHistoryPage> {
+    const { tenantId, storeScope } = requirePrincipal();
+    const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
+    const offset = query.offset ?? 0;
+    const scope = scopeIds(storeScope);
+    const storeId = query.storeId?.toLowerCase();
+    if (storeId && scope !== null && !scope.includes(storeId)) {
+      throw new ProblemException(403, 'store_not_in_scope');
+    }
+    return this.db.tenantTransaction(async (trx) => {
+      const [product] = await this.products.findForPricing(trx, tenantId, [
+        productId.toLowerCase(),
+      ]);
+      if (!product) throw notFound();
+      const storeIds = storeId ? [storeId] : scope;
+      if (storeIds !== null && storeIds.length === 0) {
+        return { items: [], total: 0, limit, offset };
+      }
+      return this.history.page(trx, {
+        tenantId,
+        productId: product.id,
+        storeIds,
+        limit,
+        offset,
+      });
     });
   }
 

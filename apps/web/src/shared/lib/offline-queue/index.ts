@@ -32,7 +32,7 @@ export {
   resetTerminalRuntimes,
   type TerminalRuntime,
 } from './runtime';
-export { raiseReceiptSeq } from './receipt-seq';
+export { peekLocalNumber, raiseReceiptSeq } from './receipt-seq';
 export {
   bufferState,
   readBufferLimits,

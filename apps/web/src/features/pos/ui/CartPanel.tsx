@@ -15,6 +15,7 @@ import {
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { PrescriptionBadge } from '@/entities/catalog';
+import type { DisplayQr } from '@/shared/lib/customer-display';
 import { MoneyInput } from '@/shared/ui';
 import {
   lineAmount,
@@ -24,6 +25,7 @@ import {
   type NonCashMethod,
   type ReceiptDraft,
 } from '../model/receipt';
+import { PaymentQrDialog } from './PaymentQrDialog';
 
 const METHODS: Array<{ method: ReceiptPaymentMethod; icon: IconName }> = [
   { method: 'cash', icon: 'banknote' },
@@ -49,6 +51,8 @@ export interface CartPanelProps {
   onHold: () => void;
   onCancel: () => void;
   onPay: () => void;
+  /** The payment QR of the QR part (spec 2026-11-03-pos-store-ideas, D40); null — none to show. */
+  paymentQr: DisplayQr | null;
 }
 
 /** Some prescription data of a ПКУ line was given. */
@@ -166,6 +170,7 @@ export function CartPanel(props: CartPanelProps) {
   const [mixed, setMixed] = useState(
     draft.nonCash.card + draft.nonCash.qr + draft.nonCash.nfc > 0,
   );
+  const [showQr, setShowQr] = useState(false);
   const sum = totals(draft, rules);
   const payment = paymentState(draft, sum.totalMinor);
   const next = nextDiscount(sum.subtotalMinor, rules);
@@ -294,6 +299,24 @@ export function CartPanel(props: CartPanelProps) {
         )}
         {payment.nonCashMinor > 0 && (
           <p className="text-xs text-fg-subtle">{t('bankTerminalHint')}</p>
+        )}
+        {props.paymentQr && (
+          <Button
+            variant="secondary"
+            size="lg"
+            iconStart="qr-code"
+            onClick={() => setShowQr(true)}
+          >
+            {t('paymentQr.show', {
+              amount: formatMoney(props.paymentQr.amountMinor),
+            })}
+          </Button>
+        )}
+        {showQr && props.paymentQr && (
+          <PaymentQrDialog
+            qr={props.paymentQr}
+            onClose={() => setShowQr(false)}
+          />
         )}
         {payment.cashPartMinor > 0 && (
           <div className="grid grid-cols-2 items-end gap-2">

@@ -37,3 +37,18 @@ export async function raiseReceiptSeq(
   }
   await tx.done;
 }
+
+/**
+ * The number the next receipt of the shift will get, without taking it: the `{ref}` of the payment QR shown before
+ * «Оплатить» (spec 2026-11-03-pos-store-ideas, R2). Two tabs of a terminal may show the same one.
+ */
+export async function peekLocalNumber(
+  db: PosDb,
+  shiftId: string,
+): Promise<number> {
+  const current = await db.get('state', seqKey(shiftId));
+  return Math.min(
+    (typeof current === 'number' ? current : 0) + 1,
+    MAX_LOCAL_NUMBER,
+  );
+}

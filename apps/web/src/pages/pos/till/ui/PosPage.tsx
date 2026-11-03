@@ -65,6 +65,7 @@ import {
   totals,
   useCustomerDisplay,
   useDraftPersistence,
+  usePaymentQr,
   usePosStore,
   type AddError,
   type DraftLine,
@@ -182,6 +183,14 @@ function PosPageView() {
       ? t('noShift')
       : null;
 
+  // the payment QR of the QR part, on the POS and the customer display (spec 2026-11-03-pos-store-ideas, D40)
+  const paymentQr = usePaymentQr({
+    db: runtime?.db ?? null,
+    shiftId,
+    settings: snapshot?.settings,
+    qrMinor: draft.nonCash.qr,
+  });
+
   // the window on the buyer's monitor (spec 2026-11-03-pos-store-ideas, D1–D7)
   useCustomerDisplay({
     terminalId: session?.terminalId ?? null,
@@ -197,6 +206,7 @@ function PosPageView() {
         }
       : null,
     active: Boolean(openShift) && !locked,
+    qr: paymentQr,
   });
 
   useEffect(() => () => setFullscreen(false), [setFullscreen]);
@@ -592,6 +602,7 @@ function PosPageView() {
                   }}
                   onCancel={() => setCancelOpen(true)}
                   onPay={() => void pay()}
+                  paymentQr={paymentQr}
                 />
               </div>
             ) : null

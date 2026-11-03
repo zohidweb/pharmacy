@@ -14,6 +14,7 @@ import {
   DISPLAY_PROTOCOL,
   isDisplayMessage,
   openDisplayChannel,
+  type DisplayQr,
   type DisplayState,
 } from '@/shared/lib/customer-display';
 import {
@@ -37,6 +38,8 @@ export interface CustomerDisplayInput {
   done: { saleId: string; totalMinor: number; changeMinor: number } | null;
   /** An open shift and a POS that may sell. */
   active: boolean;
+  /** The payment QR of the QR part (`usePaymentQr`). */
+  qr: DisplayQr | null;
 }
 
 /** The line added or whose quantity changed since `before`; else the last highlighted one if it is still there. */
@@ -88,6 +91,7 @@ export function displayStateOf(
           payments: payment.payments,
           tenderedMinor: c.draft.cashTenderedMinor,
           changeMinor: payment.changeMinor,
+          qr: c.qr,
         }
       : null,
   };
@@ -100,7 +104,7 @@ export function useCustomerDisplay(c: CustomerDisplayInput): void {
   const changedKey = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { terminalId, storeName, locale, draft, rules, done, active } = c;
+  const { terminalId, storeName, locale, draft, rules, done, active, qr } = c;
   const saleId = done?.saleId ?? null;
   const doneTotal = done?.totalMinor ?? 0;
   const doneChange = done?.changeMinor ?? 0;
@@ -160,6 +164,7 @@ export function useCustomerDisplay(c: CustomerDisplayInput): void {
           ? { saleId, totalMinor: doneTotal, changeMinor: doneChange }
           : null,
         active,
+        qr,
       },
       changedKey.current,
     );
@@ -174,5 +179,15 @@ export function useCustomerDisplay(c: CustomerDisplayInput): void {
         });
       }
     }, SEND_DELAY_MS);
-  }, [storeName, locale, draft, rules, saleId, doneTotal, doneChange, active]);
+  }, [
+    storeName,
+    locale,
+    draft,
+    rules,
+    saleId,
+    doneTotal,
+    doneChange,
+    active,
+    qr,
+  ]);
 }

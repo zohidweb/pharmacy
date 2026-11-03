@@ -10,11 +10,41 @@ import {
   DISPLAY_PROTOCOL,
   isDisplayMessage,
   openDisplayChannel,
+  type DisplayQr,
   type DisplayState,
 } from '@/shared/lib/customer-display';
+import { QrSvg } from '@/shared/ui';
 
 /** «Спасибо за покупку!» stays this long without a new receipt (D3). */
 const THANKS_MS = 10_000;
+
+/** The payment QR beside the receipt (spec 2026-11-03-pos-store-ideas, D40): the code, the recipient and the amount. */
+function PaymentQrPanel({ qr }: { qr: DisplayQr }) {
+  const t = useTranslations('pos.customerDisplay');
+  const amount = formatMoney(qr.amountMinor);
+  return (
+    <aside className="flex shrink-0 flex-col items-center justify-center gap-4 border-s border-border bg-surface px-8 py-6 text-center">
+      <span className="text-2xl font-bold">{t('qrTitle')}</span>
+      <QrSvg
+        text={qr.link}
+        label={t('qrLabel')}
+        className="w-(--ph-pay-qr-display-size)"
+      />
+      <span className="max-w-(--ph-pay-qr-display-size) text-xl">
+        {qr.recipient}
+      </span>
+      {qr.withAmount ? (
+        <span className="text-2xl font-bold tabular-nums">
+          {t('qrAmount', { amount })}
+        </span>
+      ) : (
+        <span className="text-3xl font-bold text-primary tabular-nums">
+          {t('qrTypeAmount', { amount })}
+        </span>
+      )}
+    </aside>
+  );
+}
 
 /**
  * The customer display (spec 2026-11-03-pos-store-ideas, D1–D7): a window on the buyer's monitor that only shows what
@@ -123,6 +153,7 @@ function CustomerDisplayView() {
       </div>
     );
   } else {
+    const qr = state.payment?.qr ?? null;
     body = (
       <>
         {state.storeName && (
@@ -130,69 +161,76 @@ function CustomerDisplayView() {
             {state.storeName}
           </header>
         )}
-        <ul
-          aria-label={t('lines')}
-          className="m-0 flex min-h-0 flex-1 list-none flex-col gap-1 overflow-y-auto px-6 py-4"
-        >
-          {state.lines.map((line) => (
-            <li
-              key={line.key}
-              className={cx(
-                'flex items-baseline gap-6 rounded-md px-4 py-3 text-2xl',
-                line.key === state.changedKey && 'bg-primary-subtle',
-              )}
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <ul
+              aria-label={t('lines')}
+              className="m-0 flex min-h-0 flex-1 list-none flex-col gap-1 overflow-y-auto px-6 py-4"
             >
-              <span className="min-w-0 flex-1">{line.name}</span>
-              <span className="text-xl text-fg-muted tabular-nums">
-                {line.quantity} {tPos(`units.${line.unit}`)} ×{' '}
-                {formatMoney(line.unitPriceMinor)}
-              </span>
-              <span className="font-bold tabular-nums">
-                {formatMoney(line.amountMinor)}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <footer className="flex flex-col gap-2 border-t border-border bg-surface px-8 py-6 text-xl">
-          <div className="flex justify-between tabular-nums">
-            <span>{t('subtotal')}</span>
-            <span>{formatMoney(state.subtotalMinor)}</span>
-          </div>
-          {state.discountMinor > 0 && (
-            <div className="flex justify-between tabular-nums">
-              <span>{t('discount', { percent: state.discountPercent })}</span>
-              <span>−{formatMoney(state.discountMinor)}</span>
-            </div>
-          )}
-          <div className="flex items-baseline justify-between text-3xl font-bold tabular-nums">
-            <span>{t('toPay')}</span>
-            <span className="text-primary">
-              {formatMoney(state.totalMinor)}
-            </span>
-          </div>
-          {state.payment && (
-            <div className="mt-2 flex flex-col gap-1 border-t border-border pt-3 text-xl tabular-nums">
-              {state.payment.payments.map((payment) => (
-                <div key={payment.method} className="flex justify-between">
-                  <span>{tPos(`methods.${payment.method}`)}</span>
-                  <span>{formatMoney(payment.amountMinor)}</span>
-                </div>
+              {state.lines.map((line) => (
+                <li
+                  key={line.key}
+                  className={cx(
+                    'flex items-baseline gap-6 rounded-md px-4 py-3 text-2xl',
+                    line.key === state.changedKey && 'bg-primary-subtle',
+                  )}
+                >
+                  <span className="min-w-0 flex-1">{line.name}</span>
+                  <span className="text-xl text-fg-muted tabular-nums">
+                    {line.quantity} {tPos(`units.${line.unit}`)} ×{' '}
+                    {formatMoney(line.unitPriceMinor)}
+                  </span>
+                  <span className="font-bold tabular-nums">
+                    {formatMoney(line.amountMinor)}
+                  </span>
+                </li>
               ))}
-              {state.payment.tenderedMinor !== null && (
-                <div className="flex justify-between">
-                  <span>{t('tendered')}</span>
-                  <span>{formatMoney(state.payment.tenderedMinor)}</span>
+            </ul>
+            <footer className="flex flex-col gap-2 border-t border-border bg-surface px-8 py-6 text-xl">
+              <div className="flex justify-between tabular-nums">
+                <span>{t('subtotal')}</span>
+                <span>{formatMoney(state.subtotalMinor)}</span>
+              </div>
+              {state.discountMinor > 0 && (
+                <div className="flex justify-between tabular-nums">
+                  <span>
+                    {t('discount', { percent: state.discountPercent })}
+                  </span>
+                  <span>−{formatMoney(state.discountMinor)}</span>
                 </div>
               )}
-              {state.payment.changeMinor > 0 && (
-                <div className="flex justify-between font-bold">
-                  <span>{t('changeLabel')}</span>
-                  <span>{formatMoney(state.payment.changeMinor)}</span>
+              <div className="flex items-baseline justify-between text-3xl font-bold tabular-nums">
+                <span>{t('toPay')}</span>
+                <span className="text-primary">
+                  {formatMoney(state.totalMinor)}
+                </span>
+              </div>
+              {state.payment && (
+                <div className="mt-2 flex flex-col gap-1 border-t border-border pt-3 text-xl tabular-nums">
+                  {state.payment.payments.map((payment) => (
+                    <div key={payment.method} className="flex justify-between">
+                      <span>{tPos(`methods.${payment.method}`)}</span>
+                      <span>{formatMoney(payment.amountMinor)}</span>
+                    </div>
+                  ))}
+                  {state.payment.tenderedMinor !== null && (
+                    <div className="flex justify-between">
+                      <span>{t('tendered')}</span>
+                      <span>{formatMoney(state.payment.tenderedMinor)}</span>
+                    </div>
+                  )}
+                  {state.payment.changeMinor > 0 && (
+                    <div className="flex justify-between font-bold">
+                      <span>{t('changeLabel')}</span>
+                      <span>{formatMoney(state.payment.changeMinor)}</span>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
-        </footer>
+            </footer>
+          </div>
+          {qr && <PaymentQrPanel qr={qr} />}
+        </div>
       </>
     );
   }

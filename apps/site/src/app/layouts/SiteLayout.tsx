@@ -12,12 +12,27 @@ export interface SiteLayoutProps {
   children: ReactNode;
 }
 
-/** The document of a language (W2): `<html lang>`, header, the page, footer. */
+/*
+ * Without JavaScript nothing reveals the elements that wait for the viewport (R2): they are shown as they are.
+ * A constant, never user input.
+ */
+const NO_SCRIPT_REVEAL =
+  '[data-reveal]{opacity:1!important;transform:none!important}';
+
+/**
+ * The document of a language (W2): `<html lang>` in the site theme (a light page with colour panels, ADR-0024),
+ * header, the page, footer.
+ */
 export function SiteLayout({ locale, info, children }: SiteLayoutProps) {
   const { errors, nav } = getMessages(locale);
   return (
-    <html lang={locale}>
-      <body className="flex min-h-dvh flex-col">
+    <html lang={locale} data-theme="site">
+      <head>
+        <noscript>
+          <style>{NO_SCRIPT_REVEAL}</style>
+        </noscript>
+      </head>
+      <body className="flex min-h-dvh flex-col bg-bg text-fg">
         <IntlClientProvider
           locale={locale}
           messages={{ errors, nav }}

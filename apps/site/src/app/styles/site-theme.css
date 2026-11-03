@@ -1,0 +1,585 @@
+/*
+ * The theme of the public site (spec 2026-11-02-public-site-redesign 4.2, 4.7 and its amendment
+ * 2026-11-02-public-site-light-panels 4.1 to 4.3; ADR-0023, ADR-0024): a light page with colour panels, no light/dark
+ * switch. The only place the site's colour values live. On <html data-theme="site"> it overrides the kit's semantic
+ * layer (and four component tokens of shape and the field focus ring), so libs/ui components (buttons, fields, cards,
+ * alerts) take the site palette without changes to the kit. A panel is any container with data-surface="dark", "green"
+ * or "mint": it sets the same semantic tokens to its own values, its fill and its text colour, so the kit inside it takes
+ * the panel's colours too.
+ *
+ * WCAG 2.1 contrast, measured on the sRGB hex below (text ≥ 4.5:1; large text, controls and focus ≥ 3:1):
+ *   light root (bg mint-25, surface mint-0)
+ *     fg (975)              on bg 16.0 · surface 16.7 · sunken mint-50 15.5
+ *     fg-muted (ink-600)    on bg 6.9  · surface 7.2  · sunken 6.7 (fg-subtle is the same colour)
+ *     on-primary (mint-25)  on primary 700 5.8 · hover and active 800 8.5
+ *     primary as link text (700) on bg 5.8 · surface 6.1
+ *     focus ring (700)      on bg 5.8 · surface 6.1 · field border (ink-600) on bg 6.9 · surface 7.2
+ *     danger (kit red-700)  on surface 6.4 · bg 6.1 · lines (mint-150) are decorative only (1.3:1)
+ *   data-surface="dark" (bg and surface 950, raised 900)
+ *     fg (mint-50)          on bg 13.1 · raised 10.8
+ *     fg-muted (mint-300)   on bg 7.7  · raised 6.3
+ *     on-primary (975)      on primary mint-400 8.4 · hover mint-200 10.1 · active mint-300 9.1
+ *     focus ring (mint-400) on bg 7.1 · raised 5.9 · field border (mint-300) on bg 7.7 · raised 6.3
+ *     danger (red-200)      on bg 9.9  · raised 8.2 · lines (800) are decorative only (1.6:1)
+ *   data-surface="green" (bg 700, surface 950)
+ *     fg and fg-muted (mint-50) on bg 5.7 · surface 13.1 (mint-300 would be 3.3:1 on 700, so muted is the main colour)
+ *     on-primary (975)      on primary mint-400 8.4 · hover mint-200 10.1 · active mint-300 9.1
+ *     focus ring and button fill (mint-400) on bg 3.1 · surface 7.1 · field border (mint-300) on bg 3.3
+ *     danger (red-200)      on bg 4.3: below 4.5, so no form sits on this panel
+ *     links and text on the panel use text-fg (mint-400 text would be 3.1:1) · lines (800) decorative only (1.5:1)
+ *   data-surface="mint" (bg mint-400, surface mint-0)
+ *     fg and fg-muted (975) on bg 8.4 · surface 16.7
+ *     on-primary (mint-50)  on primary 950 13.1 · hover and active 975 15.5
+ *     focus ring and button fill (950) on bg 7.1 · field border (950) on bg 7.1 · lines (700) decorative only (3.1:1)
+ *     danger is the kit's red-700 of the light root: 3.2:1 on mint-400, so no form sits on this panel
+ *   decorative only, never text: the future step numbers (mint-300 at 55 %, 3.4:1 on the panel, text-site-step-future).
+ */
+
+/* Primitives of the site: spec 4.1 (hex as approved). Read only by this file: the semantic layer and @theme below. */
+:root {
+  --ph-emerald-975: #04211b;
+  --ph-emerald-950: #06302a;
+  --ph-emerald-900: #0a3f37;
+  --ph-emerald-800: #11524a;
+  --ph-emerald-700: #0f6e56;
+  --ph-emerald-ink-600: #3e5c55; /* secondary text and field borders of the light page */
+  --ph-mint-0: #fbfefc; /* the surface of the light page, not a pure white */
+  --ph-mint-25: #f2faf6; /* the light page */
+  --ph-mint-50: #ecf7f2;
+  --ph-mint-150: #cfe3da; /* lines of the light page */
+  --ph-mint-200: #7fd9ba; /* the accent on hover */
+  --ph-mint-300: #9cc7b8;
+  --ph-mint-400: #5dcaa5;
+  /* Shadows are tinted with the page, no black shadows (4.3) */
+  --ph-site-shadow-color: rgb(1 20 16 / 0.5); /* on a dark panel */
+  --ph-site-shadow-color-light: rgb(4 33 27 / 0.18); /* on the light page */
+  /* The future step numbers (amendment 4.4, п. 6): decorative, mint-300 seen through. 55 % gives 3.4:1 on the dark
+     panel, so the 96 px figure still clears axe's 3:1 check for large text */
+  --ph-site-step-future: color-mix(
+    in srgb,
+    var(--ph-mint-300) 55%,
+    transparent
+  );
+
+  /* Type scale of the site (4.2): sizes in rem (WCAG 1.4.4) */
+  --ph-site-font-size-display: 3.5rem; /* 56: first screen from 1024 px */
+  --ph-site-line-height-display: 3.75rem; /* 60 */
+  --ph-site-font-size-display-sm: 2.25rem; /* 36: first screen on a phone */
+  --ph-site-line-height-display-sm: 2.5rem; /* 40 */
+  --ph-site-font-size-section: 2.5rem; /* 40: section headings */
+  --ph-site-line-height-section: 2.75rem; /* 44 */
+  /* Large figures of the home page (amendment 4.4) */
+  --ph-site-font-size-marquee: 2.5rem; /* 40: the capability line from 1024 px */
+  --ph-site-line-height-marquee: 3rem; /* 48 */
+  --ph-site-font-size-marquee-sm: 1.75rem; /* 28: the capability line on a phone */
+  --ph-site-line-height-marquee-sm: 2.25rem; /* 36 */
+  --ph-site-font-size-number: 4rem; /* 64: the numbers of «Для кого» */
+  --ph-site-line-height-number: 4rem;
+  --ph-site-font-size-figure: 6rem; /* 96: step numbers and the price from 1024 px */
+  --ph-site-line-height-figure: 6rem;
+  --ph-site-font-size-figure-sm: 3.5rem; /* 56: the same on a phone */
+  --ph-site-line-height-figure-sm: 3.5rem;
+
+  /* Product screens only (4.3): the dark panel's shadow and the light page's border and shadow */
+  --ph-site-shadow-shot-dark: 0 24px 64px var(--ph-site-shadow-color);
+  --ph-site-shadow-shot-light: 0 24px 64px var(--ph-site-shadow-color-light);
+
+  /* Width and panels (amendment 4.2): content 1320 px; a panel 32 px round, almost the width of the window */
+  --ph-site-content-width: 82.5rem; /* 1320 */
+  --ph-site-radius-panel: 2rem; /* 32 */
+  /* The inner padding of a panel from 1024 px (96): the kit's spacing scale stops at 64, so py-24 is the site's step */
+  --ph-site-space-24: 6rem;
+
+  /* Header (4.5, п. 1): one line of 72 px; behind it, once scrolled, the page is blurred */
+  --ph-site-header-height: 4.5rem; /* 72 */
+  --ph-site-header-blur: 1rem; /* 16 */
+
+  /* Home page (4.5): the first screen fills the viewport under the header, capped so a tall screen does not stretch
+     it; a pinned heading stops one gap below the header */
+  --ph-site-first-screen: min(
+    calc(100dvh - var(--ph-site-header-height)),
+    60rem
+  );
+  --ph-site-sticky-top: calc(var(--ph-site-header-height) + var(--ph-space-8));
+  /* The stack of «Для кого» (amendment 4.4, п. 4): each card pins 16 px below the one before, 320 px tall */
+  --ph-site-stack-step: var(--ph-space-4);
+  --ph-site-stack-card-height: 20rem; /* 320 */
+  --ph-site-grid-hero: minmax(0, 5fr) minmax(0, 6fr); /* text : product screens */
+  --ph-site-grid-aside: minmax(0, 4fr) minmax(0, 7fr); /* pinned heading : content */
+  --ph-site-grid-main: minmax(0, 7fr) minmax(0, 4fr); /* main tile : its side note (tariffs) */
+  --ph-site-marquee-duration: 48s; /* one pass of the capability line, slow (4.5, п. 3) */
+  /* «Как подключиться» (4.5, п. 6; R6): the scroll track of the pinned steps, from 1024 px; the line fills along it */
+  --ph-site-steps-track: 220dvh;
+
+  /*
+   * The reading column of an article and of the documents (4.6): 68 characters of the 18 px text. `ch` is the width of
+   * the figure 0, and TT Norms Pro draws it wider than an average letter (12.25 against 8.62 px of Russian text at
+   * 18 px, measured on the built site), so 68 letters take 48ch.
+   */
+  --ph-site-reading-width: 48ch;
+  /* The kit's restricted Markdown (SiteMarkdown) in that column: each size it asks for, one step up (.site-prose) */
+  --ph-site-prose-caption: var(--ph-font-size-sm); /* 14, a caption */
+  --ph-site-prose-caption-leading: var(--ph-line-height-sm);
+  --ph-site-prose-text: var(--ph-font-size-lg); /* 18, the text */
+  --ph-site-prose-text-leading: var(--ph-line-height-lg); /* 28 */
+  --ph-site-prose-h3: var(--ph-font-size-xl); /* 20 */
+  --ph-site-prose-h3-leading: var(--ph-line-height-xl);
+  --ph-site-prose-h2: var(--ph-font-size-2xl); /* 24 */
+  --ph-site-prose-h2-leading: var(--ph-line-height-2xl);
+  --ph-site-prose-radius: var(
+    --ph-radius-lg
+  ); /* pictures are product screens' kin: 24 (4.3) */
+
+  /* Entrance of the first screen (R1): lift and fade, line by line */
+  --ph-site-enter-duration: 600ms;
+  --ph-site-enter-step: 100ms;
+  --ph-site-stagger-step: 60ms; /* cascade of revealed items (4.7) */
+  --ph-site-enter-distance: 1rem; /* 16 */
+  --ph-site-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Revealed items show without hydration after this long (Review Focus 2) */
+  --ph-site-reveal-fallback-delay: 2.5s;
+}
+
+/*
+ * The light page (amendment 4.1). Only the roles of its table are set; every other semantic token keeps the kit's light
+ * value (the form's error among them). Roles the table names cover the kit's twin tokens too: fg-subtle is secondary
+ * text, border-strong (the secondary button's outline) a line, border-control a field border, primary-active the
+ * pressed main button (the kit's blue otherwise).
+ */
+:root[data-theme='site'] {
+  color-scheme: light;
+  /* an anchor (#features, #contacts) stops below the header that stays on top */
+  scroll-padding-top: var(--ph-site-header-height);
+
+  --ph-color-bg: var(--ph-mint-25);
+  --ph-color-surface: var(--ph-mint-0);
+  --ph-color-surface-sunken: var(--ph-mint-50);
+  --ph-color-surface-highlight: var(--ph-mint-0);
+
+  --ph-color-fg: var(--ph-emerald-975);
+  --ph-color-fg-muted: var(--ph-emerald-ink-600);
+  --ph-color-fg-subtle: var(--ph-emerald-ink-600);
+
+  --ph-color-border: var(--ph-mint-150);
+  --ph-color-border-strong: var(--ph-mint-150);
+  --ph-color-border-control: var(--ph-emerald-ink-600);
+  --ph-color-border-input: var(--ph-emerald-ink-600);
+
+  --ph-color-primary: var(--ph-emerald-700);
+  --ph-color-primary-hover: var(--ph-emerald-800);
+  --ph-color-primary-active: var(--ph-emerald-800);
+  --ph-color-on-primary: var(--ph-mint-25);
+
+  --ph-color-focus-ring: var(--ph-emerald-700);
+
+  /* Tokens of the site that follow the surface (L3): the accent, the line, a product screen's border and shadow */
+  --ph-site-accent: var(--ph-emerald-700);
+  --ph-site-line: var(--ph-mint-150);
+  --ph-site-shot-border: var(--ph-mint-150);
+  --ph-site-shadow-shot: var(--ph-site-shadow-shot-light);
+
+  /* Shape (4.3): buttons fully rounded, fields 12, cards and tiles 24; no shadow but on product screens */
+  --ph-button-radius: var(--ph-radius-full);
+  --ph-input-radius: var(--ph-radius-ms);
+  --ph-card-radius: var(--ph-radius-lg);
+  --ph-card-shadow: none;
+
+  /*
+   * The focus ring of text fields (TextField, TextareaField): the kit draws it in primary-subtle-hover, a light tint
+   * that would not show (WCAG 1.4.11). On the site it is the focus colour, the same 2 px; it shows on a valid field and
+   * on an invalid one (red border) alike.
+   */
+  --ph-input-ring-focus: 0 0 0 var(--ph-border-width-2)
+    var(--ph-color-focus-ring);
+}
+
+/*
+ * Panels (amendment 4.1, L1 to L3). The kit's component tokens (fields, switch, table header, navigation) are composed
+ * from the semantic ones on :root, and a custom property with var() resolves where it is declared, so each panel
+ * declares them again with the same expressions (L2); otherwise a field in a panel would keep the colours of the page.
+ * The fill and the text colour sit in the base layer, so a utility on the same element still wins.
+ */
+[data-surface='dark'],
+[data-surface='green'],
+[data-surface='mint'] {
+  --ph-input-bg: var(--ph-color-surface);
+  --ph-input-border: var(--ph-color-border-input);
+  --ph-input-border-focus: var(--ph-color-primary);
+  --ph-input-border-invalid: var(--ph-color-danger);
+  --ph-input-ring-focus: 0 0 0 var(--ph-border-width-2)
+    var(--ph-color-focus-ring);
+  /* the other kit component tokens composed from semantic ones (components.css), for the same reason */
+  --ph-input-bg-disabled: var(--ph-color-surface-sunken);
+  --ph-switch-track-off: var(--ph-color-border-control);
+  --ph-switch-track-on: var(--ph-color-primary);
+  --ph-table-header-bg: var(--ph-color-surface-sunken);
+  --ph-nav-item-bg-active: var(--ph-color-primary-subtle);
+  --ph-nav-item-fg-active: var(--ph-color-primary);
+  --ph-nav-counter-bg: var(--ph-color-danger);
+  --ph-nav-counter-fg: var(--ph-color-on-danger);
+  /* product screens on a panel: no border */
+  --ph-site-shot-border: transparent;
+}
+
+@layer base {
+  [data-surface='dark'],
+  [data-surface='green'],
+  [data-surface='mint'] {
+    /* the panel's own bg, so "the page colour inside" (a step marker on bg-bg) is the panel */
+    background-color: var(--ph-color-bg);
+    color: var(--ph-color-fg);
+  }
+}
+
+/* The dark panel: the former dark mapping of the whole site, on emerald-950. The green panel starts from it. */
+[data-surface='dark'],
+[data-surface='green'] {
+  color-scheme: dark; /* native parts (checkbox, scrollbars, autofill) follow the dark panel */
+
+  --ph-color-bg: var(--ph-emerald-950);
+  --ph-color-surface: var(--ph-emerald-950);
+  /* "Sunken" on a dark panel is the lighter shade: hovers, insets, image placeholders */
+  --ph-color-surface-sunken: var(--ph-emerald-900);
+  --ph-color-surface-highlight: var(--ph-emerald-900);
+
+  --ph-color-fg: var(--ph-mint-50);
+  --ph-color-fg-muted: var(--ph-mint-300);
+  --ph-color-fg-subtle: var(--ph-mint-300);
+  --ph-color-fg-disabled: var(--ph-emerald-700);
+
+  /* One line colour (4.3): the kit's secondary button outline is the site line too */
+  --ph-color-border: var(--ph-emerald-800);
+  --ph-color-border-strong: var(--ph-emerald-800);
+  --ph-color-border-control: var(--ph-mint-300);
+  /* Fields keep a 3:1 boundary on the dark surfaces, unlike the kit's light field border */
+  --ph-color-border-input: var(--ph-mint-300);
+
+  --ph-color-primary: var(--ph-mint-400);
+  --ph-color-primary-hover: var(--ph-mint-200);
+  --ph-color-primary-active: var(--ph-mint-300);
+  --ph-color-on-primary: var(--ph-emerald-975);
+  --ph-color-primary-subtle: var(--ph-emerald-900);
+  --ph-color-primary-subtle-hover: var(--ph-emerald-700);
+  --ph-color-accent: var(--ph-mint-400);
+
+  --ph-color-focus-ring: var(--ph-mint-400);
+  --ph-color-disabled: var(--ph-emerald-800);
+  --ph-color-on-disabled: var(--ph-mint-300);
+
+  /* Statuses of the form: success is the accent itself; the error is the kit's light red (no new hue) */
+  --ph-color-success: var(--ph-mint-400);
+  --ph-color-success-subtle: var(--ph-emerald-900);
+  --ph-color-success-border: var(--ph-mint-400);
+  --ph-color-success-hover: var(--ph-mint-200);
+  --ph-color-on-success: var(--ph-emerald-975);
+
+  --ph-color-danger: var(--ph-red-200);
+  --ph-color-danger-hover: var(--ph-red-100);
+  --ph-color-on-danger: var(--ph-emerald-975);
+  --ph-color-danger-subtle: var(--ph-emerald-900);
+  --ph-color-danger-surface: var(--ph-emerald-975);
+  --ph-color-danger-border: var(--ph-red-200);
+
+  --ph-site-accent: var(--ph-mint-400);
+  --ph-site-line: var(--ph-emerald-800);
+  --ph-site-shadow-shot: var(--ph-site-shadow-shot-dark);
+}
+
+/*
+ * The green panel (emerald-700: the tariffs): mint-300 is 3.3:1 there, so secondary text is the main text colour.
+ * Primary stays the button fill (3.1:1 to the panel, a non-text boundary); text and links on it use text-fg, and the
+ * accent is the main text colour too.
+ */
+[data-surface='green'] {
+  --ph-color-bg: var(--ph-emerald-700);
+  --ph-color-fg-muted: var(--ph-mint-50);
+  --ph-color-fg-subtle: var(--ph-mint-50);
+
+  --ph-site-accent: var(--ph-mint-50);
+}
+
+/*
+ * The mint panel (mint-400: the final call, one tile of the features, one card of «Для кого», the blog card without a
+ * cover): dark text and a dark main button. Its surfaces are those of the light page. It sits only on the light page,
+ * never inside a dark or green panel: it does not reset the tokens the dark block sets beyond this table (subtle
+ * primary, statuses, disabled), so nested there it would inherit them.
+ */
+[data-surface='mint'] {
+  color-scheme: light;
+
+  --ph-color-bg: var(--ph-mint-400);
+  --ph-color-surface: var(--ph-mint-0);
+  --ph-color-surface-sunken: var(--ph-mint-50);
+  --ph-color-surface-highlight: var(--ph-mint-0);
+
+  --ph-color-fg: var(--ph-emerald-975);
+  --ph-color-fg-muted: var(--ph-emerald-975);
+  --ph-color-fg-subtle: var(--ph-emerald-975);
+
+  --ph-color-border: var(--ph-emerald-700);
+  --ph-color-border-strong: var(--ph-emerald-700);
+  --ph-color-border-control: var(--ph-emerald-950);
+  --ph-color-border-input: var(--ph-emerald-950);
+
+  --ph-color-primary: var(--ph-emerald-950);
+  --ph-color-primary-hover: var(--ph-emerald-975);
+  --ph-color-primary-active: var(--ph-emerald-975);
+  --ph-color-on-primary: var(--ph-mint-50);
+
+  --ph-color-focus-ring: var(--ph-emerald-950);
+
+  --ph-site-accent: var(--ph-emerald-975);
+  --ph-site-line: var(--ph-emerald-700);
+  --ph-site-shadow-shot: var(--ph-site-shadow-shot-light);
+}
+
+/*
+ * The text of an article or a document (4.6): the kit's SiteMarkdown keeps its classes, the reading column lifts the
+ * sizes they read (paragraphs and lists 14 → 18/28, headings 18 and 16 → 24 and 20, captions 12 → 14) and the picture
+ * radius (16 → 24). Its colours already come from the semantic layer above. The values are inherited from :root, so
+ * no token here refers to itself.
+ */
+.site-prose {
+  --ph-font-size-xs: var(--ph-site-prose-caption);
+  --ph-line-height-xs: var(--ph-site-prose-caption-leading);
+  --ph-font-size-sm: var(--ph-site-prose-text);
+  --ph-line-height-sm: var(--ph-site-prose-text-leading);
+  --ph-font-size-md: var(--ph-site-prose-h3);
+  --ph-line-height-md: var(--ph-site-prose-h3-leading);
+  --ph-font-size-lg: var(--ph-site-prose-h2);
+  --ph-line-height-lg: var(--ph-site-prose-h2-leading);
+  --ph-radius-md: var(--ph-site-prose-radius);
+}
+
+/*
+ * Utilities of the site (R3, R4, L3, L4): only links to the tokens above.
+ * Colours: text-accent-site, bg-accent-site, border-site-line (divide-, bg-), border-site-shot, bg-site-mint,
+ * text-site-step-future. Type: text-display(-sm), text-section, text-lead, text-site-marquee(-sm), text-site-number,
+ * text-site-figure(-sm). Shape: rounded-site-card, rounded-site-panel, shadow-shot. Layout: py-24 (one step past the
+ * kit's scale), max-w-site-content,
+ * h-site-header, backdrop-blur-site-header, min-h-site-first-screen, top-site-sticky, top-site-stack,
+ * min-h-site-stack-card, h-site-steps, max-w-site-reading, grid-cols-site-hero, grid-cols-site-aside,
+ * grid-cols-site-main.
+ * Colour utilities read tokens that a panel redefines, so they resolve on the element (`inline`).
+ * md: is 1024 px, the site's desktop threshold (4.2, 4.5).
+ */
+@theme {
+  --breakpoint-md: 64rem; /* 1024 */
+}
+
+@theme inline {
+  --color-site-line: var(--ph-site-line);
+  --color-accent-site: var(--ph-site-accent);
+  --color-site-shot: var(--ph-site-shot-border);
+  --color-site-mint: var(
+    --ph-mint-400
+  ); /* bg-site-mint: the markers of the capability line */
+  --color-site-step-future: var(--ph-site-step-future);
+
+  --text-display: var(--ph-site-font-size-display);
+  --text-display--line-height: var(--ph-site-line-height-display);
+  --text-display--font-weight: var(--ph-font-weight-bold);
+  --text-display--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-display-sm: var(--ph-site-font-size-display-sm);
+  --text-display-sm--line-height: var(--ph-site-line-height-display-sm);
+  --text-display-sm--font-weight: var(--ph-font-weight-bold);
+  --text-display-sm--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-section: var(--ph-site-font-size-section);
+  --text-section--line-height: var(--ph-site-line-height-section);
+  --text-section--font-weight: var(--ph-font-weight-bold);
+  --text-section--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-lead: var(--ph-font-size-lg); /* 18 */
+  --text-lead--line-height: var(--ph-line-height-lg); /* 28 */
+  --text-site-marquee: var(--ph-site-font-size-marquee);
+  --text-site-marquee--line-height: var(--ph-site-line-height-marquee);
+  --text-site-marquee--font-weight: var(--ph-font-weight-bold);
+  --text-site-marquee--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-site-marquee-sm: var(--ph-site-font-size-marquee-sm);
+  --text-site-marquee-sm--line-height: var(--ph-site-line-height-marquee-sm);
+  --text-site-marquee-sm--font-weight: var(--ph-font-weight-bold);
+  --text-site-marquee-sm--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-site-number: var(--ph-site-font-size-number);
+  --text-site-number--line-height: var(--ph-site-line-height-number);
+  --text-site-number--font-weight: var(--ph-font-weight-bold);
+  --text-site-number--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-site-figure: var(--ph-site-font-size-figure);
+  --text-site-figure--line-height: var(--ph-site-line-height-figure);
+  --text-site-figure--font-weight: var(--ph-font-weight-bold);
+  --text-site-figure--letter-spacing: var(--ph-letter-spacing-tight);
+  --text-site-figure-sm: var(--ph-site-font-size-figure-sm);
+  --text-site-figure-sm--line-height: var(--ph-site-line-height-figure-sm);
+  --text-site-figure-sm--font-weight: var(--ph-font-weight-bold);
+  --text-site-figure-sm--letter-spacing: var(--ph-letter-spacing-tight);
+
+  --spacing-24: var(--ph-site-space-24); /* md:py-24 of a panel (L5) */
+  --spacing-site-content: var(
+    --ph-site-content-width
+  ); /* max-w-site-content: 1320 */
+  --spacing-site-header: var(
+    --ph-site-header-height
+  ); /* h-site-header, top-site-header */
+  --blur-site-header: var(
+    --ph-site-header-blur
+  ); /* backdrop-blur-site-header */
+  --spacing-site-first-screen: var(
+    --ph-site-first-screen
+  ); /* min-h-site-first-screen */
+  --spacing-site-sticky: var(--ph-site-sticky-top); /* top-site-sticky */
+  /* top-site-stack: the card gives its place as --ph-site-stack-index (L8), read on the card itself */
+  --spacing-site-stack: calc(
+    var(--ph-site-sticky-top) + var(--ph-site-stack-index, 0) *
+      var(--ph-site-stack-step)
+  );
+  --spacing-site-stack-card: var(
+    --ph-site-stack-card-height
+  ); /* min-h-site-stack-card */
+  --spacing-site-steps: var(--ph-site-steps-track); /* h-site-steps */
+  --spacing-site-reading: var(
+    --ph-site-reading-width
+  ); /* max-w-site-reading: 68 letters, in `ch` of the element's own size */
+  --grid-template-columns-site-hero: var(
+    --ph-site-grid-hero
+  ); /* grid-cols-site-hero */
+  --grid-template-columns-site-aside: var(
+    --ph-site-grid-aside
+  ); /* grid-cols-site-aside */
+  --grid-template-columns-site-main: var(
+    --ph-site-grid-main
+  ); /* grid-cols-site-main */
+
+  --radius-site-card: var(--ph-radius-lg); /* 24 */
+  --radius-site-panel: var(--ph-site-radius-panel); /* 32 */
+  --shadow-shot: var(--ph-site-shadow-shot);
+}
+
+/*
+ * Entrance of the first screen (R1): plain CSS, so the largest paint does not wait for hydration. Without the
+ * preference (reduce, or a browser that does not say) the text is simply there.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes site-enter {
+    from {
+      opacity: 0;
+      transform: translateY(var(--ph-site-enter-distance));
+    }
+  }
+
+  .site-enter {
+    animation: site-enter var(--ph-site-enter-duration)
+      var(--ph-site-ease-enter) both;
+  }
+
+  .site-enter-delay-1 {
+    animation-delay: var(--ph-site-enter-step);
+  }
+
+  .site-enter-delay-2 {
+    animation-delay: calc(var(--ph-site-enter-step) * 2);
+  }
+
+  .site-enter-delay-3 {
+    animation-delay: calc(var(--ph-site-enter-step) * 3);
+  }
+
+  .site-enter-delay-4 {
+    animation-delay: calc(var(--ph-site-enter-step) * 4);
+  }
+
+  /*
+   * A cascade of items without `motion` (the cards of the blog): the same entrance, 0.06 s apart (4.7). The item gives
+   * its place as --ph-site-enter-index; declared after .site-enter, so its delay wins.
+   */
+  .site-enter-stagger {
+    animation-delay: calc(
+      var(--ph-site-enter-index, 0) * var(--ph-site-stagger-step)
+    );
+  }
+
+  /*
+   * Items of the phone menu (header): the same entrance when its <details> opens, 0.06 s apart (4.7). The item gives
+   * its place as --ph-site-enter-index. While the menu is closed the item has no animation, so the first opening starts
+   * it; Chrome keeps the finished animation across later openings (the closed content is only content-visibility
+   * hidden), so those show the items at once, like Reveal's `once`.
+   */
+  details[open] .site-enter-open {
+    animation: site-enter var(--ph-site-enter-duration)
+      var(--ph-site-ease-enter) both;
+    animation-delay: calc(
+      var(--ph-site-enter-index, 0) * var(--ph-site-stagger-step)
+    );
+  }
+
+  /*
+   * The capability line of the home page (R7): a track of two equal lists moves by one list, so the copy takes the
+   * place of the original and the loop has no seam. It stops under the pointer, while focus is inside it, and by the
+   * pause button (MarqueeFrame sets data-marquee-paused). With reduce there is no track: the list wraps in place and its
+   * copy is hidden (CapabilityMarquee).
+   */
+  @keyframes site-marquee {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .site-marquee {
+    animation: site-marquee var(--ph-site-marquee-duration) linear infinite;
+  }
+
+  .site-marquee:hover,
+  .site-marquee:focus-within,
+  [data-marquee-paused] .site-marquee {
+    animation-play-state: paused;
+  }
+
+  /*
+   * The questions of the home page (R8): a native <details> whose answer opens and closes by its height. A browser
+   * without `::details-content` or `interpolate-size` simply opens it at once; with reduce it opens at once too.
+   */
+  .site-accordion {
+    interpolate-size: allow-keywords;
+  }
+
+  .site-accordion::details-content {
+    block-size: 0;
+    overflow-y: clip;
+    transition:
+      block-size var(--ph-duration-slow) var(--ph-ease-out),
+      content-visibility var(--ph-duration-slow) allow-discrete;
+  }
+
+  .site-accordion[open]::details-content {
+    block-size: auto;
+  }
+}
+
+/*
+ * Slow hydration (Review Focus 2): JavaScript is on but the page has not hydrated yet, so motion's hidden start (inline
+ * opacity 0 and the 24 px lift) would keep the sections blank. After 2.5 s an animation shows them; an animation
+ * outranks inline styles. MotionScope marks <html data-motion-ready> once it has mounted: from then on the rule no longer
+ * matches, the animation and its `forwards` end are dropped, and motion's own inline styles and reveal take over (an
+ * element revealed this way plays its reveal again when it enters the viewport).
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes site-reveal-fallback {
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  html:not([data-motion-ready]) [data-reveal] {
+    animation: site-reveal-fallback 0s var(--ph-site-reveal-fallback-delay)
+      forwards;
+  }
+}
+
+/*
+ * Reveal (shared/ui/motion) renders its hidden start on the server. With reduce everything is visible at once, before
+ * and after hydration (Review Focus 1); without JavaScript the <noscript> style of SiteLayout does the same (R2).
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important; /* ignore-design: beats the inline start style of motion */
+    transform: none !important; /* ignore-design: beats the inline start style of motion */
+  }
+}

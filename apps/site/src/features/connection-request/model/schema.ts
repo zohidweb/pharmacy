@@ -95,7 +95,7 @@ export function connectionRequestSchema() {
       .boolean()
       .check(z.refine((value) => value, { error: 'consent' })),
     // The trap (spec 7.3): never checked here, the API makes a filled one spam. Its name says nothing to the
-    // autofill of password managers — a field named `website` would be filled with a real visitor's site; the body
+    // autofill of password managers: a field named `website` would be filled with a real visitor's site; the body
     // carries it as the API field `website` (toSubmitBody).
     hp_note: z.string(),
   });
@@ -137,7 +137,7 @@ export function isConnectionRequestErrorKey(
 }
 
 /**
- * The fields of the form the API may name in `errors[]` (the rest — locale, openedAt, website — are not the
+ * The fields of the form the API may name in `errors[]` (the rest, locale, openedAt and website, are not the
  * visitor's).
  */
 export function isConnectionRequestField(

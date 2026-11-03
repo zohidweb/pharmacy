@@ -26,7 +26,7 @@ export async function generateMetadata({
   const faviconId = info?.settings.faviconMediaId;
   return {
     metadataBase: new URL(siteEnv().siteOrigin),
-    title: { template: `%s — ${name}`, default: name },
+    title: { template: `%s | ${name}`, default: name },
     ...(faviconId && { icons: { icon: mediaPath(faviconId) } }),
   };
 }

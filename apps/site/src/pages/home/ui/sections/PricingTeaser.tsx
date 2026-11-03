@@ -1,12 +1,23 @@
+/*
+ * Тарифы (amendment 2026-11-02-public-site-light-panels 4.4, п. 7; L9): a green panel, the heading on the left. On the
+ * right the price of a store per month from the billing settings (the same figure as in the invoices), huge, under it
+ * «НДС N % сверху» and the link to /tariffs. No list of what the price includes: the dictionary has no short lines for
+ * it. The figure rises in as the panel enters. On the panel text and links take the panel's own text colour (fg).
+ */
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import { formatMoney, formatPercentBp } from '@pharmacy/shared-util';
-import { buttonClassName, Card } from '@pharmacy/ui';
+import { cx, Icon } from '@pharmacy/ui';
 import Link from 'next/link';
 import { getTranslator } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
-import { PageSection } from '@/shared/ui';
+import {
+  contentClassName,
+  figureClassName,
+  panelBodyClassName,
+  panelClassName,
+} from '@/shared/ui';
+import { Reveal } from '@/shared/ui/motion';
 
-/** spec 6.2, п. 6: the price of a store from the billing settings — the same figure as in the invoices. */
 export function PricingTeaser({
   locale,
   pricing,
@@ -15,27 +26,46 @@ export function PricingTeaser({
   pricing: PublicSiteInfo['pricing'];
 }) {
   const t = getTranslator(locale);
+  const price = formatMoney(pricing.storeMonthlyPriceDirams);
   return (
-    <PageSection id="pricing" tone="surface" title={t('home.pricing.title')}>
-      <Card className="flex flex-col gap-4 @2xl:flex-row @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="flex flex-wrap items-baseline gap-2">
-            <span className="text-3xl font-bold tabular-nums">
-              {formatMoney(pricing.storeMonthlyPriceDirams)}
-            </span>
-            <span className="text-fg-muted">{t('home.pricing.perMonth')}</span>
-          </p>
-          <p className="text-sm text-fg-muted">
+    <section
+      id="pricing"
+      aria-labelledby="pricing-title"
+      data-surface="green"
+      className={cx(panelClassName, 'scroll-mt-4')}
+    >
+      <div
+        className={cx(
+          contentClassName,
+          panelBodyClassName,
+          'grid gap-10 md:grid-cols-2 md:items-end md:gap-16',
+        )}
+      >
+        <h2 id="pricing-title" className="text-section text-balance">
+          {t('home.pricing.title')}
+        </h2>
+        <div className="flex flex-col items-start gap-4">
+          <Reveal>
+            <p className="flex flex-col gap-2">
+              {/* the figure never wraps (no-break spaces): its size follows its length (figureClassName) */}
+              <span className={cx(figureClassName(price), 'tabular-nums')}>
+                {price}
+              </span>
+              <span className="text-lead">{t('home.pricing.perMonth')}</span>
+            </p>
+          </Reveal>
+          <p className="max-w-(--ph-size-dialog-md) text-lead">
             {t('home.pricing.vat', { vat: formatPercentBp(pricing.vatBp) })}
           </p>
+          <Link
+            href={localePath(locale, '/tariffs')}
+            className="inline-flex min-h-touch items-center gap-2 font-semibold text-fg underline underline-offset-4"
+          >
+            {t('home.pricing.more')}
+            <Icon name="chevron-right" size="sm" />
+          </Link>
         </div>
-        <Link
-          href={localePath(locale, '/tariffs')}
-          className={buttonClassName({ variant: 'secondary' })}
-        >
-          {t('home.pricing.more')}
-        </Link>
-      </Card>
-    </PageSection>
+      </div>
+    </section>
   );
 }

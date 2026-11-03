@@ -1,7 +1,7 @@
 'use client';
 
 /*
- * RU/TJ (spec 6.2, п. 1): ordinary links to the same page in the other language. The root layout cannot
+ * RU/TJ (spec 4.5, п. 1): ordinary links to the same page in the other language. The root layout cannot
  * know the page address without middleware, so the switch reads it in the browser. A plain <a>, not
  * next/link: the other language is another document (`<html lang>`, header, footer). Client-safe imports
  * only: no dictionaries, no server environment.
@@ -34,17 +34,21 @@ export interface LocaleSwitchProps {
   label: string;
 }
 
+// a pill in a pill (4.3: controls are fully rounded); the current language is the line colour, not a shadow
+const itemClass =
+  'flex min-h-touch min-w-touch items-center justify-center rounded-full text-sm font-semibold';
+
 export function LocaleSwitch({ locale, label }: LocaleSwitchProps) {
   const path = otherLanguagePath(pathWithoutLocale(usePathname() ?? '/'));
   return (
     <nav aria-label={label}>
-      <ul className="flex items-center gap-1 rounded-sm bg-surface-sunken p-0.5">
+      <ul className="flex items-center gap-0.5 rounded-full border border-site-line p-0.5">
         {LANGUAGES.map((language) => (
           <li key={language.locale}>
             {language.locale === locale ? (
               <span
                 aria-current="true"
-                className="flex min-h-touch min-w-touch items-center justify-center rounded-sm bg-surface text-sm font-semibold text-fg shadow-sm"
+                className={`${itemClass} bg-site-line text-fg`}
               >
                 {language.label}
               </span>
@@ -53,7 +57,7 @@ export function LocaleSwitch({ locale, label }: LocaleSwitchProps) {
                 href={localePath(language.locale, path)}
                 hrefLang={language.locale}
                 lang={language.locale}
-                className="flex min-h-touch min-w-touch items-center justify-center rounded-sm text-sm font-semibold text-fg-muted hover:text-fg"
+                className={`${itemClass} text-fg-muted transition-colors hover:text-fg`}
               >
                 {language.label}
               </a>

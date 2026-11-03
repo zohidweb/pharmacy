@@ -32,7 +32,7 @@ export function siteRobots(): MetadataRoute.Robots {
 const STATIC_PATHS = ['/', '/tariffs', '/blog', '/connect'] as const;
 
 /**
- * One entry per language of a page, each with the hreflang of all the page's languages and `x-default` — RU
+ * One entry per language of a page, each with the hreflang of all the page's languages and `x-default`, RU
  * when RU is among them (as `alternates()` of the page metadata).
  */
 function entries(

@@ -4,8 +4,8 @@ import { ARTICLES_PER_PAGE } from '@/shared/api';
 const MAX_OFFSET = 100_000;
 
 /**
- * `?page=N` of the blog (W7): absent — the first page; anything but a positive whole number (or a page past
- * what the API can list) — `null`, a 404. A page past the last one is checked against `total` by the page.
+ * `?page=N` of the blog (W7): absent, the first page; anything but a positive whole number (or a page past
+ * what the API can list), `null`, a 404. A page past the last one is checked against `total` by the page.
  */
 export function blogPageNumber(
   raw: string | string[] | undefined,

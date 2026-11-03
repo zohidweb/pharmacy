@@ -64,7 +64,7 @@ export function getSiteInfo(): Promise<PublicSiteInfo> {
 }
 
 /**
- * The settings for the parts that must never fail — header, footer, metadata (W2): `null` when the API
+ * The settings for the parts that must never fail, the header, footer and metadata (W2): `null` when the API
  * is unavailable. The page body uses getSiteInfo, so the failure still reaches error.tsx.
  */
 export function findSiteInfo(): Promise<PublicSiteInfo | null> {
@@ -107,7 +107,7 @@ export function getSitemap(): Promise<PublicSitemap> {
   return required<PublicSitemap>('sitemap');
 }
 
-/** Relative on purpose: the browser loads pictures through Caddy (in dev — the dev rewrite). */
+/** Relative on purpose: the browser loads pictures through Caddy (in dev, the dev rewrite). */
 export function mediaPath(id: string): string {
   return `/api/v1/public/media/${id}`;
 }

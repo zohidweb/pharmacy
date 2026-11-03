@@ -10,9 +10,14 @@ import {
 } from '@nestjs/common';
 import type { OwnerStore, StoresOverview } from '@pharmacy/shared-dto';
 import { FieldProblemException } from '../../common/errors/validation-failed.exception';
+import { RequireFreshAuth } from '../../common/guards/decorators';
 import { isUuid } from '../../core/database';
 import { RequirePermission } from '../auth/decorators';
-import { CreateStoreDto, UpdateStoreDto } from './dto/store.dto';
+import {
+  CreateStoreDto,
+  UpdatePaymentQrDto,
+  UpdateStoreDto,
+} from './dto/store.dto';
 import { StoresService } from './stores.service';
 
 // The optional Idempotency-Key header of POST /stores: a UUID, case-insensitive.
@@ -56,5 +61,19 @@ export class StoresController {
     @Body() body: UpdateStoreDto,
   ): Promise<OwnerStore> {
     return this.stores.update(id, body);
+  }
+
+  /**
+   * The payment QR of the store (spec 2026-11-03-pos-store-ideas, D38): 400 `validation_failed`, 403
+   * `fresh_auth_required`, 404 (outside the scope), 409 `store_closed` / `store_closing`.
+   */
+  @RequirePermission('stores:update')
+  @RequireFreshAuth()
+  @Put(':id/payment-qr')
+  updatePaymentQr(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: UpdatePaymentQrDto,
+  ): Promise<OwnerStore> {
+    return this.stores.updatePaymentQr(id, body);
   }
 }

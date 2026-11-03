@@ -1104,6 +1104,7 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       licenseValidUntil: null,
       closedOn: null,
       stockMovedTo: null,
+      paymentQr: null,
     };
     if (idempotencyKey) owner().storeKeys[idempotencyKey] = id;
     appendAudit(session, {

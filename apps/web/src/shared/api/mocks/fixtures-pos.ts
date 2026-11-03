@@ -39,6 +39,8 @@ export const storeSettings = (
     'Спасибо за покупку! Обмен и возврат — 14 дней при наличии чека.',
   returnWindowDays: 14,
   bufferLimits: posBufferDefaults,
+  storeCode: '',
+  paymentQr: null,
 });
 
 const batch = (

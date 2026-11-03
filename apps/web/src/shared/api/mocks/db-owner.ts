@@ -138,6 +138,7 @@ const details = (
   licenseValidUntil,
   closedOn: null,
   stockMovedTo: null,
+  paymentQr: null,
 });
 
 const audit = (
@@ -243,6 +244,7 @@ export function createOwnerDb(): OwnerMockDb {
         stockMovedTo: 'Аптека №1 · Центр',
         closingTransfers: [],
         closingCancellable: false,
+        paymentQr: null,
       },
     ],
     services: [

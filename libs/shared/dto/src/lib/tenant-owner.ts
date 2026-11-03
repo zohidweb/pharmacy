@@ -83,6 +83,19 @@ export interface OwnerStore {
   closingTransfers: StoreClosingTransfer[];
   /** A closing store none of whose transfers is accepted yet: the closing can be cancelled (E10). */
   closingCancellable: boolean;
+  /** The payment QR link of the store (spec 2026-11-03-pos-store-ideas, D37); null — the POS shows no QR. */
+  paymentQr: PaymentQrSettings | null;
+}
+
+/**
+ * The payment QR of a store (D37; ADR-0022, amendment 2026-11-03): the payment link the bank gave the store and the
+ * recipient shown under the QR. `template` — `https://` only, up to 500 characters, no spaces or control characters,
+ * the placeholders `{amount}` (somoni, `125.50`) and `{ref}` (the receipt, up to 18 characters) only (the rules —
+ * `paymentQrTemplateProblem` of `@pharmacy/shared-domain`); `recipient` — 1–100 characters.
+ */
+export interface PaymentQrSettings {
+  template: string;
+  recipient: string;
 }
 
 export interface StoreClosingTransfer {
@@ -116,6 +129,16 @@ export interface UpdateOwnerStoreRequest {
   address: string;
   legalEntityId: string;
   printReceiptDefault: boolean;
+}
+
+/**
+ * PUT /api/v1/stores/{id}/payment-qr (`stores:update`, a fresh sign-in) — the payment QR of the store; `null` removes
+ * it. 200 `OwnerStore`; 400 `validation_failed` (fields `paymentQr.template`, `paymentQr.recipient`), 403
+ * `fresh_auth_required`, 404 (outside the scope), 409 `store_closed` / `store_closing`. A change is audited
+ * (`store.payment_qr_changed`, the link before and after) and notifies the owner (`payment_qr_changed`).
+ */
+export interface UpdatePaymentQrRequest {
+  paymentQr: PaymentQrSettings | null;
 }
 
 /** GET /api/v1/stores (`stores:view`) — the stores of the employee's scope, active first. */

@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { LegalEntity, LegalEntityInput, StoreKind } from '@pharmacy/shared-dto';
+import type {
+  LegalEntity,
+  LegalEntityInput,
+  PaymentQrSettings,
+  StoreKind,
+} from '@pharmacy/shared-dto';
 import { sql } from 'kysely';
 import { type TenantTransaction, tenantTimeZone } from '../../core/database';
 
@@ -15,6 +20,9 @@ export interface StoreRow {
   legalEntityId: string;
   legalEntityName: string;
   printReceiptDefault: boolean;
+  /** The payment QR (spec 2026-11-03-pos-store-ideas, D37): both set or both null (CHECK). */
+  paymentQrTemplate: string | null;
+  paymentQrRecipient: string | null;
   closedAt: Date | null;
   /** YYYY-MM-DD: the business date of `closedAt` in the time zone of the network. */
   closedOn: string | null;
@@ -79,6 +87,8 @@ export class StoresRepository {
         'stores.legalEntityId',
         'legalEntities.name as legalEntityName',
         'stores.printReceiptDefault',
+        'stores.paymentQrTemplate',
+        'stores.paymentQrRecipient',
         'stores.closedAt',
       ])
       .where('stores.tenantId', '=', tenantId);
@@ -242,6 +252,25 @@ export class StoresRepository {
     await trx
       .updateTable('stores')
       .set({ ...change, updatedAt: sql`now()` })
+      .where('tenantId', '=', tenantId)
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** The payment QR of the store; null removes it. */
+  async updatePaymentQr(
+    trx: TenantTransaction,
+    tenantId: string,
+    id: string,
+    value: PaymentQrSettings | null,
+  ): Promise<void> {
+    await trx
+      .updateTable('stores')
+      .set({
+        paymentQrTemplate: value?.template ?? null,
+        paymentQrRecipient: value?.recipient ?? null,
+        updatedAt: sql`now()`,
+      })
       .where('tenantId', '=', tenantId)
       .where('id', '=', id)
       .execute();

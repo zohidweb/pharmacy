@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { NotificationKind } from '@pharmacy/shared-dto';
 import type { TenantTransaction } from '../../core/database';
 import { LoginLocks } from '../audit/login-locks';
+import { PaymentQrChanges } from '../audit/payment-qr-changes';
 import { ReceiptRefusals } from '../audit/receipt-refusals';
 import { OverdueInvoices } from '../billing/overdue-invoices';
 import { ServiceDecisions } from '../billing/service-decisions';
@@ -43,6 +44,7 @@ export class NotificationsRefresh {
     private readonly invoices: OverdueInvoices,
     private readonly refusals: ReceiptRefusals,
     private readonly loginLocks: LoginLocks,
+    private readonly paymentQrChanges: PaymentQrChanges,
   ) {}
 
   async run(trx: TenantTransaction, tenantId: string): Promise<void> {
@@ -261,6 +263,28 @@ export class NotificationsRefresh {
       }));
       // a lock later that day comes back unread: a guess going on must not stay silent
       await this.repository.reopenGrown(trx, tenantId, items);
+      await this.repository.upsert(trx, tenantId, items);
+    }
+    if (enabled('payment_qr_changed')) {
+      // a change of the payment QR link of a store — one event per change (spec 2026-11-03-pos-store-ideas, D38)
+      const changes = await this.paymentQrChanges.changedSince(
+        trx,
+        tenantId,
+        new Date(eventsFrom),
+      );
+      const items: NewNotification[] = changes.map((change) => ({
+        kind: 'payment_qr_changed',
+        storeId: change.storeId,
+        dedupeKey: `payment_qr_changed:${change.auditId}`,
+        entityType: 'store',
+        entityId: change.storeId,
+        params: {
+          storeName: change.storeName,
+          ...(change.employeeName !== null && {
+            employeeName: change.employeeName,
+          }),
+        },
+      }));
       await this.repository.upsert(trx, tenantId, items);
     }
     if (enabled('service_decided')) {

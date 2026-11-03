@@ -421,6 +421,7 @@ export function createOwnerDb(): OwnerMockDb {
         negative_stock: true,
         receipt_discrepancy: true,
         login_locked: true,
+        payment_qr_changed: true,
         license_expiring: true,
         service_decided: true,
         invoice_overdue: true,

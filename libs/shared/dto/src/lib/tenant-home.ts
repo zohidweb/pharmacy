@@ -68,6 +68,11 @@ export type NotificationKind =
    * 2026-10-22, A2): `positions` holds the count of the day's locks, `employeeName` the employee; `employees:update`.
    */
   | 'login_locked'
+  /**
+   * The payment QR link of a store was changed or removed — one change (event; spec 2026-11-03-pos-store-ideas, D38):
+   * `storeName`, `employeeName` (who changed it); `stores:view`.
+   */
+  | 'payment_qr_changed'
   | 'sync_conflict'
   | 'license_expiring'
   /** The operator approved (with a price), rejected or cancelled a service of the network (event). */
@@ -96,7 +101,7 @@ export interface ReminderParams {
   toStore?: string;
   positions?: number;
   operatorName?: string;
-  /** `login_locked`: the employee whose sign-in was locked. */
+  /** `login_locked`: the employee whose sign-in was locked; `payment_qr_changed`: who changed the link. */
   employeeName?: string;
   shiftNumber?: string;
   /** `service_decided`: the service, the decision and its price or reason. */

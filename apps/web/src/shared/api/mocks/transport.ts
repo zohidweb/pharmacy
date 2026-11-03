@@ -62,6 +62,7 @@ const KIND_PERMISSION: Record<NotificationKind, Permission> = {
   shift_discrepancy: 'shifts:view',
   receipt_discrepancy: 'shifts:view',
   login_locked: 'employees:update',
+  payment_qr_changed: 'stores:view',
   sync_conflict: 'sync:view',
   license_expiring: 'stores:view',
   service_decided: 'services:view',

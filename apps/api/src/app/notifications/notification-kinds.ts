@@ -11,6 +11,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'negative_stock',
   'receipt_discrepancy',
   'login_locked',
+  'payment_qr_changed',
   'sync_conflict',
   'license_expiring',
   'service_decided',
@@ -23,6 +24,7 @@ export const EVENT_KINDS: readonly NotificationKind[] = [
   'negative_stock',
   'receipt_discrepancy',
   'login_locked',
+  'payment_qr_changed',
   'service_decided',
 ];
 
@@ -42,6 +44,8 @@ export const KIND_PERMISSION: Readonly<Record<NotificationKind, Permission>> = {
   receipt_discrepancy: 'shifts:view',
   // whoever can set a new password and so lift the lock (security review A2)
   login_locked: 'employees:update',
+  // whoever sees the store: its link decides where the buyers' money goes (spec 2026-11-03-pos-store-ideas, R5)
+  payment_qr_changed: 'stores:view',
   transfer_in_transit: 'inventory:view',
   supplier_payment_due: 'purchasing:view',
   shift_discrepancy: 'shifts:view',

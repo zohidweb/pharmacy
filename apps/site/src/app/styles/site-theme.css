@@ -31,7 +31,7 @@
  *     on-primary (mint-50)  on primary 950 13.1 · hover and active 975 15.5
  *     focus ring and button fill (950) on bg 7.1 · field border (950) on bg 7.1 · lines (700) decorative only (3.1:1)
  *     danger is the kit's red-700 of the light root: 3.2:1 on mint-400, so no form sits on this panel
- *   decorative only, never text: the future step numbers (mint-300 at 40 %, text-site-step-future).
+ *   decorative only, never text: the future step numbers (mint-300 at 55 %, 3.4:1 on the panel, text-site-step-future).
  */
 
 /* Primitives of the site: spec 4.1 (hex as approved). Read only by this file: the semantic layer and @theme below. */
@@ -55,7 +55,7 @@
   /* The future step numbers (amendment 4.4, п. 6): decorative, mint-300 seen through */
   --ph-site-step-future: color-mix(
     in srgb,
-    var(--ph-mint-300) 40%,
+    var(--ph-mint-300) 55%,
     transparent
   );
 

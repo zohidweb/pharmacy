@@ -1,11 +1,14 @@
 /*
- * «Как подключиться» (spec 4.5, п. 6; R6): five steps from the request to the first sale. The verb is the heading of a
- * step, with no «Шаг 1»: the order is the list's own (<ol>). From 1024 px the steps stand in a row under a line that
- * fills while the pinned section scrolls by; below, a column with a vertical line (StepsProgress). The step the line has
- * reached is marked, the current one is mint.
+ * «Как подключиться» (amendment 2026-11-02-public-site-light-panels 4.4, п. 6; R6, L11): a dark panel, five steps from
+ * the request to the first sale. The verb is the heading of a step, with no «Шаг 1»: the order is the list's own (<ol>).
+ * From 1024 px the steps stand in a row under a line that fills while the pinned section scrolls by; below, a column with
+ * a vertical line (StepsProgress). Over each step a large number: mint for the steps the line has reached, a faint mint
+ * (decorative, not text) for those ahead; the heading of the current step is mint.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
+import { cx } from '@pharmacy/ui';
 import { getTranslator } from '@/shared/i18n';
+import { contentClassName, panelClassName } from '@/shared/ui';
 import { StepsProgress } from './StepsProgress';
 
 // request → operator's call → network and activation code → catalog → first sale
@@ -14,8 +17,13 @@ const STEPS = ['request', 'call', 'activation', 'catalog', 'sale'] as const;
 export function Steps({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   return (
-    <section id="steps" aria-labelledby="steps-title" className="scroll-mt-4">
-      <div className="mx-auto w-full max-w-site-content px-4 md:px-8">
+    <section
+      id="steps"
+      aria-labelledby="steps-title"
+      data-surface="dark"
+      className={cx(panelClassName, 'scroll-mt-4')}
+    >
+      <div className={contentClassName}>
         <StepsProgress
           header={
             <header className="flex max-w-(--ph-size-dialog-lg) flex-col gap-4">
@@ -42,6 +50,13 @@ export function Steps({ locale }: { locale: UiLocale }) {
                   className="relative mt-1 size-4 shrink-0 rounded-full border-2 border-fg-muted bg-bg group-data-reached/step:border-accent-site group-data-reached/step:bg-accent-site md:mt-0"
                 />
                 <div className="flex flex-col gap-2">
+                  {/* decorative: the order is the list's own */}
+                  <span
+                    aria-hidden="true"
+                    className="text-site-figure-sm text-site-step-future group-data-reached/step:text-accent-site md:text-site-figure"
+                  >
+                    {String(STEPS.indexOf(key) + 1).padStart(2, '0')}
+                  </span>
                   <h3 className="text-xl font-bold tracking-tight group-data-current/step:text-accent-site">
                     {t(`home.steps.items.${key}.title`)}
                   </h3>

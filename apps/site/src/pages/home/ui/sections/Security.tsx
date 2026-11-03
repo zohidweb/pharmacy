@@ -1,12 +1,14 @@
 /*
- * Безопасность (spec 4.5, п. 8): two columns from 1024 px, the heading with a short text on the left, five statements
- * with icons on the right. Exactly these five, each true of the deployment (spec 4.8, without general denials): own
+ * Безопасность (amendment 2026-11-02-public-site-light-panels 4.4, п. 8; L10): the «manifesto», no panel. Two columns
+ * from 1024 px, the heading with a short text on the left, five statements on the right as rows between lines: the
+ * statement is the row's heading (24 px, Medium) with its explanation under it, an icon in a mint circle at the side. Exactly these five, each true of the deployment (spec 4.8, without general denials): own
  * server (ADR-0020), nightly copies checked by a restore (ADR-0019), encrypted copies off the host (ADR-0020
  * amendment), HTTPS (ADR-0012), roles checked on the server (ADR-0018).
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
-import { Icon, type IconName } from '@pharmacy/ui';
+import { cx, Icon, type IconName } from '@pharmacy/ui';
 import { getTranslator } from '@/shared/i18n';
+import { contentClassName, panelBodyClassName } from '@/shared/ui';
 import { RevealGroup, RevealItem } from '@/shared/ui/motion';
 
 const CLAIMS = [
@@ -25,7 +27,13 @@ export function Security({ locale }: { locale: UiLocale }) {
       aria-labelledby="security-title"
       className="scroll-mt-4"
     >
-      <div className="mx-auto grid w-full max-w-site-content gap-10 px-4 md:px-8 py-16 md:grid-cols-site-aside md:gap-16">
+      <div
+        className={cx(
+          contentClassName,
+          panelBodyClassName,
+          'grid gap-10 md:grid-cols-site-aside md:gap-16',
+        )}
+      >
         <header className="flex flex-col gap-4 md:self-start">
           <h2 id="security-title" className="text-section text-balance">
             {t('home.security.title')}
@@ -34,14 +42,21 @@ export function Security({ locale }: { locale: UiLocale }) {
             {t('home.security.subtitle')}
           </p>
         </header>
-        <RevealGroup as="ul" className="flex flex-col gap-8">
+        <RevealGroup
+          as="ul"
+          className="flex flex-col divide-y divide-site-line"
+        >
           {CLAIMS.map(({ key, icon }) => (
-            <RevealItem key={key} as="li" className="flex gap-5">
-              <span className="flex size-avatar-md shrink-0 items-center justify-center rounded-full border border-site-line bg-surface text-accent-site">
+            <RevealItem
+              key={key}
+              as="li"
+              className="flex gap-5 py-6 first:pt-0 last:pb-0 md:py-8 md:first:pt-0"
+            >
+              <span className="flex size-avatar-md shrink-0 items-center justify-center rounded-full bg-surface-sunken text-accent-site">
                 <Icon name={icon} size="lg" />
               </span>
               <div className="flex flex-col gap-2">
-                <h3 className="text-xl font-bold tracking-tight">
+                <h3 className="text-2xl font-medium tracking-tight">
                   {t(`home.security.items.${key}.title`)}
                 </h3>
                 <p className="max-w-(--ph-size-dialog-md) text-lead text-fg-muted">

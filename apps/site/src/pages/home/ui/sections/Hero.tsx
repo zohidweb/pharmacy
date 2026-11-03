@@ -1,11 +1,11 @@
 /*
  * First screen of the home page (spec 4.5, п. 2; amendment 4.4, п. 2): a dark panel, text on the left, three product
  * screens on the right; on a phone the text comes first and the screens stay inside the panel. It fills the viewport
- * under the header (capped), so the heading and both buttons are seen without scrolling. From 1024 px the screens sit at
- * the bottom of the panel and hang 64 px below it: the panel clips only sideways and keeps that much room under itself
- * (mb-16), and the text keeps the panel's bottom padding, so it stays centred in the panel. The entrance is CSS
- * (`site-enter*`, R1): the largest paint does not wait for hydration, and without JavaScript or with reduce everything
- * is simply there.
+ * under the header (capped), so the heading and both buttons are seen without scrolling; it stands off the header by
+ * the panel's own inset (8 px, 16 px from 1024 px). From 1024 px the screens sit at the bottom of the panel and hang
+ * 64 px below it: the panel clips only sideways and keeps that much room under itself (mb-16), and the text keeps the
+ * panel's bottom padding, so it stays centred in the panel. The entrance is CSS (`site-enter*`, R1): the largest paint
+ * does not wait for hydration, and without JavaScript or with reduce everything is simply there.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx } from '@pharmacy/ui';
@@ -30,7 +30,7 @@ export function Hero({
       data-surface="dark"
       className={cx(
         panelClassName,
-        'flex flex-col overflow-x-clip md:mb-16 md:min-h-site-first-screen',
+        'mt-2 flex flex-col overflow-x-clip md:mt-4 md:mb-16 md:min-h-site-first-screen',
       )}
     >
       {/* the panel padding (py-12 md:py-24) without its bottom from 1024 px: the screens end at the panel's edge */}

@@ -5,8 +5,8 @@
  * batches and the sales report behind it, shifted. They come in one after another with the CSS entrance (R1); from
  * 1024 px they part at their own speed while the page scrolls and straighten from their tilt (Parallax, L7), never with
  * reduce. Each layer moves on its own element: Parallax (shift and tilt) → entrance, so the transforms never fight. On
- * the dark panel the screens have no border, only the shadow (L3). The shots are viewport crops; their lower edge fades
- * instead of ending in a cut.
+ * the dark panel the screens have no border, only the shadow (L3). No fade at the lower edge: the screen that hangs
+ * below the panel reads as a whole card with its 24 px corners.
  */
 import { cx } from '@pharmacy/ui';
 import { Parallax } from '@/shared/ui/motion';
@@ -55,7 +55,7 @@ function Shot({ shot, alt, speed, place, enter, tilt, priority }: ShotProps) {
               ? { fetchPriority: 'high' as const }
               : { loading: 'lazy' as const })}
             decoding="async"
-            className="block h-auto w-full rounded-site-card mask-b-from-70%"
+            className="block h-auto w-full rounded-site-card"
           />
         </div>
       </div>

@@ -232,7 +232,7 @@ export type PriceChangeSource =
 export interface PriceHistoryQuery {
   /** One store of the scope; without it — every store of the scope. */
   storeId?: string;
-  /** 1–100, default 50. */
+  /** 1–100, default 20 (the page of the API). */
   limit?: number;
   offset?: number;
 }
@@ -241,6 +241,7 @@ export interface PriceHistoryQuery {
 export interface PriceHistoryEntry {
   /** Id of the audit log entry. */
   id: string;
+  /** When the price changed; an offline store's change — by the clock of the store. */
   at: string;
   storeId: string;
   storeName: string;

@@ -5,12 +5,13 @@ import type {
   CatalogReferences,
   StockProductOption,
 } from '@pharmacy/shared-dto';
-import { Alert, Button, Dialog, Spinner } from '@pharmacy/ui';
+import { Alert, Button, Dialog } from '@pharmacy/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'use-intl';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { WithMessages } from '@/shared/i18n';
+import { QueryState } from '@/shared/ui';
 import { useCatalogReferences } from '../model/references';
 import {
   ProductForm,
@@ -62,19 +63,17 @@ function CreateProductView({
       closeLabel={t('createFromSearch.close')}
       size="lg"
     >
-      {refs.data ? (
-        <CreateProductForm
-          refs={refs.data}
-          seed={seed}
-          storeId={storeId}
-          onCreated={onCreated}
-          onClose={onClose}
-        />
-      ) : (
-        <div className="grid place-items-center py-8 text-primary">
-          <Spinner size="lg" label={t('createFromSearch.loading')} />
-        </div>
-      )}
+      <QueryState query={refs}>
+        {(data) => (
+          <CreateProductForm
+            refs={data}
+            seed={seed}
+            storeId={storeId}
+            onCreated={onCreated}
+            onClose={onClose}
+          />
+        )}
+      </QueryState>
     </Dialog>
   );
 }
@@ -100,22 +99,30 @@ function CreateProductForm({
   });
   const [touched, setTouched] = useState(false);
   const [lost, setLost] = useState(false);
-  // the native dialog focuses its close button: the cashier types into the first empty field instead (D11)
+  // the product once the catalog took it: a failed lookup after that is retried by «Сохранить» without a second product
+  const [created, setCreated] = useState<CatalogProduct | null>(null);
+  // the native dialog focuses its close button: the cashier types into the first empty field instead (D11). With the
+  // references cached the form mounts with the dialog, and this effect runs before the dialog's showModal — so it waits.
   const formRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const fields = formRef.current?.querySelectorAll<HTMLInputElement>(
-      'input:not([type=hidden]):not(:disabled)',
-    );
-    [...(fields ?? [])].find((field) => field.value === '')?.focus();
+    const timer = window.setTimeout(() => {
+      const fields = formRef.current?.querySelectorAll<HTMLInputElement>(
+        'input:not([type=hidden]):not(:disabled)',
+      );
+      [...(fields ?? [])].find((field) => field.value === '')?.focus();
+    });
+    return () => window.clearTimeout(timer);
   }, []);
   const create = useMutation({
     mutationFn: async () => {
-      const product: CatalogProduct = await apiRequest('catalog.create', {
-        body: inputOf(draft),
-      });
-      // the catalog and the document searches: a search that found nothing before must find the new product now
-      void queryClient.invalidateQueries({ queryKey: ['catalog'] });
-      void queryClient.invalidateQueries({ queryKey: ['stock-products'] });
+      let product = created;
+      if (product === null) {
+        product = await apiRequest('catalog.create', { body: inputOf(draft) });
+        setCreated(product);
+        // the catalog and the document searches: a search that found nothing before must find the new product now
+        void queryClient.invalidateQueries({ queryKey: ['catalog'] });
+        void queryClient.invalidateQueries({ queryKey: ['stock-products'] });
+      }
       const options = await apiRequest('stock.products', {
         params: { storeId },
         query: {
@@ -137,6 +144,10 @@ function CreateProductForm({
   );
   const problems = draftProblems(draft);
   const valid = !problems.name && !problems.piecesPerPack && !problems.maxPrice;
+  // the search showed «нет в каталоге», yet the barcode is taken: the product holding it is archived (D11)
+  const barcodeArchived = fieldErrors.some(
+    (problem) => problem.code === 'barcode_taken',
+  );
 
   if (lost) {
     return (
@@ -156,12 +167,15 @@ function CreateProductForm({
           {error}
         </Alert>
       )}
+      {barcodeArchived && (
+        <Alert tone="info">{t('createFromSearch.barcodeArchived')}</Alert>
+      )}
       <ProductForm
         draft={draft}
         onChange={setDraft}
         refs={refs}
         touched={touched}
-        disabled={create.isPending}
+        disabled={create.isPending || created !== null}
         fieldErrors={fieldErrors}
       />
       <div className="flex justify-end gap-2">

@@ -60,19 +60,24 @@ function CustomerDisplayView() {
     if (locale && locale !== getLocale()) setLocale(locale);
   }, [locale]);
 
+  // keyed on the sale, not the state: the same «thank you» sent again (a `hello` answer) keeps its 10 s
+  const doneSale = state?.screen === 'done' ? state.saleId : null;
   useEffect(() => {
-    if (state?.screen !== 'done') return;
-    const { saleId, storeName, locale: language } = state;
+    if (doneSale === null) return;
     const timer = setTimeout(() => {
-      thanked.current.add(saleId);
+      thanked.current.add(doneSale);
       setState((current) =>
-        current?.screen === 'done' && current.saleId === saleId
-          ? { screen: 'idle', storeName, locale: language }
+        current?.screen === 'done' && current.saleId === doneSale
+          ? {
+              screen: 'idle',
+              storeName: current.storeName,
+              locale: current.locale,
+            }
           : current,
       );
     }, THANKS_MS);
     return () => clearTimeout(timer);
-  }, [state]);
+  }, [doneSale]);
 
   useEffect(() => {
     const update = () => setFullscreen(document.fullscreenElement !== null);

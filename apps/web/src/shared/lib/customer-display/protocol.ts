@@ -73,15 +73,19 @@ export function openDisplayChannel(
   return new BroadcastChannel(`ph-customer-display:${terminalId}`);
 }
 
+/** A state the display can show: a known screen, and the lines of a receipt. */
+function isDisplayState(data: unknown): data is DisplayState {
+  if (typeof data !== 'object' || data === null) return false;
+  const state = data as { screen?: unknown; lines?: unknown };
+  if (state.screen === 'idle' || state.screen === 'done') return true;
+  return state.screen === 'receipt' && Array.isArray(state.lines);
+}
+
 /** A message of this version of the protocol; anything else is dropped. */
 export function isDisplayMessage(data: unknown): data is DisplayMessage {
   if (typeof data !== 'object' || data === null) return false;
   const message = data as { v?: unknown; kind?: unknown; state?: unknown };
   if (message.v !== DISPLAY_PROTOCOL) return false;
   if (message.kind === 'hello') return true;
-  return (
-    message.kind === 'state' &&
-    typeof message.state === 'object' &&
-    message.state !== null
-  );
+  return message.kind === 'state' && isDisplayState(message.state);
 }

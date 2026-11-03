@@ -4,7 +4,8 @@
  * The POS side of the customer display (spec 2026-11-03-pos-store-ideas, D2, D3, D7): the state of the receipt goes to
  * the channel of the terminal coalesced by a short timer (not a frame: a window that is not drawn, e.g. covered by
  * another program, runs no animation frames), a display that says `hello` gets the current state, and the display
- * goes idle when the POS page unmounts (sign-out, another screen) or has no open shift.
+ * goes idle when the POS page unmounts (sign-out, another screen), the POS tab is closed or reloaded (`pagehide`) or
+ * there is no open shift. A tab that comes back from the page cache sends its state again.
  */
 import type { DiscountRule } from '@pharmacy/shared-domain';
 import { useEffect, useRef } from 'react';
@@ -109,41 +110,34 @@ export function useCustomerDisplay(c: CustomerDisplayInput): void {
     const opened = openDisplayChannel(terminalId);
     if (!opened) return;
     channel.current = opened;
-    opened.onmessage = (event: MessageEvent<unknown>) => {
-      if (
-        isDisplayMessage(event.data) &&
-        event.data.kind === 'hello' &&
-        latest.current
-      ) {
-        opened.postMessage({
-          v: DISPLAY_PROTOCOL,
-          kind: 'state',
-          state: latest.current,
-        });
-      }
+    const post = (state: DisplayState) =>
+      opened.postMessage({ v: DISPLAY_PROTOCOL, kind: 'state', state });
+    const postLatest = () => {
+      if (latest.current) post(latest.current);
     };
-    if (latest.current) {
-      opened.postMessage({
-        v: DISPLAY_PROTOCOL,
-        kind: 'state',
-        state: latest.current,
-      });
-    }
-    return () => {
-      if (timer.current !== null) clearTimeout(timer.current);
+    const postIdle = () => {
       const base = latest.current ?? {
         storeName: null,
         locale: 'ru' as Locale,
       };
-      opened.postMessage({
-        v: DISPLAY_PROTOCOL,
-        kind: 'state',
-        state: {
-          storeName: base.storeName,
-          locale: base.locale,
-          screen: 'idle',
-        },
-      });
+      post({ storeName: base.storeName, locale: base.locale, screen: 'idle' });
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) postLatest();
+    };
+    opened.onmessage = (event: MessageEvent<unknown>) => {
+      if (isDisplayMessage(event.data) && event.data.kind === 'hello') {
+        postLatest();
+      }
+    };
+    postLatest();
+    window.addEventListener('pagehide', postIdle);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('pagehide', postIdle);
+      window.removeEventListener('pageshow', onPageShow);
+      if (timer.current !== null) clearTimeout(timer.current);
+      postIdle();
       opened.close();
       channel.current = null;
     };

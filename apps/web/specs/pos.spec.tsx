@@ -11,7 +11,7 @@ import {
   within,
 } from '@testing-library/react';
 import { axe } from 'jest-axe';
-import { PosPage } from '@/pages/pos';
+import { PosPage } from '@/pages/pos/till';
 import { getTerminalRuntime } from '@/shared/lib/offline-queue';
 import { AppShell } from '@/widgets/app-shell';
 import { scenario, signInByPin, useMockApi } from './mock-env';

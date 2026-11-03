@@ -105,7 +105,8 @@ pharmacy/
   `pos`, `returns`, `inventory`, `purchasing` ← `notifications` ← `reports` (`SalesFigures`, `PosAlerts`,
   `ReturnFigures`, `StockAlerts`, `SupplierDues`, `Reminders`); `audit` ← все (`AuditService`, журнал `AuditJournal`);
   блокировки входа (ADR-0008, поправка 2026-10-23): `auth` ← `staff` (`SignInLocks` — новый пароль снимает блокировки),
-  `audit` ← `notifications` (`LoginLocks` — блокировки для уведомления `login_locked`);
+  `audit` ← `notifications` (`LoginLocks` — блокировки для уведомления `login_locked`; `PaymentQrChanges` — смены ссылки
+  QR оплаты точки для уведомления `payment_qr_changed`, спецификация 2026-11-03-pos-store-ideas, I6);
   цену последнего прихода `pricing` получает через порт `PurchasePrices`, который заполняет `inventory`, а
   остатки точек (проблема «нет цены») — через порт `StockedProducts`, который тоже заполняет `inventory`;
   `inventory`, `pricing` ← `reports` (счётчики меню: `StockAlerts`, `PriceProblems`).

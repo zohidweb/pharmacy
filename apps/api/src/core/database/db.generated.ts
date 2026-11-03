@@ -955,6 +955,8 @@ export interface Stores {
   legalEntityId: string;
   mode: Generated<string>;
   name: string;
+  paymentQrRecipient: string | null;
+  paymentQrTemplate: string | null;
   printReceiptDefault: Generated<boolean>;
   status: Generated<string>;
   tenantId: string;

@@ -189,6 +189,17 @@ export class CatalogSnapshotService {
           ),
           returnWindowDays: settings.returnPeriodDays,
           bufferLimits: settings.bufferLimits,
+          storeCode: store.code,
+          // the payment QR is drawn by the POS of a cloud store only (spec 2026-11-03-pos-store-ideas, R6)
+          paymentQr:
+            store.mode === 'online' &&
+            store.paymentQrTemplate !== null &&
+            store.paymentQrRecipient !== null
+              ? {
+                  template: store.paymentQrTemplate,
+                  recipient: store.paymentQrRecipient,
+                }
+              : null,
         },
       };
     });

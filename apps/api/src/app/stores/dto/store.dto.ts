@@ -1,15 +1,18 @@
 import type {
   CreateStoreRequest,
   LegalEntityInput,
+  PaymentQrSettings,
   StoreKind,
   UpdateLegalEntityRequest,
   UpdateOwnerStoreRequest,
+  UpdatePaymentQrRequest,
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -165,4 +168,26 @@ export class UpdateStoreDto implements UpdateOwnerStoreRequest {
 
   @IsBoolean()
   printReceiptDefault!: boolean;
+}
+
+/**
+ * The payment QR of a store (spec 2026-11-03-pos-store-ideas, D37): the shape here; the rules of the link and the
+ * recipient in the service, with the codes the owner's form knows (`paymentQrTemplateProblem`, `required`, `length`).
+ */
+export class PaymentQrSettingsDto implements PaymentQrSettings {
+  @IsString()
+  template!: string;
+
+  @Transform(trim)
+  @IsString()
+  recipient!: string;
+}
+
+/** PUT /api/v1/stores/{id}/payment-qr: `null` removes the QR; a missing field is a 400. */
+export class UpdatePaymentQrDto implements UpdatePaymentQrRequest {
+  @ValidateIf((_object, value) => value !== null)
+  @IsObject()
+  @ValidateNested()
+  @Type(() => PaymentQrSettingsDto)
+  paymentQr!: PaymentQrSettingsDto | null;
 }

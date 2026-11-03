@@ -311,6 +311,10 @@
       "title": "{positions, plural, one {# чек} few {# чека} other {# чеков}} с расхождением цены, скидки или автора",
       "detail": "{store} · проверьте смену и Z-отчёт"
     },
+    "payment_qr_changed": {
+      "title": "{store}: изменена ссылка QR оплаты",
+      "detail": "Изменил {employee} · если вы не ждали изменения, проверьте ссылку в карточке точки"
+    },
     "login_locked": {
       "title": "{employee}: вход заблокирован",
       "detail": "{positions, plural, one {# блокировка} few {# блокировки} other {# блокировок}} за день после неверных паролей · если входил не сотрудник, задайте ему новый пароль"
@@ -505,6 +509,7 @@
     "role_updated": "Роль изменена",
     "role_changed": "Роль изменена",
     "store_created": "Точка добавлена",
+    "store_payment_qr_changed": "Ссылка QR оплаты изменена",
     "store_updated": "Точка изменена",
     "legal_entity_created": "Юрлицо добавлено",
     "legal_entity_updated": "Юрлицо изменено",

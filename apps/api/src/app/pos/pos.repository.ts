@@ -20,6 +20,9 @@ export interface PosStore {
   taxId: string;
   /** Closed period of the legal entity of the store, YYYY-MM-DD. */
   closedUntil: string | null;
+  /** The payment QR (spec 2026-11-03-pos-store-ideas, D39): both set or both null. */
+  paymentQrTemplate: string | null;
+  paymentQrRecipient: string | null;
 }
 
 /** Settings of the network the POS needs. */
@@ -50,7 +53,8 @@ export class PosRepository {
   ): Promise<PosStore | null> {
     const result = await sql<PosStore>`
       select s.id, s.code, s.name, s.address, s.mode, s.status, s.legal_entity_id,
-             le.tax_id, le.closed_until::text as closed_until
+             le.tax_id, le.closed_until::text as closed_until,
+             s.payment_qr_template, s.payment_qr_recipient
       from pharmacy.stores s
       join pharmacy.legal_entities le on le.tenant_id = s.tenant_id and le.id = s.legal_entity_id
       where s.tenant_id = ${tenantId} and s.id = ${storeId}

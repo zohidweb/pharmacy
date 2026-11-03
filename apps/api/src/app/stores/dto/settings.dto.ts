@@ -70,6 +70,9 @@ export class NotificationSwitchesDto implements Record<
   login_locked!: boolean;
 
   @IsBoolean()
+  payment_qr_changed!: boolean;
+
+  @IsBoolean()
   sync_conflict!: boolean;
 
   @IsBoolean()

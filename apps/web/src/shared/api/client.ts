@@ -164,6 +164,7 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'billing.invoice',
   'stores.create',
   'stores.update',
+  'stores.paymentQr',
   'stores.closingPreview',
   'stores.close',
   'stores.cancelClosing',

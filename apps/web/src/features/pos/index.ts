@@ -33,6 +33,7 @@ export {
   useCustomerDisplay,
   type CustomerDisplayInput,
 } from './model/customer-display';
+export { usePaymentQr, type PaymentQrInput } from './model/payment-qr';
 export { CartPanel, type CartPanelProps } from './ui/CartPanel';
 export { CustomerDisplayButton } from './ui/CustomerDisplayButton';
 export { HeldReceiptsDialog } from './ui/HeldReceiptsDialog';

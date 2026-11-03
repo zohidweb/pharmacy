@@ -8,12 +8,13 @@
  * there is no open shift. A tab that comes back from the page cache sends its state again.
  */
 import type { DiscountRule } from '@pharmacy/shared-domain';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Locale } from '@/shared/i18n';
 import {
   DISPLAY_PROTOCOL,
   isDisplayMessage,
   openDisplayChannel,
+  type DisplayQr,
   type DisplayState,
 } from '@/shared/lib/customer-display';
 import {
@@ -26,6 +27,8 @@ import {
 
 /** Changes within this window go to the display as one state. */
 const SEND_DELAY_MS = 50;
+/** The payment QR reaches the buyer once it stopped changing for this long: no QR of an amount still being typed. */
+const QR_SETTLE_MS = 1000;
 
 export interface CustomerDisplayInput {
   terminalId: string | null;
@@ -37,6 +40,8 @@ export interface CustomerDisplayInput {
   done: { saleId: string; totalMinor: number; changeMinor: number } | null;
   /** An open shift and a POS that may sell. */
   active: boolean;
+  /** The payment QR of the QR part (`usePaymentQr`). */
+  qr: DisplayQr | null;
 }
 
 /** The line added or whose quantity changed since `before`; else the last highlighted one if it is still there. */
@@ -51,7 +56,10 @@ function changedLine(
   return after.some((line) => line.key === last) ? last : null;
 }
 
-/** What the buyer sees (D3, D4): only names, quantities and money; the payment once the cashier started it (R6). */
+/**
+ * What the buyer sees (D3, D4): only names, quantities and money; the payment once the cashier started it (R6) and
+ * while the bank-terminal parts fit the total — a part above it is the cashier's mistake to fix, not the buyer's.
+ */
 export function displayStateOf(
   c: Omit<CustomerDisplayInput, 'terminalId'>,
   changedKey: string | null,
@@ -66,7 +74,8 @@ export function displayStateOf(
   const sum = totals(c.draft, c.rules);
   const payment = paymentState(c.draft, sum.totalMinor);
   const started =
-    payment.nonCashMinor > 0 || c.draft.cashTenderedMinor !== null;
+    (payment.nonCashMinor > 0 || c.draft.cashTenderedMinor !== null) &&
+    payment.problem !== 'non_cash_exceeds_total';
   return {
     ...base,
     screen: 'receipt',
@@ -88,9 +97,21 @@ export function displayStateOf(
           payments: payment.payments,
           tenderedMinor: c.draft.cashTenderedMinor,
           changeMinor: payment.changeMinor,
+          qr: c.qr,
         }
       : null,
   };
+}
+
+/** `value` once it has stayed the same for `ms`; null before that and while it changes. */
+function useSettled<T>(value: T | null, ms: number): T | null {
+  const [settled, setSettled] = useState<T | null>(null);
+  useEffect(() => {
+    if (value === null) return;
+    const id = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return value !== null && settled === value ? value : null;
 }
 
 export function useCustomerDisplay(c: CustomerDisplayInput): void {
@@ -101,6 +122,8 @@ export function useCustomerDisplay(c: CustomerDisplayInput): void {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { terminalId, storeName, locale, draft, rules, done, active } = c;
+  // typing the QR part of a mixed payment changes the amount per key; the buyer could scan 12,00 on the way to 125,50
+  const qr = useSettled(c.qr, QR_SETTLE_MS);
   const saleId = done?.saleId ?? null;
   const doneTotal = done?.totalMinor ?? 0;
   const doneChange = done?.changeMinor ?? 0;
@@ -160,6 +183,7 @@ export function useCustomerDisplay(c: CustomerDisplayInput): void {
           ? { saleId, totalMinor: doneTotal, changeMinor: doneChange }
           : null,
         active,
+        qr,
       },
       changedKey.current,
     );
@@ -174,5 +198,15 @@ export function useCustomerDisplay(c: CustomerDisplayInput): void {
         });
       }
     }, SEND_DELAY_MS);
-  }, [storeName, locale, draft, rules, saleId, doneTotal, doneChange, active]);
+  }, [
+    storeName,
+    locale,
+    draft,
+    rules,
+    saleId,
+    doneTotal,
+    doneChange,
+    active,
+    qr,
+  ]);
 }

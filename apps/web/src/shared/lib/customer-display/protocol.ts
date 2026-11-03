@@ -23,6 +23,18 @@ export interface DisplayPayment {
   amountMinor: number;
 }
 
+/**
+ * The payment QR of the QR part (spec 2026-11-03-pos-store-ideas, D40; ADR-0022, amendment 2026-11-03): the link with
+ * the amount and the reference put in, the recipient under it. `withAmount` false — the bank does not take the amount
+ * from the link, the buyer types it in.
+ */
+export interface DisplayQr {
+  link: string;
+  recipient: string;
+  amountMinor: number;
+  withAmount: boolean;
+}
+
 interface DisplayBase {
   storeName: string | null;
   /** The language of the receipt — the interface language of the POS. */
@@ -46,6 +58,8 @@ export type DisplayState =
         /** Cash handed over; null — exactly the cash part. */
         tenderedMinor: number | null;
         changeMinor: number;
+        /** null — no QR part, or the store has no payment link. */
+        qr: DisplayQr | null;
       } | null;
     })
   | (DisplayBase & {

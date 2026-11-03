@@ -41,6 +41,7 @@ const NOTIFICATIONS: NotificationKind[] = [
   'negative_stock',
   'receipt_discrepancy',
   'login_locked',
+  'payment_qr_changed',
   'license_expiring',
   'service_decided',
   'invoice_overdue',

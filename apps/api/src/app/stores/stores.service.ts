@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { PAYMENT_QR_RECIPIENT_MAX, paymentQrTemplateProblem } from '@pharmacy/shared-domain';
 import type {
   CreateStoreRequest,
   OwnerStore,
+  PaymentQrSettings,
   StoreKind,
   StoresOverview,
   UpdateOwnerStoreRequest,
+  UpdatePaymentQrRequest,
 } from '@pharmacy/shared-dto';
 import { requirePrincipal } from '../../common/context/request-context';
 import { ProblemException } from '../../common/errors/problem.exception';
@@ -58,7 +61,18 @@ export function toOwnerStore(
     })),
     closingCancellable:
       row.status === 'closing' && shown.every((t) => t.status === 'in_transit'),
+    paymentQr: paymentQrOf(row),
   };
+}
+
+/** The payment QR of a store row: both columns or none (CHECK). */
+export function paymentQrOf(row: {
+  paymentQrTemplate: string | null;
+  paymentQrRecipient: string | null;
+}): PaymentQrSettings | null {
+  return row.paymentQrTemplate !== null && row.paymentQrRecipient !== null
+    ? { template: row.paymentQrTemplate, recipient: row.paymentQrRecipient }
+    : null;
 }
 
 // Stores of the owner (spec 2026-10-06-owner-stores, section 3): cloud stores only; the code and
@@ -178,6 +192,57 @@ export class StoresService {
           entityId: storeId,
           storeId,
           details: { fields: changed },
+        });
+      }
+      return this.read(trx, tenantId, storeId);
+    });
+  }
+
+  /**
+   * The payment QR of a store (spec 2026-11-03-pos-store-ideas, D37, D38): the rules of the link of shared-domain, the
+   * store locked so that the audit holds the link it replaced; the same values again write nothing.
+   */
+  async updatePaymentQr(
+    id: string,
+    request: UpdatePaymentQrRequest,
+  ): Promise<OwnerStore> {
+    const { tenantId, storeScope } = requirePrincipal();
+    const storeId = id.toLowerCase();
+    if (storeScope !== 'all' && !storeScope.includes(storeId)) throw notFound();
+    const after = request.paymentQr;
+    if (after !== null) {
+      const problem = paymentQrTemplateProblem(after.template);
+      const recipient =
+        after.recipient === ''
+          ? 'required'
+          : after.recipient.length > PAYMENT_QR_RECIPIENT_MAX
+            ? 'length'
+            : null;
+      if (problem !== null || recipient !== null) {
+        throw new FieldProblemException(400, 'validation_failed', [
+          ...(problem === null ? [] : [{ field: 'paymentQr.template', code: problem }]),
+          ...(recipient === null ? [] : [{ field: 'paymentQr.recipient', code: recipient }]),
+        ]);
+      }
+    }
+    return this.db.tenantTransaction(async (trx) => {
+      const store = await this.repository.lockStore(trx, tenantId, storeId);
+      if (store === null) throw notFound();
+      if (store.status === 'closed') throw new ProblemException(409, 'store_closed');
+      if (store.status === 'closing') throw new ProblemException(409, 'store_closing');
+      const before = paymentQrOf(store);
+      const same =
+        before?.template === after?.template &&
+        before?.recipient === after?.recipient;
+      if (!same) {
+        await this.repository.updatePaymentQr(trx, tenantId, storeId, after);
+        // the link decides where the buyer's money goes: who changed it and from what (D38)
+        await this.audit.append(trx, {
+          action: 'store.payment_qr_changed',
+          entityType: 'store',
+          entityId: storeId,
+          storeId,
+          details: { before, after },
         });
       }
       return this.read(trx, tenantId, storeId);

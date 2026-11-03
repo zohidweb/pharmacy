@@ -54,6 +54,7 @@ import {
   enqueueSale,
   HeldReceiptsDialog,
   payAllBy,
+  paymentState,
   ProductDetailsDialog,
   ProductPicker,
   removeLine,
@@ -65,6 +66,7 @@ import {
   totals,
   useCustomerDisplay,
   useDraftPersistence,
+  usePaymentQr,
   usePosStore,
   type AddError,
   type DraftLine,
@@ -182,6 +184,19 @@ function PosPageView() {
       ? t('noShift')
       : null;
 
+  // the payment QR of the QR part, on the POS and the customer display (spec 2026-11-03-pos-store-ideas, D40); no QR
+  // while the bank-terminal parts exceed «К оплате» — a line removed after «QR» leaves the old part until it is fixed
+  const qrTotal = totals(draft, snapshot?.discountRules ?? NO_RULES).totalMinor;
+  const paymentQr = usePaymentQr({
+    db: runtime?.db ?? null,
+    shiftId,
+    settings: snapshot?.settings,
+    qrMinor:
+      paymentState(draft, qrTotal).nonCashMinor > qrTotal
+        ? 0
+        : draft.nonCash.qr,
+  });
+
   // the window on the buyer's monitor (spec 2026-11-03-pos-store-ideas, D1–D7)
   useCustomerDisplay({
     terminalId: session?.terminalId ?? null,
@@ -197,6 +212,7 @@ function PosPageView() {
         }
       : null,
     active: Boolean(openShift) && !locked,
+    qr: paymentQr,
   });
 
   useEffect(() => () => setFullscreen(false), [setFullscreen]);
@@ -592,6 +608,7 @@ function PosPageView() {
                   }}
                   onCancel={() => setCancelOpen(true)}
                   onPay={() => void pay()}
+                  paymentQr={paymentQr}
                 />
               </div>
             ) : null

@@ -11,6 +11,8 @@ import {
   daysInMonth,
   expenseKinds,
   hasPermissions,
+  PAYMENT_QR_RECIPIENT_MAX,
+  paymentQrTemplateProblem,
   posBufferBounds,
   prescriptionRetentionBounds,
   prorateExpense,
@@ -1104,6 +1106,7 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       licenseValidUntil: null,
       closedOn: null,
       stockMovedTo: null,
+      paymentQr: null,
     };
     if (idempotencyKey) owner().storeKeys[idempotencyKey] = id;
     appendAudit(session, {
@@ -1155,6 +1158,52 @@ export const ownerHandlers: Pick<MockHandlers, OwnerRoute> = {
       storeName: base.name,
     });
     mockDb().pos.catalogVersion += 1;
+    const updated = ownerStore(base.id);
+    if (!updated) throw new ApiError(404, 'not_found', correlationId);
+    return updated;
+  },
+  'stores.paymentQr': ({ params, body, correlationId }) => {
+    const { session } = context(correlationId, 'stores:update', {
+      write: true,
+    });
+    // a fresh sign-in, as the API asks for the link the buyers pay by (spec 2026-11-03-pos-store-ideas, D38)
+    if (session.auth !== 'password') {
+      throw new ApiError(403, 'fresh_auth_required', correlationId);
+    }
+    const base = stores.find((s) => s.id === params.id);
+    const details = base && owner().storeDetails[base.id];
+    if (!base || !details || !session.stores.some((s) => s.id === base.id)) {
+      throw new ApiError(404, 'not_found', correlationId);
+    }
+    if (details.status === 'closing') {
+      throw new ApiError(409, 'store_closing', correlationId);
+    }
+    let value = null;
+    if (body.paymentQr) {
+      const problem = paymentQrTemplateProblem(body.paymentQr.template);
+      if (problem) throw invalid(correlationId, 'paymentQr.template', problem);
+      const recipient = body.paymentQr.recipient.trim();
+      if (!recipient) {
+        throw invalid(correlationId, 'paymentQr.recipient', 'required');
+      }
+      if (recipient.length > PAYMENT_QR_RECIPIENT_MAX) {
+        throw invalid(correlationId, 'paymentQr.recipient', 'length');
+      }
+      value = { template: body.paymentQr.template, recipient };
+    }
+    const before = details.paymentQr;
+    if (
+      before?.template !== value?.template ||
+      before?.recipient !== value?.recipient
+    ) {
+      details.paymentQr = value;
+      appendAudit(session, {
+        event: 'store.payment_qr_changed',
+        object: base.name,
+        storeName: base.name,
+      });
+      mockDb().pos.catalogVersion += 1;
+    }
     const updated = ownerStore(base.id);
     if (!updated) throw new ApiError(404, 'not_found', correlationId);
     return updated;

@@ -5,6 +5,7 @@ import { AuditJournalController } from './audit-journal.controller';
 import { AuditJournalRepository } from './audit-journal.repository';
 import { AuditService } from './audit.service';
 import { LoginLocks } from './login-locks';
+import { PaymentQrChanges } from './payment-qr-changes';
 import { PinSignIns } from './pin-sign-ins';
 import { PriceChanges } from './price-changes';
 import { PriceHistory } from './price-history';
@@ -23,6 +24,8 @@ import { SyncCoreModule } from '../../core/sync';
   // PriceHistory — the history of the prices of a product for its owner's screens (spec 2026-11-03-pos-store-ideas, D16)
   // ReceiptRefusals — the sales the price rules refused, for the owner's notification (I2)
   // LoginLocks — the sign-in locks of the employees, for the owner's notification (A2)
+  // PaymentQrChanges — the changes of the payment QR links of the stores, for the owner's notification
+  // (spec 2026-11-03-pos-store-ideas, D38)
   providers: [
     AuditService,
     AuditJournalRepository,
@@ -33,6 +36,7 @@ import { SyncCoreModule } from '../../core/sync';
     PriceHistory,
     ReceiptRefusals,
     LoginLocks,
+    PaymentQrChanges,
   ],
   exports: [
     AuditService,
@@ -42,6 +46,7 @@ import { SyncCoreModule } from '../../core/sync';
     PriceHistory,
     ReceiptRefusals,
     LoginLocks,
+    PaymentQrChanges,
   ],
 })
 export class AuditModule {}

@@ -187,7 +187,20 @@
       "thanks": "Спасибо за покупку!",
       "paid": "Оплачено: {amount}",
       "change": "Сдача: {amount}",
-      "tapToFullscreen": "Коснитесь, чтобы развернуть на весь экран"
+      "tapToFullscreen": "Коснитесь, чтобы развернуть на весь экран",
+      "qrTitle": "Оплата по QR",
+      "qrLabel": "QR оплаты",
+      "qrAmount": "К оплате по QR: {amount}",
+      "qrTypeAmount": "Сумма к оплате: {amount}"
+    },
+    "paymentQr": {
+      "show": "Показать QR · {amount}",
+      "title": "QR для оплаты",
+      "hint": "Покажите QR покупателю. Нажмите «Оплатить», когда увидите платёж в приложении банка",
+      "label": "QR оплаты",
+      "amount": "К оплате по QR: {amount}",
+      "typeAmount": "Сумма к оплате: {amount}",
+      "close": "Закрыть"
     }
   },
   "shift": {

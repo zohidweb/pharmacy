@@ -286,6 +286,9 @@ function networkSettingsOf(storeName: string, storeAddress: string) {
       controlledMaxOperations: network.posControlledMaxOperations,
     },
     ...(store && {
+      // the payment QR of the owner's store card (spec 2026-11-03-pos-store-ideas, D39)
+      storeCode: store.code,
+      paymentQr: store.paymentQr,
       taxId:
         mockDb().owner.legalEntities.find((e) => e.id === store.legalEntityId)
           ?.taxId ?? base.taxId,

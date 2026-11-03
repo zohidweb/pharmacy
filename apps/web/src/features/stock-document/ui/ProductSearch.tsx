@@ -2,16 +2,23 @@
 
 import type { StockProductOption } from '@pharmacy/shared-dto';
 import { formatMoney } from '@pharmacy/shared-util';
-import { Spinner, TextField } from '@pharmacy/ui';
+import { Button, Spinner, TextField } from '@pharmacy/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { apiRequest } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
 
+/** What a new product starts from: the scanned barcode, or the typed name (spec 2026-11-03-pos-store-ideas, D10). */
+export type ProductSeed = { barcode: string } | { name: string };
+
+/** 8–14 digits, as the catalog takes a barcode. */
+const BARCODE = /^\d{8,14}$/;
+
 /**
  * Adds a product to a document line: search by name, МНН or barcode, or a scan (the scanner works
- * without focusing the field). Results come from the stock of the store (`stock-products`).
+ * without focusing the field). Results come from the stock of the store (`stock-products`). With
+ * `create`, a search that found nothing offers to create the product (the documents that bring stock in).
  */
 export function ProductSearch({
   storeId,
@@ -19,6 +26,7 @@ export function ProductSearch({
   onPick,
   disabled = false,
   initialQuery = '',
+  create,
 }: {
   storeId: string;
   /** Only the batches of this supplier (a supplier return). */
@@ -27,6 +35,8 @@ export function ProductSearch({
   disabled?: boolean;
   /** The search to start with, e.g. a barcode scanned before the search was shown. */
   initialQuery?: string;
+  /** «Завести товар»: `allowed` — the session may create products (`catalog:create`). */
+  create?: { allowed: boolean; onCreate: (seed: ProductSeed) => void };
 }) {
   const t = useTranslations('stockDocs.search');
   const [query, setQuery] = useState(initialQuery);
@@ -97,6 +107,31 @@ export function ProductSearch({
                 </li>
               ))}
             </ul>
+          ) : create && !results.isError ? (
+            <div className="flex flex-col items-start gap-2 p-3 text-sm">
+              <p className="text-fg-subtle">
+                {BARCODE.test(trimmed)
+                  ? t('notInCatalogBarcode', { code: trimmed })
+                  : t('notInCatalogName', { name: trimmed })}
+              </p>
+              {create.allowed ? (
+                <Button
+                  variant="secondary"
+                  iconStart="plus"
+                  onClick={() =>
+                    create.onCreate(
+                      BARCODE.test(trimmed)
+                        ? { barcode: trimmed }
+                        : { name: trimmed },
+                    )
+                  }
+                >
+                  {t('createProduct')}
+                </Button>
+              ) : (
+                <p className="text-fg-muted">{t('askToCreate')}</p>
+              )}
+            </div>
           ) : (
             <p className="p-3 text-sm text-fg-subtle">{t('nothing')}</p>
           )}

@@ -19,11 +19,14 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { canWrite, useSession } from '@/entities/session';
 import { DocumentStatusPill } from '@/entities/stock-document';
+import { CreateProductDialog } from '@/features/product-form';
 import {
   ProductSearch,
   QuantityInput,
   UnpostDialog,
+  type ProductSeed,
   type StockAccess,
 } from '@/features/stock-document';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
@@ -92,6 +95,9 @@ export function OpeningBalanceEditor({
   );
   const [touched, setTouched] = useState(false);
   const [unposting, setUnposting] = useState(false);
+  // «Завести товар» from the search of a line (spec 2026-11-03-pos-store-ideas, D9–D11)
+  const { data: session } = useSession();
+  const [seed, setSeed] = useState<ProductSeed | null>(null);
   const editable = (!doc || doc.status === 'draft') && access.canUpdate;
 
   const invalidate = () =>
@@ -309,7 +315,25 @@ export function OpeningBalanceEditor({
               {t('lines')}
             </h3>
             {editable && draft.storeId && (
-              <ProductSearch storeId={draft.storeId} onPick={addProduct} />
+              <ProductSearch
+                storeId={draft.storeId}
+                onPick={addProduct}
+                create={{
+                  allowed: canWrite(session, 'catalog:create'),
+                  onCreate: setSeed,
+                }}
+              />
+            )}
+            {seed && (
+              <CreateProductDialog
+                seed={seed}
+                storeId={draft.storeId}
+                onCreated={(product) => {
+                  setSeed(null);
+                  addProduct(product);
+                }}
+                onClose={() => setSeed(null)}
+              />
             )}
             {touched && draft.lines.length === 0 && (
               <Alert tone="warning">{t('linesRequired')}</Alert>

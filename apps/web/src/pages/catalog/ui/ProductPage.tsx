@@ -20,19 +20,19 @@ import { useLocale, useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
 import { PriceHistoryButton } from '@/features/price-history';
 import { PrintTagsDialog } from '@/features/print-price-tags';
-import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
-import { routes } from '@/shared/config';
-import { QueryState } from '@/shared/ui';
-import { PageHeader } from '@/widgets/app-shell';
-import { useCatalogReferences } from './CatalogPage';
 import {
   ProductForm,
   draftOf,
   draftProblems,
   inputOf,
   shownAtFields,
+  useCatalogReferences,
   type ProductDraft,
-} from './ProductForm';
+} from '@/features/product-form';
+import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
+import { routes } from '@/shared/config';
+import { QueryState } from '@/shared/ui';
+import { PageHeader } from '@/widgets/app-shell';
 import { WithMessages } from '@/shared/i18n';
 
 function ProductView() {

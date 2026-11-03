@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { paymentQrTemplateProblem } from '@pharmacy/shared-domain';
+import { PAYMENT_QR_RECIPIENT_MAX, paymentQrTemplateProblem } from '@pharmacy/shared-domain';
 import type {
   CreateStoreRequest,
   OwnerStore,
@@ -212,9 +212,16 @@ export class StoresService {
     const after = request.paymentQr;
     if (after !== null) {
       const problem = paymentQrTemplateProblem(after.template);
-      if (problem !== null) {
+      const recipient =
+        after.recipient === ''
+          ? 'required'
+          : after.recipient.length > PAYMENT_QR_RECIPIENT_MAX
+            ? 'length'
+            : null;
+      if (problem !== null || recipient !== null) {
         throw new FieldProblemException(400, 'validation_failed', [
-          { field: 'paymentQr.template', code: problem },
+          ...(problem === null ? [] : [{ field: 'paymentQr.template', code: problem }]),
+          ...(recipient === null ? [] : [{ field: 'paymentQr.recipient', code: recipient }]),
         ]);
       }
     }

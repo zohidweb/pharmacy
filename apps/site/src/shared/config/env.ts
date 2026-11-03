@@ -1,6 +1,6 @@
 /*
  * Environment of the site (spec 5, ADR-0023): read on the server at call time, never inlined into the
- * client bundle. The site has no database, Redis or secrets — only these four variables.
+ * client bundle. The site has no database, Redis or secrets: only these four variables.
  */
 export interface SiteEnv {
   /** Base address of apps/api for server requests (`http://api:3000` in compose). */

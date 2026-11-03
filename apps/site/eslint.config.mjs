@@ -2,6 +2,10 @@ import nextEslintPluginNext from '@next/eslint-plugin-next';
 import nx from '@nx/eslint-plugin';
 import baseConfig from '../../eslint.config.mjs';
 import { fsdLayerRules } from '../../tools/eslint-rules/fsd-layers.mjs';
+import {
+  motionBanFiles,
+  motionSiteImportPatterns,
+} from '../../tools/eslint-rules/motion-imports.mjs';
 
 export default [
   { plugins: { '@next/next': nextEslintPluginNext } },
@@ -10,5 +14,15 @@ export default [
   {
     ignores: ['.next/**/*', '**/out-tsc'],
   },
-  ...fsdLayerRules(),
+  // ADR-0024: the site is the one place `motion` is allowed, and only as `motion/react`
+  {
+    files: motionBanFiles,
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: motionSiteImportPatterns },
+      ],
+    },
+  },
+  ...fsdLayerRules({ allowMotion: true }),
 ];

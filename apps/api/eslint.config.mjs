@@ -1,4 +1,5 @@
 import baseConfig from '../../eslint.config.mjs';
+import { motionImportPatterns } from '../../tools/eslint-rules/motion-imports.mjs';
 
 export default [
   ...baseConfig,
@@ -26,6 +27,7 @@ export default [
             },
           ],
           patterns: [
+            ...motionImportPatterns,
             {
               group: [
                 '**/core/database/platform',

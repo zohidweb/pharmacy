@@ -24,7 +24,7 @@ export function siteNameOf(
 }
 
 /**
- * Canonical — the address of the current language; `languages` — only the given ones; `x-default` — RU
+ * Canonical: the address of the current language; `languages`: only the given ones; `x-default`: RU
  * when RU is among them. Absolute addresses on SITE_ORIGIN.
  */
 export function alternates(
@@ -47,7 +47,7 @@ export interface PageMetadataInput {
   /** The address without the language prefix, e.g. `/tariffs`. */
   path: string;
   info: PublicSiteInfo | null;
-  /** The page title; the layout adds « — <site name>» to a plain string. */
+  /** The page title; the layout adds « | <site name>» to a plain string. */
   title: Metadata['title'];
   /** The title in link previews (no template there). */
   openGraphTitle: string;

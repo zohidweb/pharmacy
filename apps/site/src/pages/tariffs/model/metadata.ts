@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { getTranslator } from '@/shared/i18n';
 import { pageMetadata, siteNameOf } from '@/shared/seo';
 
-/** «Тарифы и услуги — <name>» (the layout's template), canonical and hreflang of `/tariffs`, Open Graph. */
+/** «Тарифы и услуги | <name>» (the layout's template), canonical and hreflang of `/tariffs`, Open Graph. */
 export function tariffsMetadata(
   locale: UiLocale,
   info: PublicSiteInfo | null,
@@ -15,7 +15,7 @@ export function tariffsMetadata(
     path: '/tariffs',
     info,
     title,
-    openGraphTitle: `${title} — ${siteNameOf(info, locale)}`,
+    openGraphTitle: `${title} | ${siteNameOf(info, locale)}`,
     description: t('tariffs.description'),
   });
 }

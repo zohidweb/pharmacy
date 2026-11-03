@@ -6,7 +6,7 @@ import { loadArticle } from './load-article';
 
 /**
  * The SEO title and description of the article (its title and excerpt when empty), hreflang only of the
- * languages it exists in (Review Focus 2), Open Graph `article` with the cover. A missing article — no
+ * languages it exists in (Review Focus 2), Open Graph `article` with the cover. A missing article: no
  * metadata: the page answers 404.
  */
 export async function articleMetadata(
@@ -26,7 +26,7 @@ export async function articleMetadata(
     path: `/blog/${article.slug}`,
     info,
     title,
-    openGraphTitle: `${title} — ${siteNameOf(info, locale)}`,
+    openGraphTitle: `${title} | ${siteNameOf(info, locale)}`,
     description,
     available: article.locales,
     imageId: article.coverMediaId,

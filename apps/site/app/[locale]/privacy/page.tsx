@@ -18,7 +18,7 @@ export async function generateMetadata({
   return legalMetadata('privacy', locale, await findSiteInfo());
 }
 
-// nothing published — 404; an unavailable API shows error.tsx (W2)
+// nothing published: 404; an unavailable API shows error.tsx (W2)
 export default async function PrivacyRoute({ params }: PrivacyRouteProps) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();

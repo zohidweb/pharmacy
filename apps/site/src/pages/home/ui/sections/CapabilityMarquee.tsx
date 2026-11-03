@@ -1,0 +1,75 @@
+/*
+ * The capability line of the home page (spec 4.5, п. 3; R7; amendment 4.4, п. 3), the only one on the site: eight
+ * capabilities of the cloud pilot in large green type on the light page, mint dots between them, no panel and no
+ * lines. They move slowly to the left and stop under the pointer and by the pause button of MarqueeFrame (WCAG 2.2.2).
+ * The movement is pure CSS (`.site-marquee` in site-theme.css). The track holds the list twice so the loop has no seam;
+ * the copy is hidden from assistive technology. With reduce the copy is gone and the list wraps in place, still.
+ */
+import type { UiLocale } from '@pharmacy/shared-dto';
+import { cx } from '@pharmacy/ui';
+import { getTranslator } from '@/shared/i18n';
+import { MarqueeFrame } from './MarqueeFrame';
+
+const CAPABILITIES = [
+  'pos',
+  'batches',
+  'purchasing',
+  'transfers',
+  'counts',
+  'reports',
+  'roles',
+  'import',
+] as const;
+
+function CapabilityList({
+  labels,
+  label,
+  copy,
+}: {
+  labels: readonly string[];
+  /** Accessible name of the list; the copy has none, it is hidden. */
+  label?: string;
+  copy?: boolean;
+}) {
+  return (
+    <ul
+      aria-label={label}
+      aria-hidden={copy || undefined}
+      className={cx(
+        // the trailing gap (pr) equals the inner one: the two halves of the track are equal, the loop is seamless
+        'flex shrink-0 items-center gap-8 pr-8 motion-reduce:shrink motion-reduce:flex-wrap motion-reduce:justify-center',
+        'motion-reduce:gap-y-4 motion-reduce:pr-0',
+        copy && 'motion-reduce:hidden',
+      )}
+    >
+      {labels.map((text, index) => (
+        <li key={index} className="flex min-w-0 items-center gap-8">
+          <span
+            aria-hidden="true"
+            className="size-2 shrink-0 rounded-full bg-site-mint"
+          />
+          {/* one line on the moving track; the still list (reduce) may break a long label on a phone */}
+          <span className="text-site-marquee-sm whitespace-nowrap text-accent-site motion-reduce:whitespace-normal md:text-site-marquee">
+            {text}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function CapabilityMarquee({ locale }: { locale: UiLocale }) {
+  const t = getTranslator(locale);
+  const labels = CAPABILITIES.map((key) => t(`home.marquee.items.${key}`));
+  return (
+    <MarqueeFrame pauseLabel={t('home.marquee.pause')}>
+      {/* clip, not a scroll container: the moving track never widens the page (375 px) */}
+      <div className="min-w-0 flex-1 overflow-x-clip py-8 motion-safe:mask-x-from-90%">
+        <div className="site-marquee flex w-max motion-reduce:mx-auto motion-reduce:w-full motion-reduce:max-w-site-content motion-reduce:px-4 motion-reduce:md:px-8">
+          <CapabilityList labels={labels} label={t('home.marquee.label')} />
+          <CapabilityList labels={labels} copy />
+        </div>
+      </div>
+    </MarqueeFrame>
+  );
+}

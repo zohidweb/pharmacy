@@ -1,6 +1,6 @@
 /*
  * The one request the browser sends to the API (spec 6.4, 7.3): POST public/connection-requests on the site's own
- * origin (Caddy; in dev — the rewrite of next.config). Client-side: it never imports the server-only segments
+ * origin (Caddy; in dev, the rewrite of next.config). Client-side: it never imports the server-only segments
  * (@/shared/api, @/shared/config). No cookie: the public contour has no session.
  */
 import type { SubmitConnectionRequest } from '@pharmacy/shared-dto';
@@ -14,7 +14,7 @@ export type SubmitResult =
   | { ok: true }
   | {
       ok: false;
-      /** 0 — no answer (network, timeout). */
+      /** 0: no answer (network, timeout). */
       status: number;
       /** `code` of the problem+json; `network` without an answer, `unexpected` for a body that is not one. */
       code: string;

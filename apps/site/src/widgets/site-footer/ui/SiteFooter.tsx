@@ -1,7 +1,8 @@
 /*
- * Footer of every page (spec 6.2, п. 10), the target of the «Контакты» menu item: the offer and the privacy
- * policy, the contacts from the site settings — only those that are filled. No supplier requisites: they
- * are not in PublicSiteInfo (W5).
+ * Footer of every page (spec 4.5, п. 11), the target of the «Контакты» menu item: four columns from 1024 px (brand,
+ * sections, documents, contacts), one on a phone, on a dark panel with gaps to the window edges (amendment 4.4, п. 11;
+ * L6), its content in the width of the page; no decorative lines, no versions. Contacts come from the site settings,
+ * only those that are filled. No supplier requisites: they are not in PublicSiteInfo (W5).
  */
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import Link from 'next/link';
@@ -9,6 +10,11 @@ import type { ReactNode } from 'react';
 import { getTranslator } from '@/shared/i18n';
 import { localePath, pickText } from '@/shared/lib';
 import { siteNameOf } from '@/shared/seo';
+import {
+  contentClassName,
+  panelBodyClassName,
+  panelClassName,
+} from '@/shared/ui';
 
 export interface SiteFooterProps {
   locale: UiLocale;
@@ -22,7 +28,15 @@ interface Contact {
   value: ReactNode;
 }
 
-const linkClass = 'text-primary hover:underline';
+/** A link of a column list: secondary text that lights up on hover. */
+const listLinkClass =
+  'inline-flex min-h-touch items-center text-fg-muted transition-colors hover:text-fg md:min-h-0 md:py-1';
+
+/** A contact value: the main text colour, the accent on hover. */
+const contactLinkClass =
+  'text-fg underline-offset-4 transition-colors hover:text-accent-site hover:underline';
+
+const headingClass = 'text-sm font-semibold text-fg';
 
 /** Messenger links come from the operator; only https addresses become links. */
 function isHttps(url: string): boolean {
@@ -43,7 +57,10 @@ function contactsOf(info: PublicSiteInfo | null, locale: UiLocale): Contact[] {
       key: 'phone',
       label: t('footer.phone'),
       value: (
-        <a href={`tel:${phone.replace(/[^\d+]/g, '')}`} className={linkClass}>
+        <a
+          href={`tel:${phone.replace(/[^\d+]/g, '')}`}
+          className={contactLinkClass}
+        >
           {phone}
         </a>
       ),
@@ -54,7 +71,7 @@ function contactsOf(info: PublicSiteInfo | null, locale: UiLocale): Contact[] {
       key: 'email',
       label: t('footer.email'),
       value: (
-        <a href={`mailto:${email}`} className={linkClass}>
+        <a href={`mailto:${email}`} className={contactLinkClass}>
           {email}
         </a>
       ),
@@ -83,7 +100,7 @@ function contactsOf(info: PublicSiteInfo | null, locale: UiLocale): Contact[] {
           href={url.trim()}
           target="_blank"
           rel="noopener nofollow"
-          className={linkClass}
+          className={contactLinkClass}
         >
           {t(`footer.${key}`)}
         </a>
@@ -98,61 +115,95 @@ export function SiteFooter({ locale, info }: SiteFooterProps) {
   const name = siteNameOf(info, locale);
   const tagline = info ? pickText(info.settings.tagline, locale).trim() : '';
   const contacts = contactsOf(info, locale);
+  const home = localePath(locale, '/');
+  const sections = [
+    { href: `${home}#features`, label: t('nav.features') },
+    { href: localePath(locale, '/tariffs'), label: t('nav.tariffs') },
+    { href: localePath(locale, '/blog'), label: t('nav.blog') },
+    { href: localePath(locale, '/connect'), label: t('nav.connect') },
+  ];
+  const documents = [
+    { href: localePath(locale, '/offer'), label: t('footer.offer') },
+    { href: localePath(locale, '/privacy'), label: t('footer.privacy') },
+  ];
   return (
     <footer
       id="contacts"
-      className="@container border-t border-border bg-surface text-sm"
+      data-surface="dark"
+      className={`${panelClassName} mt-4 mb-2 text-sm md:mt-6 md:mb-4`}
     >
-      <div className="mx-auto grid w-full max-w-(--ph-size-dialog-xl) gap-8 px-4 py-10 @2xl:grid-cols-3">
-        <div className="flex flex-col gap-2">
-          <p className="text-md font-bold tracking-tight">{name}</p>
+      <div
+        className={`${contentClassName} ${panelBodyClassName} grid gap-10 md:grid-cols-4 md:gap-8`}
+      >
+        <div className="flex flex-col gap-3">
+          <Link
+            href={home}
+            className="self-start text-lg font-bold tracking-tight text-fg"
+          >
+            {name}
+          </Link>
           {tagline && <p className="text-fg-muted">{tagline}</p>}
         </div>
 
+        <nav aria-labelledby="footer-sections" className="flex flex-col gap-2">
+          <h2 id="footer-sections" className={headingClass}>
+            {t('footer.sections')}
+          </h2>
+          <ul className="flex flex-col">
+            {sections.map((item) => (
+              <li key={item.href}>
+                <Link href={item.href} className={listLinkClass}>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <section
+          aria-labelledby="footer-documents"
+          className="flex flex-col gap-2"
+        >
+          <h2 id="footer-documents" className={headingClass}>
+            {t('footer.documents')}
+          </h2>
+          <ul className="flex flex-col">
+            {documents.map((item) => (
+              <li key={item.href}>
+                <Link href={item.href} className={listLinkClass}>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section
           aria-labelledby="footer-contacts"
-          className="flex flex-col gap-3"
+          className="flex flex-col gap-2"
         >
-          <h2 id="footer-contacts" className="font-semibold">
+          <h2 id="footer-contacts" className={headingClass}>
             {t('footer.contacts')}
           </h2>
           {contacts.length > 0 ? (
-            <dl className="flex flex-col gap-2">
+            <dl className="flex flex-col gap-3">
               {contacts.map((contact) => (
                 <div key={contact.key}>
                   <dt className="text-xs text-fg-muted">{contact.label}</dt>
-                  <dd className="wrap-anywhere">{contact.value}</dd>
+                  <dd className="wrap-anywhere text-fg">{contact.value}</dd>
                 </div>
               ))}
             </dl>
           ) : (
-            <p className="text-fg-muted">
-              <Link href={localePath(locale, '/connect')} className={linkClass}>
+            <p>
+              <Link
+                href={localePath(locale, '/connect')}
+                className={contactLinkClass}
+              >
                 {t('footer.noContacts')}
               </Link>
             </p>
           )}
-        </section>
-
-        <section
-          aria-labelledby="footer-documents"
-          className="flex flex-col gap-3"
-        >
-          <h2 id="footer-documents" className="font-semibold">
-            {t('footer.documents')}
-          </h2>
-          <ul className="flex flex-col gap-2">
-            <li>
-              <Link href={localePath(locale, '/offer')} className={linkClass}>
-                {t('footer.offer')}
-              </Link>
-            </li>
-            <li>
-              <Link href={localePath(locale, '/privacy')} className={linkClass}>
-                {t('footer.privacy')}
-              </Link>
-            </li>
-          </ul>
         </section>
       </div>
     </footer>

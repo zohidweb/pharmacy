@@ -2,7 +2,6 @@
 
 import {
   PAYMENT_QR_RECIPIENT_MAX,
-  PAYMENT_QR_TEMPLATE_MAX,
   paymentQrHasAmount,
   paymentQrLink,
   paymentQrTemplateProblem,
@@ -166,7 +165,6 @@ export function PaymentQrDialog({
           autoComplete="off"
           spellCheck={false}
           placeholder="https://"
-          maxLength={PAYMENT_QR_TEMPLATE_MAX}
           value={template}
           onChange={(event) => {
             setTemplate(event.target.value);

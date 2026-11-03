@@ -9,6 +9,9 @@ export const routes = {
   profile: () => '/profile',
 
   pos: () => '/pos',
+  // the customer display of a terminal (spec 2026-11-03-pos-store-ideas, D1)
+  customerDisplay: (terminalId: string) =>
+    `/customer-display?terminal=${encodeURIComponent(terminalId)}`,
   shift: () => '/shift',
   returns: () => '/returns',
 

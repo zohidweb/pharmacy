@@ -219,6 +219,49 @@ export interface UpdatePricesRequest {
   confirmAboveMax: boolean;
 }
 
+/** The retail price of a pack, or the wholesale one (spec 2026-11-03-pos-store-ideas, I4 — not yet written). */
+export type PriceKind = 'retail' | 'wholesale';
+
+/**
+ * What changed a price: the prices page, a posted document (goods receipt, opening balance), an accepted transfer, or
+ * the offline store itself (spec 2026-11-03-pos-store-ideas, D15).
+ */
+export type PriceChangeSource =
+  'manual' | 'document' | 'transfer' | 'offline_store';
+
+export interface PriceHistoryQuery {
+  /** One store of the scope; without it — every store of the scope. */
+  storeId?: string;
+  /** 1–100, default 20 (the page of the API). */
+  limit?: number;
+  offset?: number;
+}
+
+/** One change of a price of a store, as the audit log keeps it (append-only: the history is complete). */
+export interface PriceHistoryEntry {
+  /** Id of the audit log entry. */
+  id: string;
+  /** When the price changed; an offline store's change — by the clock of the store. */
+  at: string;
+  storeId: string;
+  storeName: string;
+  kind: PriceKind;
+  /** null — the store had no price before. */
+  oldPriceMinor: number | null;
+  newPriceMinor: number;
+  source: PriceChangeSource;
+  /** The document that set the price; `type` as the documents keep it (`goods_receipt`, `opening_balance`, …). */
+  document: { id: string; type: string; number: string } | null;
+  /** null — no employee (a system change). */
+  author: { name: string } | null;
+}
+
+/**
+ * GET /api/v1/prices/{productId}/history?storeId=&limit=&offset= (`pricing:view`) — the newest first. 403
+ * `store_not_in_scope` for a store outside the scope; 404 — no such product of the network.
+ */
+export type PriceHistoryPage = Page<PriceHistoryEntry>;
+
 export interface PriceConflict {
   id: string;
   productId: string;

@@ -1,6 +1,6 @@
 export { useStockAccess, type StockAccess } from './model/access';
 export { QuantityInput } from './ui/inputs';
-export { ProductSearch } from './ui/ProductSearch';
+export { ProductSearch, type ProductSeed } from './ui/ProductSearch';
 export { StockNotices } from './ui/StockNotices';
 export { UnpostDialog } from './ui/UnpostDialog';
 export {

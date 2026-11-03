@@ -18,20 +18,21 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useLocale, useTranslations } from 'use-intl';
 import { can, canWrite, useSession } from '@/entities/session';
+import { PriceHistoryButton } from '@/features/price-history';
 import { PrintTagsDialog } from '@/features/print-price-tags';
-import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
-import { routes } from '@/shared/config';
-import { QueryState } from '@/shared/ui';
-import { PageHeader } from '@/widgets/app-shell';
-import { useCatalogReferences } from './CatalogPage';
 import {
   ProductForm,
   draftOf,
   draftProblems,
   inputOf,
   shownAtFields,
+  useCatalogReferences,
   type ProductDraft,
-} from './ProductForm';
+} from '@/features/product-form';
+import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
+import { routes } from '@/shared/config';
+import { QueryState } from '@/shared/ui';
+import { PageHeader } from '@/widgets/app-shell';
 import { WithMessages } from '@/shared/i18n';
 
 function ProductView() {
@@ -306,6 +307,7 @@ function ProductBatches({ card }: { card: CatalogProductCard }) {
 function ProductPrices({ card }: { card: CatalogProductCard }) {
   const t = useTranslations('products.card');
   const tPricing = useTranslations('pricing');
+  const locale = useLocale();
   const prices = useQuery({
     queryKey: ['prices', 'product', card.id],
     queryFn: ({ signal }) =>
@@ -315,7 +317,26 @@ function ProductPrices({ card }: { card: CatalogProductCard }) {
 
   return (
     <Card padding="none">
-      <CardHeader title={t('prices')} inset />
+      <CardHeader
+        title={t('prices')}
+        inset
+        actions={
+          prices.data && prices.data.length > 0 ? (
+            <PriceHistoryButton
+              productId={card.id}
+              productName={
+                locale === 'tg'
+                  ? card.nameTj || card.nameRu
+                  : card.nameRu || card.nameTj
+              }
+              stores={prices.data.map((p) => ({
+                id: p.storeId,
+                name: p.storeName,
+              }))}
+            />
+          ) : undefined
+        }
+      />
       <QueryState query={prices}>
         {(rows) => (
           <ul className="flex flex-col">

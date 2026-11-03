@@ -1,6 +1,7 @@
 import type {
   DiscountRuleInput,
   DiscountThreshold,
+  PriceHistoryQuery,
   PriceListQuery,
   UpdatePricesRequest,
 } from '@pharmacy/shared-dto';
@@ -50,6 +51,26 @@ export class PriceListQueryDto implements PriceListQuery {
   @IsBoolean()
   problems?: boolean;
 
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}
+
+/** GET /api/v1/prices/{productId}/history (spec 2026-11-03-pos-store-ideas, D16). */
+export class PriceHistoryQueryDto implements PriceHistoryQuery {
   @IsOptional()
   @IsUUID()
   storeId?: string;

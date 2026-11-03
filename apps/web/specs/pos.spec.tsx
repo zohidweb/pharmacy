@@ -11,7 +11,7 @@ import {
   within,
 } from '@testing-library/react';
 import { axe } from 'jest-axe';
-import { PosPage } from '@/pages/pos';
+import { PosPage } from '@/pages/pos/till';
 import { getTerminalRuntime } from '@/shared/lib/offline-queue';
 import { AppShell } from '@/widgets/app-shell';
 import { scenario, signInByPin, useMockApi } from './mock-env';
@@ -85,7 +85,7 @@ describe('PosPage', () => {
     act(() => scan('4870009999999'));
     expect(
       await screen.findByText(
-        'Товар со штрихкодом 4870009999999 не найден в каталоге точки',
+        'Товар со штрихкодом 4870009999999 не найден в каталоге точки. Заведите товар в каталоге или при приходе.',
       ),
     ).toBeTruthy();
     expect(within(receipt()).getByText('Чек пуст')).toBeTruthy();

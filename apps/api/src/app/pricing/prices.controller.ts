@@ -8,12 +8,17 @@ import {
   Query,
 } from '@nestjs/common';
 import type {
+  PriceHistoryPage,
   PriceListResponse,
   PriceRow,
   StorePrice,
 } from '@pharmacy/shared-dto';
 import { RequirePermission } from '../auth/decorators';
-import { PriceListQueryDto, UpdatePricesDto } from './dto/pricing.dto';
+import {
+  PriceHistoryQueryDto,
+  PriceListQueryDto,
+  UpdatePricesDto,
+} from './dto/pricing.dto';
 import { PricesService } from './prices.service';
 
 // Retail prices by store (spec 2026-10-07-catalog-pricing, section 6).
@@ -33,6 +38,16 @@ export class PricesController {
     @Param('productId', new ParseUUIDPipe()) productId: string,
   ): Promise<StorePrice[]> {
     return this.prices.ofProduct(productId);
+  }
+
+  /** 403 `store_not_in_scope`, 404 (spec 2026-11-03-pos-store-ideas, D16). */
+  @RequirePermission('pricing:view')
+  @Get(':productId/history')
+  history(
+    @Param('productId', new ParseUUIDPipe()) productId: string,
+    @Query() query: PriceHistoryQueryDto,
+  ): Promise<PriceHistoryPage> {
+    return this.prices.priceHistory(productId, query);
   }
 
   /**

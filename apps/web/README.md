@@ -127,7 +127,9 @@ npx nx fsd web
 
 ## Маршруты
 
-`app/` — только реэкспорты страниц из `src/pages`. Вход — `app/login`, экраны после входа —
+`app/` — только реэкспорты страниц из `src/pages`. Вход — `app/login`; экран покупателя — `app/customer-display`
+(`?terminal=<id>`, вне каркаса, без сессии и запросов: состояние чека приходит от кассы через `BroadcastChannel`;
+страница — срез `pages/pos/customer-display`, а касса — `pages/pos/till`: окно экрана не грузит код кассы). Экраны после входа —
 группа `app/(shell)` с каркасом `widgets/app-shell` (касса — `/pos`, смена — `/shift`, возвраты —
 `/returns`, склад — `/stock`, `/goods-receipts`, `/transfers`, `/write-offs`, `/supplier-returns`,
 `/stock-counts`, закупки — `/orders`, `/suppliers`, каталог — `/catalog`, `/catalog/view`,

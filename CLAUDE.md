@@ -134,7 +134,8 @@ pharmacy/
   «по тенанту в цикле» вызывает `PrescriptionRetention` (экспорт `pos`), `InboxRetention` и `FeedRetention` (экспорты
   `sync`; окно ленты `sync_changes` без читающих точек, раздел 13 спецификации offline-sync); кто держал
   терминал в момент операции под терминалом, `pos` узнаёт у `audit` (`PinSignIns`); цену точки в момент снимка кассы
-  `pricing` узнаёт у `audit` (`PriceChanges`, журнал `price.changed`).
+  `pricing` узнаёт у `audit` (`PriceChanges`, журнал `price.changed`), историю цен товара (`GET /prices/{id}/history`) —
+  тоже у `audit` (`PriceHistory`).
   Загрузка данных из файла (спецификация 2026-10-20-data-import): каталог, начальные остатки и поставщиков загружают
   их модули (`catalog`, `inventory`, `purchasing`); общий журнал загрузок `ImportJobs` (`core/imports`, глобальный) —
   очередь загрузок сети, повтор по ключу, прошлые загрузки тех же строк.

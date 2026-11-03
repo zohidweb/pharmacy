@@ -31,6 +31,15 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { canWrite, useSession } from '@/entities/session';
 import {
+  ProductForm,
+  draftProblems,
+  emptyDraft,
+  inputOf,
+  shownAtFields,
+  useCatalogReferences,
+  type ProductDraft,
+} from '@/features/product-form';
+import {
   apiFieldErrors,
   apiRequest,
   isApiRouteAvailable,
@@ -39,14 +48,6 @@ import {
 import { routes } from '@/shared/config';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
-import {
-  ProductForm,
-  draftProblems,
-  emptyDraft,
-  inputOf,
-  shownAtFields,
-  type ProductDraft,
-} from './ProductForm';
 import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 20;
@@ -67,14 +68,6 @@ export function FlagPill({ flag }: { flag: CatalogFlag }) {
       {t(flag)}
     </StatusPill>
   );
-}
-
-export function useCatalogReferences() {
-  return useQuery({
-    queryKey: ['catalog', 'references'],
-    queryFn: ({ signal }) => apiRequest('catalog.references', { signal }),
-    staleTime: 5 * 60_000,
-  });
 }
 
 /** Catalog of products (UI mockup «Каталог товаров»). */
@@ -468,8 +461,7 @@ function NewProductDialog({
     shownAtFields(fieldErrors) ? null : create.error,
   );
   const problems = draftProblems(draft);
-  const valid =
-    !problems.name && !problems.piecesPerPack && !problems.maxPrice;
+  const valid = !problems.name && !problems.piecesPerPack && !problems.maxPrice;
 
   return (
     <Dialog

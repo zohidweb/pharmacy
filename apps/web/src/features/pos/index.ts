@@ -28,7 +28,13 @@ export {
   type NonCashMethod,
   type ReceiptDraft,
 } from './model/receipt';
+export {
+  displayStateOf,
+  useCustomerDisplay,
+  type CustomerDisplayInput,
+} from './model/customer-display';
 export { CartPanel, type CartPanelProps } from './ui/CartPanel';
+export { CustomerDisplayButton } from './ui/CustomerDisplayButton';
 export { HeldReceiptsDialog } from './ui/HeldReceiptsDialog';
 export {
   BatchDialog,

@@ -1,5 +1,6 @@
 'use client';
 
+import type { DiscountRule } from '@pharmacy/shared-domain';
 import type {
   ControlledSaleData,
   HeldReceipt,
@@ -48,6 +49,7 @@ import {
   CartPanel,
   changeBatch,
   ControlledDialog,
+  CustomerDisplayButton,
   emptyDraft,
   enqueueSale,
   HeldReceiptsDialog,
@@ -61,6 +63,7 @@ import {
   setQuantity,
   setTendered,
   totals,
+  useCustomerDisplay,
   useDraftPersistence,
   usePosStore,
   type AddError,
@@ -88,6 +91,9 @@ interface PendingAdd {
   /** Version of the snapshot `product` (and its price) comes from: taken with it, not when the line is added. */
   priceVersion?: number;
 }
+
+/** A stable empty list: the customer display re-sends its state only when the rules change. */
+const NO_RULES: readonly DiscountRule[] = [];
 
 function useOnlineState(): boolean {
   return useSyncExternalStore(subscribeConnectivity, isOnline, () => true);
@@ -175,6 +181,23 @@ function PosPageView() {
     : !openShift
       ? t('noShift')
       : null;
+
+  // the window on the buyer's monitor (spec 2026-11-03-pos-store-ideas, D1–D7)
+  useCustomerDisplay({
+    terminalId: session?.terminalId ?? null,
+    storeName: snapshot?.settings.storeName ?? null,
+    locale: locale === 'tg' ? 'tg' : 'ru',
+    draft,
+    rules: snapshot?.discountRules ?? NO_RULES,
+    done: printed
+      ? {
+          saleId: printed.request.id,
+          totalMinor: printed.request.totalMinor,
+          changeMinor: printed.request.changeMinor,
+        }
+      : null,
+    active: Boolean(openShift) && !locked,
+  });
 
   useEffect(() => () => setFullscreen(false), [setFullscreen]);
   useEffect(() => {
@@ -408,6 +431,12 @@ function PosPageView() {
       }
       actions={
         <>
+          {session?.terminalId && (
+            <CustomerDisplayButton
+              terminalId={session.terminalId}
+              onBlocked={() => setNotice(t('customerDisplay.blocked'))}
+            />
+          )}
           <Button
             variant="secondary"
             iconStart="pause"

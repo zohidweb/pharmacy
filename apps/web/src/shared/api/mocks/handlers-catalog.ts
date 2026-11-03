@@ -26,6 +26,7 @@ import type {
   DiscountRuleInput,
   EmployeeSession,
   PosProduct,
+  PriceHistoryEntry,
   PriceRow,
   StorePrice,
 } from '@pharmacy/shared-dto';
@@ -697,6 +698,29 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
     const { session, canSeeCost } = context(correlationId, 'pricing:view');
     const product = findDoc(products(), params.productId, correlationId);
     return pricesOf(product, session, canSeeCost);
+  },
+  // demo history: one manual change per store of the scope, the current price set on the first of October
+  'prices.history': ({ params, query, correlationId }) => {
+    const { session } = context(correlationId, 'pricing:view');
+    const product = findDoc(products(), params.productId, correlationId);
+    if (query?.storeId && !session.stores.some((s) => s.id === query.storeId)) {
+      throw new ApiError(403, 'store_not_in_scope', correlationId);
+    }
+    const entries: PriceHistoryEntry[] = session.stores
+      .filter((store) => !query?.storeId || store.id === query.storeId)
+      .map((store) => ({
+        id: `${product.id}-${store.id}`,
+        at: '2026-10-01T04:00:00.000Z',
+        storeId: store.id,
+        storeName: store.name,
+        kind: 'retail',
+        oldPriceMinor: null,
+        newPriceMinor: storePrice(store.id, product),
+        source: 'manual',
+        document: null,
+        author: { name: session.employee.fullName },
+      }));
+    return page(entries, { limit: query?.limit ?? 50, offset: query?.offset });
   },
   'prices.update': ({ params, body, correlationId }) => {
     const { session, canSeeCost } = context(correlationId, 'pricing:view', {

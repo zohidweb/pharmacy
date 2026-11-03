@@ -7,6 +7,7 @@ import { AuditService } from './audit.service';
 import { LoginLocks } from './login-locks';
 import { PinSignIns } from './pin-sign-ins';
 import { PriceChanges } from './price-changes';
+import { PriceHistory } from './price-history';
 import { ReceiptRefusals } from './receipt-refusals';
 import { SyncCoreModule } from '../../core/sync';
 
@@ -19,6 +20,7 @@ import { SyncCoreModule } from '../../core/sync';
   // AuditFacts — the journal rows of offline stores without a domain operation (spec 2026-10-16-offline-sync)
   // PinSignIns — who held a terminal at the moment of a POS operation sent under it (spec 2026-10-21-pos-offline-limits)
   // PriceChanges — the price of a store at the moment of a POS snapshot (security review 2026-10-22, I2)
+  // PriceHistory — the history of the prices of a product for its owner's screens (spec 2026-11-03-pos-store-ideas, D16)
   // ReceiptRefusals — the sales the price rules refused, for the owner's notification (I2)
   // LoginLocks — the sign-in locks of the employees, for the owner's notification (A2)
   providers: [
@@ -28,6 +30,7 @@ import { SyncCoreModule } from '../../core/sync';
     AuditFacts,
     PinSignIns,
     PriceChanges,
+    PriceHistory,
     ReceiptRefusals,
     LoginLocks,
   ],
@@ -36,6 +39,7 @@ import { SyncCoreModule } from '../../core/sync';
     AuditJournal,
     PinSignIns,
     PriceChanges,
+    PriceHistory,
     ReceiptRefusals,
     LoginLocks,
   ],

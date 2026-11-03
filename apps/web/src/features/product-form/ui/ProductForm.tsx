@@ -177,9 +177,7 @@ export function ProductForm({
           disabled={disabled}
           value={draft.nameRu}
           error={
-            touched && problems.name
-              ? t('nameRequired')
-              : serverError('nameRu')
+            touched && problems.name ? t('nameRequired') : serverError('nameRu')
           }
           onChange={(event) => set('nameRu', event.target.value)}
         />
@@ -189,9 +187,7 @@ export function ProductForm({
           disabled={disabled}
           value={draft.nameTj}
           error={
-            touched && problems.name
-              ? t('nameRequired')
-              : serverError('nameTj')
+            touched && problems.name ? t('nameRequired') : serverError('nameTj')
           }
           onChange={(event) => set('nameTj', event.target.value)}
         />

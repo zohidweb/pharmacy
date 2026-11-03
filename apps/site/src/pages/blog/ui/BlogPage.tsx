@@ -57,7 +57,7 @@ function ArticleCard({
         <div
           aria-hidden="true"
           data-surface="mint"
-          className="flex aspect-16/9 shrink-0 items-end p-6 text-fg"
+          className="flex aspect-16/9 shrink-0 items-end p-6"
         >
           <Icon name="newspaper" size="xl" />
         </div>

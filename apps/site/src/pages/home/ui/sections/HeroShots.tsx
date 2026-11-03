@@ -3,10 +3,11 @@
 /*
  * Three product screens of the first screen (spec 4.4, 4.5, п. 2; amendment 4.4, п. 2): the till in front, stock by
  * batches and the sales report behind it, shifted. They come in one after another with the CSS entrance (R1); from
- * 1024 px they part at their own speed while the page scrolls and straighten from their tilt (Parallax, L7), never with
- * reduce. Each layer moves on its own element: Parallax (shift and tilt) → entrance, so the transforms never fight. On
- * the dark panel the screens have no border, only the shadow (L3). No fade at the lower edge: the screen that hangs
- * below the panel reads as a whole card with its 24 px corners.
+ * 1024 px they lean by CSS (−6°, −4°, −2°, so the tilt is there before hydration and without JavaScript), part at their
+ * own speed while the page scrolls and straighten (Parallax turns the other way, L7); with reduce and on a phone they
+ * stand straight. Each layer moves on its own element: Parallax (shift and counter-turn) → entrance → tilt, so the
+ * transforms never fight. On the dark panel the screens have no border, only the shadow (L3). No fade at the lower
+ * edge: the screen that hangs below the panel reads as a whole card with its 24 px corners.
  */
 import { cx } from '@pharmacy/ui';
 import { Parallax } from '@/shared/ui/motion';
@@ -19,6 +20,16 @@ const SHOTS = {
 } as const;
 
 type ShotKey = keyof typeof SHOTS;
+
+/**
+ * The tilt before the page scrolls (L7): the farther the screen, the more it leans. The class draws it (only from
+ * 1024 px and without reduce), Parallax undoes it by the same degrees.
+ */
+const TILTS = {
+  stock: { degrees: -6, className: 'md:motion-safe:-rotate-6' },
+  report: { degrees: -4, className: 'md:motion-safe:-rotate-4' },
+  pos: { degrees: -2, className: 'md:motion-safe:-rotate-2' },
+} as const satisfies Record<ShotKey, { degrees: number; className: string }>;
 
 export interface HeroShotsProps {
   /** Text alternatives of the screens, in the page language. */
@@ -34,17 +45,20 @@ interface ShotProps {
   place: string;
   /** Entrance delay class. */
   enter: string;
-  /** Tilt in degrees before the page scrolls (L7): the farther the screen, the more it leans. */
-  tilt: number;
   priority?: boolean;
 }
 
-function Shot({ shot, alt, speed, place, enter, tilt, priority }: ShotProps) {
+function Shot({ shot, alt, speed, place, enter, priority }: ShotProps) {
   const { src, width, height } = SHOTS[shot];
+  const tilt = TILTS[shot];
   return (
-    <Parallax speed={speed} tilt={tilt} className={cx('absolute', place)}>
+    <Parallax
+      speed={speed}
+      straighten={tilt.degrees}
+      className={cx('absolute', place)}
+    >
       <div className={cx('site-enter', enter)}>
-        <div className="rounded-site-card shadow-shot">
+        <div className={cx('rounded-site-card shadow-shot', tilt.className)}>
           {/* a plain <img>: no next/image on the site (ADR-0023) */}
           <img
             src={src}
@@ -75,7 +89,6 @@ export function HeroShots({ alts }: HeroShotsProps) {
         speed={0.15}
         place="top-0 left-0 w-3/4"
         enter="site-enter-delay-3"
-        tilt={-6}
       />
       <Shot
         shot="report"
@@ -83,7 +96,6 @@ export function HeroShots({ alts }: HeroShotsProps) {
         speed={0.1}
         place="top-1/8 right-0 w-3/4"
         enter="site-enter-delay-4"
-        tilt={-4}
       />
       <Shot
         shot="pos"
@@ -91,7 +103,6 @@ export function HeroShots({ alts }: HeroShotsProps) {
         speed={0.05}
         place="bottom-0 left-1/12 w-5/6"
         enter="site-enter-delay-2"
-        tilt={-2}
         priority
       />
     </div>

@@ -2,7 +2,8 @@
  * «Для кого» (amendment 2026-11-02-public-site-light-panels 4.4, п. 4, L8): from 1024 px the heading stays pinned on the
  * left while the four pains pile up on the right: each card sticks 16 px lower than the one before it, so the next one
  * slides over the last. The cards are a surface, a mint block, a surface and a dark block, each with its large number.
- * On a phone, and with reduce, nothing sticks (a plain list); the cards still rise in as they enter.
+ * On a phone, and with reduce, nothing sticks (a plain list); the cards still rise in as they enter. From 1024 px a card
+ * keeps its minimum height (320 px) with reduce too: only the pinning is motion.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx } from '@pharmacy/ui';

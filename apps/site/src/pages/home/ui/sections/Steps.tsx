@@ -4,6 +4,12 @@
  * From 1024 px the steps stand in a row under a line that fills while the pinned section scrolls by; below, a column with
  * a vertical line (StepsProgress). Over each step a large number: mint for the steps the line has reached, a faint mint
  * (decorative, not text) for those ahead; the heading of the current step is mint.
+ *
+ * Padding: the panel's own 48 px on a phone and 96 px from 1024 px with reduce (nothing pinned). The pinned frame from
+ * 1024 px keeps 64 px instead (StepsProgress): it is one screen high and centres the steps, so its free height already
+ * leaves 92 to 206 px above them (1024 × 768 to 1440 × 900, both languages), while 96 px would make the frame taller
+ * than the screen under the header with the Tajik texts (1024 × 768, 1280 × 720) and cut its lower edge while pinned.
+ * On a phone the marker sits in the middle of the 56 px number line (mt-5); the line starts under the first marker.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx } from '@pharmacy/ui';
@@ -47,7 +53,7 @@ export function Steps({ locale }: { locale: UiLocale }) {
                 <span
                   data-step-marker=""
                   aria-hidden="true"
-                  className="relative mt-1 size-4 shrink-0 rounded-full border-2 border-fg-muted bg-bg group-data-reached/step:border-accent-site group-data-reached/step:bg-accent-site md:mt-0"
+                  className="relative mt-5 size-4 shrink-0 rounded-full border-2 border-fg-muted bg-bg group-data-reached/step:border-accent-site group-data-reached/step:bg-accent-site md:mt-0"
                 />
                 <div className="flex flex-col gap-2">
                   {/* decorative: the order is the list's own */}

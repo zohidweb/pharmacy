@@ -49,7 +49,7 @@ function CapabilityList({
             className="size-2 shrink-0 rounded-full bg-site-mint"
           />
           {/* one line on the moving track; the still list (reduce) may break a long label on a phone */}
-          <span className="text-site-marquee-sm font-bold whitespace-nowrap text-accent-site motion-reduce:whitespace-normal md:text-site-marquee">
+          <span className="text-site-marquee-sm whitespace-nowrap text-accent-site motion-reduce:whitespace-normal md:text-site-marquee">
             {text}
           </span>
         </li>

@@ -23,8 +23,9 @@
  *     danger (red-200)      on bg 9.9  · raised 8.2 · lines (800) are decorative only (1.6:1)
  *   data-surface="green" (bg 700, surface 950)
  *     fg and fg-muted (mint-50) on bg 5.7 · surface 13.1 (mint-300 would be 3.3:1 on 700, so muted is the main colour)
- *     on-primary (975)      on primary mint-400 8.4 · hover mint-200 10.1
- *     focus ring and button fill (mint-400) on bg 3.1 · field border (mint-300) on bg 3.3 · danger (red-200) on bg 4.3
+ *     on-primary (975)      on primary mint-400 8.4 · hover mint-200 10.1 · active mint-300 9.1
+ *     focus ring and button fill (mint-400) on bg 3.1 · surface 7.1 · field border (mint-300) on bg 3.3
+ *     danger (red-200)      on bg 4.3: below 4.5, so no form sits on this panel
  *     links and text on the panel use text-fg (mint-400 text would be 3.1:1) · lines (800) decorative only (1.5:1)
  *   data-surface="mint" (bg mint-400, surface mint-0)
  *     fg and fg-muted (975) on bg 8.4 · surface 16.7
@@ -52,7 +53,8 @@
   /* Shadows are tinted with the page, no black shadows (4.3) */
   --ph-site-shadow-color: rgb(1 20 16 / 0.5); /* on a dark panel */
   --ph-site-shadow-color-light: rgb(4 33 27 / 0.18); /* on the light page */
-  /* The future step numbers (amendment 4.4, п. 6): decorative, mint-300 seen through */
+  /* The future step numbers (amendment 4.4, п. 6): decorative, mint-300 seen through. 55 % gives 3.4:1 on the dark
+     panel, so the 96 px figure still clears axe's 3:1 check for large text */
   --ph-site-step-future: color-mix(
     in srgb,
     var(--ph-mint-300) 55%,
@@ -192,10 +194,10 @@
 }
 
 /*
- * Panels (amendment 4.1, L1 to L3). The kit's field tokens are composed from the semantic ones on :root, and a custom
- * property with var() resolves where it is declared, so each panel declares them again with the same expressions (L2);
- * otherwise a field in a panel would keep the colours of the page. The fill and the text colour sit in the base layer,
- * so a utility on the same element still wins.
+ * Panels (amendment 4.1, L1 to L3). The kit's component tokens (fields, switch, table header, navigation) are composed
+ * from the semantic ones on :root, and a custom property with var() resolves where it is declared, so each panel
+ * declares them again with the same expressions (L2); otherwise a field in a panel would keep the colours of the page.
+ * The fill and the text colour sit in the base layer, so a utility on the same element still wins.
  */
 [data-surface='dark'],
 [data-surface='green'],
@@ -206,6 +208,15 @@
   --ph-input-border-invalid: var(--ph-color-danger);
   --ph-input-ring-focus: 0 0 0 var(--ph-border-width-2)
     var(--ph-color-focus-ring);
+  /* the other kit component tokens composed from semantic ones (components.css), for the same reason */
+  --ph-input-bg-disabled: var(--ph-color-surface-sunken);
+  --ph-switch-track-off: var(--ph-color-border-control);
+  --ph-switch-track-on: var(--ph-color-primary);
+  --ph-table-header-bg: var(--ph-color-surface-sunken);
+  --ph-nav-item-bg-active: var(--ph-color-primary-subtle);
+  --ph-nav-item-fg-active: var(--ph-color-primary);
+  --ph-nav-counter-bg: var(--ph-color-danger);
+  --ph-nav-counter-fg: var(--ph-color-on-danger);
   /* product screens on a panel: no border */
   --ph-site-shot-border: transparent;
 }
@@ -288,8 +299,10 @@
 }
 
 /*
- * The mint panel (mint-400: the final call, one tile of the features, one card of «Для кого»): dark text and a dark
- * main button. Its surfaces are those of the light page.
+ * The mint panel (mint-400: the final call, one tile of the features, one card of «Для кого», the blog card without a
+ * cover): dark text and a dark main button. Its surfaces are those of the light page. It sits only on the light page,
+ * never inside a dark or green panel: it does not reset the tokens the dark block sets beyond this table (subtle
+ * primary, statuses, disabled), so nested there it would inherit them.
  */
 [data-surface='mint'] {
   color-scheme: light;

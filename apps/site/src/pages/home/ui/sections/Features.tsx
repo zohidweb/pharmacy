@@ -82,9 +82,9 @@ function TileShot({
   const { src, width, height } = SHOTS[shot];
   const { view, screen } = FRAMES[frame];
   return (
-    // The window fills the rest of the tile. The screen starts 24 px from the left edge and runs past the right and the
-    // lower edges: the tile crops it there (the shots are viewport crops, as on the first screen). The 8 px above the
-    // screen leave room for the 4 px rise.
+    // The window fills the rest of the tile. The screen starts 24 px (32 px from 1024 px) from the left edge and runs
+    // past the right and the lower edges: the tile crops it there (the shots are viewport crops, as on the first
+    // screen). The 8 px above the screen leave room for the 4 px rise.
     <div className={cx('relative grow', view)}>
       <div className="absolute inset-y-0 left-6 pt-2 transition-transform duration-(--ph-duration-slow) ease-out motion-safe:group-hover:-translate-y-1 md:left-8">
         {/* a plain <img>: no next/image on the site (ADR-0023) */}

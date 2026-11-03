@@ -1,6 +1,6 @@
 /*
- * The state screens of the site, the error, 404 and the last-resort error page (spec 4.6): a narrow centred column in the
- * middle of the free height, with a large mint number above the text.
+ * The state screens of the site, the error, 404 and the last-resort error page (spec 4.6; amendment 4.5): a narrow
+ * centred column in the middle of the free height, with a large emerald-700 number above the text.
  */
 
 /** The body: a narrow column centred in the height left between the header and the footer. */

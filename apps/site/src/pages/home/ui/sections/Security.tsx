@@ -1,9 +1,11 @@
 /*
  * Безопасность (amendment 2026-11-02-public-site-light-panels 4.4, п. 8; L10): the «manifesto», no panel. Two columns
  * from 1024 px, the heading with a short text on the left, five statements on the right as rows between lines: the
- * statement is the row's heading (24 px, Medium) with its explanation under it, an icon in a mint circle at the side. Exactly these five, each true of the deployment (spec 4.8, without general denials): own
- * server (ADR-0020), nightly copies checked by a restore (ADR-0019), encrypted copies off the host (ADR-0020
- * amendment), HTTPS (ADR-0012), roles checked on the server (ADR-0018).
+ * statement is the row's heading (24 px, Medium) with its explanation under it, an icon in a mint circle at the side.
+ *
+ * Exactly these five, each true of the deployment (spec 4.8, without general denials): own server (ADR-0020), nightly
+ * copies checked by a restore (ADR-0019), encrypted copies off the host (ADR-0020 amendment), HTTPS (ADR-0012), roles
+ * checked on the server (ADR-0018).
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx, Icon, type IconName } from '@pharmacy/ui';
@@ -50,7 +52,7 @@ export function Security({ locale }: { locale: UiLocale }) {
             <RevealItem
               key={key}
               as="li"
-              className="flex gap-5 py-6 first:pt-0 last:pb-0 md:py-8 md:first:pt-0"
+              className="flex gap-5 py-6 first:pt-0 last:pb-0 md:py-8 md:first:pt-0 md:last:pb-0"
             >
               <span className="flex size-avatar-md shrink-0 items-center justify-center rounded-full bg-surface-sunken text-accent-site">
                 <Icon name={icon} size="lg" />

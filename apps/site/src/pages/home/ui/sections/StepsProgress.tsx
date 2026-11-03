@@ -101,7 +101,7 @@ export function StepsProgress({ header, children }: StepsProgressProps) {
   const fill = reduce ? 1 : progress;
   return (
     <div ref={track} className="md:motion-safe:h-site-steps">
-      <div className="flex flex-col justify-center gap-12 py-16 md:motion-safe:sticky md:motion-safe:top-site-header md:motion-safe:min-h-site-first-screen">
+      <div className="flex flex-col justify-center gap-12 py-12 md:py-16 md:motion-safe:sticky md:motion-safe:top-site-header md:motion-safe:min-h-site-first-screen md:motion-reduce:py-24">
         {header}
         <div className="relative">
           {/* from 1024 px: from the centre of the first marker to the centre of the last (the grid of the steps) */}
@@ -120,11 +120,11 @@ export function StepsProgress({ header, children }: StepsProgressProps) {
               />
             </div>
           </div>
-          {/* below 1024 px: from the centre of the first marker to the end of the list */}
+          {/* below 1024 px: from the first marker (it starts under it, hidden by its fill) to the end of the list */}
           <div
             ref={down}
             aria-hidden="true"
-            className="pointer-events-none absolute top-3 bottom-0 left-2 w-0.5 -translate-x-1/2 bg-site-line md:hidden"
+            className="pointer-events-none absolute top-6 bottom-0 left-2 w-0.5 -translate-x-1/2 bg-site-line md:hidden"
           >
             <m.div
               data-reveal=""

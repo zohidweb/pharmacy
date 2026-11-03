@@ -12,6 +12,7 @@ import { getTranslator } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
 import {
   contentClassName,
+  figureClassName,
   panelBodyClassName,
   panelClassName,
 } from '@/shared/ui';
@@ -25,6 +26,7 @@ export function PricingTeaser({
   pricing: PublicSiteInfo['pricing'];
 }) {
   const t = getTranslator(locale);
+  const price = formatMoney(pricing.storeMonthlyPriceDirams);
   return (
     <section
       id="pricing"
@@ -45,8 +47,9 @@ export function PricingTeaser({
         <div className="flex flex-col items-start gap-4">
           <Reveal>
             <p className="flex flex-col gap-2">
-              <span className="text-site-figure-sm whitespace-nowrap tabular-nums md:text-site-figure">
-                {formatMoney(pricing.storeMonthlyPriceDirams)}
+              {/* the figure never wraps (no-break spaces): its size follows its length (figureClassName) */}
+              <span className={cx(figureClassName(price), 'tabular-nums')}>
+                {price}
               </span>
               <span className="text-lead">{t('home.pricing.perMonth')}</span>
             </p>

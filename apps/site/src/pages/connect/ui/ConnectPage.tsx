@@ -1,8 +1,9 @@
 /*
  * «Оставить заявку» (spec 6.4, W11; redesign 4.6). The server part checks the privacy policy the visitor consents to
  * (the page's language, the API falls back to RU: the same check the API makes on submit). With it, two columns from
- * 1024 px: on the left what happens after the request (three points) on a dark panel, on the right the form on the surface of the light page.
- * None published: «Приём заявок скоро откроется» and the contacts from the settings instead of the form.
+ * 1024 px: on the left what happens after the request (three points) on a dark panel, on the right the form on the
+ * surface of the light page. None published: «Приём заявок скоро откроется» and the contacts from the settings instead
+ * of the form.
  * No `motion` on this page: the heading and the «Заявка принята» screen rise in by CSS.
  */
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';

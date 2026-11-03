@@ -17,8 +17,8 @@ export interface HomePageProps {
 }
 
 /**
- * The home page: sections 2 to 10 of the redesign spec 4.5, top to bottom (the header and the footer come from the
- * layout).
+ * The home page: blocks 2 to 10 of the amendment 2026-11-02-public-site-light-panels 4.4, top to bottom (the header and
+ * the footer, blocks 1 and 11, come from the layout).
  */
 export function HomePage({ locale, info }: HomePageProps) {
   return (

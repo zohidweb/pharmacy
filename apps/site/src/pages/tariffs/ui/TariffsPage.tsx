@@ -1,18 +1,19 @@
 /*
- * Tariffs and services (spec 6.3, W6; redesign 4.6; amendment 2026-11-02-public-site-light-panels 4.5): the price of a store huge on a green panel, «НДС N %
- * сверху» and the price with VAT under it, the billing rule beside it as a tile, the one-time services as tiles (not a
- * table) and the call to request on a mint panel. No calculator
- * (W6). Figures come from the billing settings, so they match invoices. No `motion` on this page: the heading rises in
- * by CSS, the request link gives on press (pressClassName).
+ * Tariffs and services (spec 6.3, W6; redesign 4.6; amendment 2026-11-02-public-site-light-panels 4.5): the price of a
+ * store huge on a green panel, «НДС N % сверху» and the price with VAT under it, the billing rule beside it as a tile,
+ * the one-time services as tiles (not a table) and the call to request on a mint panel. No calculator (W6). Figures
+ * come from the billing settings, so they match invoices. No `motion` on this page: the heading rises in by CSS, the
+ * request link gives on press (pressClassName).
  */
 import { vatOf } from '@pharmacy/shared-domain';
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import { formatMoney, formatPercentBp } from '@pharmacy/shared-util';
-import { buttonClassName, Icon } from '@pharmacy/ui';
+import { buttonClassName, cx, Icon } from '@pharmacy/ui';
 import Link from 'next/link';
 import { getTranslator } from '@/shared/i18n';
 import { localePath, pickText } from '@/shared/lib';
 import {
+  figureClassName,
   pageClassName,
   pageHeaderClassName,
   pageLeadClassName,
@@ -31,6 +32,7 @@ export function TariffsPage({ locale, info }: TariffsPageProps) {
   const t = getTranslator(locale);
   const { storeMonthlyPriceDirams: price, vatBp, services } = info.pricing;
   const vat = formatPercentBp(vatBp);
+  const priceText = formatMoney(price);
   return (
     <main className={pageClassName}>
       <header className={pageHeaderClassName}>
@@ -51,12 +53,13 @@ export function TariffsPage({ locale, info }: TariffsPageProps) {
             {t('tariffs.store.title')}
           </h2>
           <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="text-site-figure-sm whitespace-nowrap tabular-nums md:text-site-figure">
-              {formatMoney(price)}
+            {/* the figure never wraps (no-break spaces): its size follows its length (figureClassName) */}
+            <span className={cx(figureClassName(priceText), 'tabular-nums')}>
+              {priceText}
             </span>
             <span className="text-lead">{t('tariffs.store.perMonth')}</span>
           </p>
-          <div className="flex flex-col gap-1 border-t border-site-line pt-6">
+          <div className="flex flex-col gap-1 pt-6">
             <p className="text-lead font-semibold text-accent-site">
               {t('tariffs.store.vat', { vat })}
             </p>
@@ -86,7 +89,11 @@ export function TariffsPage({ locale, info }: TariffsPageProps) {
           className="flex flex-col gap-8"
         >
           <div className="flex flex-col gap-4">
-            <h2 id="services-title" className="text-section text-balance">
+            {/* «Хизматрасониҳои яккарата»: one word of the Tajik heading is wider than a 320 px screen */}
+            <h2
+              id="services-title"
+              className="text-section text-balance wrap-break-word"
+            >
               {t('tariffs.services.title')}
             </h2>
             <p className="text-lead text-fg-muted">
@@ -101,7 +108,7 @@ export function TariffsPage({ locale, info }: TariffsPageProps) {
                   key={service.id}
                   className={`${tileClass} flex flex-col gap-6 p-6 md:p-8`}
                 >
-                  <h3 className="text-2xl font-bold tracking-tight text-balance">
+                  <h3 className="text-2xl font-bold tracking-tight text-balance wrap-break-word">
                     {pickText(service.name, locale)}
                   </h3>
                   {description && (

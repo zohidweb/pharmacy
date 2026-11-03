@@ -6,8 +6,9 @@
  * DOM, `website` in the body) and the time the form was opened (`openedAt`, set on mount, not during the server
  * render). One request at a time: the button is busy while it is sent and a second submit is ignored (Review Focus 3).
  * Nothing typed is cleared on any error; an edit hides the failure alert.
- * Look (amendment 2026-11-02-public-site-light-panels 4.5): the form and the «Заявка принята» screen lie on the surface of the light page, with a line border; the screen
- * rises in by the CSS entrance (no `motion` on this page; at once with reduce).
+ * Look (amendment 2026-11-02-public-site-light-panels 4.5): the form and the «Заявка принята» screen lie on the
+ * surface of the light page, with a line border; the screen rises in by the CSS entrance (no `motion` on this page; at
+ * once with reduce).
  */
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { UiLocale } from '@pharmacy/shared-dto';
@@ -309,7 +310,8 @@ function RequestForm({
                   href={localePath(locale, '/privacy')}
                   target="_blank"
                   rel="noopener"
-                  // underlined: in a sentence a link must not differ by colour alone (mint to mint-50 is 1.8:1)
+                  // underlined: in a sentence a link must not differ by colour alone (emerald-700 to the 975 text
+                  // is 2.7:1)
                   className="text-primary underline underline-offset-2 hover:text-primary-hover"
                 >
                   {chunks}

@@ -19,7 +19,8 @@ export interface PaymentQrInput {
   db: PosDb | null;
   shiftId: string | null;
   /** A snapshot stored before the payment QR has neither `storeCode` nor `paymentQr` (R7). */
-  settings: PosStoreSettings | undefined;
+  settings:
+    Partial<Pick<PosStoreSettings, 'storeCode' | 'paymentQr'>> | undefined;
   /** The QR part of the receipt. */
   qrMinor: number;
 }
@@ -55,6 +56,8 @@ export function usePaymentQr({
     );
     return () => {
       live = false;
+      // the number belongs to this receipt: the next QR part reads it again rather than showing the old reference
+      setNext(null);
     };
   }, [shown, db, shiftId]);
 

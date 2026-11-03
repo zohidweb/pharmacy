@@ -171,6 +171,9 @@ export function CartPanel(props: CartPanelProps) {
     draft.nonCash.card + draft.nonCash.qr + draft.nonCash.nfc > 0,
   );
   const [showQr, setShowQr] = useState(false);
+  // the QR went away while its dialog was open (the link left the snapshot, the part was cleared): closed, so it does
+  // not reappear unasked with the next QR part
+  if (showQr && !props.paymentQr) setShowQr(false);
   const sum = totals(draft, rules);
   const payment = paymentState(draft, sum.totalMinor);
   const next = nextDiscount(sum.subtotalMinor, rules);

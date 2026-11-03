@@ -65,11 +65,15 @@ export interface PosStoreSettings {
   returnWindowDays: number;
   /** Limits of the outage buffer of the network (spec 2026-10-21-pos-offline-limits, P6). */
   bufferLimits: PosBufferLimits;
-  /** `^[A-Z0-9]{1,8}$` — the first part of `{ref}` of the payment QR (spec 2026-11-03-pos-store-ideas, D37). */
+  /**
+   * `^[A-Z0-9]{1,8}$` — the first part of `{ref}` of the payment QR (spec 2026-11-03-pos-store-ideas, D37). A snapshot
+   * stored before this field lacks it: readers of a stored snapshot keep the `?? ''`.
+   */
   storeCode: string;
   /**
    * The payment QR of the store (D39): the POS draws it for the QR part of the receipt without the network. null — the
-   * store has no link, or the store is not a cloud one. A snapshot stored before this field has neither field.
+   * store has no link, or the store is not a cloud one. A snapshot stored before this field has neither field: readers
+   * of a stored snapshot keep the `?.`.
    */
   paymentQr: PaymentQrSettings | null;
 }

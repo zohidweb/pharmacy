@@ -13,7 +13,9 @@ const REF = '{ref}';
 
 /**
  * Why a template is refused: `scheme` — not an `https://` link with a host, `length` — over 500 characters,
- * `characters` — a space or a control character, `placeholder` — braces other than `{amount}` and `{ref}`.
+ * `characters` — a space, a control or an invisible format character (U+200B, bidi marks: a link pasted from a
+ * messenger can carry them; stricter than the CHECK, which knows only spaces and control characters), `placeholder` —
+ * braces other than `{amount}` and `{ref}`.
  */
 export type PaymentQrTemplateProblem =
   'scheme' | 'length' | 'characters' | 'placeholder';
@@ -29,7 +31,7 @@ export function paymentQrTemplateProblem(
     return 'scheme';
   }
   if (template.length > PAYMENT_QR_TEMPLATE_MAX) return 'length';
-  if (/[\s\p{Cc}]/u.test(template)) return 'characters';
+  if (/[\s\p{Cc}\p{Cf}]/u.test(template)) return 'characters';
   const rest = template.split(AMOUNT).join('').split(REF).join('');
   if (rest.includes('{') || rest.includes('}')) return 'placeholder';
   return null;

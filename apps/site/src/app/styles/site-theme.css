@@ -104,7 +104,10 @@
   /* The stack of «Для кого» (amendment 4.4, п. 4): each card pins 16 px below the one before, 320 px tall */
   --ph-site-stack-step: var(--ph-space-4);
   --ph-site-stack-card-height: 20rem; /* 320 */
-  --ph-site-grid-hero: minmax(0, 5fr) minmax(0, 6fr); /* text : product screens */
+  --ph-site-grid-hero: minmax(0, 5fr) minmax(0, 6fr); /* text : product screen */
+  /* The till screen of the first screen from 1024 px (spec 2026-11-04-public-site-home-polish, H1): wider than its
+     column, the panel clips what runs past its right edge. 150 % of the column is about 990 px at 1440 */
+  --ph-site-hero-shot-width: 150%;
   --ph-site-grid-aside: minmax(0, 4fr) minmax(0, 7fr); /* pinned heading : content */
   --ph-site-grid-main: minmax(0, 7fr) minmax(0, 4fr); /* main tile : its side note (tariffs) */
   --ph-site-marquee-duration: 48s; /* one pass of the capability line, slow (4.5, п. 3) */
@@ -358,12 +361,13 @@
  * text-site-figure(-sm). Shape: rounded-site-card, rounded-site-panel, shadow-shot. Layout: py-24 (one step past the
  * kit's scale), max-w-site-content,
  * h-site-header, backdrop-blur-site-header, min-h-site-first-screen, top-site-sticky, top-site-stack,
- * min-h-site-stack-card, h-site-steps, max-w-site-reading, grid-cols-site-hero, grid-cols-site-aside,
- * grid-cols-site-main.
+ * min-h-site-stack-card, h-site-steps, max-w-site-reading, w-site-hero-shot, grid-cols-site-hero,
+ * grid-cols-site-aside, grid-cols-site-main.
  * Colour utilities read tokens that a panel redefines, so they resolve on the element (`inline`).
- * md: is 1024 px, the site's desktop threshold (4.2, 4.5).
+ * md: is 1024 px, the site's desktop threshold (4.2, 4.5); sm: is 640 px (the kit's theme drops the default breakpoints).
  */
 @theme {
+  --breakpoint-sm: 40rem; /* 640: the facts of the first screen go in a row (spec 2026-11-04-public-site-home-polish, H1) */
   --breakpoint-md: 64rem; /* 1024 */
 }
 
@@ -440,6 +444,9 @@
   --grid-template-columns-site-hero: var(
     --ph-site-grid-hero
   ); /* grid-cols-site-hero */
+  --spacing-site-hero-shot: var(
+    --ph-site-hero-shot-width
+  ); /* w-site-hero-shot */
   --grid-template-columns-site-aside: var(
     --ph-site-grid-aside
   ); /* grid-cols-site-aside */

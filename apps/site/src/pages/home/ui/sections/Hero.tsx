@@ -1,20 +1,28 @@
 /*
- * First screen of the home page (spec 4.5, п. 2; amendment 4.4, п. 2): a dark panel, text on the left, three product
- * screens on the right; on a phone the text comes first and the screens stay inside the panel. It fills the viewport
- * under the header (capped), so the heading and both buttons are seen without scrolling; it stands off the header by
- * the panel's own inset (8 px, 16 px from 1024 px). From 1024 px the screens sit at the bottom of the panel and hang
- * 64 px below it: the panel clips only sideways and keeps that much room under itself (mb-16), and the text keeps the
- * panel's bottom padding, so it stays centred in the panel. The entrance is CSS (`site-enter*`, R1): the largest paint
- * does not wait for hydration, and without JavaScript or with reduce everything is simply there.
+ * First screen of the home page (spec 4.5, п. 2; amendment 4.4, п. 2; spec 2026-11-04-public-site-home-polish, H1): a
+ * dark panel, text on the left, one large till screen on the right; on a phone the text comes first and the screen
+ * stays inside the panel. Under the buttons stands a row of three facts (an icon and a short line each; a column on a
+ * phone, a wrapping row from 640 px). The panel fills the viewport under the header (capped), so the heading, both
+ * buttons and the facts are seen without scrolling; it stands off the header by the panel's own inset (8 px, 16 px from
+ * 1024 px). From 1024 px the screen sits at the bottom of the panel, runs past its right edge and hangs 64 px below it:
+ * the panel clips only sideways and keeps that much room under itself (mb-16), and the text keeps the panel's bottom
+ * padding, so it stays centred in the panel. The entrance is CSS (`site-enter*`, R1): the largest paint does not wait
+ * for hydration, and without JavaScript or with reduce everything is simply there.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
-import { cx } from '@pharmacy/ui';
+import { cx, Icon, type IconName } from '@pharmacy/ui';
 import type { ReactNode } from 'react';
 import { getTranslator } from '@/shared/i18n';
 import { localePath } from '@/shared/lib';
 import { contentClassName, panelClassName } from '@/shared/ui';
 import { PressableLink } from '@/shared/ui/motion';
 import { HeroShots } from './HeroShots';
+
+const FACTS = [
+  { key: 'browser', icon: 'globe' },
+  { key: 'languages', icon: 'scroll-text' },
+  { key: 'billing', icon: 'calendar-check' },
+] as const satisfies readonly { key: string; icon: IconName }[];
 
 export function Hero({
   locale,
@@ -84,14 +92,17 @@ export function Hero({
               {t('home.hero.secondary')}
             </PressableLink>
           </div>
+          {/* three facts true of the pilot (spec H1): a browser (ADR-0004), RU and TJ, billing by active days */}
+          <ul className="site-enter site-enter-delay-4 flex flex-col gap-3 pt-2 text-md text-fg-muted sm:flex-row sm:flex-wrap sm:gap-x-6">
+            {FACTS.map(({ key, icon }) => (
+              <li key={key} className="flex items-center gap-2">
+                <Icon name={icon} size="md" className="text-accent-site" />
+                {t(`home.hero.facts.${key}`)}
+              </li>
+            ))}
+          </ul>
         </div>
-        <HeroShots
-          alts={{
-            pos: t('home.hero.shots.pos'),
-            stock: t('home.hero.shots.stock'),
-            report: t('home.hero.shots.report'),
-          }}
-        />
+        <HeroShots alt={t('home.hero.shot')} />
       </div>
     </section>
   );

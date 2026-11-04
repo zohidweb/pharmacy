@@ -14,3 +14,4 @@ export {
   type RevealItemElement,
   type RevealItemProps,
 } from './RevealGroup';
+export { useScrollMode, type ScrollMode } from './useScrollMode';

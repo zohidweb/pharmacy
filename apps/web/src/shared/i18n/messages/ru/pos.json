@@ -23,7 +23,8 @@
       "stock_exceeded": "«{name}»: на остатке меньше, чем в чеке",
       "no_wholesale_price": "«{name}»: нет оптовой цены на этой точке",
       "wholesale_controlled": "«{name}»: ПКУ оптом не продаётся",
-      "wholesale_piece": "«{name}»: оптом — только упаковками"
+      "wholesale_piece": "«{name}»: оптом — только упаковками",
+      "not_in_catalog": "«{name}»: товара больше нет в каталоге точки — уберите строку из чека"
     },
     "catalog": "Каталог",
     "search": "Скан или поиск",

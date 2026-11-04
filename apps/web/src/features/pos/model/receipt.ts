@@ -72,7 +72,9 @@ export type AddError =
   /** A wholesale draft: the store sells the product only retail. */
   | 'no_wholesale_price'
   | 'wholesale_controlled'
-  | 'wholesale_piece';
+  | 'wholesale_piece'
+  /** A line of a product the snapshot of the store no longer has: it cannot be repriced. */
+  | 'not_in_catalog';
 
 export interface AddOptions {
   unit?: SaleUnit;
@@ -302,17 +304,19 @@ export function toWholesale(
   const lines: DraftLine[] = [];
   for (const line of draft.lines) {
     const product = products.get(line.productId);
-    const code = product
-      ? wholesaleError(product, line.unit)
-      : 'no_wholesale_price';
-    if (code || !product) {
+    if (!product) {
       return {
         draft,
-        error: {
-          code: code ?? 'no_wholesale_price',
-          productId: line.productId,
-        },
+        error: { code: 'not_in_catalog', productId: line.productId },
       };
+    }
+    // a line sold as ПКУ stays one, whatever the snapshot says now: the receipt would carry its prescription data
+    const code =
+      line.prescription === 'controlled'
+        ? 'wholesale_controlled'
+        : wholesaleError(product, line.unit);
+    if (code) {
+      return { draft, error: { code, productId: line.productId } };
     }
     lines.push({
       ...line,
@@ -341,29 +345,42 @@ export function setWholesaleBuyer(
 }
 
 /**
- * Back to a retail receipt (R11): the lines are priced by the retail price of the snapshot (a product no longer in it
- * keeps its price), the payment starts over.
+ * Back to a retail receipt (R11): the lines are priced by the retail price of the snapshot, the payment starts over. A
+ * line of a product the snapshot no longer has is the error and the draft stays as it was: its wholesale price would be
+ * sent as a retail one (final review M5).
  */
 export function toRetail(
   draft: ReceiptDraft,
   products: ReadonlyMap<string, PosProduct>,
   priceVersion: number,
-): ReceiptDraft {
+): {
+  draft: ReceiptDraft;
+  error: { code: AddError; productId: string } | null;
+} {
+  const lines: DraftLine[] = [];
+  for (const line of draft.lines) {
+    const product = products.get(line.productId);
+    if (!product) {
+      return {
+        draft,
+        error: { code: 'not_in_catalog', productId: line.productId },
+      };
+    }
+    lines.push({
+      ...line,
+      unitPriceMinor: unitPrice(product, line.unit),
+      priceVersion,
+    });
+  }
   return {
-    ...draft,
-    lines: draft.lines.map((line) => {
-      const product = products.get(line.productId);
-      return product
-        ? {
-            ...line,
-            unitPriceMinor: unitPrice(product, line.unit),
-            priceVersion,
-          }
-        : line;
-    }),
-    wholesale: null,
-    nonCash: { card: 0, qr: 0, nfc: 0 },
-    cashTenderedMinor: null,
+    draft: {
+      ...draft,
+      lines,
+      wholesale: null,
+      nonCash: { card: 0, qr: 0, nfc: 0 },
+      cashTenderedMinor: null,
+    },
+    error: null,
   };
 }
 

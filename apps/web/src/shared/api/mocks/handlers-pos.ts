@@ -397,9 +397,9 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       }
       if (wholesale) {
         const errors = body.lines.flatMap((line, index) => {
-          const item = product(line.productId, correlationId);
+          product(line.productId, correlationId);
           return [
-            ...(line.controlled !== null || item.prescription === 'controlled'
+            ...(line.controlled !== null
               ? [{ field: `lines.${index}.productId`, code: 'wholesale_controlled' }]
               : []),
             ...(line.unit === 'piece'

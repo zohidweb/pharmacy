@@ -226,12 +226,9 @@ export class ReceiptsService {
             // the expired batch is a hard ban without a bypass (ТЗ), even after the fact
             errors.push({ field: `lines.${i}.batchId`, code: 'batch_expired' });
           }
-          const product = products.get(line.productId.toLowerCase());
-          if (
-            wholesale !== null &&
-            product &&
-            (line.controlled !== null || product.prescription === 'controlled')
-          ) {
+          // the till sold the line as ПКУ; a product made ПКУ after its snapshot is a `catalog` mark, as in retail —
+          // the sale is a fact (plan 2026-11-03-pos-store-ideas-pr3, final review M4)
+          if (wholesale !== null && line.controlled !== null) {
             errors.push({
               field: `lines.${i}.productId`,
               code: 'wholesale_controlled',

@@ -145,6 +145,7 @@ function PosPageView() {
   const [paying, setPaying] = useState(false);
   // the wholesale of an organisation (spec 2026-11-03-pos-store-ideas, D24): the buyer dialog, the retail confirmation
   const [buyerOpen, setBuyerOpen] = useState(false);
+  const [buyerError, setBuyerError] = useState<string | null>(null);
   const [retailOpen, setRetailOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -465,10 +466,28 @@ function PosPageView() {
   const productOf = (line: DraftLine) => index?.byId.get(line.productId);
 
   /** The buyer is confirmed: the receipt becomes (or stays) a wholesale one (plan 2026-11-03-pos-store-ideas-pr3, R11). */
-  const confirmBuyer = (buyer: WholesaleBuyer) => {
+  /** The text of a line that blocks a switch, by the name the line keeps (its product may have left the snapshot). */
+  const switchError = (error: { code: AddError; productId: string }) =>
+    t(`addErrors.${error.code}`, {
+      name:
+        draft.lines.find((line) => line.productId === error.productId)?.name ??
+        index?.byId.get(error.productId)?.name ??
+        '',
+    });
+
+  const closeBuyer = () => {
     setBuyerOpen(false);
+    setBuyerError(null);
+  };
+
+  /**
+   * The buyer is confirmed: the receipt becomes (or stays) a wholesale one (plan 2026-11-03-pos-store-ideas-pr3, R11).
+   * A line that blocks it keeps the dialog open with what was typed (final review M6).
+   */
+  const confirmBuyer = (buyer: WholesaleBuyer) => {
     if (usePosStore.getState().draft.wholesale) {
       update((current) => setWholesaleBuyer(current, buyer));
+      closeBuyer();
       return;
     }
     if (!index) return;
@@ -484,21 +503,25 @@ function PosPageView() {
       return result.draft;
     });
     const error = failed as { code: AddError; productId: string } | null;
-    if (error) {
-      const name =
-        index.byId.get(error.productId)?.name ??
-        draft.lines.find((line) => line.productId === error.productId)?.name ??
-        '';
-      setNotice(t(`addErrors.${error.code}`, { name }));
-    }
+    if (error) setBuyerError(switchError(error));
+    else closeBuyer();
   };
 
   const backToRetail = () => {
     setRetailOpen(false);
     if (!index) return;
-    update((current) =>
-      toRetail(current, index.byId, snapshot?.version ?? Date.now()),
-    );
+    let failed: { code: AddError; productId: string } | null = null;
+    update((current) => {
+      const result = toRetail(
+        current,
+        index.byId,
+        snapshot?.version ?? Date.now(),
+      );
+      failed = result.error;
+      return result.draft;
+    });
+    const error = failed as { code: AddError; productId: string } | null;
+    if (error) setNotice(switchError(error));
   };
   const sum = totals(draft, snapshot?.discountRules ?? []);
 
@@ -772,8 +795,9 @@ function PosPageView() {
         <WholesaleBuyerDialog
           open
           initial={draft.wholesale ?? null}
+          error={buyerError}
           onConfirm={confirmBuyer}
-          onClose={() => setBuyerOpen(false)}
+          onClose={closeBuyer}
         />
       )}
       <RetailReceiptDialog

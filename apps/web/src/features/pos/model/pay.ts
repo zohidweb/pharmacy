@@ -79,7 +79,8 @@ export function buildReceiptRequest(
     cashTenderedMinor: payment.tenderedMinor,
     changeMinor: payment.changeMinor,
     language,
-    wholesale: draft.wholesale ?? null,
+    // only a wholesale receipt carries the key: an API without it (a rollback) still takes every retail receipt
+    ...(draft.wholesale ? { wholesale: draft.wholesale } : {}),
   };
 }
 

@@ -352,12 +352,15 @@ const TAX_ID = /^\d{9}$/;
 export function WholesaleBuyerDialog({
   open,
   initial,
+  error,
   onConfirm,
   onClose,
 }: {
   open: boolean;
   /** The buyer being changed; null — the wholesale is being switched on. */
   initial: WholesaleBuyer | null;
+  /** Why the receipt could not become a wholesale one (a line of it): the dialog stays with what was typed. */
+  error?: string | null;
   onConfirm: (buyer: WholesaleBuyer) => void;
   onClose: () => void;
 }) {
@@ -408,6 +411,11 @@ export function WholesaleBuyerDialog({
           submit();
         }}
       >
+        {error && (
+          <Alert tone="danger" live="assertive">
+            {error}
+          </Alert>
+        )}
         <TextField
           label={t('buyerName')}
           autoComplete="off"

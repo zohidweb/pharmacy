@@ -445,6 +445,7 @@ export class CreateReceiptDto
 
   /** Absent in the operations buffered before it (plan 2026-11-03-pos-store-ideas-pr3, R9): a retail receipt. */
   @IsOptional()
+  @IsObject()
   @ValidateNested()
   @Type(() => WholesaleBuyerDto)
   wholesale?: WholesaleBuyerDto | null;

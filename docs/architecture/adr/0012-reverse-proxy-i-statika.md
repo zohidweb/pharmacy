@@ -398,3 +398,14 @@ ADR-0023 меняет корневой домен: `{$APEX_ADDR}` больше �
 /api/v1/public/media/{id}` ответ кешируется браузером (`public, max-age=31536000, immutable`) — исключение из общего
 `no-store` для `/api`. Предел тела 3 МиБ для загрузки картинок сайта `POST /api/v1/operator/site-media` на `admin.`
 вводится вместе с экранами «Сайт» админки. Остальные решения ADR не меняются.
+
+## Поправка 2026-11-04 (ADR-0025)
+
+Предложена вместе с ADR-0025 (proposed) и действует после его принятия архитектором. Касса сканирует штрихкод камерой
+планшета (спецификация `2026-11-03-pos-store-ideas`, I5, D35):
+- хост `app.` и офлайн-профиль web — `Permissions-Policy: camera=(self), microphone=(), geolocation=()` и
+  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'` (распознаватель `zxing-wasm` компилирует WebAssembly);
+- `admin.` и публичный сайт — прежние `camera=()` и CSP без `'wasm-unsafe-eval'`.
+
+Сниппет `static-files` получает оба значения параметрами. `.wasm` добавляется в предсжатие (`.br` и `.gz`).
+Остальные решения ADR не меняются.

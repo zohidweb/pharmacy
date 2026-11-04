@@ -232,6 +232,9 @@ export function CartPanel(props: CartPanelProps) {
               {t('wholesale.banner', { name: buyer.buyerName })}
             </span>
           </span>
+          {!props.canWholesale && (
+            <span className="text-danger">{t('wholesale.notAllowed')}</span>
+          )}
           <span className="flex flex-wrap gap-2">
             <Button
               variant="tertiary"
@@ -422,7 +425,13 @@ export function CartPanel(props: CartPanelProps) {
         </button>
         <button
           type="button"
-          disabled={Boolean(payment.problem) || busy || Boolean(locked)}
+          disabled={
+            Boolean(payment.problem) ||
+            busy ||
+            Boolean(locked) ||
+            // a wholesale draft of a session without the right is not paid (it can be switched off)
+            (Boolean(buyer) && !props.canWholesale)
+          }
           onClick={props.onPay}
           className="col-span-2 min-h-touch-primary rounded-lg bg-primary text-xl font-bold text-on-primary hover:bg-primary-hover disabled:bg-disabled disabled:text-on-disabled"
         >

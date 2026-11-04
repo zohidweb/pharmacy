@@ -377,6 +377,12 @@ function PosPageView() {
 
   const pay = async () => {
     if (!session || !openShift || !snapshot || !runtime || paying) return;
+    // a wholesale draft outlives the session that made it (a PIN switch, a revoked right): the server would refuse the
+    // sale for good after the money is taken (ADR-0015, amendment 2026-11-03, p. 5)
+    if (usePosStore.getState().draft.wholesale && !canWholesale) {
+      setNotice(t('wholesale.notAllowed'));
+      return;
+    }
     if (bufferStop) {
       setNotice(bufferStop);
       return;

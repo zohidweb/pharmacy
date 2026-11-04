@@ -287,3 +287,21 @@ use-intl (ICU), Jest.
   - снимки блоков в середине прокрутки: движение видно;
   - снимки в конце прокрутки: всё в конечном положении.
 - [ ] **Step 3.** axe на `/` и `/tg`.
+
+### Task 10: раскладки без пустых колонок (H9, поправка 2026-11-04)
+
+**Files:**
+- секции: `Audience.tsx`, `Features.tsx`, `PricingTeaser.tsx`, `Security.tsx`, `Faq.tsx`;
+- словари RU и TJ;
+- `apps/site/public/images/sales-report.webp` (вернуть из `git show 8b7ebd7c:apps/site/public/images/sales-report.webp`);
+- `site-theme.css`, если нужны новые утилиты.
+
+**Spec:** раздел 9 (H9.1–H9.5).
+
+- [ ] **Step 1.** H9.1–H9.5 по таблице раздела 9. Каждый блок — отдельный коммит.
+- [ ] **Step 2.** После каждого коммита `npx nx run-many -t test lint fsd -p site`. В конце сборка и живая проверка:
+  - на 375, 1024 и 1440, RU и TJ, режимы по умолчанию, `REDUCE=1` и `NOJS=1`;
+  - высота и горизонтальная прокрутка;
+  - JS;
+  - axe на `/` и `/tg`;
+  - снимки пяти блоков на 1440 сверены с макетом `gap-mock/after-*.png`.

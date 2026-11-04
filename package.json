@@ -8,7 +8,7 @@
     "build": "nx run-many -t build",
     "test": "nx run-many -t test",
     "lint": "nx run-many -t lint",
-    "check": "nx run-many -t lint fsd test build",
+    "check": "nx run-many -t lint fsd typecheck test build",
     "stack": "node tools/scripts/stack.mjs",
     "test-env:build": "node tools/scripts/stack.mjs test build",
     "test-env:up": "node tools/scripts/stack.mjs test up",

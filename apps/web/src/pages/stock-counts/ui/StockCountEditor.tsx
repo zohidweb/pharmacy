@@ -19,6 +19,8 @@ import { DocumentStatusPill } from '@/entities/stock-document';
 import { UnpostDialog, type StockAccess } from '@/features/stock-document';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
+import { CameraScanButton } from '@/shared/ui';
 import { FoundLineDialog } from './FoundLineDialog';
 
 /**
@@ -415,25 +417,25 @@ export function StockCountEditor({
       saveComment.error,
   );
 
-  // a scanned barcode shows its lines; an unknown one opens «найденный товар»
-  useBarcodeScanner(
-    (code) => {
-      const lines = doc.lines.filter((l) => l.barcodes.includes(code));
-      if (lines.length > 0) {
-        setFocused(lines.map((l) => l.lineId));
-        setFilter('');
-        // one line: its quantity field is ready to type
-        if (lines.length === 1 && editable) {
-          setFocusLine({ lineId: lines[0].lineId, at: Date.now() });
-        }
-      } else if (editable) {
-        // the search of «найденный товар» starts with the scanned code
-        setScannedCode(code);
-        setFound('new');
+  // a scanned barcode (USB scanner or camera, ADR-0025) shows its lines; an unknown one opens «найденный товар»
+  const handleScan = (code: string) => {
+    const lines = doc.lines.filter((l) => l.barcodes.includes(code));
+    if (lines.length > 0) {
+      setFocused(lines.map((l) => l.lineId));
+      setFilter('');
+      // one line: its quantity field is ready to type
+      if (lines.length === 1 && editable) {
+        setFocusLine({ lineId: lines[0].lineId, at: Date.now() });
       }
-    },
-    { enabled: editable && found === null },
-  );
+    } else if (editable) {
+      // the search of «найденный товар» starts with the scanned code
+      setScannedCode(code);
+      setFound('new');
+    }
+  };
+  const scanEnabled = editable && found === null;
+  useBarcodeScanner(handleScan, { enabled: scanEnabled });
+  const camera = useCameraAvailable();
 
   const diffs = doc.lines.map(lineDiff);
   const surplus = diffs.filter((d) => d !== null && d > 0).length;
@@ -538,6 +540,11 @@ export function StockCountEditor({
                   setFilter(event.target.value);
                   setFocused(null);
                 }}
+                endAdornment={
+                  scanEnabled && camera ? (
+                    <CameraScanButton onScan={handleScan} />
+                  ) : undefined
+                }
               />
             </div>
             {focused && (

@@ -62,3 +62,6 @@ docker/secrets/
 .next
 apps/*/out
 test-output
+
+# the camera reader, copied from zxing-wasm by tools/scripts/zxing-wasm.mjs (ADR-0025)
+apps/web/public/vendor/*.wasm

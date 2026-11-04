@@ -8,6 +8,8 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { apiRequest } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
+import { CameraScanButton } from '@/shared/ui';
 
 /** What a new product starts from: the scanned barcode, or the typed name (spec 2026-11-03-pos-store-ideas, D10). */
 export type ProductSeed = { barcode: string } | { name: string };
@@ -58,17 +60,24 @@ export function ProductSearch({
     enabled: trimmed.length >= 2 && !disabled,
   });
 
-  useBarcodeScanner(
-    async (code) => {
+  // a code of the USB scanner or of the camera (ADR-0025): the product whose barcode it is, otherwise the search shows
+  // the code — a QR text or a short Code 128 may match a name, which is never picked by itself (final review M5, M6)
+  const handleScan = async (code: string) => {
+    try {
       const found = await apiRequest('stock.products', {
         params: { storeId },
-        query: { query: code, limit: 1, supplierId },
+        query: { query: code, limit: 8, supplierId },
       });
-      if (found[0]) onPick(found[0]);
+      const product = found.find((option) => option.barcodes.includes(code));
+      if (product) onPick(product);
       else setQuery(code);
-    },
-    { enabled: !disabled && scanEnabled },
-  );
+    } catch {
+      // the search of the field asks again and shows its own error
+      setQuery(code);
+    }
+  };
+  const camera = useCameraAvailable();
+  useBarcodeScanner(handleScan, { enabled: !disabled && scanEnabled });
 
   return (
     <div className="relative flex flex-col gap-1">
@@ -81,6 +90,14 @@ export function ProductSearch({
         disabled={disabled}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
+        endAdornment={
+          camera ? (
+            <CameraScanButton
+              onScan={(code) => void handleScan(code)}
+              disabled={disabled || !scanEnabled}
+            />
+          ) : undefined
+        }
       />
       {trimmed.length >= 2 && (
         <div className="rounded-md border border-border bg-surface shadow-md">

@@ -43,6 +43,8 @@ import {
   useApiErrorMessage,
 } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
+import { CameraScanButton } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import {
   refundOf,
@@ -426,14 +428,13 @@ function ReturnsPageView() {
   const createGeneric = useApiErrorMessage(paymentsChanged ? null : create.error);
   const createError = paymentsChanged ? t('paymentsChanged') : createGeneric;
 
-  // a QR / barcode of the receipt is its number
-  useBarcodeScanner(
-    (code) => {
-      setNumber(code);
-      findByCode(code);
-    },
-    { minLength: 3, enabled: online },
-  );
+  // a QR / barcode of the receipt is its number — from the USB scanner or the camera (ADR-0025)
+  const handleScan = (code: string) => {
+    setNumber(code);
+    findByCode(code);
+  };
+  useBarcodeScanner(handleScan, { minLength: 3, enabled: online });
+  const camera = useCameraAvailable();
 
   const picked = Object.values(quantities).some((quantity) => quantity > 0);
   const refund = receipt && picked ? refundOf(receipt, quantities) : null;
@@ -491,6 +492,11 @@ function ReturnsPageView() {
               value={number}
               disabled={!online}
               onChange={(event) => setNumber(event.target.value)}
+              endAdornment={
+                camera ? (
+                  <CameraScanButton onScan={handleScan} disabled={!online} />
+                ) : undefined
+              }
             />
             <Button
               type="submit"

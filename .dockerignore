@@ -23,3 +23,5 @@ docker/secrets
 **/*.key
 docs
 templates
+# the camera reader: the image copies it from its own npm ci (ADR-0025)
+apps/web/public/vendor/*.wasm

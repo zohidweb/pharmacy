@@ -151,16 +151,21 @@
 
 # Static export of Next.js: every route is its own HTML, no SPA fallback (ADR-0012).
 # Inline scripts are allowed until build-time hashes (RSC payload of Next, ADR-0012 «Принятие», 4).
+# args[0] — Permissions-Policy, args[1] — the sources of script-src: the web host lets its own pages use the camera and
+# compile WebAssembly (the barcode reader of the camera window, ADR-0025 and its ADR-0012 amendment), the admin does not.
 (static-files) {
 	handle {
 		header {
-			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+			Content-Security-Policy "default-src 'self'; script-src {args[1]}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
 			X-Content-Type-Options nosniff
 			Referrer-Policy strict-origin-when-cross-origin
 			Cross-Origin-Opener-Policy same-origin
-			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			Permissions-Policy "{args[0]}"
 		}
 		header /_next/static/* Cache-Control "public, max-age=31536000, immutable"
+		# the camera reader of web: its name carries the zxing-wasm version (ADR-0025)
+		@zxingReader path_regexp ^/vendor/zxing_reader-[^/]+\.wasm$
+		header @zxingReader Cache-Control "public, max-age=31536000, immutable"
 		header ?Cache-Control "no-cache"
 		# trailingSlash is false in the export: /stock/ → /stock instead of a 404. Only plain route segments: the decoded
 		# path may hold a backslash or a tab, and /%5Cevil.com/ would redirect to /\evil.com — another site for a browser.
@@ -183,8 +188,9 @@
 	}
 }
 
+# The static files of web with their headers (args of static-files); the admin site imports static-files itself.
 (static) {
-	import static-files
+	import static-files "camera=(self), microphone=(), geolocation=()" "'self' 'unsafe-inline' 'wasm-unsafe-eval'"
 	import static-errors
 }
 
@@ -209,7 +215,7 @@
 	}
 	handle {
 		import api-operator
-		import static-files
+		import static-files "camera=(), microphone=(), geolocation=()" "'self' 'unsafe-inline'"
 	}
 	import static-errors
 }

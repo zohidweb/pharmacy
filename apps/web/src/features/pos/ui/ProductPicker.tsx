@@ -18,6 +18,8 @@ import {
   sellablePieces,
   type CatalogIndex,
 } from '@/entities/catalog';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
+import { CameraScanButton } from '@/shared/ui';
 
 export interface ProductPickerProps {
   index: CatalogIndex;
@@ -30,6 +32,8 @@ export interface ProductPickerProps {
   onAdd: (product: PosProduct, unit: SaleUnit) => void;
   onDetails: (product: PosProduct) => void;
   searchRef?: React.Ref<HTMLInputElement>;
+  /** The handler of the USB scanner of the till; given — the search field gets the camera button (ADR-0025). */
+  onCameraScan?: (code: string) => void;
 }
 
 const MAX_RESULTS = 24;
@@ -119,8 +123,10 @@ export function ProductPicker({
   onAdd,
   onDetails,
   searchRef,
+  onCameraScan,
 }: ProductPickerProps) {
   const t = useTranslations('pos');
+  const camera = useCameraAvailable();
   // products in stock first; out-of-stock ones stay findable (their analogs are offered)
   const results = index
     .search(query, categoryId)
@@ -147,6 +153,11 @@ export function ProductPicker({
         autoComplete="off"
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
+        endAdornment={
+          camera && onCameraScan ? (
+            <CameraScanButton onScan={onCameraScan} />
+          ) : undefined
+        }
       />
       <ChipGroup label={t('categories')}>
         <Chip

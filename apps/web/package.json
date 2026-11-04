@@ -12,7 +12,7 @@
     "targets": {
       "dev": {
         "options": {
-          "command": "next dev -H 127.0.0.1 -p 4200",
+          "command": "node ../../tools/scripts/zxing-wasm.mjs apps/web/public && next dev -H 127.0.0.1 -p 4200",
           "env": {
             "NEXT_PUBLIC_API_MOCKS": "true"
           }
@@ -22,7 +22,7 @@
         "executor": "nx:run-commands",
         "continuous": true,
         "options": {
-          "command": "next dev -H 127.0.0.1 -p 4200",
+          "command": "node ../../tools/scripts/zxing-wasm.mjs apps/web/public && next dev -H 127.0.0.1 -p 4200",
           "cwd": "{projectRoot}",
           "env": {
             "NEXT_PUBLIC_API_MOCKS": "partial"
@@ -43,15 +43,18 @@
       },
       "build": {
         "options": {
-          "command": "next build && node ../../tools/scripts/build-sw.mjs apps/web/out"
+          "command": "node ../../tools/scripts/zxing-wasm.mjs apps/web/public && next build && node ../../tools/scripts/build-sw.mjs apps/web/out"
         },
         "inputs": [
           "default",
           "^default",
           "{workspaceRoot}/tools/scripts/build-sw.mjs",
+          "{workspaceRoot}/tools/scripts/zxing-wasm.mjs",
           {
             "externalDependencies": [
-              "next"
+              "next",
+              "barcode-detector",
+              "zxing-wasm"
             ]
           },
           {

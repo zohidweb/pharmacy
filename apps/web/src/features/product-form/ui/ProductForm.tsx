@@ -19,6 +19,8 @@ import {
 } from '@pharmacy/ui';
 import { useId, useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
+import { CameraScanButton } from '@/shared/ui';
 
 export interface ProductDraft extends CatalogProductInput {
   /** Text of the regulated maximum while it is typed. */
@@ -142,6 +144,7 @@ export function ProductForm({
   const t = useTranslations('products.form');
   const id = useId();
   const [code, setCode] = useState('');
+  const camera = useCameraAvailable();
   const problems = draftProblems(draft);
   const serverError = (field: string) => {
     const code = fieldErrors.find((error) => error.field === field)?.code;
@@ -152,21 +155,27 @@ export function ProductForm({
   };
   const set = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) =>
     onChange((current) => ({ ...current, [key]: value }));
-  const codeError =
-    code === ''
+  const codeErrorOf = (value: string) =>
+    value === ''
       ? undefined
-      : !BARCODE.test(code)
+      : !BARCODE.test(value)
         ? t('barcodeFormat')
-        : draft.barcodes.some((b) => b.code === code)
+        : draft.barcodes.some((b) => b.code === value)
           ? t('barcodeDuplicate')
           : undefined;
-  const addCode = () => {
-    if (!code || codeError) return;
+  const codeError = codeErrorOf(code);
+  const addCode = (value = code) => {
+    if (!value || codeErrorOf(value)) return;
     onChange((current) => ({
       ...current,
-      barcodes: [...current.barcodes, { code }],
+      barcodes: [...current.barcodes, { code: value }],
     }));
     setCode('');
+  };
+  // a camera code is added as a typed one; a wrong one (a QR, a duplicate) stays in the field with its error
+  const scanCode = (value: string) => {
+    if (codeErrorOf(value)) setCode(value);
+    else addCode(value);
   };
 
   return (
@@ -339,12 +348,17 @@ export function ProductForm({
                   addCode();
                 }
               }}
+              endAdornment={
+                camera ? (
+                  <CameraScanButton onScan={scanCode} disabled={disabled} />
+                ) : undefined
+              }
             />
             <Button
               variant="secondary"
               iconStart="plus"
               disabled={!code || codeError !== undefined}
-              onClick={addCode}
+              onClick={() => addCode()}
             >
               {t('addBarcode')}
             </Button>

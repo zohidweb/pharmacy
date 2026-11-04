@@ -155,8 +155,8 @@ pharmacy/
 
 ```
 npm ci                               # установка строго по lock-файлу
-npx nx run-many -t build test lint fsd   # всё (= npm run check)
-npx nx affected -t build test lint fsd   # только затронутое изменением
+npx nx run-many -t lint fsd typecheck test build   # всё (= npm run check = джоба checks CI, .github/workflows/deploy.yml)
+npx nx affected -t lint fsd typecheck test build   # только затронутое изменением
 npx nx fsd web / admin / site        # Steiger — слои FSD (ADR-0017)
 npx nx serve api                     # http://localhost:3000/api/v1/health
 npx nx dev web                       # http://localhost:4200 (/api/* проксируется на :3000, только dev)

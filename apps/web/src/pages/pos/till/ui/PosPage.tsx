@@ -295,17 +295,17 @@ function PosPageView() {
     commitAdd(pending);
   };
 
-  useBarcodeScanner(
-    (code) => {
-      const product = index?.byBarcode.get(code);
-      if (!product) {
-        setNotice(t('unknownBarcode', { code }));
-        return;
-      }
-      requestAdd(product, 'pack');
-    },
-    { enabled: Boolean(index) && !locked },
-  );
+  // a code of the USB scanner or of the camera (ADR-0025): the same lookup in the snapshot
+  const handleScan = (code: string) => {
+    const product = index?.byBarcode.get(code);
+    if (!product) {
+      setNotice(t('unknownBarcode', { code }));
+      return;
+    }
+    requestAdd(product, 'pack');
+  };
+  const scanEnabled = Boolean(index) && !locked;
+  useBarcodeScanner(handleScan, { enabled: scanEnabled });
 
   // held receipts live on the server: shared by the cashiers of the store, online only
   const held = useQuery({
@@ -649,6 +649,7 @@ function PosPageView() {
                   onAdd={(product, unit) => requestAdd(product, unit)}
                   onDetails={setDetails}
                   searchRef={searchRef}
+                  onCameraScan={scanEnabled ? handleScan : undefined}
                 />
                 <CartPanel
                   draft={draft}

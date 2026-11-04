@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { apiRequest } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
+import { CameraScanButton } from '@/shared/ui';
 
 /** What a new product starts from: the scanned barcode, or the typed name (spec 2026-11-03-pos-store-ideas, D10). */
 export type ProductSeed = { barcode: string } | { name: string };
@@ -58,17 +59,16 @@ export function ProductSearch({
     enabled: trimmed.length >= 2 && !disabled,
   });
 
-  useBarcodeScanner(
-    async (code) => {
-      const found = await apiRequest('stock.products', {
-        params: { storeId },
-        query: { query: code, limit: 1, supplierId },
-      });
-      if (found[0]) onPick(found[0]);
-      else setQuery(code);
-    },
-    { enabled: !disabled && scanEnabled },
-  );
+  // a code of the USB scanner or of the camera (ADR-0025): the product of the code, or the search shows it
+  const handleScan = async (code: string) => {
+    const found = await apiRequest('stock.products', {
+      params: { storeId },
+      query: { query: code, limit: 1, supplierId },
+    });
+    if (found[0]) onPick(found[0]);
+    else setQuery(code);
+  };
+  useBarcodeScanner(handleScan, { enabled: !disabled && scanEnabled });
 
   return (
     <div className="relative flex flex-col gap-1">
@@ -81,6 +81,12 @@ export function ProductSearch({
         disabled={disabled}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
+        endAdornment={
+          <CameraScanButton
+            onScan={(code) => void handleScan(code)}
+            disabled={disabled || !scanEnabled}
+          />
+        }
       />
       {trimmed.length >= 2 && (
         <div className="rounded-md border border-border bg-surface shadow-md">

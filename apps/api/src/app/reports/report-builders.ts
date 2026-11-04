@@ -115,6 +115,8 @@ export function salesByStore(
       store: store.name,
       receipts: sold?.receipts ?? 0,
       revenue,
+      retailMinor: sold?.retailMinor ?? 0,
+      wholesaleMinor: sold?.wholesaleMinor ?? 0,
       returns,
       cost,
       losses: lossMinor,
@@ -125,6 +127,8 @@ export function salesByStore(
   const total = totalOf(rows, 'store', [
     'receipts',
     'revenue',
+    'retailMinor',
+    'wholesaleMinor',
     'returns',
     'cost',
     'losses',
@@ -138,6 +142,9 @@ export function salesByStore(
     col('store', 'text'),
     col('receipts', 'count'),
     col('revenue', 'money'),
+    // the wholesale sale to organisations apart (spec 2026-11-03-pos-store-ideas, D29)
+    col('retailMinor', 'money'),
+    col('wholesaleMinor', 'money'),
     col('returns', 'money'),
     col('cost', 'money'),
     col('losses', 'money'),

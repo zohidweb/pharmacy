@@ -364,7 +364,8 @@
         "employees_assign-role": "Таъини нақшҳо",
         "employees_manage-peers": "Тағйир додани кормандони ҳамсатҳ",
         "sync_run": "Оғози ҳамоҳангсозӣ",
-        "shifts_force-close": "Бастани баст аз компютери дигар"
+        "shifts_force-close": "Бастани баст аз компютери дигар",
+        "pos_sell-wholesale": "Фурӯши яклухт"
       }
     },
     "terminals": {
@@ -413,6 +414,8 @@
       "store": "Нуқта",
       "receipts": "Чекҳо",
       "revenue": "Даромад, с",
+      "retailMinor": "Чакана, с",
+      "wholesaleMinor": "Яклухт, с",
       "returns": "Баргардонӣ, с",
       "cost": "Арзиши аслӣ, с",
       "margin": "Фоида, с",

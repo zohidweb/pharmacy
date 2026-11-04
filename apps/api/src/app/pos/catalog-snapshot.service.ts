@@ -152,6 +152,9 @@ export class CatalogSnapshotService {
                   settings.pieceStepDirams,
                 )
               : null,
+          // the wholesale is sold only online (spec 2026-11-03-pos-store-ideas, D30)
+          wholesalePriceMinor:
+            store.mode === 'online' ? (price?.wholesaleDirams ?? null) : null,
           batches: (byProduct.get(p.id) ?? []).map(
             (b): PosBatch => ({
               id: b.id,
@@ -200,6 +203,8 @@ export class CatalogSnapshotService {
                   recipient: store.paymentQrRecipient,
                 }
               : null,
+          legalEntityName: store.legalEntityName,
+          legalAddress: store.legalAddress,
         },
       };
     });

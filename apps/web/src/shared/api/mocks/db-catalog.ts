@@ -46,6 +46,8 @@ export interface CatalogMockDb {
   archived: string[];
   /** storeId → productId → price of a pack; absent — the network price. */
   storePrices: Record<string, Record<string, number>>;
+  /** storeId → productId → wholesale price of a pack; absent — no wholesale at the store. */
+  wholesalePrices: Record<string, Record<string, number>>;
   priceConflicts: PriceConflict[];
   duplicates: CatalogDuplicate[];
   discountRules: DiscountRuleRecord[];
@@ -130,6 +132,18 @@ export function createCatalogDb(): CatalogMockDb {
       'store-2': { 'p-paracetamol': 480 },
       // above the regulated maximum and below the purchase price: the warnings of «Цены и скидки»
       'store-4': { 'p-paracetamol': 520, 'p-amoxicillin': 1_800 },
+    },
+    // the wholesale of store-3 (spec 2026-11-03-pos-store-ideas, I4): below the retail price, one above it, a ПКУ
+    // product (refused by the till) and a divisible one (packs only)
+    wholesalePrices: {
+      'store-3': {
+        'p-paracetamol': 400,
+        'p-ibuprofen-400': 1_050,
+        'p-vitamin-d3': 5_900,
+        'p-amoxicillin': 2_500,
+        'p-nurofen': 2_000,
+        'p-tramadol': 3_900,
+      },
     },
     priceConflicts: [
       {

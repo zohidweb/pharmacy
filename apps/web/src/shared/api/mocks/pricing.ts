@@ -22,6 +22,24 @@ export function setStorePrice(
   (mockDb().catalog.storePrices[storeId] ??= {})[productId] = priceMinor;
 }
 
+/** Wholesale price of a pack at a store; null — the product is not sold wholesale there. */
+export function wholesalePrice(
+  storeId: string,
+  productId: string,
+): number | null {
+  return mockDb().catalog.wholesalePrices[storeId]?.[productId] ?? null;
+}
+
+export function setWholesalePrice(
+  storeId: string,
+  productId: string,
+  priceMinor: number | null,
+) {
+  const prices = (mockDb().catalog.wholesalePrices[storeId] ??= {});
+  if (priceMinor === null) delete prices[productId];
+  else prices[productId] = priceMinor;
+}
+
 /** Price of one piece of a divisible pack at a store (rounded up, like the cost of a piece). */
 export function piecePrice(product: PosProduct, packPriceMinor: number) {
   return product.divisible

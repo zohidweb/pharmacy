@@ -19,12 +19,20 @@ export function withPending(
   const cash = { ...shift.cash };
   let receipts = shift.receipts;
   let revenue = shift.revenueMinor;
+  const wholesale = shift.wholesale ? { ...shift.wholesale } : undefined;
+  let pendingWholesale = { count: 0, amountMinor: 0 };
   const known = new Set(shift.events.map((event) => event.id));
   for (const record of records) {
     if (record.status !== 'pending' || known.has(record.id)) continue;
     if (record.kind === 'receipt' && record.payload.shiftId === shift.id) {
       receipts += 1;
       revenue += record.payload.totalMinor;
+      if (record.payload.wholesale) {
+        pendingWholesale = {
+          count: pendingWholesale.count + 1,
+          amountMinor: pendingWholesale.amountMinor + record.payload.totalMinor,
+        };
+      }
       for (const payment of record.payload.payments) {
         byMethod[payment.method].count += 1;
         byMethod[payment.method].amountMinor += payment.amountMinor;
@@ -44,5 +52,20 @@ export function withPending(
     cash.inMinor -
     cash.outMinor -
     cash.returnsMinor;
-  return { ...shift, byMethod, cash, receipts, revenueMinor: revenue };
+  const wholesaleTotal =
+    pendingWholesale.count > 0
+      ? {
+          count: (wholesale?.count ?? 0) + pendingWholesale.count,
+          amountMinor:
+            (wholesale?.amountMinor ?? 0) + pendingWholesale.amountMinor,
+        }
+      : wholesale;
+  return {
+    ...shift,
+    byMethod,
+    cash,
+    receipts,
+    revenueMinor: revenue,
+    ...(wholesaleTotal ? { wholesale: wholesaleTotal } : {}),
+  };
 }

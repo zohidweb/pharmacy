@@ -36,6 +36,11 @@ export interface ReceiptValues {
   language: 'ru' | 'tj';
   /** The number of the receipt of the terminal within its shift (P12); null for an older buffer. */
   localNumber: number | null;
+  /** A wholesale receipt names its buyer (spec 2026-11-03-pos-store-ideas, D26); a retail one has none. */
+  saleKind: 'retail' | 'wholesale';
+  buyerName: string | null;
+  buyerTaxId: string | null;
+  buyerBasis: string | null;
 }
 
 export interface ReceiptLineValues {

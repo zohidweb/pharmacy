@@ -31,7 +31,7 @@
 | `employee_id`, `store_id`, `terminal_id` | null там, где неприменимо |
 | `acting_operator_id`, `impersonation_id` | Вход «от имени» (ADR-0008) |
 | `correlation_id` | |
-| `action` | `receipt.completed`, `price.changed`, `auth.pin-failed`, `access.denied`, `role.changed`… |
+| `action` | `receipt.completed`, `price.changed`, `wholesale_price.changed` (оптовая цена точки, `newPriceMinor` null — опт закрыт), `auth.pin-failed`, `access.denied`, `role.changed`… |
 | `entity_type`, `entity_id` | |
 | `details jsonb` | Без секретов. События `document.posted` / `document.unposted` документов с датой, которую ставит человек, пишут `documentDate` — журнал показывает «документ от …» (кабинет владельца, E8, 2026-10-14) |
 | `source` | `cloud` / `offline_store` |

@@ -18,6 +18,7 @@ export interface PriceCell {
   productId: string;
   storeId: string;
   priceDirams: bigint | null;
+  wholesaleDirams: bigint | null;
 }
 
 /** The price of a product at a store as the cloud holds it (spec 2026-10-16-offline-sync, E25). */
@@ -119,6 +120,7 @@ export class PricingRepository {
         'productId',
         'storeId',
         'retailPricePerPackDirams as priceDirams',
+        'wholesalePricePerPackDirams as wholesaleDirams',
       ])
       .where('tenantId', '=', tenantId)
       .where('productId', 'in', [...productIds])
@@ -133,16 +135,23 @@ export class PricingRepository {
     storeId: string,
     productIds: readonly string[] | null,
   ): Promise<
-    Array<{ productId: string; packDirams: bigint; pieceDirams: bigint | null }>
+    Array<{
+      productId: string;
+      packDirams: bigint;
+      pieceDirams: bigint | null;
+      wholesaleDirams: bigint | null;
+    }>
   > {
     if (productIds !== null && productIds.length === 0) return [];
     const result = await sql<{
       productId: string;
       packDirams: bigint;
       pieceDirams: bigint | null;
+      wholesaleDirams: bigint | null;
     }>`
       select sp.product_id, sp.retail_price_per_pack_dirams as pack_dirams,
-             sp.retail_price_per_piece_dirams as piece_dirams
+             sp.retail_price_per_piece_dirams as piece_dirams,
+             sp.wholesale_price_per_pack_dirams as wholesale_dirams
       from pharmacy.store_products sp
       where sp.tenant_id = ${tenantId} and sp.store_id = ${storeId}
         and sp.retail_price_per_pack_dirams is not null
@@ -216,7 +225,7 @@ export class PricingRepository {
     trx: TenantTransaction,
     tenantId: string,
     storeIds: readonly string[],
-  ): Promise<PriceCell[]> {
+  ): Promise<Omit<PriceCell, 'wholesaleDirams'>[]> {
     if (storeIds.length === 0) return [];
     return trx
       .selectFrom('storeProducts')
@@ -245,6 +254,57 @@ export class PricingRepository {
       order by store_id
       for update`.execute(trx);
     return new Map(result.rows.map((row) => [row.storeId, row.price]));
+  }
+
+  /**
+   * The retail and the wholesale prices of a pack of one product at the stores, locked until the transaction ends
+   * (spec 2026-11-03-pos-store-ideas, D20). A store without a row has no entry.
+   */
+  async lockWholesalePrices(
+    trx: TenantTransaction,
+    tenantId: string,
+    productId: string,
+    storeIds: readonly string[],
+  ): Promise<Map<string, { retail: bigint | null; wholesale: bigint | null }>> {
+    if (storeIds.length === 0) return new Map();
+    const result = await sql<{
+      storeId: string;
+      retail: bigint | null;
+      wholesale: bigint | null;
+    }>`
+      select store_id, retail_price_per_pack_dirams as retail, wholesale_price_per_pack_dirams as wholesale
+      from pharmacy.store_products
+      where tenant_id = ${tenantId} and product_id = ${productId}
+        and store_id in (${sql.join([...storeIds])})
+      order by store_id
+      for update`.execute(trx);
+    return new Map(
+      result.rows.map((row) => [
+        row.storeId,
+        { retail: row.retail, wholesale: row.wholesale },
+      ]),
+    );
+  }
+
+  /**
+   * Sets (null — closes) the wholesale price of a pack (plan 2026-11-03-pos-store-ideas-pr3, R3): `updated_at` moves,
+   * so the next snapshot of the till takes it; `price_version` and the change feed of the offline stores do not — the
+   * wholesale is sold only online (D30), and the version is the base of the conflicts of an offline store's price.
+   */
+  async setWholesalePrice(
+    trx: TenantTransaction,
+    tenantId: string,
+    productId: string,
+    storeId: string,
+    priceDirams: number | null,
+  ): Promise<void> {
+    await sql`
+      update pharmacy.store_products set
+        wholesale_price_per_pack_dirams = ${priceDirams === null ? null : BigInt(priceDirams)},
+        updated_at = now()
+      where tenant_id = ${tenantId} and store_id = ${storeId} and product_id = ${productId}`.execute(
+      trx,
+    );
   }
 
   async setPrice(

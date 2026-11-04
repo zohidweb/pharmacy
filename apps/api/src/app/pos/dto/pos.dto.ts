@@ -13,6 +13,7 @@ import type {
   SaleUnit,
   ShiftListQuery,
   ShiftStatus,
+  WholesaleBuyer,
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -340,6 +341,32 @@ export class ReceiptPaymentDto {
   amountMinor!: number;
 }
 
+/**
+ * The buyer of a wholesale receipt (spec 2026-11-03-pos-store-ideas, D26): the organisation, 1–200 characters after
+ * trimming; its taxpayer number, 9 digits (as the legal entities of the network); the basis, up to 200 characters,
+ * empty — null. The CHECK of receipts holds the same rules.
+ */
+export class WholesaleBuyerDto implements WholesaleBuyer {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 200)
+  buyerName!: string;
+
+  @Transform(trim)
+  @IsString()
+  @Matches(/^\d{9}$/)
+  buyerTaxId!: string;
+
+  @Transform(({ value }: { value: unknown }) => {
+    const text = typeof value === 'string' ? value.trim() : value;
+    return text === '' || text === undefined ? null : text;
+  })
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(200)
+  basis!: string | null;
+}
+
 /** POST /api/v1/receipts — the arithmetic is checked by the service (4.5). */
 export class CreateReceiptDto
   extends PosOperationContextDto
@@ -415,6 +442,13 @@ export class CreateReceiptDto
 
   @IsIn(['ru', 'tj'])
   language!: 'ru' | 'tj';
+
+  /** Absent in the operations buffered before it (plan 2026-11-03-pos-store-ideas-pr3, R9): a retail receipt. */
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => WholesaleBuyerDto)
+  wholesale?: WholesaleBuyerDto | null;
 }
 
 /** POST /api/v1/shifts/{id}/forced-closure — a manager closes the shift of another till (plan 2026-10-27-shift-history, S3). */

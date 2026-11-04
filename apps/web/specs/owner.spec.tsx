@@ -387,6 +387,8 @@ describe('ReportsPage', () => {
       'store',
       'receipts',
       'revenue',
+      'retailMinor',
+      'wholesaleMinor',
       'returns',
     ]);
     expect(report.rows[0]).not.toHaveProperty('margin');

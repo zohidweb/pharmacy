@@ -102,7 +102,8 @@ erDiagram
 |---|---|---|
 | `retail_price_per_pack_dirams` | bigint null | Пусто — товар на точке не продаётся |
 | `retail_price_per_piece_dirams` | bigint null | Своя цена штуки (решение 2026-09-30). Пусто — `ceil(цена упаковки / pieces_per_pack)` до шага `tenant_settings.piece_price_rounding_dirams`. Имеет смысл только при `products.sold_by_piece` |
-| `price_version` | integer | Растёт при каждом изменении; основа конфликта цен (ADR-0014) |
+| `price_version` | integer | Растёт при каждом изменении розничной цены; основа конфликта цен (ADR-0014) |
+| `wholesale_price_per_pack_dirams` | bigint null > 0 (проверка добавлена `NOT VALID` и проверена миграцией `wholesale-sale-validate`) | Оптовая цена упаковки (спецификация `2026-11-03-pos-store-ideas`, I4; поправка ADR-0015 от 2026-11-03). Пусто — опт товара на точке закрыт. Задаётся `PUT /prices/{id}/wholesale` только при розничной цене (иначе 422 `no_retail_price`); меняет `updated_at` (снимок кассы), но не `price_version` и не ленту офлайн-точек — опт продаётся только онлайн. Журнал — `wholesale_price.changed` |
 | `price_changed_at`, `price_changed_by`, `price_source` | | `cloud` / `store` (локальное изменение офлайн-точки) |
 | `min_stock_pieces` | integer null | Переопределение для точки; пусто — `products.default_min_stock_pieces`. Порог для «Мало на складе» и «заполнить по дефициту» |
 | `updated_at` | | |
@@ -110,7 +111,7 @@ erDiagram
 Черновых цен после прихода (`draft_price_per_pack_dirams`, `draft_source_document_id`) нет: розница из строки прихода
 применяется при его проведении (поправка 2026-10-09, `APPROVAL.md`; `03-batches-warehouse.md`).
 
-Синхронизация: цена сети — облако → точка; локальное изменение — точка → облако (`price.changed-locally`). Предупреждения «выше предельной» и «ниже закупочной» — в приложении, база их не блокирует. История цен — в `audit_log`.
+Синхронизация: цена сети — облако → точка; локальное изменение — точка → облако (`price.changed-locally`). Предупреждения «выше предельной» и «ниже закупочной» (у оптовой — ещё «выше розничной») — в приложении, база их не блокирует. История цен — в `audit_log` (`price.changed`, `wholesale_price.changed`).
 
 ## `discount_rules`, `discount_rule_tiers`, `discount_rule_stores` (класс `tenant`)
 

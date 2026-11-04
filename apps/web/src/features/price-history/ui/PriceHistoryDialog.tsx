@@ -31,7 +31,7 @@ export interface PriceHistoryDialogProps {
 
 /**
  * The history of the prices of a product by store (spec 2026-11-03-pos-store-ideas, D14–D15): the newest change
- * first, by pages of 50.
+ * first, by pages of 50; the retail and the wholesale prices in one list, told by the column «Вид».
  */
 export function PriceHistoryDialog({
   productId,
@@ -107,6 +107,11 @@ export function PriceHistoryDialog({
         ]
       : []),
     {
+      key: 'kind',
+      header: t('kind'),
+      cell: (row) => t(`kinds.${row.kind}`),
+    },
+    {
       key: 'old',
       header: t('old'),
       numeric: true,
@@ -117,7 +122,11 @@ export function PriceHistoryDialog({
       key: 'new',
       header: t('new'),
       numeric: true,
-      cell: (row) => formatMoney(row.newPriceMinor),
+      // null — the wholesale of the product at the store was closed
+      cell: (row) =>
+        row.newPriceMinor === null
+          ? t('closed')
+          : formatMoney(row.newPriceMinor),
     },
     {
       key: 'change',
@@ -125,7 +134,9 @@ export function PriceHistoryDialog({
       numeric: true,
       // a percent for the eye only: money stays integer dirams
       cell: (row) =>
-        row.oldPriceMinor === null || row.oldPriceMinor === 0
+        row.oldPriceMinor === null ||
+        row.oldPriceMinor === 0 ||
+        row.newPriceMinor === null
           ? '—'
           : `${percent.format(((row.newPriceMinor - row.oldPriceMinor) / row.oldPriceMinor) * 100)} %`,
     },

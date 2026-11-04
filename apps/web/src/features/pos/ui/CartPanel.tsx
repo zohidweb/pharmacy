@@ -53,6 +53,14 @@ export interface CartPanelProps {
   onPay: () => void;
   /** The payment QR of the QR part (spec 2026-11-03-pos-store-ideas, D40); null — none to show. */
   paymentQr: DisplayQr | null;
+  /**
+   * The session may switch the receipt to the wholesale of an organisation (`pos:sell-wholesale` at a cloud store; spec
+   * 2026-11-03-pos-store-ideas, D24).
+   */
+  canWholesale: boolean;
+  onWholesale: () => void;
+  onEditBuyer: () => void;
+  onRetail: () => void;
 }
 
 /** Some prescription data of a ПКУ line was given. */
@@ -167,6 +175,7 @@ function Line({
 export function CartPanel(props: CartPanelProps) {
   const { draft, rules, busy, locked } = props;
   const t = useTranslations('pos');
+  const buyer = draft.wholesale ?? null;
   const [mixed, setMixed] = useState(
     draft.nonCash.card + draft.nonCash.qr + draft.nonCash.nfc > 0,
   );
@@ -176,7 +185,8 @@ export function CartPanel(props: CartPanelProps) {
   if (showQr && !props.paymentQr) setShowQr(false);
   const sum = totals(draft, rules);
   const payment = paymentState(draft, sum.totalMinor);
-  const next = nextDiscount(sum.subtotalMinor, rules);
+  // no discount of the network in a wholesale receipt, nor its hint (plan 2026-11-03-pos-store-ideas-pr3, R12)
+  const next = buyer ? null : nextDiscount(sum.subtotalMinor, rules);
   const allNonCash = (['card', 'qr', 'nfc'] as const).find(
     (m) => draft.nonCash[m] === sum.totalMinor && sum.totalMinor > 0,
   );
@@ -195,6 +205,17 @@ export function CartPanel(props: CartPanelProps) {
           <span className="text-xs text-fg-subtle">
             {t('positions', { count: draft.lines.length })}
           </span>
+          {props.canWholesale && !buyer && (
+            <Button
+              variant="secondary"
+              iconStart="building-2"
+              title={t('wholesale.onHint')}
+              disabled={busy || Boolean(locked)}
+              onClick={props.onWholesale}
+            >
+              {t('wholesale.on')}
+            </Button>
+          )}
           {draft.lines.length > 0 && (
             <Button variant="tertiary" onClick={props.onCancel}>
               {t('cancelReceipt')}
@@ -202,6 +223,36 @@ export function CartPanel(props: CartPanelProps) {
           )}
         </span>
       </div>
+      {buyer && (
+        // the wholesale stays visible, and can be switched off, even when the right is gone
+        <div className="flex flex-col gap-1 rounded-md bg-info-subtle px-3 py-2 text-sm text-info">
+          <span className="flex items-start gap-2 font-medium">
+            <Icon name="building-2" size="sm" />
+            <span className="min-w-0 break-words">
+              {t('wholesale.banner', { name: buyer.buyerName })}
+            </span>
+          </span>
+          {!props.canWholesale && (
+            <span className="text-danger">{t('wholesale.notAllowed')}</span>
+          )}
+          <span className="flex flex-wrap gap-2">
+            <Button
+              variant="tertiary"
+              disabled={busy || Boolean(locked)}
+              onClick={props.onEditBuyer}
+            >
+              {t('wholesale.edit')}
+            </Button>
+            <Button
+              variant="tertiary"
+              disabled={busy || Boolean(locked)}
+              onClick={props.onRetail}
+            >
+              {t('wholesale.off')}
+            </Button>
+          </span>
+        </div>
+      )}
       {draft.lines.length === 0 ? (
         <EmptyState
           icon="shopping-cart"
@@ -221,24 +272,26 @@ export function CartPanel(props: CartPanelProps) {
           <dt>{t('subtotal')}</dt>
           <dd className="m-0 tabular-nums">{formatMoney(sum.subtotalMinor)}</dd>
         </div>
-        <div className="flex justify-between">
-          <dt>
-            {t('discount', { percent: sum.discount.percent })}
-            {next && (
-              <span className="ms-2 text-xs text-fg-subtle">
-                {t('nextDiscount', {
-                  amount: formatMoney(
-                    next.minSubtotalMinor - sum.subtotalMinor,
-                  ),
-                  percent: next.percent,
-                })}
-              </span>
-            )}
-          </dt>
-          <dd className="m-0 tabular-nums">
-            −{formatMoney(sum.discount.amountMinor)}
-          </dd>
-        </div>
+        {!buyer && (
+          <div className="flex justify-between">
+            <dt>
+              {t('discount', { percent: sum.discount.percent })}
+              {next && (
+                <span className="ms-2 text-xs text-fg-subtle">
+                  {t('nextDiscount', {
+                    amount: formatMoney(
+                      next.minSubtotalMinor - sum.subtotalMinor,
+                    ),
+                    percent: next.percent,
+                  })}
+                </span>
+              )}
+            </dt>
+            <dd className="m-0 tabular-nums">
+              −{formatMoney(sum.discount.amountMinor)}
+            </dd>
+          </div>
+        )}
         <div className="flex items-baseline justify-between">
           <dt className="text-lg font-bold">{t('total')}</dt>
           <dd className="m-0 text-3xl font-bold tabular-nums">
@@ -357,7 +410,14 @@ export function CartPanel(props: CartPanelProps) {
       <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
-          disabled={draft.lines.length === 0 || busy || Boolean(locked)}
+          // a wholesale receipt is not held (D25)
+          disabled={
+            draft.lines.length === 0 ||
+            busy ||
+            Boolean(locked) ||
+            Boolean(buyer)
+          }
+          title={buyer ? t('wholesale.noHold') : undefined}
           onClick={props.onHold}
           className="min-h-touch-primary rounded-lg border border-border bg-surface text-md font-medium hover:bg-surface-sunken disabled:text-on-disabled"
         >
@@ -365,7 +425,13 @@ export function CartPanel(props: CartPanelProps) {
         </button>
         <button
           type="button"
-          disabled={Boolean(payment.problem) || busy || Boolean(locked)}
+          disabled={
+            Boolean(payment.problem) ||
+            busy ||
+            Boolean(locked) ||
+            // a wholesale draft of a session without the right is not paid (it can be switched off)
+            (Boolean(buyer) && !props.canWholesale)
+          }
           onClick={props.onPay}
           className="col-span-2 min-h-touch-primary rounded-lg bg-primary text-xl font-bold text-on-primary hover:bg-primary-hover disabled:bg-disabled disabled:text-on-disabled"
         >

@@ -19,6 +19,8 @@ export interface ZReportLabels {
   opened: string;
   closed: string;
   receipts: string;
+  /** The wholesale receipts among them (spec 2026-11-03-pos-store-ideas, D29). */
+  wholesale: (count: number) => string;
   method: { cash: string; card: string; qr: string; nfc: string };
   returns: (count: number) => string;
   revenue: string;
@@ -69,6 +71,12 @@ export function zReportLines(
       : []),
     receiptRule(cols),
     ...row(labels.receipts, String(shift.receipts)),
+    ...(shift.wholesale && shift.wholesale.count > 0
+      ? row(
+          labels.wholesale(shift.wholesale.count),
+          amount(shift.wholesale.amountMinor),
+        )
+      : []),
     ...(['cash', 'card', 'qr', 'nfc'] as const).flatMap((m) =>
       row(labels.method[m], amount(shift.byMethod[m].amountMinor)),
     ),

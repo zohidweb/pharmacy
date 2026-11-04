@@ -7,6 +7,7 @@ import type {
   PosBatch,
   PosProduct,
   SaleUnit,
+  WholesaleBuyer,
 } from '@pharmacy/shared-dto';
 import { formatDateTime, toAppDate, uuidv7 } from '@pharmacy/shared-util';
 import {
@@ -58,12 +59,17 @@ import {
   ProductDetailsDialog,
   ProductPicker,
   removeLine,
+  RetailReceiptDialog,
   RxDialog,
   SaleReceiptDialog,
   setNonCash,
   setQuantity,
   setTendered,
+  setWholesaleBuyer,
+  toRetail,
+  toWholesale,
   totals,
+  WholesaleBuyerDialog,
   useCustomerDisplay,
   useDraftPersistence,
   usePaymentQr,
@@ -137,6 +143,10 @@ function PosPageView() {
   const [heldOpen, setHeldOpen] = useState(false);
   const [printed, setPrinted] = useState<ReceiptPrintData | null>(null);
   const [paying, setPaying] = useState(false);
+  // the wholesale of an organisation (spec 2026-11-03-pos-store-ideas, D24): the buyer dialog, the retail confirmation
+  const [buyerOpen, setBuyerOpen] = useState(false);
+  const [buyerError, setBuyerError] = useState<string | null>(null);
+  const [retailOpen, setRetailOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const today = toAppDate();
@@ -144,6 +154,9 @@ function PosPageView() {
   const snapshot = catalog.data?.snapshot;
   const canChooseBatch = can(session, 'pos:choose-batch');
   const canSeeCost = can(session, 'finance:view-cost');
+  // the wholesale is sold only online, at a cloud store (D30)
+  const canWholesale =
+    canWrite(session, 'pos:sell-wholesale') && store?.mode === 'cloud';
   const openShift = shift.data ?? null;
   // the local numbers of the shift go on after the largest one the server has: a browser whose data was cleared does
   // not start again at 1 nor repeat a delivered number (spec 2026-10-21-pos-offline-limits, P12)
@@ -252,6 +265,14 @@ function PosPageView() {
     batch?: PosBatch,
   ) => {
     const pending = { product, unit, batch, priceVersion: snapshot?.version };
+    // a wholesale receipt refuses ПКУ before its dialog (D25)
+    if (
+      usePosStore.getState().draft.wholesale &&
+      product.prescription === 'controlled'
+    ) {
+      addError('wholesale_controlled', product);
+      return;
+    }
     if (product.prescription === 'controlled') {
       if (!can(session, 'pos:sell-controlled')) {
         setNotice(t('controlledForbidden', { name: product.name }));
@@ -357,6 +378,12 @@ function PosPageView() {
 
   const pay = async () => {
     if (!session || !openShift || !snapshot || !runtime || paying) return;
+    // a wholesale draft outlives the session that made it (a PIN switch, a revoked right): the server would refuse the
+    // sale for good after the money is taken (ADR-0015, amendment 2026-11-03, p. 5)
+    if (usePosStore.getState().draft.wholesale && !canWholesale) {
+      setNotice(t('wholesale.notAllowed'));
+      return;
+    }
     if (bufferStop) {
       setNotice(bufferStop);
       return;
@@ -410,6 +437,12 @@ function PosPageView() {
         ),
         cashierName: session.employee.fullName,
         settings: snapshot.settings,
+        batches: Object.fromEntries(
+          current.lines.map((l) => [
+            l.batchId,
+            { number: l.batchNumber, expiresOn: l.expiresOn },
+          ]),
+        ),
       };
       setPrinted(data);
       const created = await delivery;
@@ -431,6 +464,65 @@ function PosPageView() {
   };
 
   const productOf = (line: DraftLine) => index?.byId.get(line.productId);
+
+  /** The buyer is confirmed: the receipt becomes (or stays) a wholesale one (plan 2026-11-03-pos-store-ideas-pr3, R11). */
+  /** The text of a line that blocks a switch, by the name the line keeps (its product may have left the snapshot). */
+  const switchError = (error: { code: AddError; productId: string }) =>
+    t(`addErrors.${error.code}`, {
+      name:
+        draft.lines.find((line) => line.productId === error.productId)?.name ??
+        index?.byId.get(error.productId)?.name ??
+        '',
+    });
+
+  const closeBuyer = () => {
+    setBuyerOpen(false);
+    setBuyerError(null);
+  };
+
+  /**
+   * The buyer is confirmed: the receipt becomes (or stays) a wholesale one (plan 2026-11-03-pos-store-ideas-pr3, R11).
+   * A line that blocks it keeps the dialog open with what was typed (final review M6).
+   */
+  const confirmBuyer = (buyer: WholesaleBuyer) => {
+    if (usePosStore.getState().draft.wholesale) {
+      update((current) => setWholesaleBuyer(current, buyer));
+      closeBuyer();
+      return;
+    }
+    if (!index) return;
+    let failed: { code: AddError; productId: string } | null = null;
+    update((current) => {
+      const result = toWholesale(
+        current,
+        buyer,
+        index.byId,
+        snapshot?.version ?? Date.now(),
+      );
+      failed = result.error;
+      return result.draft;
+    });
+    const error = failed as { code: AddError; productId: string } | null;
+    if (error) setBuyerError(switchError(error));
+    else closeBuyer();
+  };
+
+  const backToRetail = () => {
+    setRetailOpen(false);
+    if (!index) return;
+    let failed: { code: AddError; productId: string } | null = null;
+    update((current) => {
+      const result = toRetail(
+        current,
+        index.byId,
+        snapshot?.version ?? Date.now(),
+      );
+      failed = result.error;
+      return result.draft;
+    });
+    const error = failed as { code: AddError; productId: string } | null;
+    if (error) setNotice(switchError(error));
+  };
   const sum = totals(draft, snapshot?.discountRules ?? []);
 
   const header = (
@@ -609,6 +701,13 @@ function PosPageView() {
                   onCancel={() => setCancelOpen(true)}
                   onPay={() => void pay()}
                   paymentQr={paymentQr}
+                  canWholesale={canWholesale}
+                  onWholesale={() => setBuyerOpen(true)}
+                  onEditBuyer={() => setBuyerOpen(true)}
+                  onRetail={() => {
+                    if (draft.lines.length === 0) backToRetail();
+                    else setRetailOpen(true);
+                  }}
                 />
               </div>
             ) : null
@@ -691,6 +790,20 @@ function PosPageView() {
           setCancelOpen(false);
         }}
         onClose={() => setCancelOpen(false)}
+      />
+      {buyerOpen && (
+        <WholesaleBuyerDialog
+          open
+          initial={draft.wholesale ?? null}
+          error={buyerError}
+          onConfirm={confirmBuyer}
+          onClose={closeBuyer}
+        />
+      )}
+      <RetailReceiptDialog
+        open={retailOpen}
+        onConfirm={backToRetail}
+        onClose={() => setRetailOpen(false)}
       />
       <HeldReceiptsDialog
         open={heldOpen}

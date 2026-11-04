@@ -1,7 +1,9 @@
 /*
  * Draft receipt of the POS as pure functions (ADR-0015: the receipt reducer is a pure function with
  * a coverage threshold): lines by batch with FEFO by default, sale by the piece, discount by
- * threshold, mixed payment and change. Money is integer dirams; nothing here touches the network.
+ * threshold, mixed payment and change. A wholesale draft (spec 2026-11-03-pos-store-ideas, D24–D25) sells packs at
+ * the wholesale price of the store, without ПКУ and without the discounts of the network. Money is integer dirams;
+ * nothing here touches the network.
  */
 import {
   bestDiscount,
@@ -16,6 +18,7 @@ import type {
   ReceiptPayment,
   ReceiptPaymentMethod,
   SaleUnit,
+  WholesaleBuyer,
 } from '@pharmacy/shared-dto';
 import { fefoBatches } from '@/entities/catalog';
 
@@ -55,9 +58,23 @@ export interface ReceiptDraft {
   cashTenderedMinor: number | null;
   /** Held receipt this draft was resumed from (deleted on the server when paid). */
   heldId: string | null;
+  /**
+   * The buyer of a wholesale receipt (spec 2026-11-03-pos-store-ideas, D24); null — a retail receipt. Absent in a draft
+   * stored before it.
+   */
+  wholesale?: WholesaleBuyer | null;
 }
 
-export type AddError = 'out_of_stock' | 'not_divisible' | 'stock_exceeded';
+export type AddError =
+  | 'out_of_stock'
+  | 'not_divisible'
+  | 'stock_exceeded'
+  /** A wholesale draft: the store sells the product only retail. */
+  | 'no_wholesale_price'
+  | 'wholesale_controlled'
+  | 'wholesale_piece'
+  /** A line of a product the snapshot of the store no longer has: it cannot be repriced. */
+  | 'not_in_catalog';
 
 export interface AddOptions {
   unit?: SaleUnit;
@@ -85,8 +102,27 @@ export const piecesOf = (
   quantity: number,
 ) => (unit === 'pack' ? quantity * product.piecesPerPack : quantity);
 
-export function unitPrice(product: PosProduct, unit: SaleUnit): number {
+/** The price of a unit: retail, or the wholesale price of a pack (a snapshot stored before it has none). */
+export function unitPrice(
+  product: PosProduct,
+  unit: SaleUnit,
+  wholesale = false,
+): number {
+  if (wholesale) return product.wholesalePriceMinor ?? 0;
   return unit === 'pack' ? product.priceMinor : (product.piecePriceMinor ?? 0);
+}
+
+/** Why a product cannot go into a wholesale receipt (D25), or null. */
+function wholesaleError(
+  product: Pick<PosProduct, 'prescription' | 'wholesalePriceMinor'>,
+  unit: SaleUnit,
+): AddError | null {
+  if (product.prescription === 'controlled') return 'wholesale_controlled';
+  if (unit === 'piece') return 'wholesale_piece';
+  if ((product.wholesalePriceMinor ?? null) === null) {
+    return 'no_wholesale_price';
+  }
+  return null;
 }
 
 export const lineAmount = (line: DraftLine) =>
@@ -117,6 +153,7 @@ function toLine(
   manualBatch: boolean,
   controlled: ControlledSaleData | null,
   priceVersion: number | undefined,
+  wholesale: boolean,
 ): DraftLine {
   return {
     key: lineKey(product.id, batch.id, unit),
@@ -127,7 +164,7 @@ function toLine(
     expiresOn: batch.expiresOn,
     unit,
     quantity,
-    unitPriceMinor: unitPrice(product, unit),
+    unitPriceMinor: unitPrice(product, unit, wholesale),
     prescription: product.prescription,
     controlled,
     manualBatch,
@@ -147,6 +184,11 @@ export function addProduct(
 ): { draft: ReceiptDraft; error: AddError | null } {
   const unit = options.unit ?? 'pack';
   const quantity = options.quantity ?? 1;
+  const wholesale = Boolean(draft.wholesale);
+  if (wholesale) {
+    const error = wholesaleError(product, unit);
+    if (error) return { draft, error };
+  }
   if (unit === 'piece' && (!product.divisible || !product.piecePriceMinor)) {
     return { draft, error: 'not_divisible' };
   }
@@ -183,6 +225,7 @@ export function addProduct(
           Boolean(options.batch),
           options.controlled ?? null,
           options.priceVersion,
+          wholesale,
         ),
       ];
   return { draft: { ...draft, lines }, error: null };
@@ -244,6 +287,103 @@ export function changeBatch(
   return result.error ? { draft, error: result.error } : result;
 }
 
+/**
+ * The draft becomes a wholesale receipt of `buyer` (plan 2026-11-03-pos-store-ideas-pr3, R11): every line is priced by
+ * the wholesale price of the snapshot `products`, or the first line that cannot be sold wholesale is the error and the
+ * draft stays as it was. The payment starts over.
+ */
+export function toWholesale(
+  draft: ReceiptDraft,
+  buyer: WholesaleBuyer,
+  products: ReadonlyMap<string, PosProduct>,
+  priceVersion: number,
+): {
+  draft: ReceiptDraft;
+  error: { code: AddError; productId: string } | null;
+} {
+  const lines: DraftLine[] = [];
+  for (const line of draft.lines) {
+    const product = products.get(line.productId);
+    if (!product) {
+      return {
+        draft,
+        error: { code: 'not_in_catalog', productId: line.productId },
+      };
+    }
+    // a line sold as ПКУ stays one, whatever the snapshot says now: the receipt would carry its prescription data
+    const code =
+      line.prescription === 'controlled'
+        ? 'wholesale_controlled'
+        : wholesaleError(product, line.unit);
+    if (code) {
+      return { draft, error: { code, productId: line.productId } };
+    }
+    lines.push({
+      ...line,
+      unitPriceMinor: unitPrice(product, line.unit, true),
+      priceVersion,
+    });
+  }
+  return {
+    draft: {
+      ...draft,
+      lines,
+      wholesale: buyer,
+      nonCash: { card: 0, qr: 0, nfc: 0 },
+      cashTenderedMinor: null,
+    },
+    error: null,
+  };
+}
+
+/** The buyer of a wholesale draft changes; the lines and the payment stay. */
+export function setWholesaleBuyer(
+  draft: ReceiptDraft,
+  buyer: WholesaleBuyer,
+): ReceiptDraft {
+  return { ...draft, wholesale: buyer };
+}
+
+/**
+ * Back to a retail receipt (R11): the lines are priced by the retail price of the snapshot, the payment starts over. A
+ * line of a product the snapshot no longer has is the error and the draft stays as it was: its wholesale price would be
+ * sent as a retail one (final review M5).
+ */
+export function toRetail(
+  draft: ReceiptDraft,
+  products: ReadonlyMap<string, PosProduct>,
+  priceVersion: number,
+): {
+  draft: ReceiptDraft;
+  error: { code: AddError; productId: string } | null;
+} {
+  const lines: DraftLine[] = [];
+  for (const line of draft.lines) {
+    const product = products.get(line.productId);
+    if (!product) {
+      return {
+        draft,
+        error: { code: 'not_in_catalog', productId: line.productId },
+      };
+    }
+    lines.push({
+      ...line,
+      unitPriceMinor: unitPrice(product, line.unit),
+      priceVersion,
+    });
+  }
+  return {
+    draft: {
+      ...draft,
+      lines,
+      wholesale: null,
+      nonCash: { card: 0, qr: 0, nfc: 0 },
+      cashTenderedMinor: null,
+    },
+    error: null,
+  };
+}
+
 export interface ReceiptTotals {
   subtotalMinor: number;
   discount: AppliedDiscount;
@@ -258,7 +398,8 @@ export function totals(
     (sum, line) => sum + lineAmount(line),
     0,
   );
-  const discount = bestDiscount(subtotalMinor, rules);
+  // the discounts of the network do not apply to a wholesale receipt (R12)
+  const discount = bestDiscount(subtotalMinor, draft.wholesale ? [] : rules);
   return {
     subtotalMinor,
     discount,

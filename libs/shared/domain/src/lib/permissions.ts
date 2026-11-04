@@ -58,6 +58,8 @@ export const specialPermissions = [
   'sync:run',
   // closing the shift of another till from another computer (ADR-0018, amendment 2026-10-27)
   'shifts:force-close',
+  // the wholesale receipt of an organisation, checked on its author (ADR-0018, amendment 2026-11-03)
+  'pos:sell-wholesale',
 ] as const;
 
 export type PermissionModule = keyof typeof moduleActions;

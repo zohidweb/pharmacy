@@ -7,13 +7,18 @@ import type { TenantTransaction } from '../../core/database';
 // same transaction. The POS asks what a product cost at the moment of its catalog snapshot. Read in the caller's
 // transaction, by audit_log_entity_idx; the cloud changes only (an offline store keeps its own prices). The pack price
 // only: the own piece price of a store changes in the cloud only by a copy to a store without a price (no old one).
-/** A change of the pack price of a store, as `price.changed` journals it. */
+// The wholesale price of a store is journaled the same way as `wholesale_price.changed` (ADR-0015, amendment
+// 2026-11-03), its new price null when the wholesale is closed.
+/** A change of the pack price of a store, as `price.changed` or `wholesale_price.changed` journals it. */
 export interface PriceChange {
   at: Date;
   /** null — the store had no price before. */
   oldPriceMinor: number | null;
-  newPriceMinor: number;
+  /** null — the wholesale was closed (a retail price is never removed). */
+  newPriceMinor: number | null;
 }
+
+export type PriceChangeAction = 'price.changed' | 'wholesale_price.changed';
 
 @Injectable()
 export class PriceChanges {
@@ -24,13 +29,14 @@ export class PriceChanges {
     storeId: string,
     productIds: readonly string[],
     after: Date,
+    action: PriceChangeAction = 'price.changed',
   ): Promise<Map<string, PriceChange[]>> {
     if (productIds.length === 0) return new Map();
     const result = await sql<{
       productId: string;
       at: Date;
       oldPriceMinor: string | null;
-      newPriceMinor: string;
+      newPriceMinor: string | null;
     }>`
       select a.entity_id as product_id, a.recorded_at as at,
              a.details ->> 'oldPriceMinor' as old_price_minor,
@@ -39,7 +45,7 @@ export class PriceChanges {
       where a.tenant_id = ${tenantId} and a.entity_type = 'product'
         and a.entity_id = any(${sql.val([...productIds])}::uuid[])
         and a.recorded_at > ${after}
-        and a.action = 'price.changed' and a.source = 'cloud' and a.store_id = ${storeId}
+        and a.action = ${action} and a.source = 'cloud' and a.store_id = ${storeId}
       order by a.entity_id, a.recorded_at, a.id`.execute(trx);
     const changes = new Map<string, PriceChange[]>();
     for (const row of result.rows) {
@@ -48,7 +54,8 @@ export class PriceChanges {
         at: row.at,
         oldPriceMinor:
           row.oldPriceMinor === null ? null : Number(row.oldPriceMinor),
-        newPriceMinor: Number(row.newPriceMinor),
+        newPriceMinor:
+          row.newPriceMinor === null ? null : Number(row.newPriceMinor),
       });
       changes.set(row.productId, list);
     }

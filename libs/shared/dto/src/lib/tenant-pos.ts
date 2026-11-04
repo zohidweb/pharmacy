@@ -45,6 +45,12 @@ export interface PosProduct {
   priceMinor: number;
   /** Store price of one piece of a divisible pack. */
   piecePriceMinor: number | null;
+  /**
+   * Wholesale price of a pack at the store (spec 2026-11-03-pos-store-ideas, D22); null — not sold wholesale, or the
+   * store is not a cloud one. A snapshot stored before this field lacks it: readers of a stored snapshot keep the
+   * `?? null`.
+   */
+  wholesalePriceMinor: number | null;
   /** Batches of the store, any order; the POS applies FEFO. */
   batches: PosBatch[];
 }
@@ -76,6 +82,13 @@ export interface PosStoreSettings {
    * of a stored snapshot keep the `?.`.
    */
   paymentQr: PaymentQrSettings | null;
+  /**
+   * The legal entity of the store — the seller of the wholesale invoice (spec 2026-11-03-pos-store-ideas, D27; plan
+   * 2026-11-03-pos-store-ideas-pr3, R13). A snapshot stored before these fields lacks them: readers of a stored
+   * snapshot keep the `??` (`networkName`, `storeAddress`).
+   */
+  legalEntityName: string;
+  legalAddress: string;
 }
 
 /**
@@ -134,6 +147,17 @@ export interface ReceiptPayment {
 }
 
 /**
+ * The buyer of a wholesale receipt (spec 2026-11-03-pos-store-ideas, D26): an organisation, 1–200 characters after
+ * trimming; its taxpayer number, 9 digits; the basis of the purchase (a contract, a power of attorney), up to 200
+ * characters, empty — null.
+ */
+export interface WholesaleBuyer {
+  buyerName: string;
+  buyerTaxId: string;
+  basis: string | null;
+}
+
+/**
  * Context of every buffered POS operation (ADR-0015). Without a session of its author the operation is sent under
  * the terminal (device-cookie): the author must have held the terminal at its moment, else 422
  * `author_session_missing` (spec 2026-10-21-pos-offline-limits, P9, P10).
@@ -186,6 +210,14 @@ export interface CreateReceiptRequest extends PosOperationContext {
   changeMinor: number;
   /** Language of the printed receipt. */
   language: 'ru' | 'tj';
+  /**
+   * Not null — the wholesale receipt of an organisation (spec 2026-11-03-pos-store-ideas, D24–D26; ADR-0015, amendment
+   * 2026-11-03): its lines are priced by the wholesale price of the store, packs only, no ПКУ, no discount (400
+   * `validation_failed`: `lines.N.productId` `wholesale_controlled`, `lines.N.unit` `wholesale_piece`, `discountRuleId`
+   * `discount_not_allowed`); its author needs `pos:sell-wholesale` (422 `author_not_allowed`, not lifted by
+   * `X-Accept-Discrepancy`). Absent in operations buffered before it existed — a retail receipt.
+   */
+  wholesale?: WholesaleBuyer | null;
 }
 
 export interface CreatedReceipt {
@@ -282,6 +314,11 @@ export interface Shift {
   };
   /** Receipts of the shift with discrepancy marks (K4). */
   discrepancyReceipts: number;
+  /**
+   * The wholesale receipts of the shift, included in `receipts` and `byMethod` (spec 2026-11-03-pos-store-ideas, D29).
+   * Absent in the Z-reports saved before it.
+   */
+  wholesale?: PaymentTotal;
   /**
    * The largest local number of the receipts of the shift (spec 2026-10-21-pos-offline-limits, P12): a terminal whose
    * browser data was cleared numbers on after it. Absent in the Z-reports saved before it.
@@ -458,6 +495,8 @@ export interface ReturnableReceipt {
   daysLeft: number;
   subtotalMinor: number;
   discountMinor: number;
+  /** The organisation of a wholesale receipt (spec 2026-11-03-pos-store-ideas, D28); null — a retail receipt. */
+  wholesaleBuyer: string | null;
   /** What can still go back by each way of payment: paid (cash net of change) − refunded (E7). */
   payments: ReceiptPayment[];
   lines: ReturnableLine[];

@@ -9,6 +9,7 @@ import {
   discountRuleStatus,
   hasPermissions,
   priceWarnings,
+  wholesalePriceWarnings,
   type Permission,
 } from '@pharmacy/shared-domain';
 import { productUnits } from '@pharmacy/shared-domain';
@@ -38,7 +39,13 @@ import type { DiscountRuleRecord, ProductExtras } from './db-catalog';
 import { stores } from './fixtures';
 import { appendAudit } from './handlers-staff';
 import { context, findDoc, inScope, page, storeName } from './handlers-stock';
-import { piecePrice, setStorePrice, storePrice } from './pricing';
+import {
+  piecePrice,
+  setStorePrice,
+  setWholesalePrice,
+  storePrice,
+  wholesalePrice,
+} from './pricing';
 import { authorize } from './session';
 import type { MockHandlers } from './types';
 
@@ -155,12 +162,20 @@ function pricesOf(
   const cost = canSeeCost ? lastCost(product) : undefined;
   return session.stores.map((store) => {
     const priceMinor = storePrice(store.id, product);
+    const wholesalePriceMinor = wholesalePrice(store.id, product.id);
     return {
       storeId: store.id,
       storeName: store.name,
       priceMinor,
       warnings: priceWarnings({
         priceMinor,
+        costMinor: cost,
+        maxPriceMinor: extrasOf(product).maxPriceMinor,
+      }),
+      wholesalePriceMinor,
+      wholesaleWarnings: wholesalePriceWarnings({
+        wholesaleMinor: wholesalePriceMinor,
+        retailMinor: priceMinor,
         costMinor: cost,
         maxPriceMinor: extrasOf(product).maxPriceMinor,
       }),
@@ -318,6 +333,7 @@ function createProduct(body: CatalogProductInput, correlationId: string) {
     // the retail price comes from the first goods receipt by the markup
     priceMinor: 0,
     piecePriceMinor: null,
+    wholesalePriceMinor: null,
     batches: [],
   };
   applyProduct(product, body, codes);
@@ -708,18 +724,37 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
     }
     const entries: PriceHistoryEntry[] = session.stores
       .filter((store) => !query?.storeId || store.id === query.storeId)
-      .map((store) => ({
-        id: `${product.id}-${store.id}`,
-        at: '2026-10-01T04:00:00.000Z',
-        storeId: store.id,
-        storeName: store.name,
-        kind: 'retail',
-        oldPriceMinor: null,
-        newPriceMinor: storePrice(store.id, product),
-        source: 'manual',
-        document: null,
-        author: { name: session.employee.fullName },
-      }));
+      .flatMap((store) => {
+        const entry = {
+          storeId: store.id,
+          storeName: store.name,
+          oldPriceMinor: null,
+          source: 'manual' as const,
+          document: null,
+          author: { name: session.employee.fullName },
+        };
+        const wholesale = wholesalePrice(store.id, product.id);
+        return [
+          ...(wholesale === null
+            ? []
+            : [
+                {
+                  ...entry,
+                  id: `${product.id}-${store.id}-wholesale`,
+                  at: '2026-10-02T04:00:00.000Z',
+                  kind: 'wholesale' as const,
+                  newPriceMinor: wholesale,
+                },
+              ]),
+          {
+            ...entry,
+            id: `${product.id}-${store.id}`,
+            at: '2026-10-01T04:00:00.000Z',
+            kind: 'retail' as const,
+            newPriceMinor: storePrice(store.id, product),
+          },
+        ];
+      });
     return page(entries, { limit: query?.limit ?? 50, offset: query?.offset });
   },
   'prices.update': ({ params, body, correlationId }) => {
@@ -777,6 +812,64 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
       prices: pricesOf(product, session, canSeeCost),
       ...(canSeeCost && { costMinor: lastCost(product) ?? 0 }),
     };
+  },
+  // the rules of PricesService.updateWholesale (plan 2026-11-03-pos-store-ideas-pr3, R2): the rights of the retail
+  // price, a price only next to a retail one (every mock store has one — the network price), null closes
+  'prices.updateWholesale': ({ params, body, correlationId }) => {
+    const { session } = context(correlationId, 'pricing:view', {
+      write: true,
+    });
+    const product = findDoc(products(), params.productId, correlationId);
+    if (statusOf(product) === 'archived') {
+      throw conflict(correlationId, 'product_archived');
+    }
+    const network = hasPermissions(
+      session.permissions,
+      'pricing:update-network',
+    );
+    if (!network) authorize(correlationId, 'pricing:update-store');
+    for (const price of body.prices) {
+      if (!stores.some((s) => s.id === price.storeId)) {
+        throw new ApiError(404, 'not_found', correlationId);
+      }
+      if (!network && !session.stores.some((s) => s.id === price.storeId)) {
+        throw new ApiError(403, 'store_not_in_scope', correlationId);
+      }
+      if (
+        price.priceMinor !== null &&
+        (!Number.isInteger(price.priceMinor) || price.priceMinor <= 0)
+      ) {
+        throw validation(correlationId, 'prices.0.priceMinor', 'min');
+      }
+    }
+    const max = extrasOf(product).maxPriceMinor;
+    if (
+      !body.confirmAboveMax &&
+      max !== null &&
+      body.prices.some((p) => p.priceMinor !== null && p.priceMinor > max)
+    ) {
+      throw new ApiError(422, 'above_max_price', correlationId, [
+        { field: 'prices', code: 'above_max_price' },
+      ]);
+    }
+    for (const price of body.prices) {
+      if (wholesalePrice(price.storeId, product.id) === price.priceMinor) {
+        continue;
+      }
+      setWholesalePrice(price.storeId, product.id, price.priceMinor);
+      appendAudit(session, {
+        event: 'wholesale_price.changed',
+        object: product.name,
+        params: {},
+        storeName: storeName(price.storeId),
+      });
+    }
+    mockDb().pos.catalogVersion += 1;
+    return pricesOf(
+      product,
+      session,
+      hasPermissions(session.permissions, 'finance:view-cost'),
+    );
   },
   'priceConflicts.list': ({ correlationId }) => {
     const { session } = context(correlationId, 'pricing:view');

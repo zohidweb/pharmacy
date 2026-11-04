@@ -4,6 +4,7 @@ import type {
   DiscountRuleDefinition,
   DiscountRuleStatus,
   PriceConflict,
+  PriceKind,
   PriceRow,
 } from '@pharmacy/shared-dto';
 import {
@@ -22,6 +23,7 @@ import {
   EmptyState,
   Icon,
   Pagination,
+  SegmentedControl,
   Select,
   StatusPill,
   Tabs,
@@ -42,7 +44,11 @@ import {
 } from '@/shared/api';
 import { QueryState } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
-import { PriceDialog, RuleDialog } from './PricingDialogs';
+import {
+  PriceDialog,
+  RuleDialog,
+  WholesalePriceDialog,
+} from './PricingDialogs';
 import { WithMessages } from '@/shared/i18n';
 
 const PAGE = 20;
@@ -132,6 +138,9 @@ function PricesTab({ initial }: { initial: ProblemsFilter }) {
   const [categoryId, setCategoryId] = useState('');
   const [offset, setOffset] = useState(0);
   const [editing, setEditing] = useState<PriceRow | null>(null);
+  // the retail or the wholesale price of the stores (spec 2026-11-03-pos-store-ideas, D20); the filters stay the
+  // retail ones (plan 2026-11-03-pos-store-ideas-pr3, R19)
+  const [kind, setKind] = useState<PriceKind>('retail');
   const categories = useQuery({
     queryKey: ['catalog', 'references'],
     queryFn: ({ signal }) => apiRequest('catalog.references', { signal }),
@@ -188,7 +197,16 @@ function PricesTab({ initial }: { initial: ProblemsFilter }) {
           ]}
         />
       </div>
-      <div className="px-(--ph-card-padding) pb-3">
+      <div className="flex flex-wrap items-center gap-3 px-(--ph-card-padding) pb-3">
+        <SegmentedControl
+          label={t('kind')}
+          value={kind}
+          onValueChange={setKind}
+          options={[
+            { value: 'retail', label: t('kinds.retail') },
+            { value: 'wholesale', label: t('kinds.wholesale') },
+          ]}
+        />
         <ChipGroup label={t('problemsFilter')}>
           <Chip
             selected={filter.problems}
@@ -256,6 +274,33 @@ function PricesTab({ initial }: { initial: ProblemsFilter }) {
               cell: (row: PriceRow) => {
                 const price = row.prices[index];
                 if (!price) return '—';
+                if (kind === 'wholesale') {
+                  const warnings = price.wholesaleWarnings;
+                  return price.wholesalePriceMinor === null ? (
+                    <span>
+                      <span aria-hidden="true">—</span>
+                      <span className="ph-visually-hidden">
+                        {t('wholesaleClosed')}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      {warnings.length > 0 && (
+                        <span className="text-warning">
+                          <Icon name="triangle-alert" size="sm" />
+                        </span>
+                      )}
+                      {formatMoney(price.wholesalePriceMinor, {
+                        withSign: false,
+                      })}
+                      {warnings.length > 0 && (
+                        <span className="ph-visually-hidden">
+                          {warnings.map((w) => t(`warnings.${w}`)).join(', ')}
+                        </span>
+                      )}
+                    </span>
+                  );
+                }
                 if (price.warnings.includes('no_price')) {
                   return (
                     <span className="inline-flex items-center gap-1 text-danger">
@@ -350,13 +395,20 @@ function PricesTab({ initial }: { initial: ProblemsFilter }) {
           );
         }}
       </QueryState>
-      {editing && (
-        <PriceDialog
-          key={editing.productId}
-          row={editing}
-          onClose={() => setEditing(null)}
-        />
-      )}
+      {editing &&
+        (kind === 'wholesale' ? (
+          <WholesalePriceDialog
+            key={editing.productId}
+            row={editing}
+            onClose={() => setEditing(null)}
+          />
+        ) : (
+          <PriceDialog
+            key={editing.productId}
+            row={editing}
+            onClose={() => setEditing(null)}
+          />
+        ))}
     </Card>
   );
 }

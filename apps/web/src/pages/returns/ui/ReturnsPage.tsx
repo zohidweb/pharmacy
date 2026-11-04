@@ -622,6 +622,10 @@ function ReturnsPageView() {
                   receipt.localNumber !== null
                     ? t('localNumber', { number: receipt.localNumber })
                     : null,
+                  // a wholesale receipt goes back at its own prices (spec 2026-11-03-pos-store-ideas, D28)
+                  receipt.wholesaleBuyer
+                    ? t('wholesale', { name: receipt.wholesaleBuyer })
+                    : null,
                 ]
                   .filter(Boolean)
                   .join(' · ')}

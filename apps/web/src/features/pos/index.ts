@@ -3,6 +3,7 @@ export {
   type ReceiptLabels,
   type ReceiptPrintData,
 } from './lib/receipt-print';
+export { wholesaleInvoiceSheet } from './lib/wholesale-invoice';
 export {
   applySaleToSnapshot,
   awaitDelivery,
@@ -22,6 +23,9 @@ export {
   setNonCash,
   setQuantity,
   setTendered,
+  setWholesaleBuyer,
+  toRetail,
+  toWholesale,
   totals,
   type AddError,
   type DraftLine,
@@ -42,7 +46,9 @@ export {
   CancelReceiptDialog,
   ControlledDialog,
   ProductDetailsDialog,
+  RetailReceiptDialog,
   RxDialog,
+  WholesaleBuyerDialog,
 } from './ui/PosDialogs';
 export { ProductPicker, type ProductPickerProps } from './ui/ProductPicker';
 export { SaleReceiptDialog, useReceiptLabels } from './ui/SaleReceiptDialog';

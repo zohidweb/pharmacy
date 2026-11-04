@@ -9,6 +9,7 @@ import type {
   Shift,
   ZReport,
   ShiftEvent,
+  WholesaleBuyer,
 } from '@pharmacy/shared-dto';
 import { DAY_MS, initialProducts, minutesAgo } from './fixtures-pos';
 
@@ -39,6 +40,8 @@ export interface MockReceipt {
   localNumber?: number | null;
   /** When «the server» took it: the ПКУ journal shows it beside the sale (P1); the seed — at the sale. */
   receivedAt?: string;
+  /** The buyer of a wholesale receipt (spec 2026-11-03-pos-store-ideas, D26). */
+  wholesale?: WholesaleBuyer | null;
 }
 
 /** A shift of the mock: one open per terminal (spec 2026-10-13-pos-shift-sale, K5). */

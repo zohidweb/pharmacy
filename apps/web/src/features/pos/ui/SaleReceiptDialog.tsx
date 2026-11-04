@@ -4,15 +4,18 @@ import {
   Alert,
   Button,
   Dialog,
+  InvoiceSheet,
+  printDocument,
   printReceipt,
   RECEIPT_COLUMNS,
   ReceiptPreview,
   ReceiptPrint,
   SegmentedControl,
+  SheetPrint,
   type PaperWidth,
 } from '@pharmacy/ui';
 import { receiptCode } from '@pharmacy/shared-domain';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { QrSvg } from '@/shared/ui';
 import {
@@ -20,6 +23,13 @@ import {
   type ReceiptLabels,
   type ReceiptPrintData,
 } from '../lib/receipt-print';
+import { wholesaleInvoiceSheet } from '../lib/wholesale-invoice';
+
+/** The A4 sheet is printed once its print root is in the document (SheetPrint mounts it after a render). */
+function whenSheetMounted(print: () => void, tries = 20) {
+  if (document.querySelector('.ph-print-sheet') || tries === 0) print();
+  else setTimeout(() => whenSheetMounted(print, tries - 1), 16);
+}
 
 export function useReceiptLabels(): ReceiptLabels {
   const t = useTranslations('pos.print');
@@ -44,6 +54,10 @@ export function useReceiptLabels(): ReceiptLabels {
     unit: { pack: tPos('units.pack'), piece: tPos('units.piece') },
     fiscalPlaceholder: t('fiscalPlaceholder'),
     taxId: t('taxId'),
+    wholesale: t('wholesale'),
+    buyer: (name) => t('buyer', { name }),
+    buyerTaxId: (taxId) => t('buyerTaxId', { taxId }),
+    basis: (basis) => t('basis', { basis }),
   };
 }
 
@@ -59,6 +73,17 @@ export function SaleReceiptDialog({
   const tPos = useTranslations('pos');
   const labels = useReceiptLabels();
   const [paper, setPaper] = useState<PaperWidth>('80');
+  // one print root at a time (`.ph-print-root`): the receipt, or the A4 invoice of a wholesale receipt while it prints
+  // (plan 2026-11-03-pos-store-ideas-pr3, R14)
+  const [printing, setPrinting] = useState<'receipt' | 'sheet'>('receipt');
+  const wholesale = Boolean(data?.request.wholesale);
+  useEffect(() => {
+    if (printing !== 'sheet') return;
+    const back = () => setPrinting('receipt');
+    window.addEventListener('afterprint', back, { once: true });
+    whenSheetMounted(() => void printDocument());
+    return () => window.removeEventListener('afterprint', back);
+  }, [printing]);
   const lines = data
     ? saleReceiptLines(data, labels, RECEIPT_COLUMNS[paper])
     : [];
@@ -97,7 +122,20 @@ export function SaleReceiptDialog({
           <Button variant="secondary" onClick={onClose}>
             {t('next')}
           </Button>
-          <Button iconStart="printer" onClick={() => void printReceipt()}>
+          {wholesale && (
+            <Button
+              variant="secondary"
+              iconStart="file-text"
+              onClick={() => setPrinting('sheet')}
+            >
+              {tPos('invoice.print')}
+            </Button>
+          )}
+          <Button
+            iconStart="printer"
+            disabled={printing === 'sheet'}
+            onClick={() => void printReceipt()}
+          >
             {t('print')}
           </Button>
         </>
@@ -115,7 +153,14 @@ export function SaleReceiptDialog({
           label={t('preview')}
           after={qr}
         />
-        {data && <ReceiptPrint lines={lines} paperWidth={paper} after={qr} />}
+        {data && printing === 'receipt' && (
+          <ReceiptPrint lines={lines} paperWidth={paper} after={qr} />
+        )}
+        {data && printing === 'sheet' && (
+          <SheetPrint>
+            <InvoiceSheet {...wholesaleInvoiceSheet(data, tPos)} />
+          </SheetPrint>
+        )}
       </div>
     </Dialog>
   );

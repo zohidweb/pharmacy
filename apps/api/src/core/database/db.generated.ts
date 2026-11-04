@@ -753,6 +753,9 @@ export interface ReceiptLines {
 
 export interface Receipts {
   businessDate: string;
+  buyerBasis: string | null;
+  buyerName: string | null;
+  buyerTaxId: string | null;
   cashierId: string;
   cashTenderedDirams: Generated<bigint>;
   changeDirams: Generated<bigint>;
@@ -771,6 +774,7 @@ export interface Receipts {
   number: string;
   origin: string;
   receivedAt: Timestamp;
+  saleKind: Generated<string>;
   shiftId: string;
   soldAt: Timestamp;
   status: Generated<string>;
@@ -939,6 +943,7 @@ export interface StoreProducts {
   storeId: string;
   tenantId: string;
   updatedAt: Generated<Timestamp>;
+  wholesalePricePerPackDirams: bigint | null;
 }
 
 export interface Stores {

@@ -5,6 +5,7 @@ import {
   piecePriceMinor,
 } from '@pharmacy/shared-domain';
 import type { ControlledSaleData, CreatedReceipt } from '@pharmacy/shared-dto';
+import { ProblemException } from '../../common/errors/problem.exception';
 import {
   getPrincipal,
   getTerminal,
@@ -121,6 +122,14 @@ export class ReceiptsService {
     const op = await this.context.operation(body, 'pos:create', sentAt, {
       shiftId: body.shiftId.toLowerCase(),
     });
+    // the wholesale receipt is refused without the right of its author, accepted or not (ADR-0015 and ADR-0018,
+    // amendments 2026-11-03; plan 2026-11-03-pos-store-ideas-pr3, R6)
+    if (
+      body.wholesale &&
+      !hasPermissions(op.author.permissions, 'pos:sell-wholesale')
+    ) {
+      throw new ProblemException(422, 'author_not_allowed');
+    }
     try {
       return await this.accept(body, id, op, acceptDiscrepancy);
     } catch (error) {
@@ -162,6 +171,9 @@ export class ReceiptsService {
     acceptDiscrepancy: boolean,
   ): Promise<CreatedReceipt> {
     const { tenantId, storeId } = op;
+    // the wholesale receipt of an organisation (spec 2026-11-03-pos-store-ideas, D24–D26): packs by the wholesale price
+    // of the store, no ПКУ, no discount
+    const wholesale = body.wholesale ?? null;
     return this.db.tenantTransaction((trx) =>
       this.idempotency.run(trx, tenantId, 'receipt', id, body, 201, async () => {
         // a sale is a fact (K4): the shift may have been closed from another computer while it waited (S4)
@@ -214,7 +226,26 @@ export class ReceiptsService {
             // the expired batch is a hard ban without a bypass (ТЗ), even after the fact
             errors.push({ field: `lines.${i}.batchId`, code: 'batch_expired' });
           }
+          // the till sold the line as ПКУ; a product made ПКУ after its snapshot is a `catalog` mark, as in retail —
+          // the sale is a fact (plan 2026-11-03-pos-store-ideas-pr3, final review M4)
+          if (wholesale !== null && line.controlled !== null) {
+            errors.push({
+              field: `lines.${i}.productId`,
+              code: 'wholesale_controlled',
+            });
+          }
+          if (wholesale !== null && line.unit === 'piece') {
+            errors.push({ field: `lines.${i}.unit`, code: 'wholesale_piece' });
+          }
         });
+        if (
+          wholesale !== null &&
+          (body.discountRuleId !== null ||
+            body.discountMinor !== 0 ||
+            body.discountPercent !== 0)
+        ) {
+          errors.push({ field: 'discountRuleId', code: 'discount_not_allowed' });
+        }
         if (errors.length > 0) throw invalid(errors);
 
         const settings = await this.repository.settings(trx, tenantId);
@@ -241,10 +272,12 @@ export class ReceiptsService {
             percent: t.percent,
           })),
         );
+        // the discounts of the network do not apply to a wholesale receipt (R8)
         if (
-          best.amountMinor !== body.discountMinor ||
-          (best.ruleId?.toLowerCase() ?? null) !==
-            (body.discountRuleId?.toLowerCase() ?? null)
+          wholesale === null &&
+          (best.amountMinor !== body.discountMinor ||
+            (best.ruleId?.toLowerCase() ?? null) !==
+              (body.discountRuleId?.toLowerCase() ?? null))
         ) {
           kinds.add('discount');
         }
@@ -261,16 +294,25 @@ export class ReceiptsService {
         const snapshotUsable =
           snapshotAt.getTime() >=
           soldAt.getTime() - settings.bufferLimits.maxHours * HOUR_MS;
-        const then = snapshotUsable
-          ? await this.prices.packPricesAround(
-              trx,
-              tenantId,
-              storeId,
-              current,
-              productIds,
-              snapshotAt,
-            )
-          : new Map<string, number[]>();
+        const then = !snapshotUsable
+          ? new Map<string, number[]>()
+          : wholesale !== null
+            ? await this.prices.wholesalePricesAround(
+                trx,
+                tenantId,
+                storeId,
+                current,
+                productIds,
+                snapshotAt,
+              )
+            : await this.prices.packPricesAround(
+                trx,
+                tenantId,
+                storeId,
+                current,
+                productIds,
+                snapshotAt,
+              );
         const snapshotDate = snapshotUsable
           ? await this.repository.businessDate(trx, tenantId, snapshotAt)
           : businessDate;
@@ -296,9 +338,13 @@ export class ReceiptsService {
               )
             : null;
         };
-        const nowPrices = body.lines.map((line) =>
-          unitPriceOf(line, current.get(line.productId.toLowerCase())?.packDirams),
-        );
+        // a wholesale line is a pack (checked above) at the wholesale price of the store (ADR-0015, amendment 2026-11-03)
+        const nowPrices = body.lines.map((line) => {
+          const price = current.get(line.productId.toLowerCase());
+          return wholesale !== null
+            ? (price?.wholesaleDirams ?? null)
+            : unitPriceOf(line, price?.packDirams);
+        });
         const ruleErrors = priceErrors(
           body.lines.map((line, i) => ({
             unitPriceMinor: line.unitPriceMinor,
@@ -310,7 +356,10 @@ export class ReceiptsService {
             ],
           })),
         );
-        const discountRefused = discountError(body, [...tiers, ...snapshotTiers]);
+        const discountRefused =
+          wholesale === null
+            ? discountError(body, [...tiers, ...snapshotTiers])
+            : null;
         if (discountRefused) ruleErrors.push(discountRefused);
         let acceptedBy: string | null = null;
         if (ruleErrors.length > 0) {
@@ -422,6 +471,10 @@ export class ReceiptsService {
               : 'online',
           language: body.language,
           localNumber: body.localNumber ?? null,
+          saleKind: wholesale === null ? 'retail' : 'wholesale',
+          buyerName: wholesale?.buyerName ?? null,
+          buyerTaxId: wholesale?.buyerTaxId ?? null,
+          buyerBasis: wholesale?.basis ?? null,
         });
         await this.receipts.insertLines(trx, tenantId, id, lines);
         // the cash line holds what was handed over: Σ payments = total + change (E10)
@@ -483,6 +536,8 @@ export class ReceiptsService {
             authorId: author.id,
             totalMinor: body.totalMinor,
             discrepancyKinds,
+            // the buyer stays in the receipt only (R21)
+            ...(wholesale === null ? {} : { saleKind: 'wholesale' }),
             ...(acceptedBy === null
               ? {}
               : { acceptedBy, acceptedErrors: ruleErrors }),

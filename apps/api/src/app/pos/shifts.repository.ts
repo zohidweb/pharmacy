@@ -69,6 +69,9 @@ export interface ShiftTotals {
   revenueDirams: number;
   changeDirams: number;
   discrepancyReceipts: number;
+  /** The wholesale receipts, included in `receipts` (spec 2026-11-03-pos-store-ideas, D29). */
+  wholesaleReceipts: number;
+  wholesaleDirams: number;
   /** The largest local number of the receipts (P12); null without one. */
   lastLocalNumber: number | null;
   byKind: Map<ReceiptPaymentMethod, { count: number; amountDirams: number }>;
@@ -406,11 +409,15 @@ export class ShiftsRepository {
       revenue: string;
       change: string;
       flagged: number;
+      wholesaleReceipts: number;
+      wholesale: string;
       lastLocalNumber: number | null;
     }>`
       select count(*)::integer as receipts, coalesce(sum(r.total_dirams), 0)::text as revenue,
              coalesce(sum(r.change_dirams), 0)::text as change,
              (count(*) filter (where r.discrepancy_kinds <> '{}'))::integer as flagged,
+             (count(*) filter (where r.sale_kind = 'wholesale'))::integer as wholesale_receipts,
+             coalesce(sum(r.total_dirams) filter (where r.sale_kind = 'wholesale'), 0)::text as wholesale,
              max(r.local_number) as last_local_number
       from pharmacy.receipts r
       where r.tenant_id = ${tenantId} and r.shift_id = ${shiftId}
@@ -438,6 +445,8 @@ export class ShiftsRepository {
       revenueDirams: Number(r.revenue),
       changeDirams: Number(r.change),
       discrepancyReceipts: r.flagged,
+      wholesaleReceipts: r.wholesaleReceipts,
+      wholesaleDirams: Number(r.wholesale),
       lastLocalNumber: r.lastLocalNumber,
       byKind: new Map(
         payments.rows.map((p) => [

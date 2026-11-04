@@ -130,6 +130,7 @@ export class ReturnableService {
         daysLeft: left,
         subtotalMinor: receipt.subtotalDirams,
         discountMinor: receipt.discountDirams,
+        wholesaleBuyer: receipt.buyerName,
         payments: refundable(
           receipt,
           await this.repository.refundedByKind(trx, tenantId, receipt.id),

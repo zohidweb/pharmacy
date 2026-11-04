@@ -156,9 +156,17 @@ function CustomerDisplayView() {
     const qr = state.payment?.qr ?? null;
     body = (
       <>
-        {state.storeName && (
-          <header className="border-b border-border bg-surface px-8 py-4 text-xl font-bold">
-            {state.storeName}
+        {(state.storeName || state.buyer) && (
+          <header className="flex flex-col gap-1 border-b border-border bg-surface px-8 py-4">
+            {state.storeName && (
+              <span className="text-xl font-bold">{state.storeName}</span>
+            )}
+            {/* the wholesale of an organisation (spec 2026-11-03-pos-store-ideas, D3) */}
+            {state.buyer && (
+              <span className="text-lg text-info">
+                {t('wholesale', { name: state.buyer })}
+              </span>
+            )}
           </header>
         )}
         <div className="flex min-h-0 flex-1">

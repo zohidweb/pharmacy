@@ -127,6 +127,10 @@ export class ShiftMapper {
           cashReturns,
       },
       discrepancyReceipts: totals.discrepancyReceipts,
+      wholesale: {
+        count: totals.wholesaleReceipts,
+        amountMinor: totals.wholesaleDirams,
+      },
       lastLocalNumber: totals.lastLocalNumber,
       events,
     };

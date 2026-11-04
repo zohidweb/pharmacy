@@ -45,6 +45,8 @@ export type DisplayState =
   | (DisplayBase & { screen: 'idle' })
   | (DisplayBase & {
       screen: 'receipt';
+      /** The organisation of a wholesale receipt (spec 2026-11-03-pos-store-ideas, D3); absent or null — retail. */
+      buyer?: string | null;
       lines: DisplayLine[];
       /** The line added or changed last: highlighted. */
       changedKey: string | null;

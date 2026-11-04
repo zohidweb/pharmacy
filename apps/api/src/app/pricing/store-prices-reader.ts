@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { TenantTransaction } from '../../core/database';
-import { PriceChanges } from '../audit/price-changes';
+import { type PriceChangeAction, PriceChanges } from '../audit/price-changes';
 import { PricingRepository } from './pricing.repository';
 
 /**
@@ -15,6 +15,8 @@ export interface StorePrice {
   productId: string;
   packDirams: number;
   ownPieceDirams: number | null;
+  /** The wholesale price of a pack (spec 2026-11-03-pos-store-ideas, D19); null — not sold wholesale. */
+  wholesaleDirams: number | null;
 }
 
 /** A step of a discount rule acting at a store: from the subtotal, whole percent. */
@@ -55,6 +57,8 @@ export class StorePricesReader {
           packDirams: Number(row.packDirams),
           ownPieceDirams:
             row.pieceDirams === null ? null : Number(row.pieceDirams),
+          wholesaleDirams:
+            row.wholesaleDirams === null ? null : Number(row.wholesaleDirams),
         },
       ]),
     );
@@ -66,13 +70,56 @@ export class StorePricesReader {
    * that window (none — the current price). `current` — the prices of the store the caller has read. A product absent
    * from the map had no price then.
    */
-  async packPricesAround(
+  packPricesAround(
     trx: TenantTransaction,
     tenantId: string,
     storeId: string,
     current: ReadonlyMap<string, StorePrice>,
     productIds: readonly string[],
     at: Date,
+  ): Promise<Map<string, number[]>> {
+    return this.pricesAround(
+      trx,
+      tenantId,
+      storeId,
+      (productId) => current.get(productId)?.packDirams ?? null,
+      productIds,
+      at,
+      'price.changed',
+    );
+  }
+
+  /**
+   * The wholesale prices of a pack the store had around a moment — the same window as `packPricesAround`, by
+   * `wholesale_price.changed` (ADR-0015, amendment 2026-11-03). A closed wholesale is no price.
+   */
+  wholesalePricesAround(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    current: ReadonlyMap<string, StorePrice>,
+    productIds: readonly string[],
+    at: Date,
+  ): Promise<Map<string, number[]>> {
+    return this.pricesAround(
+      trx,
+      tenantId,
+      storeId,
+      (productId) => current.get(productId)?.wholesaleDirams ?? null,
+      productIds,
+      at,
+      'wholesale_price.changed',
+    );
+  }
+
+  private async pricesAround(
+    trx: TenantTransaction,
+    tenantId: string,
+    storeId: string,
+    currentOf: (productId: string) => number | null,
+    productIds: readonly string[],
+    at: Date,
+    action: PriceChangeAction,
   ): Promise<Map<string, number[]>> {
     const from = new Date(at.getTime() - PRICE_HISTORY_SKEW_MS);
     const changes = await this.changes.changesAfter(
@@ -81,19 +128,22 @@ export class StorePricesReader {
       storeId,
       productIds,
       from,
+      action,
     );
     const prices = new Map<string, number[]>();
     for (const productId of productIds) {
       const list = changes.get(productId) ?? [];
       const atStart =
-        list.length > 0
-          ? list[0].oldPriceMinor
-          : (current.get(productId)?.packDirams ?? null);
+        list.length > 0 ? list[0].oldPriceMinor : currentOf(productId);
       const inWindow = list
         .filter((change) => change.at.getTime() <= at.getTime())
         .map((change) => change.newPriceMinor);
       const all = [
-        ...new Set([...(atStart === null ? [] : [atStart]), ...inWindow]),
+        ...new Set(
+          [atStart, ...inWindow].filter(
+            (price): price is number => price !== null,
+          ),
+        ),
       ];
       if (all.length > 0) prices.set(productId, all);
     }

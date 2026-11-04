@@ -4,7 +4,9 @@
  * and expiry dates, purchasing and prices stack in the two columns on its right, transfers and reports share the last
  * row. On a phone one column in the same order. The tiles are light surfaces with a line, except prices (a mint block)
  * and reports (a dark block, no line). A product screen sits in the lower right corner of its tile and the tile's edge
- * crops it. Only what works in the cloud pilot: no 1C export, no offline stores (spec 2, anti-goals).
+ * crops it; four tiles carry one: the till, batches, transfers and, since spec 2026-11-04-public-site-home-polish, H9.2,
+ * the sales report (the dark tile was almost empty with only an icon; it now holds a screen like its neighbour, in the
+ * same window, with the same zoom and scroll motion). Only what works in the cloud pilot: no 1C export, no offline stores (spec 2, anti-goals).
  *
  * The tiles appear one after another (RevealGroup). Under the pointer the product screen of a tile rises by 4 px: a CSS
  * transform, only where the device can hover and without reduce (`motion-safe:group-hover:`).
@@ -28,6 +30,7 @@ const SHOTS = {
   pos: { src: '/images/pos.webp', width: 1600, height: 1100 },
   stock: { src: '/images/stock-batches.webp', width: 1600, height: 1000 },
   transfers: { src: '/images/transfers.webp', width: 1600, height: 1000 },
+  reports: { src: '/images/sales-report.webp', width: 1600, height: 1000 },
 } as const;
 
 type ShotKey = keyof typeof SHOTS;
@@ -46,13 +49,13 @@ const FRAMES = {
 
 type Tile =
   | {
-      key: 'pos' | 'stock' | 'transfers';
+      key: 'pos' | 'stock' | 'transfers' | 'reports';
       shot: ShotKey;
       frame: keyof typeof FRAMES;
       span: string;
     }
   | {
-      key: 'purchasing' | 'pricing' | 'reports';
+      key: 'purchasing' | 'pricing';
       icon: IconName;
       span: string;
     };
@@ -75,7 +78,7 @@ const TILES: readonly Tile[] = [
   { key: 'purchasing', icon: 'truck', span: 'md:col-span-2' },
   { key: 'pricing', icon: 'tag', span: 'md:col-span-2' },
   { key: 'transfers', shot: 'transfers', frame: 'half', span: 'md:col-span-3' },
-  { key: 'reports', icon: 'download', span: 'md:col-span-3' },
+  { key: 'reports', shot: 'reports', frame: 'half', span: 'md:col-span-3' },
 ];
 
 /*

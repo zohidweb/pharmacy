@@ -79,6 +79,7 @@ export function displayStateOf(
   return {
     ...base,
     screen: 'receipt',
+    buyer: c.draft.wholesale?.buyerName ?? null,
     lines: c.draft.lines.map((line) => ({
       key: line.key,
       name: line.name,

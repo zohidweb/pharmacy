@@ -387,6 +387,33 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       if (shift.storeId !== body.storeId) {
         throw new ApiError(409, 'no_open_shift', correlationId);
       }
+      // the wholesale receipt of an organisation (spec 2026-11-03-pos-store-ideas, D24–D26), the rules of apps/api
+      const wholesale = body.wholesale ?? null;
+      if (
+        wholesale &&
+        !hasPermissions(session.permissions, 'pos:sell-wholesale')
+      ) {
+        throw new ApiError(422, 'author_not_allowed', correlationId);
+      }
+      if (wholesale) {
+        const errors = body.lines.flatMap((line, index) => {
+          const item = product(line.productId, correlationId);
+          return [
+            ...(line.controlled !== null || item.prescription === 'controlled'
+              ? [{ field: `lines.${index}.productId`, code: 'wholesale_controlled' }]
+              : []),
+            ...(line.unit === 'piece'
+              ? [{ field: `lines.${index}.unit`, code: 'wholesale_piece' }]
+              : []),
+          ];
+        });
+        if (body.discountRuleId !== null || body.discountMinor !== 0) {
+          errors.push({ field: 'discountRuleId', code: 'discount_not_allowed' });
+        }
+        if (errors.length > 0) {
+          throw new ApiError(400, 'validation_failed', correlationId, errors);
+        }
+      }
       let discrepancies = 0;
       const lines = body.lines.map((line, index) => {
         const item = productAt(
@@ -421,8 +448,11 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
           line.unit === 'pack'
             ? line.quantity * line.piecesPerPack
             : line.quantity;
-        const price =
-          line.unit === 'pack' ? item.priceMinor : item.piecePriceMinor;
+        const price = wholesale
+          ? item.wholesalePriceMinor
+          : line.unit === 'pack'
+            ? item.priceMinor
+            : item.piecePriceMinor;
         if (price !== line.unitPriceMinor || pieces > batch.quantityPieces) {
           discrepancies += 1; // the sale happened: accepted, marked for the manager
         }
@@ -473,9 +503,15 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
         refunded: {},
         localNumber: body.localNumber ?? null,
         receivedAt: new Date().toISOString(),
+        wholesale,
       };
       pos().receipts.unshift(receipt);
       shift.receipts += 1;
+      if (wholesale) {
+        const total = (shift.wholesale ??= { count: 0, amountMinor: 0 });
+        total.count += 1;
+        total.amountMinor += body.totalMinor;
+      }
       for (const payment of body.payments) {
         const total = shift.byMethod[payment.method];
         total.count += 1;
@@ -731,7 +767,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       daysLeft: window - age,
       subtotalMinor: receipt.subtotalMinor,
       discountMinor: receipt.discountMinor,
-      wholesaleBuyer: null,
+      wholesaleBuyer: receipt.wholesale?.buyerName ?? null,
       payments: refundable(receipt),
       lines: receipt.lines
         .filter((l) => !query.productId || l.productId === query.productId)

@@ -79,6 +79,7 @@ export function buildReceiptRequest(
     cashTenderedMinor: payment.tenderedMinor,
     changeMinor: payment.changeMinor,
     language,
+    wholesale: draft.wholesale ?? null,
   };
 }
 

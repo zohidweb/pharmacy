@@ -4,6 +4,7 @@ import type {
   ControlledSaleData,
   PosBatch,
   PosProduct,
+  WholesaleBuyer,
 } from '@pharmacy/shared-dto';
 import { formatDateOnly, formatMoney } from '@pharmacy/shared-util';
 import { Alert, Button, cx, Dialog, StatusPill, TextField } from '@pharmacy/ui';
@@ -342,6 +343,140 @@ export function ProductDetailsDialog({
 }
 
 /** Cancel before payment only; after payment it is a return (ТЗ). */
+const TAX_ID = /^\d{9}$/;
+
+/**
+ * The buyer of a wholesale receipt (spec 2026-11-03-pos-store-ideas, D26): the organisation, 1–200 characters; its
+ * taxpayer number, 9 digits; the basis, up to 200 characters, empty — none. The rules of the API and of the CHECK.
+ */
+export function WholesaleBuyerDialog({
+  open,
+  initial,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  /** The buyer being changed; null — the wholesale is being switched on. */
+  initial: WholesaleBuyer | null;
+  onConfirm: (buyer: WholesaleBuyer) => void;
+  onClose: () => void;
+}) {
+  const t = useTranslations('pos.wholesaleDialog');
+  const tPos = useTranslations('pos');
+  const [buyerName, setBuyerName] = useState(initial?.buyerName ?? '');
+  const [buyerTaxId, setBuyerTaxId] = useState(initial?.buyerTaxId ?? '');
+  const [basis, setBasis] = useState(initial?.basis ?? '');
+  const [touched, setTouched] = useState(false);
+  const errors = {
+    buyerName: buyerName.trim().length < 1 || buyerName.trim().length > 200,
+    buyerTaxId: !TAX_ID.test(buyerTaxId.trim()),
+    basis: basis.trim().length > 200,
+  };
+  const valid = !errors.buyerName && !errors.buyerTaxId && !errors.basis;
+  const submit = () => {
+    setTouched(true);
+    if (!valid) return;
+    onConfirm({
+      buyerName: buyerName.trim(),
+      buyerTaxId: buyerTaxId.trim(),
+      basis: basis.trim() === '' ? null : basis.trim(),
+    });
+  };
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={t('title')}
+      description={t('description')}
+      closeLabel={tPos('close')}
+      icon="building-2"
+      size="md"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {tPos('cancel')}
+          </Button>
+          <Button onClick={submit}>{initial ? t('save') : t('confirm')}</Button>
+        </>
+      }
+    >
+      <form
+        className="flex flex-col gap-4"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
+      >
+        <TextField
+          label={t('buyerName')}
+          autoComplete="off"
+          maxLength={200}
+          value={buyerName}
+          error={
+            touched && errors.buyerName ? t('errors.buyerName') : undefined
+          }
+          onChange={(event) => setBuyerName(event.target.value)}
+        />
+        <TextField
+          label={t('buyerTaxId')}
+          autoComplete="off"
+          inputMode="numeric"
+          maxLength={9}
+          value={buyerTaxId}
+          error={
+            touched && errors.buyerTaxId ? t('errors.buyerTaxId') : undefined
+          }
+          onChange={(event) => setBuyerTaxId(event.target.value)}
+        />
+        <TextField
+          label={t('basis')}
+          hint={t('basisHint')}
+          autoComplete="off"
+          maxLength={200}
+          value={basis}
+          error={touched && errors.basis ? t('errors.basis') : undefined}
+          onChange={(event) => setBasis(event.target.value)}
+        />
+        <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
+      </form>
+    </Dialog>
+  );
+}
+
+/** Switching the wholesale off with lines in the receipt (D24): the lines go back to the retail price. */
+export function RetailReceiptDialog({
+  open,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const t = useTranslations('pos.retailDialog');
+  const tPos = useTranslations('pos');
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={t('title')}
+      closeLabel={tPos('close')}
+      icon="triangle-alert"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {tPos('cancel')}
+          </Button>
+          <Button onClick={onConfirm}>{t('confirm')}</Button>
+        </>
+      }
+    >
+      <p className="text-sm text-fg-muted">{t('hint')}</p>
+    </Dialog>
+  );
+}
+
 export function CancelReceiptDialog({
   open,
   positions,

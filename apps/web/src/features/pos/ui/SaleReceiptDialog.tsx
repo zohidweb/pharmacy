@@ -44,6 +44,10 @@ export function useReceiptLabels(): ReceiptLabels {
     unit: { pack: tPos('units.pack'), piece: tPos('units.piece') },
     fiscalPlaceholder: t('fiscalPlaceholder'),
     taxId: t('taxId'),
+    wholesale: t('wholesale'),
+    buyer: (name) => t('buyer', { name }),
+    buyerTaxId: (taxId) => t('buyerTaxId', { taxId }),
+    basis: (basis) => t('basis', { basis }),
   };
 }
 

@@ -39,6 +39,11 @@ export interface ReceiptLabels {
   unit: { pack: string; piece: string };
   fiscalPlaceholder: string;
   taxId: string;
+  /** The wholesale receipt (spec 2026-11-03-pos-store-ideas, D27). */
+  wholesale: string;
+  buyer: (name: string) => string;
+  buyerTaxId: (taxId: string) => string;
+  basis: (basis: string) => string;
 }
 
 export interface ReceiptPrintData {
@@ -47,6 +52,11 @@ export interface ReceiptPrintData {
   productNames: Record<string, string>;
   cashierName: string;
   settings: PosStoreSettings;
+  /**
+   * The batches of the lines — the number and the expiry date the wholesale invoice prints (plan
+   * 2026-11-03-pos-store-ideas-pr3, R15).
+   */
+  batches: Record<string, { number: string; expiresOn: string }>;
 }
 
 export function saleReceiptLines(
@@ -75,6 +85,13 @@ export function saleReceiptLines(
   );
   if (local !== null) out.push(...receiptWrap(labels.serverNumberLater, cols));
   out.push(...receiptRow(labels.cashier, cashierName, cols));
+  const buyer = request.wholesale ?? null;
+  if (buyer) {
+    out.push(...receiptWrap(labels.wholesale, cols));
+    out.push(...receiptWrap(labels.buyer(buyer.buyerName), cols));
+    out.push(...receiptWrap(labels.buyerTaxId(buyer.buyerTaxId), cols));
+    if (buyer.basis) out.push(...receiptWrap(labels.basis(buyer.basis), cols));
+  }
   out.push(receiptRule(cols));
   for (const line of request.lines) {
     out.push(

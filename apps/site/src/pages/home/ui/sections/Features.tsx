@@ -9,6 +9,10 @@
  * The tiles appear one after another (RevealGroup). Under the pointer the product screen of a tile rises by 4 px: a CSS
  * transform, only where the device can hover and without reduce (`motion-safe:group-hover:`).
  *
+ * From 1024 px a product screen also moves inside the window of its tile with the scroll, from 24 px lower to 24 px
+ * higher (spec 2026-11-04-public-site-home-polish, H8.4; Parallax with a negative speed, the tile crops it); the hover rise
+ * stays on its own element, and below 1024 px and with reduce the screen stands.
+ *
  * A product screen is a button that enlarges it in a dialog (spec 2026-11-04-public-site-home-polish, H7; ShotZoom), with
  * a round zoom badge in the corner of the window.
  */
@@ -16,7 +20,7 @@ import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx, Icon, type IconName } from '@pharmacy/ui';
 import { getTranslator } from '@/shared/i18n';
 import { contentClassName, panelBodyClassName } from '@/shared/ui';
-import { RevealGroup, RevealItem } from '@/shared/ui/motion';
+import { Parallax, RevealGroup, RevealItem } from '@/shared/ui/motion';
 import { ShotZoom } from './ShotZoom';
 
 /** Real pixel sizes of the WebP files (CLS). Screens of apps/web on its mocks: synthetic data only. */
@@ -104,18 +108,21 @@ function TileShot({
     // screen). The 8 px above the screen leave room for the 4 px rise.
     <div className={cx('relative grow', view)}>
       <div className="absolute inset-y-0 left-6 pt-2 transition-transform duration-(--ph-duration-slow) ease-out motion-safe:group-hover:-translate-y-1 md:left-8">
-        <ShotZoom
-          src={src}
-          width={width}
-          height={height}
-          alt={alt}
-          title={title}
-          labels={labels}
-          className={cx(
-            'block w-auto max-w-none rounded-site-card border border-site-shot shadow-shot',
-            screen,
-          )}
-        />
+        {/* the screen moves inside the window with the scroll, from 24 px lower to 24 px higher (H8.4); the rise on hover stays on the element above */}
+        <Parallax speed={-0.24} className="h-full">
+          <ShotZoom
+            src={src}
+            width={width}
+            height={height}
+            alt={alt}
+            title={title}
+            labels={labels}
+            className={cx(
+              'block w-auto max-w-none rounded-site-card border border-site-shot shadow-shot',
+              screen,
+            )}
+          />
+        </Parallax>
       </div>
       {/* the badge sits in the corner of the window (not of the cropped screen) and lets clicks through to the screen */}
       <span

@@ -99,6 +99,8 @@ erDiagram
 | `fiscal_status` | text | `not_required` / `pending` / `sent` / `failed` |
 | `fiscal_data` | jsonb null | Реквизиты ККМ — после выбора вендора (stack.md № 9) |
 | `language` | text | Язык напечатанного чека |
+| `sale_kind` | text default `retail` | `retail` / `wholesale` — оптовая продажа организации (спецификация `2026-11-03-pos-store-ideas`, I4; поправка ADR-0015 от 2026-11-03): цена строки — оптовая цена точки, без скидки (`receipts_sale_kind_check`) |
+| `buyer_name`, `buyer_tax_id`, `buyer_basis` | text null | Покупатель оптового чека: организация 1–200 знаков, ИНН `^[0-9]{9}$`, основание до 200 знаков; есть ровно у оптового чека (`receipts_buyer_check`). Обе проверки добавлены `NOT VALID` и проверены миграцией `wholesale-sale-validate` |
 
 Индексы: `(tenant_id, store_id, business_date)`, `(tenant_id, shift_id)`, `(tenant_id, created_at)` — чеки, записанные в облако после прошлого пересчёта витрин статистики (миграция `admin-stats`, спецификация `2026-10-19-admin-dashboard-stats-design.md`, D4). QR на чеке кодирует `id` чека — для поиска при возврате.
 

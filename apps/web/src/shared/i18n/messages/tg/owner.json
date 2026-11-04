@@ -414,6 +414,8 @@
       "store": "Нуқта",
       "receipts": "Чекҳо",
       "revenue": "Даромад, с",
+      "retailMinor": "Чакана, с",
+      "wholesaleMinor": "Яклухт, с",
       "returns": "Баргардонӣ, с",
       "cost": "Арзиши аслӣ, с",
       "margin": "Фоида, с",

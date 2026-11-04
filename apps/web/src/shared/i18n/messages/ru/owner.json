@@ -414,6 +414,8 @@
       "store": "Точка",
       "receipts": "Чеков",
       "revenue": "Выручка, с",
+      "retailMinor": "Розница, с",
+      "wholesaleMinor": "Опт, с",
       "returns": "Возвраты, с",
       "cost": "Себестоимость, с",
       "margin": "Прибыль, с",

@@ -451,10 +451,15 @@ function report(
         // write-offs and stock-count shortages at cost (spec 2026-10-14-owner-cabinet, E3)
         const losses = -Math.round(revenue * 0.004);
         const margin = revenue + returns - cost + losses;
+        // the wholesale of the mock: a small share of store-3 (spec 2026-11-03-pos-store-ideas, D29)
+        const wholesaleMinor =
+          store.id === 'store-3' ? Math.round(revenue * 0.06) : 0;
         return {
           store: store.name,
           receipts: day.receipts * days,
           revenue,
+          retailMinor: revenue - wholesaleMinor,
+          wholesaleMinor,
           returns,
           cost,
           losses,
@@ -464,7 +469,16 @@ function report(
       });
       const total = sumRows(
         rows,
-        ['receipts', 'revenue', 'returns', 'cost', 'losses', 'margin'],
+        [
+          'receipts',
+          'revenue',
+          'retailMinor',
+          'wholesaleMinor',
+          'returns',
+          'cost',
+          'losses',
+          'margin',
+        ],
         'total',
         'store',
       );
@@ -511,6 +525,8 @@ function report(
           col('store', 'text'),
           col('receipts', 'count'),
           col('revenue', 'money'),
+          col('retailMinor', 'money'),
+          col('wholesaleMinor', 'money'),
           col('returns', 'money'),
           ...costCols(
             col('cost', 'money'),

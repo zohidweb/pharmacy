@@ -77,6 +77,15 @@ export function ShiftTotals({ shift }: { shift: Shift }) {
         <span>{t('revenue')}</span>
         <span className="tabular-nums">{formatMoney(shift.revenueMinor)}</span>
       </p>
+      {/* the wholesale receipts, included above (spec 2026-11-03-pos-store-ideas, D29); a Z-report saved before has none */}
+      {shift.wholesale && shift.wholesale.count > 0 && (
+        <p className="flex justify-between px-(--ph-card-padding) pb-3 text-sm text-fg-muted">
+          <span>{t('wholesale', { count: shift.wholesale.count })}</span>
+          <span className="tabular-nums">
+            {formatMoney(shift.wholesale.amountMinor)}
+          </span>
+        </p>
+      )}
     </Card>
   );
 }

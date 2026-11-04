@@ -14,6 +14,7 @@ export function useZReportLabels(): ZReportLabels {
     opened: t('opened'),
     closed: t('closed'),
     receipts: t('receipts'),
+    wholesale: (count) => t('wholesale', { count }),
     method: {
       cash: tShift('methods.cash'),
       card: tShift('methods.card'),

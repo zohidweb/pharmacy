@@ -3,6 +3,7 @@ export {
   type ReceiptLabels,
   type ReceiptPrintData,
 } from './lib/receipt-print';
+export { wholesaleInvoiceSheet } from './lib/wholesale-invoice';
 export {
   applySaleToSnapshot,
   awaitDelivery,

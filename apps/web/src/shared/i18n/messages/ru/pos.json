@@ -169,6 +169,26 @@
       "hint": "Строки получат розничную цену точки, скидки сети снова применятся. Оплату нужно будет выбрать заново.",
       "confirm": "Пересчитать"
     },
+    "invoice": {
+      "print": "Накладная (A4)",
+      "title": "Накладная № {number} от {date}",
+      "localTitle": "Накладная к чеку № {number} · код {code} от {date}",
+      "seller": "Продавец",
+      "buyer": "Покупатель",
+      "taxId": "ИНН {taxId}",
+      "columns": {
+        "line": "Товар",
+        "detail": "Партия, срок, количество × цена",
+        "amount": "Сумма, с"
+      },
+      "detail": "Партия {batch} · до {expires} · {quantity} уп. × {price}",
+      "total": "Итого, с",
+      "basis": "Основание",
+      "payment": "Оплата",
+      "released": "Отпустил",
+      "received": "Получил",
+      "signature": "________________ (подпись, ФИО)"
+    },
     "held": {
       "title": "Отложенные чеки",
       "subtitle": "Видны всем кассирам точки",
@@ -273,6 +293,7 @@
     "sum": "Сумма",
     "returns": "Возвраты",
     "revenue": "Выручка",
+    "wholesale": "в т.ч. опт: {count, plural, one {# чек} few {# чека} other {# чеков}}",
     "manualReconcile": "сверка с терминалом банка вручную",
     "drawer": "Денежный ящик",
     "cashSales": "продажи наличными",
@@ -351,6 +372,7 @@
       "opened": "Открыта",
       "closed": "Закрыта",
       "receipts": "Чеков",
+      "wholesale": "в т.ч. опт ({count})",
       "returns": "Возвраты ({count})",
       "revenue": "Выручка",
       "byTerminal": "{method} · по терминалу",
@@ -445,7 +467,8 @@
     "foundWithoutReceipt": "Продажа найдена без чека: вернуть можно только найденный товар.",
     "notes": "Отметки",
     "withoutReceiptPill": "без чека",
-    "writeOffRef": "Списание {number}"
+    "writeOffRef": "Списание {number}",
+    "wholesale": "Оптовая продажа · {name}"
   },
   "shiftHistory": {
     "title": "Смены",

@@ -93,7 +93,10 @@ export function Hero({
             </PressableLink>
           </div>
           {/* three facts true of the pilot (spec H1): a browser (ADR-0004), RU and TJ, billing by active days */}
-          <ul className="site-enter site-enter-delay-4 flex flex-col gap-3 pt-2 text-md text-fg-muted sm:flex-row sm:flex-wrap sm:gap-x-6">
+          <ul
+            role="list"
+            className="site-enter site-enter-delay-4 flex flex-col gap-3 pt-2 text-md text-fg-muted sm:flex-row sm:flex-wrap sm:gap-x-6"
+          >
             {FACTS.map(({ key, icon }) => (
               <li key={key} className="flex items-center gap-2">
                 <Icon name={icon} size="md" className="text-accent-site" />

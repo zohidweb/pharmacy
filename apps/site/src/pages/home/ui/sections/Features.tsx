@@ -74,6 +74,15 @@ const TILES: readonly Tile[] = [
   { key: 'reports', icon: 'download', span: 'md:col-span-3' },
 ];
 
+/*
+ * The ring of a tile's zoom button is drawn around the tile, not around the button (spec
+ * 2026-11-04-public-site-home-polish, H7; final review M1): the button has the box of the whole screen, which the tile
+ * crops on the right and below, so its own outline would show on two sides only. Same utilities as the kit's
+ * SegmentedControl; the tile's own `data-surface` gives the ring colour of its panel.
+ */
+const SHOT_TILE_FOCUS =
+  'has-focus-visible:outline-(length:--ph-focus-ring-width) has-focus-visible:outline-offset-(--ph-focus-ring-offset) has-focus-visible:outline-focus-ring has-focus-visible:outline-solid';
+
 function TileShot({
   shot,
   frame,
@@ -158,6 +167,7 @@ export function Features({ locale }: { locale: UiLocale }) {
                   className={cx(
                     'flex flex-1 flex-col overflow-hidden rounded-site-card',
                     !surface && 'border border-site-line bg-surface',
+                    'shot' in tile && SHOT_TILE_FOCUS,
                   )}
                 >
                   {'shot' in tile ? (

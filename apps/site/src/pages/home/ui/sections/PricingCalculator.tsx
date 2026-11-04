@@ -8,8 +8,8 @@
  * function never crosses the server/client boundary. Rendered on the server with the starting count, so without
  * JavaScript the sums for 3 stores are in the HTML; the slider then simply does not change them.
  *
- * The slider takes `accent-primary` (mint-400 on the green panel's raised block, 7.1:1). The number beside it is
- * decorative (`aria-hidden`): the range input announces its own value, and the sums sit in a polite live region.
+ * The block is `surface-sunken` (emerald-900). The slider (`site-range`, site-theme.css) has a mint-300 track (6.3:1 to
+ * the block) and a mint-400 thumb (5.9:1). The number beside it is decorative (`aria-hidden`): the range input announces its own value, and the sums sit in a polite live region.
  */
 import { useId, useState } from 'react';
 
@@ -53,7 +53,7 @@ export function PricingCalculator({
           step={1}
           value={stores}
           onChange={(event) => setStores(event.currentTarget.valueAsNumber)}
-          className="min-h-touch min-w-0 flex-1 cursor-pointer accent-primary"
+          className="min-h-touch min-w-0 flex-1 cursor-pointer site-range"
         />
         <span
           aria-hidden="true"

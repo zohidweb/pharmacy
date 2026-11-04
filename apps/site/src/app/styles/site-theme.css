@@ -105,7 +105,7 @@
   /* The till screen of the first screen from 1024 px (spec 2026-11-04-public-site-home-polish, H1): wider than its
      column, the panel clips what runs past its right edge. 150 % of the column is about 990 px at 1440 */
   --ph-site-hero-shot-width: 150%;
-  --ph-site-grid-aside: minmax(0, 4fr) minmax(0, 7fr); /* pinned heading : content */
+  --ph-site-grid-aside: minmax(0, 4fr) minmax(0, 7fr); /* heading : content (only the FAQ pins its heading) */
   --ph-site-grid-main: minmax(0, 7fr) minmax(0, 4fr); /* main tile : its side note (tariffs) */
   --ph-site-marquee-duration: 48s; /* one pass of the capability line, slow (4.5, п. 3) */
 
@@ -592,4 +592,48 @@
   [data-step-figure] {
     color: var(--ph-site-accent);
   }
+}
+
+/*
+ * The slider of the stores calculator (spec 2026-11-04-public-site-home-polish, H4; review minor: the browser's own
+ * unfilled track nearly vanishes on the dark raised block). The track is the control border colour (mint-300, 6.3:1 to
+ * the block, a non-text boundary of 3:1 needed) and the thumb the primary colour (mint-400, 5.9:1), as `accent-primary`
+ * drew it; a ring in the block's colour keeps the thumb apart from the track. Both engines need their own pseudo-elements.
+ */
+.site-range {
+  appearance: none;
+  background: transparent;
+}
+
+.site-range::-webkit-slider-runnable-track {
+  height: var(--ph-space-1);
+  border-radius: var(--ph-radius-full);
+  background: var(--ph-color-border-control);
+}
+
+.site-range::-webkit-slider-thumb {
+  appearance: none;
+  box-sizing: border-box;
+  width: var(--ph-space-5);
+  height: var(--ph-space-5);
+  /* centres the thumb on the track: (track height - thumb height) / 2 */
+  margin-top: calc((var(--ph-space-1) - var(--ph-space-5)) / 2);
+  border: var(--ph-border-width-2) solid var(--ph-color-surface-sunken);
+  border-radius: var(--ph-radius-full);
+  background: var(--ph-color-primary);
+}
+
+.site-range::-moz-range-track {
+  height: var(--ph-space-1);
+  border-radius: var(--ph-radius-full);
+  background: var(--ph-color-border-control);
+}
+
+.site-range::-moz-range-thumb {
+  box-sizing: border-box;
+  width: var(--ph-space-5);
+  height: var(--ph-space-5);
+  border: var(--ph-border-width-2) solid var(--ph-color-surface-sunken);
+  border-radius: var(--ph-radius-full);
+  background: var(--ph-color-primary);
 }

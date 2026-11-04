@@ -1,5 +1,3 @@
-'use client';
-
 /*
  * The product screen of the first screen (spec 2026-11-04-public-site-home-polish, H1; it replaces the three tilted
  * screens of spec 4.4, 4.5, п. 2 and amendment 4.4, п. 2): one till screen, large enough to read the search, the first
@@ -8,7 +6,7 @@
  * `overflow-x-clip`); it still hangs 64 px below the panel. On a phone it is the whole picture in the width of the
  * content. It comes in with the CSS entrance (R1) and, from 1024 px, drifts a little with the scroll (Parallax, speed
  * 0.1, no turn); with reduce and on a phone it stands. The layers do not fight: Parallax (shift) → entrance. On the dark
- * panel the screen has no border, only the shadow (L3).
+ * panel the screen has no border, only the shadow (L3). A server component: Parallax is its own client leaf.
  */
 import { Parallax } from '@/shared/ui/motion';
 

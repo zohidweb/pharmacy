@@ -4,7 +4,8 @@
  * The progress of «Как подключиться» (spec 2026-11-04-public-site-home-polish, H3). Nothing is pinned: the section is a
  * plain block, the steps stand in a row from 1024 px under one horizontal line and in a column with a vertical line
  * below. The line fills once, in 1.2 s, when 40 % of the list has come into view (`scaleX` / `scaleY`, `transform`
- * only), and the steps are marked `data-reached` in turn along it: each one is marked at once, and its own
+ * only; below 1024 px the list is a tall column that a short window never shows 40 % of, so there it starts as soon as
+ * its top has risen 40 % of the window above the bottom edge), and the steps are marked `data-reached` in turn along it: each one is marked at once, and its own
  * `transition-delay` (set in Steps, by its index) spreads the colour change, so no React render and no listener runs
  * per step. The line and the steps react to the same viewport event of the list, through the animation features the
  * page already loads (MotionScope): no `useInView`, no extra code.
@@ -20,11 +21,45 @@ import {
   type Transition,
   type Variants,
 } from 'motion/react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { STEPS_FILL_DURATION } from './stepsTiming';
 
 /** The fill starts when this share of the list is in view, once. */
 const FILL_VIEWPORT = { once: true, amount: 0.4 } as const;
+
+/**
+ * Below 1024 px the list is a column about 1000 px tall: a share of it is never in view in a short window (a phone in
+ * landscape is about 400 px high), so the fill starts when the list's top has risen 40 % of the window above its bottom.
+ */
+const FILL_VIEWPORT_COMPACT = {
+  once: true,
+  amount: 'some',
+  margin: '0px 0px -40% 0px',
+} as const;
+
+const ROW_LAYOUT = '(min-width: 1024px)';
+
+function subscribeRowLayout(onChange: () => void) {
+  const query = window.matchMedia(ROW_LAYOUT);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+const isRowLayout = () => window.matchMedia(ROW_LAYOUT).matches;
+// the server and the hydration render take the desktop share; a phone switches right after
+const isRowLayoutOnServer = () => true;
+
+/** Marks every step of the list as reached (the colours come from CSS, each step delays its own transition). */
+function markReached(root: HTMLElement | null) {
+  root
+    ?.querySelectorAll('[data-step]')
+    .forEach((step) => step.setAttribute('data-reached', ''));
+}
 
 /** The line fills from 0 to 1 along one axis; with reduce it is full from the start and does not move. */
 function fillVariants(axis: 'x' | 'y', reduce: boolean): Variants {
@@ -48,14 +83,14 @@ export function StepsProgress({ header, children }: StepsProgressProps) {
   const list = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion() ?? false;
 
-  const reach = () => {
-    list.current
-      ?.querySelectorAll('[data-step]')
-      .forEach((step) => step.setAttribute('data-reached', ''));
-  };
+  const rowLayout = useSyncExternalStore(
+    subscribeRowLayout,
+    isRowLayout,
+    isRowLayoutOnServer,
+  );
 
   useEffect(() => {
-    if (reduce) reach();
+    if (reduce) markReached(list.current);
   }, [reduce]);
 
   return (
@@ -66,8 +101,8 @@ export function StepsProgress({ header, children }: StepsProgressProps) {
         className="relative"
         initial="idle"
         whileInView="run"
-        viewport={FILL_VIEWPORT}
-        onViewportEnter={reach}
+        viewport={rowLayout ? FILL_VIEWPORT : FILL_VIEWPORT_COMPACT}
+        onViewportEnter={() => markReached(list.current)}
       >
         {/* from 1024 px: from the centre of the first marker to the centre of the last (the grid of the steps) */}
         <div

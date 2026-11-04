@@ -1,9 +1,13 @@
 /*
- * Тарифы (amendment 2026-11-02-public-site-light-panels 4.4, п. 7; L9): a green panel, the heading on the left. On the
- * right the price of a store per month from the billing settings (the same figure as in the invoices), huge, under it
- * «НДС N % сверху», the stores calculator and the link to /tariffs. No list of what the price includes: the dictionary
- * has no short lines for it. The figure rises in as the panel enters. On the panel text and links take the panel's own
- * text colour (fg).
+ * Тарифы (amendment 2026-11-02-public-site-light-panels 4.4, п. 7; L9): a green panel. The price of a store per month
+ * from the billing settings (the same figure as in the invoices) is huge, under the heading, then «НДС N % сверху» and
+ * the link to /tariffs. No list of what the price includes: the dictionary has no short lines for it. The figure rises
+ * in as the panel enters. On the panel text and links take the panel's own text colour (fg).
+ *
+ * Spec 2026-11-04-public-site-home-polish, H9.3: two columns from 1024 px, both starting at the top edge. On the left the
+ * heading, the figure, «за точку в месяц», the VAT line and the link; on the right the stores calculator, so neither
+ * column stands empty. With a zero price there is no calculator and the left column takes the whole width. On a phone
+ * the same order in one column.
  *
  * Spec 2026-11-04-public-site-home-polish, H4: the price drops its zero dirams («400 с»; «412,50 с» stays), and the
  * calculator (a client leaf) gets its sentences from here, one pair per count of stores, already translated: the ICU
@@ -73,13 +77,14 @@ export function PricingTeaser({
         className={cx(
           contentClassName,
           panelBodyClassName,
-          'grid gap-10 md:grid-cols-2 md:items-end md:gap-16',
+          'grid items-start gap-10 md:gap-16',
+          lines && 'md:grid-cols-2',
         )}
       >
-        <h2 id="pricing-title" className="text-section text-balance">
-          {t('home.pricing.title')}
-        </h2>
-        <div className="flex flex-col items-start gap-4">
+        <div className="flex flex-col items-start gap-6">
+          <h2 id="pricing-title" className="text-section text-balance">
+            {t('home.pricing.title')}
+          </h2>
           <Reveal>
             <p className="flex flex-col gap-2">
               {/* the figure never wraps (no-break spaces): its size follows its length (figureClassName) */}
@@ -92,16 +97,6 @@ export function PricingTeaser({
           <p className="max-w-(--ph-size-dialog-md) text-lead">
             {t('home.pricing.vat', { vat: formatPercentBp(vatBp) })}
           </p>
-          {lines && (
-            <PricingCalculator
-              {...CALCULATOR_STORES}
-              labels={{
-                label: t('home.pricing.calculator.label'),
-                note: t('home.pricing.calculator.note'),
-              }}
-              lines={lines}
-            />
-          )}
           <Link
             href={localePath(locale, '/tariffs')}
             className="inline-flex min-h-touch items-center gap-2 font-semibold text-fg underline underline-offset-4"
@@ -110,6 +105,16 @@ export function PricingTeaser({
             <Icon name="chevron-right" size="sm" />
           </Link>
         </div>
+        {lines && (
+          <PricingCalculator
+            {...CALCULATOR_STORES}
+            labels={{
+              label: t('home.pricing.calculator.label'),
+              note: t('home.pricing.calculator.note'),
+            }}
+            lines={lines}
+          />
+        )}
       </div>
     </section>
   );

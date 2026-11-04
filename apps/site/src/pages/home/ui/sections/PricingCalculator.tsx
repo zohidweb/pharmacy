@@ -8,7 +8,8 @@
  * function never crosses the server/client boundary. Rendered on the server with the starting count, so without
  * JavaScript the sums for 3 stores are in the HTML; the slider then simply does not change them.
  *
- * The block is `surface-sunken` (emerald-900). The slider (`site-range`, site-theme.css) has a mint-300 track (6.3:1 to
+ * The block is `surface-sunken` (emerald-900); from 1024 px it fills the right column of the panel (spec H9.3), below it
+ * keeps a reading width. The slider (`site-range`, site-theme.css) has a mint-300 track (6.3:1 to
  * the block) and a mint-400 thumb (5.9:1). The number beside it is decorative (`aria-hidden`): the range input
  * announces its own value.
  *
@@ -96,7 +97,7 @@ export function PricingCalculator({
 
   const announcedLine = lines[announced - min];
   return (
-    <div className="flex w-full max-w-(--ph-size-dialog-md) flex-col gap-4 rounded-site-card bg-surface-sunken p-6">
+    <div className="flex w-full max-w-(--ph-size-dialog-md) flex-col gap-4 rounded-site-card bg-surface-sunken p-6 md:max-w-none md:p-8">
       <label htmlFor={inputId} className="font-semibold">
         {labels.label}
       </label>

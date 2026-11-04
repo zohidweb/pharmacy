@@ -14,8 +14,8 @@
  *
  * Spec H8.5 (amendment 2026-11-04): the sums do not jump, they count up to the new value in 0.4 s. The server already
  * holds the finished sentence of every count, so the count runs through them: a `requestAnimationFrame` loop moves a
- * fractional index along `lines` (ease-out) and writes the nearest line into the two visible spans through refs, no React
- * render per frame, no animation engine in the bundle, no money formatting on the client. The visible sums are
+ * fractional index along `lines` (ease-out) and writes the nearest line into the two visible spans and the number beside
+ * the slider (so the sentence and the number stay in step) through refs, no React render per frame, no animation engine in the bundle, no money formatting on the client. The visible sums are
  * `aria-hidden`: a screen reader hears only the final text, from a separate polite live region that follows the slider
  * with a delay of the same 0.4 s (a drag through twenty counts is announced once). With reduce the sums change at once.
  * The spans hold the text of the starting count in the HTML, so without JavaScript the sums for 3 stores are there.
@@ -53,6 +53,7 @@ export function PricingCalculator({
   const startLine = lines[initial - min];
   const total = useRef<HTMLSpanElement>(null);
   const withVat = useRef<HTMLSpanElement>(null);
+  const count = useRef<HTMLSpanElement>(null);
   // the index of `lines` the visible sums stand at, fractional while they count
   const shown = useRef(initial - min);
   // the count the live region announces: the slider's, once it has been still for the length of the tween
@@ -65,6 +66,8 @@ export function PricingCalculator({
       const line = lines[Math.round(index)];
       if (total.current) total.current.textContent = line.total;
       if (withVat.current) withVat.current.textContent = line.withVat;
+      if (count.current)
+        count.current.textContent = String(Math.round(index) + min);
     };
     let frame = 0;
     if (
@@ -108,18 +111,19 @@ export function PricingCalculator({
           className="min-h-touch min-w-0 flex-1 cursor-pointer site-range"
         />
         <span
+          ref={count}
           aria-hidden="true"
           className="w-16 shrink-0 text-end text-section tabular-nums"
         >
-          {stores}
+          {initial}
         </span>
       </div>
       {/* the sums that count: the text of the starting count stays in the HTML, the effect repaints it */}
       <p aria-hidden="true" className="flex flex-col gap-1">
-        <span ref={total} className="text-xl font-bold">
+        <span ref={total} className="text-xl font-bold tabular-nums">
           {startLine.total}
         </span>
-        <span ref={withVat} className="text-lead">
+        <span ref={withVat} className="text-lead tabular-nums">
           {startLine.withVat}
         </span>
       </p>

@@ -3,7 +3,7 @@
 import { useReducedMotion } from 'motion/react';
 import { useSyncExternalStore } from 'react';
 
-/** Wide screens: the scroll-linked motion of the home page gets its sideways and larger moves (spec H8.1). */
+/** Wide screens: the scroll-linked motion of the home page gets its sideways and larger moves (spec H8). */
 const WIDE_SCREEN = '(min-width: 1024px)';
 
 function subscribeWide(onChange: () => void) {
@@ -20,7 +20,7 @@ const getMode = (): ScrollMode =>
 const getModeOnServer = (): ScrollMode => 'off';
 
 /**
- * How far a scroll-linked element may move (spec 2026-11-04-public-site-home-polish, H8.1): `off` on the server, in the
+ * How far a scroll-linked element may move (spec 2026-11-04-public-site-home-polish, H8; used by H8.1 to H8.4): `off` on the server, in the
  * hydration render and with `reduce` (the element stands in its end position), `compact` below 1024 px (softer moves,
  * nothing sideways) and `wide` from 1024 px. The hooks of the caller run in every mode (hooks are not conditional); the
  * mode only decides whether their values are applied.

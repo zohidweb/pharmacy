@@ -578,10 +578,10 @@
 }
 
 /*
- * The steps of «Как подключиться» (spec 2026-11-04-public-site-home-polish, H3): the reached ones are coloured by the
- * `data-reached` that the page sets when the list comes into view. With reduce, and without JavaScript, nothing sets it
- * in time (or at all), so every step takes the colours of a reached one from CSS; the line is full by the rule above
- * (and the <noscript> style of SiteLayout).
+ * The steps of «Как подключиться» (spec 2026-11-04-public-site-home-polish, H3, H8.3): the reached ones are coloured by
+ * the `data-reached` that StepsProgress writes while the line follows the scroll. With reduce, and without JavaScript,
+ * nothing writes it, so every step takes the colours of a reached one from CSS; the line is full then by its own inline
+ * `scale(1)` (the mode of the scroll hook is `off`).
  */
 @media (prefers-reduced-motion: reduce), (scripting: none) {
   [data-step-marker] {

@@ -3,21 +3,32 @@
 /*
  * The progress of «Как подключиться» (spec 2026-11-04-public-site-home-polish, H3 and the scroll amendment H8.3).
  * Nothing is pinned: the section is a plain block, the steps stand in a row from 1024 px under one horizontal line and
- * in a column with a vertical line below. The line follows the scroll again: it fills from the list entering the window
- * (the list's top at 85 % of the window height) to the list's top at 35 % (`useScroll` of the list → `scaleX` /
- * `scaleY`, `transform` only), and scrolling back empties it. A step is marked `data-reached` when the line reaches its
- * marker: thresholds, a share of the visible line's length, are measured from the markers (as before H3) and written
- * straight on the steps only when the reached step changes, so no React render and no scroll listener run per frame; CSS
- * colours the steps by the attribute (Steps). Which step is current is not singled out.
+ * in a column with a vertical line below. The line follows the scroll again (`useScroll` of the list → `scaleX` /
+ * `scaleY`, `transform` only), and scrolling back empties it. From 1024 px it fills from the list's top at 85 % of the
+ * window height to its top at 35 %. On a phone the list is a tall column, so that range would run its front below the
+ * fold: there the front stays on the reading line, filling from the list's top at 70 % to its bottom at 70 %. A step is
+ * marked `data-reached` when the line reaches its marker: thresholds, a share of the visible line's length, are
+ * measured from the markers (as before H3) and written straight on the steps only when the reached step changes, so no
+ * React render and no scroll listener run per frame; CSS colours the steps by the attribute (Steps). Which step is
+ * current is not singled out.
  *
  * On the server, in the hydration render and with reduce, nothing waits for the scroll: the line is full (`useScrollMode`
- * is `off`: inline `scale(1)`) and the steps take the colour of the reached ones from CSS (`data-step-marker`,
- * `data-step-figure` in site-theme.css: reduce and no JavaScript). The same rule reaches every step of a page that has
- * not hydrated yet.
+ * is `off`: inline `scale(1)`). With reduce and without JavaScript the steps take the colour of the reached ones from CSS
+ * (`data-step-marker`, `data-step-figure` in site-theme.css). A page with JavaScript that has not hydrated yet shows the
+ * full line over uncoloured steps until it does.
  */
 import { m, useMotionValueEvent, useScroll } from 'motion/react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useScrollMode } from '@/shared/ui/motion';
+
+type ScrollOffset = NonNullable<
+  NonNullable<Parameters<typeof useScroll>[0]>['offset']
+>;
+
+/** From 1024 px: the list's top from 85 % to 35 % of the window height. */
+const WIDE_OFFSET: ScrollOffset = ['start 0.85', 'start 0.35'];
+/** On a phone: the front of the line stays on the reading line, the list's top at 70 % to its bottom at 70 %. */
+const COMPACT_OFFSET: ScrollOffset = ['start 0.7', 'end 0.7'];
 
 export interface StepsProgressProps {
   /** The heading of the section. */
@@ -38,7 +49,7 @@ export function StepsProgress({ header, children }: StepsProgressProps) {
   const follows = mode !== 'off';
   const { scrollYProgress } = useScroll({
     target: list,
-    offset: ['start 0.85', 'start 0.35'],
+    offset: mode === 'compact' ? COMPACT_OFFSET : WIDE_OFFSET,
   });
 
   /**

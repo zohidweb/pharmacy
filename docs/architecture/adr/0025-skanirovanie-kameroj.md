@@ -1,6 +1,6 @@
 # ADR-0025: Сканирование штрихкода камерой — встроенный `BarcodeDetector`, иначе `barcode-detector` на `zxing-wasm`
 
-- **Статус:** proposed
+- **Статус:** accepted (2026-11-04, архитектор проекта — APPROVAL.md)
 - **Дата:** 2026-11-04
 - **Авторы:** Zohid Saidov (z.saidov@eskhata.com), команда проекта Pharmacy (текст подготовлен с помощью AI)
 - **Принимает:** архитектор проекта (docs/architecture/APPROVAL.md)

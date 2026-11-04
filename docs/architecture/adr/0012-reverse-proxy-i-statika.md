@@ -401,7 +401,8 @@ ADR-0023 меняет корневой домен: `{$APEX_ADDR}` больше �
 
 ## Поправка 2026-11-04 (ADR-0025)
 
-Предложена вместе с ADR-0025 (proposed) и действует после его принятия архитектором. Касса сканирует штрихкод камерой
+Принята архитектором 2026-11-04 вместе с ADR-0025 и планом `docs/superpowers/plans/2026-11-04-pos-store-ideas-pr4.md`
+(APPROVAL.md). Касса сканирует штрихкод камерой
 планшета (спецификация `2026-11-03-pos-store-ideas`, I5, D35):
 - хост `app.` и офлайн-профиль web — `Permissions-Policy: camera=(self), microphone=(), geolocation=()` и
   `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'` (распознаватель `zxing-wasm` компилирует WebAssembly);

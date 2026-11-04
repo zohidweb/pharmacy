@@ -24,6 +24,8 @@ const COMPRESSIBLE = new Set([
   '.json',
   '.ico',
   '.webmanifest',
+  // the camera barcode reader of web (ADR-0025): 947 KB, about 410 KB in gzip
+  '.wasm',
 ]);
 const MIN_BYTES = 1024;
 

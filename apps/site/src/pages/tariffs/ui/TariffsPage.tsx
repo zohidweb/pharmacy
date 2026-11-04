@@ -32,7 +32,9 @@ export function TariffsPage({ locale, info }: TariffsPageProps) {
   const t = getTranslator(locale);
   const { storeMonthlyPriceDirams: price, vatBp, services } = info.pricing;
   const vat = formatPercentBp(vatBp);
-  const priceText = formatMoney(price);
+  // the headline price follows the home page: «400 с», not «400,00 с» (spec 2026-11-04-public-site-home-polish, H4);
+  // the price with VAT and the prices of the services below keep their dirams
+  const priceText = formatMoney(price, { trimZeroDirams: true });
   return (
     <main className={pageClassName}>
       <header className={pageHeaderClassName}>

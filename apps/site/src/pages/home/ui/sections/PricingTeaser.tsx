@@ -1,8 +1,14 @@
 /*
  * Тарифы (amendment 2026-11-02-public-site-light-panels 4.4, п. 7; L9): a green panel, the heading on the left. On the
  * right the price of a store per month from the billing settings (the same figure as in the invoices), huge, under it
- * «НДС N % сверху» and the link to /tariffs. No list of what the price includes: the dictionary has no short lines for
- * it. The figure rises in as the panel enters. On the panel text and links take the panel's own text colour (fg).
+ * «НДС N % сверху», the stores calculator and the link to /tariffs. No list of what the price includes: the dictionary
+ * has no short lines for it. The figure rises in as the panel enters. On the panel text and links take the panel's own
+ * text colour (fg).
+ *
+ * Spec 2026-11-04-public-site-home-polish, H4: the price drops its zero dirams («400 с»; «412,50 с» stays), and the
+ * calculator (a client leaf) gets its sentences from here, one pair per count of stores, already translated: the ICU
+ * plural of the language is resolved on the server, so the client bundle carries no dictionary and no message parser.
+ * A zero price shows no calculator.
  */
 import type { PublicSiteInfo, UiLocale } from '@pharmacy/shared-dto';
 import { formatMoney, formatPercentBp } from '@pharmacy/shared-util';
@@ -17,6 +23,8 @@ import {
   panelClassName,
 } from '@/shared/ui';
 import { Reveal } from '@/shared/ui/motion';
+import { CALCULATOR_STORES, storesTotal } from '../../model/stores-total';
+import { PricingCalculator } from './PricingCalculator';
 
 export function PricingTeaser({
   locale,
@@ -26,7 +34,34 @@ export function PricingTeaser({
   pricing: PublicSiteInfo['pricing'];
 }) {
   const t = getTranslator(locale);
-  const price = formatMoney(pricing.storeMonthlyPriceDirams);
+  const { storeMonthlyPriceDirams: storePrice, vatBp } = pricing;
+  const price = formatMoney(storePrice, { trimZeroDirams: true });
+  const money = (dirams: number) =>
+    formatMoney(dirams, { trimZeroDirams: true });
+  // a zero price has nothing to calculate: the slider would only move «0 с», so there is no calculator then (H4)
+  const lines =
+    storePrice > 0
+      ? Array.from(
+          { length: CALCULATOR_STORES.max - CALCULATOR_STORES.min + 1 },
+          (_, index) => {
+            const stores = CALCULATOR_STORES.min + index;
+            const { totalDirams, withVatDirams } = storesTotal(
+              storePrice,
+              stores,
+              vatBp,
+            );
+            return {
+              total: t('home.pricing.calculator.total', {
+                amount: money(totalDirams),
+                stores,
+              }),
+              withVat: t('home.pricing.calculator.withVat', {
+                amount: money(withVatDirams),
+              }),
+            };
+          },
+        )
+      : null;
   return (
     <section
       id="pricing"
@@ -55,8 +90,18 @@ export function PricingTeaser({
             </p>
           </Reveal>
           <p className="max-w-(--ph-size-dialog-md) text-lead">
-            {t('home.pricing.vat', { vat: formatPercentBp(pricing.vatBp) })}
+            {t('home.pricing.vat', { vat: formatPercentBp(vatBp) })}
           </p>
+          {lines && (
+            <PricingCalculator
+              {...CALCULATOR_STORES}
+              labels={{
+                label: t('home.pricing.calculator.label'),
+                note: t('home.pricing.calculator.note'),
+              }}
+              lines={lines}
+            />
+          )}
           <Link
             href={localePath(locale, '/tariffs')}
             className="inline-flex min-h-touch items-center gap-2 font-semibold text-fg underline underline-offset-4"

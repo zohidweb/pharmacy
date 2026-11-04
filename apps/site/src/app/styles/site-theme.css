@@ -101,9 +101,6 @@
     60rem
   );
   --ph-site-sticky-top: calc(var(--ph-site-header-height) + var(--ph-space-8));
-  /* The stack of «Для кого» (amendment 4.4, п. 4): each card pins 16 px below the one before, 320 px tall */
-  --ph-site-stack-step: var(--ph-space-4);
-  --ph-site-stack-card-height: 20rem; /* 320 */
   --ph-site-grid-hero: minmax(0, 5fr) minmax(0, 6fr); /* text : product screen */
   /* The till screen of the first screen from 1024 px (spec 2026-11-04-public-site-home-polish, H1): wider than its
      column, the panel clips what runs past its right edge. 150 % of the column is about 990 px at 1440 */
@@ -360,8 +357,8 @@
  * text-site-step-future. Type: text-display(-sm), text-section, text-lead, text-site-marquee(-sm), text-site-number,
  * text-site-figure(-sm). Shape: rounded-site-card, rounded-site-panel, shadow-shot. Layout: py-24 (one step past the
  * kit's scale), max-w-site-content,
- * h-site-header, backdrop-blur-site-header, min-h-site-first-screen, top-site-sticky, top-site-stack,
- * min-h-site-stack-card, h-site-steps, max-w-site-reading, w-site-hero-shot, grid-cols-site-hero,
+ * h-site-header, backdrop-blur-site-header, min-h-site-first-screen, top-site-sticky, h-site-steps, max-w-site-reading,
+ * w-site-hero-shot, grid-cols-site-hero,
  * grid-cols-site-aside, grid-cols-site-main.
  * Colour utilities read tokens that a panel redefines, so they resolve on the element (`inline`).
  * md: is 1024 px, the site's desktop threshold (4.2, 4.5); sm: is 640 px (the kit's theme drops the default breakpoints).
@@ -429,14 +426,6 @@
     --ph-site-first-screen
   ); /* min-h-site-first-screen */
   --spacing-site-sticky: var(--ph-site-sticky-top); /* top-site-sticky */
-  /* top-site-stack: the card gives its place as --ph-site-stack-index (L8), read on the card itself */
-  --spacing-site-stack: calc(
-    var(--ph-site-sticky-top) + var(--ph-site-stack-index, 0) *
-      var(--ph-site-stack-step)
-  );
-  --spacing-site-stack-card: var(
-    --ph-site-stack-card-height
-  ); /* min-h-site-stack-card */
   --spacing-site-steps: var(--ph-site-steps-track); /* h-site-steps */
   --spacing-site-reading: var(
     --ph-site-reading-width

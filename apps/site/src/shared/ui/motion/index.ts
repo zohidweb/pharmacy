@@ -2,6 +2,7 @@
 // `m.*` and need a MotionScope (LazyMotion with domAnimation) around the page that uses them.
 export { MotionScope } from './MotionScope';
 export { Parallax, type ParallaxProps } from './Parallax';
+export { ScrollZoom, type ScrollZoomProps } from './ScrollZoom';
 export { PressableLink, type PressableLinkProps } from './PressableLink';
 export { Reveal, type RevealElement, type RevealProps } from './Reveal';
 export {

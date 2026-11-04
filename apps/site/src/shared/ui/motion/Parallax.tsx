@@ -1,20 +1,8 @@
 'use client';
 
-import { m, useReducedMotion, useScroll, useTransform } from 'motion/react';
-import { useRef, useSyncExternalStore, type ReactNode } from 'react';
-
-/** Parallax only on wide screens (spec 4.5, 4.7): it costs too much on a phone. */
-const WIDE_SCREEN = '(min-width: 1024px)';
-
-function subscribeWide(onChange: () => void) {
-  const query = window.matchMedia(WIDE_SCREEN);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-}
-
-const isWide = () => window.matchMedia(WIDE_SCREEN).matches;
-// the server and the hydration render have no parallax, so the markup matches
-const isWideOnServer = () => false;
+import { m, useScroll, useTransform } from 'motion/react';
+import { useRef, type ReactNode } from 'react';
+import { useScrollMode } from './useScrollMode';
 
 export interface ParallaxProps {
   children: ReactNode;
@@ -28,21 +16,24 @@ export interface ParallaxProps {
 
 /**
  * Moves its content with the scroll at its own speed (`useScroll` + `useTransform`, no scroll listener and no React render
- * per frame). Still on screens narrower than 1024 px and with `reduce`. The hooks run for every Parallax (hooks are not
- * conditional); the value is simply not applied when the element stands still.
+ * per frame). Only on wide screens (spec 4.5, 4.7: it costs too much on a phone); still below 1024 px and with `reduce`.
+ * The hooks run for every Parallax (hooks are not conditional); the value is simply not applied when the element stands
+ * still.
  */
 export function Parallax({ children, speed, className }: ParallaxProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const reduce = useReducedMotion() ?? false;
-  const wide = useSyncExternalStore(subscribeWide, isWide, isWideOnServer);
+  const mode = useScrollMode();
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ['start end', 'end start'],
   });
   const y = useTransform(scrollYProgress, [0, 1], [-speed * 100, speed * 100]);
-  const moves = wide && !reduce;
   return (
-    <m.div ref={ref} className={className} style={{ y: moves ? y : 0 }}>
+    <m.div
+      ref={ref}
+      className={className}
+      style={{ y: mode === 'wide' ? y : 0 }}
+    >
       {children}
     </m.div>
   );

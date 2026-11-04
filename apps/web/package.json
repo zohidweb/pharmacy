@@ -53,6 +53,7 @@
           {
             "externalDependencies": [
               "next",
+              "barcode-detector",
               "zxing-wasm"
             ]
           },

@@ -89,6 +89,12 @@ export function useCameraScan({
           stop();
           return;
         }
+        // from the moment the camera is on: a stalled play() or a reader that never loads must not keep it on
+        // (final review I1)
+        idleTimer = setTimeout(() => {
+          stop();
+          setStatus('timeout');
+        }, IDLE_MS);
         video.srcObject = stream;
         await video.play();
         const [track] = stream.getVideoTracks();
@@ -101,10 +107,6 @@ export function useCameraScan({
         const detector = await loadCodeDetector();
         if (stopped) return;
         setStatus('scanning');
-        idleTimer = setTimeout(() => {
-          stop();
-          setStatus('timeout');
-        }, IDLE_MS);
 
         const frame = async (): Promise<void> => {
           if (stopped) return;

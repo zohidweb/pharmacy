@@ -66,7 +66,8 @@ export function stockState(input: {
   return 'ok';
 }
 
-export type PriceWarning = 'above_max' | 'below_cost' | 'no_price';
+export type PriceWarning =
+  'above_max' | 'below_cost' | 'no_price' | 'above_retail';
 
 /**
  * Warnings of a retail price (UI mockup «Цены и скидки»): above the regulated maximum — a soft
@@ -91,6 +92,40 @@ export function priceWarnings(input: {
     input.costMinor !== undefined &&
     input.costMinor !== null &&
     input.priceMinor < input.costMinor
+  ) {
+    warnings.push('below_cost');
+  }
+  return warnings;
+}
+
+/**
+ * Warnings of a wholesale price of a pack (spec 2026-11-03-pos-store-ideas, D21): above the regulated maximum, above
+ * the retail price of the store, below the last purchase price. None for a closed wholesale (null).
+ */
+export function wholesalePriceWarnings(input: {
+  /** Wholesale price of a pack; null — the product is not sold wholesale at the store. */
+  wholesaleMinor: number | null;
+  /** Retail price of a pack at the store. */
+  retailMinor: number | null;
+  /** Last purchase price of a pack; undefined without `finance:view-cost`. */
+  costMinor?: number | null;
+  maxPriceMinor: number | null;
+}): PriceWarning[] {
+  if (input.wholesaleMinor === null) return [];
+  const warnings: PriceWarning[] = [];
+  if (
+    input.maxPriceMinor !== null &&
+    input.wholesaleMinor > input.maxPriceMinor
+  ) {
+    warnings.push('above_max');
+  }
+  if (input.retailMinor !== null && input.wholesaleMinor > input.retailMinor) {
+    warnings.push('above_retail');
+  }
+  if (
+    input.costMinor !== undefined &&
+    input.costMinor !== null &&
+    input.wholesaleMinor < input.costMinor
   ) {
     warnings.push('below_cost');
   }

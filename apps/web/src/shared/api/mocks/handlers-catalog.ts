@@ -9,6 +9,7 @@ import {
   discountRuleStatus,
   hasPermissions,
   priceWarnings,
+  wholesalePriceWarnings,
   type Permission,
 } from '@pharmacy/shared-domain';
 import { productUnits } from '@pharmacy/shared-domain';
@@ -38,7 +39,12 @@ import type { DiscountRuleRecord, ProductExtras } from './db-catalog';
 import { stores } from './fixtures';
 import { appendAudit } from './handlers-staff';
 import { context, findDoc, inScope, page, storeName } from './handlers-stock';
-import { piecePrice, setStorePrice, storePrice } from './pricing';
+import {
+  piecePrice,
+  setStorePrice,
+  storePrice,
+  wholesalePrice,
+} from './pricing';
 import { authorize } from './session';
 import type { MockHandlers } from './types';
 
@@ -155,12 +161,20 @@ function pricesOf(
   const cost = canSeeCost ? lastCost(product) : undefined;
   return session.stores.map((store) => {
     const priceMinor = storePrice(store.id, product);
+    const wholesalePriceMinor = wholesalePrice(store.id, product.id);
     return {
       storeId: store.id,
       storeName: store.name,
       priceMinor,
       warnings: priceWarnings({
         priceMinor,
+        costMinor: cost,
+        maxPriceMinor: extrasOf(product).maxPriceMinor,
+      }),
+      wholesalePriceMinor,
+      wholesaleWarnings: wholesalePriceWarnings({
+        wholesaleMinor: wholesalePriceMinor,
+        retailMinor: priceMinor,
         costMinor: cost,
         maxPriceMinor: extrasOf(product).maxPriceMinor,
       }),

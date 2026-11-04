@@ -171,6 +171,13 @@ export interface StorePrice {
   /** Price of a pack; null — the product is not sold at the store. */
   priceMinor: number | null;
   warnings: PriceWarning[];
+  /**
+   * Wholesale price of a pack (spec 2026-11-03-pos-store-ideas, D19); null — the product is not sold wholesale at the
+   * store.
+   */
+  wholesalePriceMinor: number | null;
+  /** `above_max`, `above_retail`, `below_cost` of the wholesale price (`wholesalePriceWarnings`). */
+  wholesaleWarnings: PriceWarning[];
 }
 
 export interface PriceListQuery {
@@ -219,7 +226,19 @@ export interface UpdatePricesRequest {
   confirmAboveMax: boolean;
 }
 
-/** The retail price of a pack, or the wholesale one (spec 2026-11-03-pos-store-ideas, I4 — not yet written). */
+/**
+ * PUT /api/v1/prices/{productId}/wholesale (`pricing:view`; the stores — by `pricing:update-store` /
+ * `pricing:update-network` as above) — new wholesale prices by store, returns the `StorePrice[]` of the product.
+ * `priceMinor: null` closes the wholesale of the product at the store. Only next to a retail price of the store, else
+ * 422 `no_retail_price` (field `prices`); above the regulated maximum — `confirmAboveMax`, else 422 `above_max_price`;
+ * 409 `product_archived`. Every change goes to the audit log as `wholesale_price.changed`.
+ */
+export interface UpdateWholesalePricesRequest {
+  prices: Array<{ storeId: string; priceMinor: number | null }>;
+  confirmAboveMax: boolean;
+}
+
+/** The retail price of a pack, or the wholesale one (spec 2026-11-03-pos-store-ideas, I4). */
 export type PriceKind = 'retail' | 'wholesale';
 
 /**
@@ -248,7 +267,8 @@ export interface PriceHistoryEntry {
   kind: PriceKind;
   /** null — the store had no price before. */
   oldPriceMinor: number | null;
-  newPriceMinor: number;
+  /** null — the wholesale of the product at the store was closed (a retail price is never removed). */
+  newPriceMinor: number | null;
   source: PriceChangeSource;
   /** The document that set the price; `type` as the documents keep it (`goods_receipt`, `opening_balance`, …). */
   document: { id: string; type: string; number: string } | null;

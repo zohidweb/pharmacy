@@ -9,7 +9,9 @@ import type { TenantTransaction } from '../../core/database';
 
 // The history of the prices of a product (spec 2026-11-03-pos-store-ideas, D14–D16): a price of a store changes only
 // through StorePriceWriter, which records `price.changed` with the old and the new price, the store and what changed it
-// in the same transaction, and the audit log is append-only — so the history is complete. Read in the caller's
+// in the same transaction, and the audit log is append-only — so the history is complete. The wholesale price of a
+// store changes only through PricesService.updateWholesale, which records `wholesale_price.changed` the same way (plan
+// 2026-11-03-pos-store-ideas-pr3, R4): its new price is null when the wholesale is closed. Read in the caller's
 // transaction, by audit_log_entity_idx (tenant, entity, time); every join keeps the tenant of the entry. The details
 // of an offline store's entry came from the store: the document id is cast only when it is a uuid, and the store's
 // time is shown only when it is a date (the order stays the cloud's time of recording, as the journal keeps it).
@@ -61,15 +63,16 @@ export class PriceHistory {
         : sql`and a.store_id = any(${sql.val([...c.storeIds])}::uuid[])`;
     const where = sql`
       a.tenant_id = ${c.tenantId} and a.entity_type = 'product' and a.entity_id = ${c.productId}
-        and a.action = 'price.changed' ${stores}`;
+        and a.action in ('price.changed', 'wholesale_price.changed') ${stores}`;
     const rows = await sql<{
       id: string;
+      action: string;
       recordedAt: Date;
       storeRecordedAt: string | null;
       storeId: string;
       storeName: string | null;
       oldPriceMinor: string | null;
-      newPriceMinor: string;
+      newPriceMinor: string | null;
       changeSource: string | null;
       logSource: string;
       documentId: string | null;
@@ -77,7 +80,7 @@ export class PriceHistory {
       documentNumber: string | null;
       authorName: string | null;
     }>`
-      select a.id, a.recorded_at, a.details ->> 'storeRecordedAt' as store_recorded_at,
+      select a.id, a.action, a.recorded_at, a.details ->> 'storeRecordedAt' as store_recorded_at,
              a.store_id, s.name as store_name,
              a.details ->> 'oldPriceMinor' as old_price_minor,
              a.details ->> 'newPriceMinor' as new_price_minor,
@@ -104,10 +107,11 @@ export class PriceHistory {
         at: changedAt(row.recordedAt, row.logSource, row.storeRecordedAt),
         storeId: row.storeId,
         storeName: row.storeName ?? '',
-        kind: 'retail',
+        kind: row.action === 'wholesale_price.changed' ? 'wholesale' : 'retail',
         oldPriceMinor:
           row.oldPriceMinor === null ? null : Number(row.oldPriceMinor),
-        newPriceMinor: Number(row.newPriceMinor),
+        newPriceMinor:
+          row.newPriceMinor === null ? null : Number(row.newPriceMinor),
         source: sourceOf(row.logSource, row.changeSource),
         document:
           row.documentId === null

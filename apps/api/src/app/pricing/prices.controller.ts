@@ -18,6 +18,7 @@ import {
   PriceHistoryQueryDto,
   PriceListQueryDto,
   UpdatePricesDto,
+  UpdateWholesalePricesDto,
 } from './dto/pricing.dto';
 import { PricesService } from './prices.service';
 
@@ -61,5 +62,18 @@ export class PricesController {
     @Body() body: UpdatePricesDto,
   ): Promise<PriceRow> {
     return this.prices.update(productId, body);
+  }
+
+  /**
+   * Wholesale prices by store (spec 2026-11-03-pos-store-ideas, D20): the rights of `update`. 403 `forbidden` /
+   * `store_not_in_scope`, 404, 409 `product_archived`, 422 `above_max_price` / `no_retail_price`.
+   */
+  @RequirePermission('pricing:view')
+  @Put(':productId/wholesale')
+  updateWholesale(
+    @Param('productId', new ParseUUIDPipe()) productId: string,
+    @Body() body: UpdateWholesalePricesDto,
+  ): Promise<StorePrice[]> {
+    return this.prices.updateWholesale(productId, body);
   }
 }

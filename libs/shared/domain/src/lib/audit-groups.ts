@@ -87,7 +87,7 @@ export const AUDIT_GROUP_RULES: readonly AuditGroupRule[] = [
   },
   {
     group: 'price_change',
-    actions: ['price.changed', 'markups.updated'],
+    actions: ['price.changed', 'wholesale_price.changed', 'markups.updated'],
     prefixes: ['discount_rule.'],
   },
   { group: 'catalog', prefixes: ['product.', 'category.'] },

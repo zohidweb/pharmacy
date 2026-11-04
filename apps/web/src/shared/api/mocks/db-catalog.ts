@@ -46,6 +46,8 @@ export interface CatalogMockDb {
   archived: string[];
   /** storeId → productId → price of a pack; absent — the network price. */
   storePrices: Record<string, Record<string, number>>;
+  /** storeId → productId → wholesale price of a pack; absent — no wholesale at the store. */
+  wholesalePrices: Record<string, Record<string, number>>;
   priceConflicts: PriceConflict[];
   duplicates: CatalogDuplicate[];
   discountRules: DiscountRuleRecord[];
@@ -131,6 +133,7 @@ export function createCatalogDb(): CatalogMockDb {
       // above the regulated maximum and below the purchase price: the warnings of «Цены и скидки»
       'store-4': { 'p-paracetamol': 520, 'p-amoxicillin': 1_800 },
     },
+    wholesalePrices: {},
     priceConflicts: [
       {
         id: 'pc-1',

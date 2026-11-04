@@ -4,6 +4,7 @@ import type {
   PriceHistoryQuery,
   PriceListQuery,
   UpdatePricesRequest,
+  UpdateWholesalePricesRequest,
 } from '@pharmacy/shared-dto';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -12,6 +13,7 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
+  IsDefined,
   IsInt,
   IsOptional,
   IsString,
@@ -114,6 +116,37 @@ export class UpdatePricesDto implements UpdatePricesRequest {
   @ValidateNested({ each: true })
   @Type(() => StorePriceDto)
   prices!: StorePriceDto[];
+
+  @IsBoolean()
+  confirmAboveMax!: boolean;
+}
+
+export class WholesalePriceDto {
+  @IsUUID()
+  storeId!: string;
+
+  /** null closes the wholesale of the product at the store (spec 2026-11-03-pos-store-ideas, D20). */
+  @IsDefined()
+  @ValidateIf((_, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_MONEY_MINOR)
+  priceMinor!: number | null;
+}
+
+/** PUT /api/v1/prices/{productId}/wholesale. */
+export class UpdateWholesalePricesDto implements UpdateWholesalePricesRequest {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @ArrayUnique((price: WholesalePriceDto | null) =>
+    typeof price?.storeId === 'string'
+      ? price.storeId.toLowerCase()
+      : price?.storeId,
+  )
+  @ValidateNested({ each: true })
+  @Type(() => WholesalePriceDto)
+  prices!: WholesalePriceDto[];
 
   @IsBoolean()
   confirmAboveMax!: boolean;

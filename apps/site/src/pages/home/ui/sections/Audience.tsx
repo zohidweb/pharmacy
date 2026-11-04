@@ -3,13 +3,16 @@
  * plain 2 x 2 grid from 1024 px (one column on a phone). The pinned stack of the light-panels amendment 4.4 is gone:
  * the cards no longer stick: at 1440 px the four cards are about 700 px tall in all. The cards are a surface, a mint
  * block, a surface and a dark block, each with its large number on top and the title and text at the bottom; the cards
- * of a row are equally tall. They appear one after another (RevealGroup).
+ * of a row are equally tall. Spec H8.2 (amendment 2026-11-04): each card comes into place with the scroll, not at once:
+ * from 1024 px the left column slides in from the left and the right one from the right (64 px, 3°, opacity 0.4), below
+ * that every card rises from 32 px (ScrollSlide, a client leaf: the card itself, with its `data-surface`, stays here).
+ * The section clips sideways (`overflow-x-clip`): the slide never widens the page.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx } from '@pharmacy/ui';
 import { getTranslator } from '@/shared/i18n';
 import { contentClassName, panelBodyClassName } from '@/shared/ui';
-import { RevealGroup, RevealItem } from '@/shared/ui/motion';
+import { ScrollSlide } from '@/shared/ui/motion';
 
 // expiry dates and batches, shortages, several stores, the till during outages
 const PAINS: readonly {
@@ -29,7 +32,7 @@ export function Audience({ locale }: { locale: UiLocale }) {
     <section
       id="audience"
       aria-labelledby="audience-title"
-      className="scroll-mt-4"
+      className="scroll-mt-4 overflow-x-clip"
     >
       <div
         className={cx(
@@ -46,11 +49,15 @@ export function Audience({ locale }: { locale: UiLocale }) {
             {t('home.audience.subtitle')}
           </p>
         </header>
-        {/* four short cards: the group plays when a share of it is in view, on a phone too */}
-        <RevealGroup as="ul" className="grid gap-4 md:grid-cols-2">
+        {/* each card comes into place with the scroll (ScrollSlide), the left column from the left, the right from the right */}
+        <ul className="grid gap-4 md:grid-cols-2">
           {PAINS.map(({ key, surface }, index) => (
             // the item is the grid cell (it stretches to the row); the card inside carries the fill
-            <RevealItem key={key} as="li" className="flex">
+            <ScrollSlide
+              key={key}
+              side={index % 2 === 0 ? 'left' : 'right'}
+              className="flex"
+            >
               <div
                 data-surface={surface}
                 className={cx(
@@ -74,9 +81,9 @@ export function Audience({ locale }: { locale: UiLocale }) {
                   </p>
                 </div>
               </div>
-            </RevealItem>
+            </ScrollSlide>
           ))}
-        </RevealGroup>
+        </ul>
       </div>
     </section>
   );

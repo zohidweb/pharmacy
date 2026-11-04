@@ -1,10 +1,10 @@
 /*
  * Безопасность (spec 2026-11-04-public-site-home-polish, H5, H9.4; amendment 2026-11-02-public-site-light-panels 4.4,
- * п. 8, L10): a dark panel like «Как подключиться». The header is one row on top (SplitHeader: heading on the left, lead
- * on the right), under it the three benefits as cards in a single row from 1024 px, equally tall (a column on a phone):
- * an icon in a round chip, the benefit as the heading (24 px, Medium) and its explanation under it. A card is the raised
- * surface of the panel (`surface-sunken`, emerald-900) with the panel's line; secondary text on it is 6.3:1 and the mint
- * accent 5.9:1, both above AA. The cards appear one after another (RevealGroup).
+ * п. 8, L10): a dark panel like «Как подключиться». The header is one row on top (SplitHeader: heading on the left,
+ * lead on the right), under it the three benefits as cards in a single row from 1024 px, equally tall (a column on a
+ * phone): an icon in a round chip, the benefit as the heading (24 px, Medium) and its explanation under it. A card is
+ * the raised surface of the panel (`surface-sunken`, emerald-900) with the panel's line; secondary text on it is 6.3:1
+ * and the mint accent 5.9:1, both above AA. The cards appear one after another (RevealGroup).
  *
  * Three benefits for the owner instead of five technical statements; the technical detail lives in the explanations,
  * each true of the deployment (spec 4.8, without general denials):

@@ -4,8 +4,8 @@
  * answer opens by its height (`.site-accordion` in site-theme.css, at once with reduce or where the browser cannot),
  * the plus turns into a cross.
  *
- * Spec 2026-11-04-public-site-home-polish, H9.5: from 1024 px the left column holds the heading and, under it, a help card
- * («Не нашли ответ?», a line and the main button to the request form), so the column is no longer empty. The whole
+ * Spec 2026-11-04-public-site-home-polish, H9.5: from 1024 px the left column holds the heading and, under it, a help
+ * card («Не нашли ответ?», a line and the main button to the request form), so the column is no longer empty. The whole
  * column is pinned (nothing sticks with reduce). On a phone the order is the heading, the questions, then the card: the
  * column wrapper is `display: contents` there and `order` places its two children around the list.
  */

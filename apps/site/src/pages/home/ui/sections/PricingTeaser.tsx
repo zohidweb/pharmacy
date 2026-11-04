@@ -4,10 +4,10 @@
  * the link to /tariffs. No list of what the price includes: the dictionary has no short lines for it. The figure rises
  * in as the panel enters. On the panel text and links take the panel's own text colour (fg).
  *
- * Spec 2026-11-04-public-site-home-polish, H9.3: two columns from 1024 px, both starting at the top edge. On the left the
- * heading, the figure, «за точку в месяц», the VAT line and the link; on the right the stores calculator, so neither
- * column stands empty. With a zero price there is no calculator and the left column takes the whole width. On a phone
- * the same order in one column.
+ * Spec 2026-11-04-public-site-home-polish, H9.3: two columns from 1024 px, both starting at the top edge. On the left
+ * the heading, the figure, «за точку в месяц», the VAT line and the link; on the right the stores calculator, so
+ * neither column stands empty. With a zero price there is no calculator and the left column takes the whole width. On a
+ * phone the same order in one column.
  *
  * Spec 2026-11-04-public-site-home-polish, H4: the price drops its zero dirams («400 с»; «412,50 с» stays), and the
  * calculator (a client leaf) gets its sentences from here, one pair per count of stores, already translated: the ICU

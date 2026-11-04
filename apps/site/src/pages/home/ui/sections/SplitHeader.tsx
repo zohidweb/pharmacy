@@ -4,28 +4,18 @@
  * heading stays empty; below that they stack. The text colours come from the surface the section sits on (the page or
  * a dark panel).
  */
-import { cx } from '@pharmacy/ui';
-
 export function SplitHeader({
   id,
   title,
   subtitle,
-  className,
 }: {
   /** The id of the heading (the section's `aria-labelledby`). */
   id: string;
   title: string;
   subtitle: string;
-  /** Layout only (margins). */
-  className?: string;
 }) {
   return (
-    <header
-      className={cx(
-        'flex flex-col gap-4 md:flex-row md:items-end md:justify-between md:gap-16',
-        className,
-      )}
-    >
+    <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between md:gap-16">
       <h2
         id={id}
         className="max-w-(--ph-size-dialog-lg) text-section text-balance"

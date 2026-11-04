@@ -8,10 +8,9 @@
  * function never crosses the server/client boundary. Rendered on the server with the starting count, so without
  * JavaScript the sums for 3 stores are in the HTML; the slider then simply does not change them.
  *
- * The block is `surface-sunken` (emerald-900); from 1024 px it fills the right column of the panel (spec H9.3), below it
- * keeps a reading width. The slider (`site-range`, site-theme.css) has a mint-300 track (6.3:1 to
- * the block) and a mint-400 thumb (5.9:1). The number beside it is decorative (`aria-hidden`): the range input
- * announces its own value.
+ * The block is `surface-sunken` (emerald-900); from 1024 px it fills the right column of the panel (spec H9.3), below
+ * it keeps a reading width. The slider (`site-range`, site-theme.css) has a mint-300 track (6.3:1 to the block) and a
+ * mint-400 thumb (5.9:1). The number beside it is decorative (`aria-hidden`): the range input announces its own value.
  *
  * Spec H8.5 (amendment 2026-11-04): the sums do not jump, they count up to the new value in 0.4 s. The server already
  * holds the finished sentence of every count, so the count runs through them: a `requestAnimationFrame` loop moves a

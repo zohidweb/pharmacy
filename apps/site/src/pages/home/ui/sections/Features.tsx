@@ -4,9 +4,10 @@
  * and expiry dates, purchasing and prices stack in the two columns on its right, transfers and reports share the last
  * row. On a phone one column in the same order. The tiles are light surfaces with a line, except prices (a mint block)
  * and reports (a dark block, no line). A product screen sits in the lower right corner of its tile and the tile's edge
- * crops it; four tiles carry one: the till, batches, transfers and, since spec 2026-11-04-public-site-home-polish, H9.2,
- * the sales report (the dark tile was almost empty with only an icon; it now holds a screen like its neighbour, in the
- * same window, with the same zoom and scroll motion). Only what works in the cloud pilot: no 1C export, no offline stores (spec 2, anti-goals).
+ * crops it; four tiles carry one: the till, batches, transfers and, since spec 2026-11-04-public-site-home-polish,
+ * H9.2, the sales report (the dark tile was almost empty with only an icon; it now holds a screen like its neighbour,
+ * in the same window, with the same zoom and scroll motion). Only what works in the cloud pilot: no 1C export, no
+ * offline stores (spec 2, anti-goals).
  *
  * The tiles appear one after another (RevealGroup). Under the pointer the product screen of a tile rises by 4 px: a CSS
  * transform, only where the device can hover and without reduce (`motion-safe:group-hover:`).
@@ -15,8 +16,8 @@
  * higher (spec 2026-11-04-public-site-home-polish, H8.4; Parallax with a negative speed, the tile crops it); the hover
  * rise stays on its own element, and below 1024 px and with reduce the screen stands.
  *
- * A product screen is a button that enlarges it in a dialog (spec 2026-11-04-public-site-home-polish, H7; ShotZoom), with
- * a round zoom badge in the corner of the window.
+ * A product screen is a button that enlarges it in a dialog (spec 2026-11-04-public-site-home-polish, H7; ShotZoom),
+ * with a round zoom badge in the corner of the window.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx, Icon, type IconName } from '@pharmacy/ui';

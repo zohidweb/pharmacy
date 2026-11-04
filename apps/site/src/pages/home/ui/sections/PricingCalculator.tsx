@@ -10,9 +10,20 @@
  *
  * The block is `surface-sunken` (emerald-900). The slider (`site-range`, site-theme.css) has a mint-300 track (6.3:1 to
  * the block) and a mint-400 thumb (5.9:1). The number beside it is decorative (`aria-hidden`): the range input
- * announces its own value, and the sums sit in a polite live region.
+ * announces its own value.
+ *
+ * Spec H8.5 (amendment 2026-11-04): the sums do not jump, they count up to the new value in 0.4 s. The server already
+ * holds the finished sentence of every count, so the count runs through them: a `requestAnimationFrame` loop moves a
+ * fractional index along `lines` (ease-out) and writes the nearest line into the two visible spans through refs, no React
+ * render per frame, no animation engine in the bundle, no money formatting on the client. The visible sums are
+ * `aria-hidden`: a screen reader hears only the final text, from a separate polite live region that follows the slider
+ * with a delay of the same 0.4 s (a drag through twenty counts is announced once). With reduce the sums change at once.
+ * The spans hold the text of the starting count in the HTML, so without JavaScript the sums for 3 stores are there.
  */
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+
+/** Time the sums take to settle on a new count of stores, ms (spec H8.5). */
+const TWEEN_MS = 400;
 
 export interface PricingCalculatorLine {
   /** «{amount} в месяц за N аптек», already formatted. */
@@ -39,7 +50,47 @@ export function PricingCalculator({
 }: PricingCalculatorProps) {
   const inputId = useId();
   const [stores, setStores] = useState(initial);
-  const line = lines[stores - min];
+  const startLine = lines[initial - min];
+  const total = useRef<HTMLSpanElement>(null);
+  const withVat = useRef<HTMLSpanElement>(null);
+  // the index of `lines` the visible sums stand at, fractional while they count
+  const shown = useRef(initial - min);
+  // the count the live region announces: the slider's, once it has been still for the length of the tween
+  const [announced, setAnnounced] = useState(initial);
+
+  useEffect(() => {
+    const target = stores - min;
+    const from = shown.current;
+    const paint = (index: number) => {
+      const line = lines[Math.round(index)];
+      if (total.current) total.current.textContent = line.total;
+      if (withVat.current) withVat.current.textContent = line.withVat;
+    };
+    let frame = 0;
+    if (
+      from === target ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      shown.current = target;
+      paint(target);
+    } else {
+      const start = performance.now();
+      const step = (now: number) => {
+        const done = Math.min(1, (now - start) / TWEEN_MS);
+        shown.current = from + (target - from) * (1 - (1 - done) ** 3);
+        paint(shown.current);
+        if (done < 1) frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
+    }
+    const announce = setTimeout(() => setAnnounced(stores), TWEEN_MS);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(announce);
+    };
+  }, [stores, min, lines]);
+
+  const announcedLine = lines[announced - min];
   return (
     <div className="flex w-full max-w-(--ph-size-dialog-md) flex-col gap-4 rounded-site-card bg-surface-sunken p-6">
       <label htmlFor={inputId} className="font-semibold">
@@ -63,9 +114,19 @@ export function PricingCalculator({
           {stores}
         </span>
       </div>
-      <p aria-live="polite" className="flex flex-col gap-1">
-        <span className="text-xl font-bold">{line.total}</span>
-        <span className="text-lead">{line.withVat}</span>
+      {/* the sums that count: the text of the starting count stays in the HTML, the effect repaints it */}
+      <p aria-hidden="true" className="flex flex-col gap-1">
+        <span ref={total} className="text-xl font-bold">
+          {startLine.total}
+        </span>
+        <span ref={withVat} className="text-lead">
+          {startLine.withVat}
+        </span>
+      </p>
+      {/* what a screen reader hears: the final sums only */}
+      <p aria-live="polite" className="sr-only">
+        <span className="block">{announcedLine.total}</span>
+        <span className="block">{announcedLine.withVat}</span>
       </p>
       <p className="text-sm">{labels.note}</p>
     </div>

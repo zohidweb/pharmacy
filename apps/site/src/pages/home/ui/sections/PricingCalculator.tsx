@@ -14,10 +14,11 @@
  *
  * Spec H8.5 (amendment 2026-11-04): the sums do not jump, they count up to the new value in 0.4 s. The server already
  * holds the finished sentence of every count, so the count runs through them: a `requestAnimationFrame` loop moves a
- * fractional index along `lines` (ease-out) and writes the nearest line into the two visible spans and the number beside
- * the slider (so the sentence and the number stay in step) through refs, no React render per frame, no animation engine in the bundle, no money formatting on the client. The visible sums are
- * `aria-hidden`: a screen reader hears only the final text, from a separate polite live region that follows the slider
- * with a delay of the same 0.4 s (a drag through twenty counts is announced once). With reduce the sums change at once.
+ * fractional index along `lines` (ease-out) and writes the nearest line into the two visible spans and the number
+ * beside the slider (so the sentence and the number stay in step) through refs: no React render per frame, no animation
+ * engine in the bundle, no money formatting on the client. The visible sums are `aria-hidden`: a screen reader hears
+ * only the final text, from a separate polite live region that follows the slider with a delay of the same 0.4 s (a
+ * drag through twenty counts is announced once). With reduce the sums change at once.
  * The spans hold the text of the starting count in the HTML, so without JavaScript the sums for 3 stores are there.
  */
 import { useEffect, useId, useRef, useState } from 'react';

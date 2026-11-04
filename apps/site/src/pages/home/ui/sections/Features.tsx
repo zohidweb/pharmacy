@@ -10,8 +10,8 @@
  * transform, only where the device can hover and without reduce (`motion-safe:group-hover:`).
  *
  * From 1024 px a product screen also moves inside the window of its tile with the scroll, from 24 px lower to 24 px
- * higher (spec 2026-11-04-public-site-home-polish, H8.4; Parallax with a negative speed, the tile crops it); the hover rise
- * stays on its own element, and below 1024 px and with reduce the screen stands.
+ * higher (spec 2026-11-04-public-site-home-polish, H8.4; Parallax with a negative speed, the tile crops it); the hover
+ * rise stays on its own element, and below 1024 px and with reduce the screen stands.
  *
  * A product screen is a button that enlarges it in a dialog (spec 2026-11-04-public-site-home-polish, H7; ShotZoom), with
  * a round zoom badge in the corner of the window.
@@ -105,11 +105,11 @@ function TileShot({
   return (
     // The window fills the rest of the tile. The screen starts 24 px (32 px from 1024 px) from the left edge and runs
     // past the right and the lower edges: the tile crops it there (the shots are viewport crops, as on the first
-    // screen). The 8 px above the screen leave room for the 4 px hover rise; the scroll motion (H8.4) moves the screen 24 px
-    // either way, into the text block's bottom padding above and past the tile's edge below.
+    // screen). The 8 px above the screen leave room for the 4 px hover rise; the scroll motion (H8.4) moves the screen
+    // 24 px either way, into the text block's bottom padding above and past the tile's edge below.
     <div className={cx('relative grow', view)}>
       <div className="absolute inset-y-0 left-6 pt-2 transition-transform duration-(--ph-duration-slow) ease-out motion-safe:group-hover:-translate-y-1 md:left-8">
-        {/* the screen moves inside the window with the scroll, from 24 px lower to 24 px higher (H8.4); the rise on hover stays on the element above */}
+        {/* the screen moves with the scroll from 24 px lower to 24 px higher (H8.4); the hover rise stays above */}
         <Parallax speed={-0.24} className="h-full">
           <ShotZoom
             src={src}

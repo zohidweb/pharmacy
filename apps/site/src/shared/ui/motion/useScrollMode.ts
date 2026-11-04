@@ -20,10 +20,10 @@ const getMode = (): ScrollMode =>
 const getModeOnServer = (): ScrollMode => 'off';
 
 /**
- * How far a scroll-linked element may move (spec 2026-11-04-public-site-home-polish, H8; used by H8.1 to H8.4): `off` on the server, in the
- * hydration render and with `reduce` (the element stands in its end position), `compact` below 1024 px (softer moves,
- * nothing sideways) and `wide` from 1024 px. The hooks of the caller run in every mode (hooks are not conditional); the
- * mode only decides whether their values are applied.
+ * How far a scroll-linked element may move (spec 2026-11-04-public-site-home-polish, H8; used by H8.1 to H8.4):
+ * `off` on the server, in the hydration render and with `reduce` (the element stands in its end position), `compact`
+ * below 1024 px (softer moves, nothing sideways) and `wide` from 1024 px. The hooks of the caller run in every mode
+ * (hooks are not conditional); the mode only decides whether their values are applied.
  */
 export function useScrollMode(): ScrollMode {
   const reduce = useReducedMotion() ?? false;

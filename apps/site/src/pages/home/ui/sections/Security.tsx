@@ -1,11 +1,15 @@
 /*
- * Безопасность (amendment 2026-11-02-public-site-light-panels 4.4, п. 8; L10): the «manifesto», no panel. Two columns
- * from 1024 px, the heading with a short text on the left, five statements on the right as rows between lines: the
- * statement is the row's heading (24 px, Medium) with its explanation under it, an icon in a mint circle at the side.
+ * Безопасность (spec 2026-11-04-public-site-home-polish, H5; amendment 2026-11-02-public-site-light-panels 4.4, п. 8,
+ * L10): the «manifesto», no panel. Two columns from 1024 px, the heading with a short text on the left, rows between
+ * lines on the right: the benefit is the row's heading (24 px, Medium) with its explanation under it, an icon in a
+ * mint circle at the side.
  *
- * Exactly these five, each true of the deployment (spec 4.8, without general denials): own server (ADR-0020), nightly
- * copies checked by a restore (ADR-0019), encrypted copies off the host (ADR-0020 amendment), HTTPS (ADR-0012), roles
- * checked on the server (ADR-0018).
+ * Three benefits for the owner instead of five technical statements; the technical detail lives in the explanations,
+ * each true of the deployment (spec 4.8, without general denials):
+ * - backups: nightly copies checked by a restore (ADR-0019);
+ * - offsite: encrypted copies in a bucket in another data centre, US Central or Singapore while the server is in the
+ *   EU (ADR-0020 amendment 2026-10-23); true only while BACKUP_OFFSITE_BUCKET is set in prod (launch checklist);
+ * - roles: roles checked on the server (ADR-0018) and HTTPS on every connection (ADR-0012).
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx, Icon, type IconName } from '@pharmacy/ui';
@@ -14,10 +18,8 @@ import { contentClassName, panelBodyClassName } from '@/shared/ui';
 import { RevealGroup, RevealItem } from '@/shared/ui/motion';
 
 const CLAIMS = [
-  { key: 'server', icon: 'cloud' },
   { key: 'backups', icon: 'refresh-cw' },
   { key: 'offsite', icon: 'key-round' },
-  { key: 'https', icon: 'lock' },
   { key: 'roles', icon: 'user-check' },
 ] as const satisfies readonly { key: string; icon: IconName }[];
 

@@ -637,3 +637,10 @@
   border-radius: var(--ph-radius-full);
   background: var(--ph-color-primary);
 }
+
+/* Windows High Contrast: the custom track and thumb would not be drawn, so the native slider takes over */
+@media (forced-colors: active) {
+  .site-range {
+    appearance: auto;
+  }
+}

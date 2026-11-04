@@ -9,7 +9,8 @@
  * JavaScript the sums for 3 stores are in the HTML; the slider then simply does not change them.
  *
  * The block is `surface-sunken` (emerald-900). The slider (`site-range`, site-theme.css) has a mint-300 track (6.3:1 to
- * the block) and a mint-400 thumb (5.9:1). The number beside it is decorative (`aria-hidden`): the range input announces its own value, and the sums sit in a polite live region.
+ * the block) and a mint-400 thumb (5.9:1). The number beside it is decorative (`aria-hidden`): the range input
+ * announces its own value, and the sums sit in a polite live region.
  */
 import { useId, useState } from 'react';
 

@@ -5,10 +5,10 @@
  * plain block, the steps stand in a row from 1024 px under one horizontal line and in a column with a vertical line
  * below. The line fills once, in 1.2 s, when 40 % of the list has come into view (`scaleX` / `scaleY`, `transform`
  * only; below 1024 px the list is a tall column that a short window never shows 40 % of, so there it starts as soon as
- * its top has risen 40 % of the window above the bottom edge), and the steps are marked `data-reached` in turn along it: each one is marked at once, and its own
- * `transition-delay` (set in Steps, by its index) spreads the colour change, so no React render and no listener runs
- * per step. The line and the steps react to the same viewport event of the list, through the animation features the
- * page already loads (MotionScope): no `useInView`, no extra code.
+ * its top has risen 40 % of the window above the bottom edge), and the steps are marked `data-reached` in turn along
+ * it: each one is marked at once, and its own `transition-delay` (set in Steps, by its index) spreads the colour
+ * change, so no React render and no listener runs per step. The line and the steps react to the same viewport event
+ * of the list, through the animation features the page already loads (MotionScope): no `useInView`, no extra code.
  *
  * With reduce, and without JavaScript, nothing waits for the viewport: the line is full (it carries `data-reveal`,
  * whose reduce and <noscript> rules drop its transform, SiteLayout and site-theme.css) and the steps take the colour of
@@ -34,7 +34,8 @@ const FILL_VIEWPORT = { once: true, amount: 0.4 } as const;
 
 /**
  * Below 1024 px the list is a column about 1000 px tall: a share of it is never in view in a short window (a phone in
- * landscape is about 400 px high), so the fill starts when the list's top has risen 40 % of the window above its bottom.
+ * landscape is about 400 px high), so the fill starts when the list's top has risen 40 % of the window above its
+ * bottom.
  */
 const FILL_VIEWPORT_COMPACT = {
   once: true,

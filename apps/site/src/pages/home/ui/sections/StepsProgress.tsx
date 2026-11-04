@@ -1,76 +1,77 @@
 'use client';
 
 /*
- * The progress of «Как подключиться» (spec 4.5, п. 6; R6). From 1024 px the section is pinned: a tall track
- * (`h-site-steps`) holds a sticky frame of one screen, and the horizontal line under the steps fills while the track
- * scrolls by (`useScroll` → `scaleX`). Below 1024 px nothing is pinned: the steps are a column with a vertical line that
- * fills along the list (`scaleY`). The step the line has reached last is the current one: thresholds of the progress,
- * measured from the markers on the visible line, write `data-reached` and `data-current` straight on the steps (no
- * React render per frame, no scroll listener), and CSS colours them by the attributes.
+ * The progress of «Как подключиться» (spec 2026-11-04-public-site-home-polish, H3 and the scroll amendment H8.3).
+ * Nothing is pinned: the section is a plain block, the steps stand in a row from 1024 px under one horizontal line and
+ * in a column with a vertical line below. The line follows the scroll again (`useScroll` of the list → `scaleX` /
+ * `scaleY`, `transform` only), and scrolling back empties it. From 1024 px it fills from the list's top at 85 % of the
+ * window height to its top at 35 %. On a phone the list is a tall column, so that range would run its front below the
+ * fold: there the front stays on the reading line, filling from the list's top at 70 % to its bottom at 70 %. A step is
+ * marked `data-reached` when the line reaches its marker: thresholds, a share of the visible line's length, are
+ * measured from the markers (as before H3) and written straight on the steps only when the reached step changes, so no
+ * React render and no scroll listener run per frame; CSS colours the steps by the attribute (Steps). Which step is
+ * current is not singled out.
  *
- * With reduce: no pinning, the line is full and still, every step is reached and none is singled out. Without
- * JavaScript the sticky frame still works (CSS) and the fill shows full: it carries `data-reveal`, whose <noscript> and
- * reduce rules drop its transform (SiteLayout, site-theme.css).
+ * On the server, in the hydration render and with reduce, nothing waits for the scroll: the line is full (`useScrollMode`
+ * is `off`: inline `scale(1)`). With reduce and without JavaScript the steps take the colour of the reached ones from CSS
+ * (`data-step-marker`, `data-step-figure` in site-theme.css). A page with JavaScript that has not hydrated yet shows the
+ * full line over uncoloured steps until it does.
  */
-import {
-  m,
-  useMotionValueEvent,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-} from 'motion/react';
+import { m, useMotionValueEvent, useScroll } from 'motion/react';
 import { useEffect, useRef, type ReactNode } from 'react';
+import { useScrollMode } from '@/shared/ui/motion';
 
-/**
- * Share of the track's progress (`start center` → `end center`) the line fills over. From 1024 px it is about the
- * pinned stretch of a 220dvh track with a frame one screen high, so the last step lights up before the frame leaves;
- * on a phone the line simply fills a little ahead of the reader.
- */
-const FILL = [0.2, 0.7];
+type ScrollOffset = NonNullable<
+  NonNullable<Parameters<typeof useScroll>[0]>['offset']
+>;
+
+/** From 1024 px: the list's top from 85 % to 35 % of the window height. */
+const WIDE_OFFSET: ScrollOffset = ['start 0.85', 'start 0.35'];
+/** On a phone: the front of the line stays on the reading line, the list's top at 70 % to its bottom at 70 %. */
+const COMPACT_OFFSET: ScrollOffset = ['start 0.7', 'end 0.7'];
 
 export interface StepsProgressProps {
-  /** The heading of the section; it stays in the pinned frame above the steps. */
+  /** The heading of the section. */
   header: ReactNode;
   /** The ordered list of steps: each step has `data-step`, its marker `data-step-marker`. */
   children: ReactNode;
 }
 
 export function StepsProgress({ header, children }: StepsProgressProps) {
-  const track = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const across = useRef<HTMLDivElement>(null);
   const down = useRef<HTMLDivElement>(null);
   // where each marker sits along the visible line, as a share of its length; the step reached last
   const thresholds = useRef<number[]>([]);
   const reached = useRef<number>(undefined);
 
-  const reduce = useReducedMotion() ?? false;
+  const mode = useScrollMode();
+  const follows = mode !== 'off';
   const { scrollYProgress } = useScroll({
-    target: track,
-    offset: ['start center', 'end center'],
+    target: list,
+    offset: mode === 'compact' ? COMPACT_OFFSET : WIDE_OFFSET,
   });
-  const progress = useTransform(scrollYProgress, FILL, [0, 1]);
 
   /**
-   * Writes the state of the steps for a progress value, only when the reached step changes; with reduce, all reached.
-   * At progress 0 the section has not reached its range yet: no step is lit, though the first marker sits at 0.
+   * Writes `data-reached` of the steps for a progress value, only when the reached step changes. At progress 0 the line
+   * has not started yet: no step is lit, though the first marker sits at 0.
    */
   const mark = (value: number) => {
-    const last = reduce
-      ? Infinity
-      : value <= 0
+    if (!follows) return;
+    const last =
+      value <= 0
         ? -1
         : thresholds.current.findLastIndex((at) => value >= at - 0.01);
     if (last === reached.current) return;
     reached.current = last;
-    track.current?.querySelectorAll('[data-step]').forEach((step, index) => {
+    list.current?.querySelectorAll('[data-step]').forEach((step, index) => {
       step.toggleAttribute('data-reached', index <= last);
-      step.toggleAttribute('data-current', index === last);
     });
   };
 
   useEffect(() => {
-    const root = track.current;
-    if (!root) return;
+    const root = list.current;
+    if (!root || !follows) return;
     const measure = () => {
       // one line is shown at a time; its track, not its fill: the fill is scaled, its box is not the line's
       const wide = Boolean(across.current?.offsetWidth);
@@ -87,53 +88,49 @@ export function StepsProgress({ header, children }: StepsProgressProps) {
         },
       );
       reached.current = undefined;
-      mark(progress.get());
+      mark(scrollYProgress.get());
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(root);
     return () => observer.disconnect();
-    // `mark` reads refs and `reduce` only: the effect runs again when `reduce` changes
-  }, [reduce, progress]);
+    // `mark` reads refs and `follows` only: the effect runs again when `follows` changes
+  }, [follows, scrollYProgress]);
 
-  useMotionValueEvent(progress, 'change', mark);
+  useMotionValueEvent(scrollYProgress, 'change', mark);
 
-  const fill = reduce ? 1 : progress;
+  const fill = follows ? scrollYProgress : 1;
   return (
-    <div ref={track} className="md:motion-safe:h-site-steps">
-      <div className="flex flex-col justify-center gap-12 py-12 md:py-16 md:motion-safe:sticky md:motion-safe:top-site-header md:motion-safe:min-h-site-first-screen md:motion-reduce:py-24">
-        {header}
-        <div className="relative">
-          {/* from 1024 px: from the centre of the first marker to the centre of the last (the grid of the steps) */}
+    <div className="flex flex-col gap-12">
+      {header}
+      <div ref={list} className="relative">
+        {/* from 1024 px: from the centre of the first marker to the centre of the last (the grid of the steps) */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-2 hidden grid-cols-5 gap-6 md:grid"
+        >
           <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-2 hidden grid-cols-5 gap-6 md:grid"
-          >
-            <div
-              ref={across}
-              className="col-span-4 -mr-8 ml-2 h-0.5 -translate-y-1/2 bg-site-line"
-            >
-              <m.div
-                data-reveal=""
-                className="size-full origin-left bg-accent-site"
-                style={{ scaleX: fill }}
-              />
-            </div>
-          </div>
-          {/* below 1024 px: from the first marker (it starts under it, hidden by its fill) to the end of the list */}
-          <div
-            ref={down}
-            aria-hidden="true"
-            className="pointer-events-none absolute top-6 bottom-0 left-2 w-0.5 -translate-x-1/2 bg-site-line md:hidden"
+            ref={across}
+            className="col-span-4 -mr-8 ml-2 h-0.5 -translate-y-1/2 bg-site-line"
           >
             <m.div
-              data-reveal=""
-              className="size-full origin-top bg-accent-site"
-              style={{ scaleY: fill }}
+              className="size-full origin-left bg-accent-site"
+              style={{ scaleX: fill }}
             />
           </div>
-          {children}
         </div>
+        {/* below 1024 px: from the first marker (it starts under it, hidden by its fill) to the end of the list */}
+        <div
+          ref={down}
+          aria-hidden="true"
+          className="pointer-events-none absolute top-6 bottom-0 left-2 w-0.5 -translate-x-1/2 bg-site-line md:hidden"
+        >
+          <m.div
+            className="size-full origin-top bg-accent-site"
+            style={{ scaleY: fill }}
+          />
+        </div>
+        {children}
       </div>
     </div>
   );

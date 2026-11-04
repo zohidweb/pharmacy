@@ -1,16 +1,20 @@
 /*
- * «Для кого» (amendment 2026-11-02-public-site-light-panels 4.4, п. 4, L8): from 1024 px the heading stays pinned on the
- * left while the four pains pile up on the right: each card sticks 16 px lower than the one before it, so the next one
- * slides over the last. The cards are a surface, a mint block, a surface and a dark block, each with its large number.
- * On a phone, and with reduce, nothing sticks (a plain list); the cards still rise in as they enter. From 1024 px a card
- * keeps its minimum height (320 px) with reduce too: only the pinning is motion.
+ * «Для кого» (spec 2026-11-04-public-site-home-polish, H2, H9.1): the heading on the left and the lead on the right as
+ * one row on top (SplitHeader), under it the four pains in a single row of equally tall cards from 1024 px (a column on
+ * a phone, the header too). No column stands empty under the heading. The pinned stack of the light-panels amendment
+ * 4.4 is gone: the cards do not stick. The cards are a surface, a mint block, a surface and a dark block, each with its
+ * large number on top and the title and text at the bottom. Spec H8.2 (amendment 2026-11-04), H9.1: each card comes
+ * into place with the scroll, not at once: from 1024 px the first two slide in from the left and the last two from the
+ * right (64 px, 3°, opacity 0.4), below that every card rises from 32 px (ScrollSlide, a client leaf: the card itself,
+ * with its `data-surface`, stays here). The section clips sideways (`overflow-x-clip`): the slide never widens the
+ * page.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx } from '@pharmacy/ui';
-import type { CSSProperties } from 'react';
 import { getTranslator } from '@/shared/i18n';
 import { contentClassName, panelBodyClassName } from '@/shared/ui';
-import { Reveal } from '@/shared/ui/motion';
+import { ScrollSlide } from '@/shared/ui/motion';
+import { SplitHeader } from './SplitHeader';
 
 // expiry dates and batches, shortages, several stores, the till during outages
 const PAINS: readonly {
@@ -24,67 +28,60 @@ const PAINS: readonly {
   { key: 'outages', surface: 'dark' },
 ];
 
-/** The card gives its place in the pile as `--ph-site-stack-index`; `top-site-stack` reads it (L8). */
-function stackIndex(index: number): CSSProperties {
-  return { '--ph-site-stack-index': index } as CSSProperties;
-}
-
 export function Audience({ locale }: { locale: UiLocale }) {
   const t = getTranslator(locale);
   return (
     <section
       id="audience"
       aria-labelledby="audience-title"
-      className="scroll-mt-4"
+      className="scroll-mt-4 overflow-x-clip"
     >
       <div
         className={cx(
           contentClassName,
           panelBodyClassName,
-          'grid gap-10 md:grid-cols-site-aside md:gap-16',
+          'flex flex-col gap-10 md:gap-16',
         )}
       >
-        <header className="flex flex-col gap-4 md:self-start md:motion-safe:sticky md:motion-safe:top-site-sticky">
-          <h2 id="audience-title" className="text-section text-balance">
-            {t('home.audience.title')}
-          </h2>
-          <p className="text-lead text-fg-muted">
-            {t('home.audience.subtitle')}
-          </p>
-        </header>
-        <ul className="flex flex-col gap-4">
+        <SplitHeader
+          id="audience-title"
+          title={t('home.audience.title')}
+          subtitle={t('home.audience.subtitle')}
+        />
+        {/* each card comes into place with the scroll (ScrollSlide): the first two from the left, the last two from
+            the right */}
+        <ul className="grid gap-4 md:grid-cols-4">
           {PAINS.map(({ key, surface }, index) => (
-            <li
+            // the item is the grid cell (it stretches to the row); the card inside carries the fill
+            <ScrollSlide
               key={key}
-              style={stackIndex(index)}
-              className="md:motion-safe:sticky md:motion-safe:top-site-stack"
+              side={index < 2 ? 'left' : 'right'}
+              className="flex"
             >
-              <Reveal>
-                <div
-                  data-surface={surface}
-                  className={cx(
-                    'flex flex-col gap-4 rounded-site-card p-6 md:min-h-site-stack-card md:p-8',
-                    !surface && 'border border-site-line bg-surface',
-                  )}
+              <div
+                data-surface={surface}
+                className={cx(
+                  'flex flex-1 flex-col gap-4 rounded-site-card p-6 lg:p-8',
+                  !surface && 'border border-site-line bg-surface',
+                )}
+              >
+                {/* decorative: the title names the pain */}
+                <span
+                  aria-hidden="true"
+                  className="text-site-number text-accent-site"
                 >
-                  {/* decorative: the title names the pain */}
-                  <span
-                    aria-hidden="true"
-                    className="text-site-number text-accent-site"
-                  >
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
-                  <div className="mt-auto flex flex-col gap-3">
-                    <h3 className="text-2xl font-bold tracking-tight">
-                      {t(`home.audience.items.${key}.title`)}
-                    </h3>
-                    <p className="max-w-(--ph-size-dialog-md) text-lead text-fg-muted">
-                      {t(`home.audience.items.${key}.text`)}
-                    </p>
-                  </div>
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <div className="mt-auto flex flex-col gap-3">
+                  <h3 className="text-2xl font-bold tracking-tight">
+                    {t(`home.audience.items.${key}.title`)}
+                  </h3>
+                  <p className="text-lead text-fg-muted">
+                    {t(`home.audience.items.${key}.text`)}
+                  </p>
                 </div>
-              </Reveal>
-            </li>
+              </div>
+            </ScrollSlide>
           ))}
         </ul>
       </div>

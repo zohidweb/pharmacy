@@ -4,22 +4,34 @@
  * and expiry dates, purchasing and prices stack in the two columns on its right, transfers and reports share the last
  * row. On a phone one column in the same order. The tiles are light surfaces with a line, except prices (a mint block)
  * and reports (a dark block, no line). A product screen sits in the lower right corner of its tile and the tile's edge
- * crops it. Only what works in the cloud pilot: no 1C export, no offline stores (spec 2, anti-goals).
+ * crops it; four tiles carry one: the till, batches, transfers and, since spec 2026-11-04-public-site-home-polish,
+ * H9.2, the sales report (the dark tile was almost empty with only an icon; it now holds a screen like its neighbour,
+ * in the same window, with the same zoom and scroll motion). Only what works in the cloud pilot: no 1C export, no
+ * offline stores (spec 2, anti-goals).
  *
  * The tiles appear one after another (RevealGroup). Under the pointer the product screen of a tile rises by 4 px: a CSS
  * transform, only where the device can hover and without reduce (`motion-safe:group-hover:`).
+ *
+ * From 1024 px a product screen also moves inside the window of its tile with the scroll, from 24 px lower to 24 px
+ * higher (spec 2026-11-04-public-site-home-polish, H8.4; Parallax with a negative speed, the tile crops it); the hover
+ * rise stays on its own element, and below 1024 px and with reduce the screen stands.
+ *
+ * A product screen is a button that enlarges it in a dialog (spec 2026-11-04-public-site-home-polish, H7; ShotZoom),
+ * with a round zoom badge in the corner of the window.
  */
 import type { UiLocale } from '@pharmacy/shared-dto';
 import { cx, Icon, type IconName } from '@pharmacy/ui';
 import { getTranslator } from '@/shared/i18n';
 import { contentClassName, panelBodyClassName } from '@/shared/ui';
-import { RevealGroup, RevealItem } from '@/shared/ui/motion';
+import { Parallax, RevealGroup, RevealItem } from '@/shared/ui/motion';
+import { ShotZoom } from './ShotZoom';
 
 /** Real pixel sizes of the WebP files (CLS). Screens of apps/web on its mocks: synthetic data only. */
 const SHOTS = {
   pos: { src: '/images/pos.webp', width: 1600, height: 1100 },
   stock: { src: '/images/stock-batches.webp', width: 1600, height: 1000 },
   transfers: { src: '/images/transfers.webp', width: 1600, height: 1000 },
+  reports: { src: '/images/sales-report.webp', width: 1600, height: 1000 },
 } as const;
 
 type ShotKey = keyof typeof SHOTS;
@@ -38,13 +50,13 @@ const FRAMES = {
 
 type Tile =
   | {
-      key: 'pos' | 'stock' | 'transfers';
+      key: 'pos' | 'stock' | 'transfers' | 'reports';
       shot: ShotKey;
       frame: keyof typeof FRAMES;
       span: string;
     }
   | {
-      key: 'purchasing' | 'pricing' | 'reports';
+      key: 'purchasing' | 'pricing';
       icon: IconName;
       span: string;
     };
@@ -67,40 +79,63 @@ const TILES: readonly Tile[] = [
   { key: 'purchasing', icon: 'truck', span: 'md:col-span-2' },
   { key: 'pricing', icon: 'tag', span: 'md:col-span-2' },
   { key: 'transfers', shot: 'transfers', frame: 'half', span: 'md:col-span-3' },
-  { key: 'reports', icon: 'download', span: 'md:col-span-3' },
+  { key: 'reports', shot: 'reports', frame: 'half', span: 'md:col-span-3' },
 ];
+
+/*
+ * The ring of a tile's zoom button is drawn around the tile, not around the button (spec
+ * 2026-11-04-public-site-home-polish, H7; final review M1): the button has the box of the whole screen, which the tile
+ * crops on the right and below, so its own outline would show on two sides only. Same utilities as the kit's
+ * SegmentedControl; the tile's own `data-surface` gives the ring colour of its panel.
+ */
+const SHOT_TILE_FOCUS =
+  'has-focus-visible:outline-(length:--ph-focus-ring-width) has-focus-visible:outline-offset-(--ph-focus-ring-offset) has-focus-visible:outline-focus-ring has-focus-visible:outline-solid';
 
 function TileShot({
   shot,
   frame,
   alt,
+  title,
+  labels,
 }: {
   shot: ShotKey;
   frame: keyof typeof FRAMES;
   alt: string;
+  title: string;
+  labels: { open: string; close: string };
 }) {
   const { src, width, height } = SHOTS[shot];
   const { view, screen } = FRAMES[frame];
   return (
     // The window fills the rest of the tile. The screen starts 24 px (32 px from 1024 px) from the left edge and runs
     // past the right and the lower edges: the tile crops it there (the shots are viewport crops, as on the first
-    // screen). The 8 px above the screen leave room for the 4 px rise.
+    // screen). The 8 px above the screen leave room for the 4 px hover rise; the scroll motion (H8.4) moves the screen
+    // 24 px either way, into the text block's bottom padding above and past the tile's edge below.
     <div className={cx('relative grow', view)}>
       <div className="absolute inset-y-0 left-6 pt-2 transition-transform duration-(--ph-duration-slow) ease-out motion-safe:group-hover:-translate-y-1 md:left-8">
-        {/* a plain <img>: no next/image on the site (ADR-0023) */}
-        <img
-          src={src}
-          width={width}
-          height={height}
-          alt={alt}
-          loading="lazy"
-          decoding="async"
-          className={cx(
-            'block w-auto max-w-none rounded-site-card border border-site-shot shadow-shot',
-            screen,
-          )}
-        />
+        {/* the screen moves with the scroll from 24 px lower to 24 px higher (H8.4); the hover rise stays above */}
+        <Parallax speed={-0.24} className="h-full">
+          <ShotZoom
+            src={src}
+            width={width}
+            height={height}
+            alt={alt}
+            title={title}
+            labels={labels}
+            className={cx(
+              'block w-auto max-w-none rounded-site-card border border-site-shot shadow-shot',
+              screen,
+            )}
+          />
+        </Parallax>
       </div>
+      {/* the badge sits in the corner of the window (not of the cropped screen) and lets clicks through to the screen */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute right-4 top-4 grid size-10 place-items-center rounded-full bg-fg text-bg"
+      >
+        <Icon name="maximize" size="sm" />
+      </span>
     </div>
   );
 }
@@ -144,6 +179,7 @@ export function Features({ locale }: { locale: UiLocale }) {
                   className={cx(
                     'flex flex-1 flex-col overflow-hidden rounded-site-card',
                     !surface && 'border border-site-line bg-surface',
+                    'shot' in tile && SHOT_TILE_FOCUS,
                   )}
                 >
                   {'shot' in tile ? (
@@ -160,6 +196,13 @@ export function Features({ locale }: { locale: UiLocale }) {
                         shot={tile.shot}
                         frame={tile.frame}
                         alt={t(`home.features.items.${tile.key}.shot`)}
+                        title={t(`home.features.items.${tile.key}.title`)}
+                        labels={{
+                          open: t('home.features.zoom', {
+                            title: t(`home.features.items.${tile.key}.title`),
+                          }),
+                          close: t('home.features.close'),
+                        }}
                       />
                     </>
                   ) : (

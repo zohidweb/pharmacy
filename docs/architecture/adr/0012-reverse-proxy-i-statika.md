@@ -408,5 +408,6 @@ ADR-0023 меняет корневой домен: `{$APEX_ADDR}` больше �
   `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'` (распознаватель `zxing-wasm` компилирует WebAssembly);
 - `admin.` и публичный сайт — прежние `camera=()` и CSP без `'wasm-unsafe-eval'`.
 
-Сниппет `static-files` получает оба значения параметрами. `.wasm` добавляется в предсжатие (`.br` и `.gz`).
+Сниппет `static-files` получает оба значения параметрами. `.wasm` добавляется в предсжатие (`.br` и `.gz`). Файл
+распознавателя `/vendor/zxing_reader-<версия>.wasm` кешируется как `/_next/static/*` (`immutable`): версия — в имени.
 Остальные решения ADR не меняются.

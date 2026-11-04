@@ -19,6 +19,7 @@ import {
 } from '@pharmacy/ui';
 import { useId, useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
 import { CameraScanButton } from '@/shared/ui';
 
 export interface ProductDraft extends CatalogProductInput {
@@ -143,6 +144,7 @@ export function ProductForm({
   const t = useTranslations('products.form');
   const id = useId();
   const [code, setCode] = useState('');
+  const camera = useCameraAvailable();
   const problems = draftProblems(draft);
   const serverError = (field: string) => {
     const code = fieldErrors.find((error) => error.field === field)?.code;
@@ -347,7 +349,9 @@ export function ProductForm({
                 }
               }}
               endAdornment={
-                <CameraScanButton onScan={scanCode} disabled={disabled} />
+                camera ? (
+                  <CameraScanButton onScan={scanCode} disabled={disabled} />
+                ) : undefined
               }
             />
             <Button

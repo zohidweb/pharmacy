@@ -18,6 +18,7 @@ import {
   sellablePieces,
   type CatalogIndex,
 } from '@/entities/catalog';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
 import { CameraScanButton } from '@/shared/ui';
 
 export interface ProductPickerProps {
@@ -125,6 +126,7 @@ export function ProductPicker({
   onCameraScan,
 }: ProductPickerProps) {
   const t = useTranslations('pos');
+  const camera = useCameraAvailable();
   // products in stock first; out-of-stock ones stay findable (their analogs are offered)
   const results = index
     .search(query, categoryId)
@@ -152,7 +154,9 @@ export function ProductPicker({
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         endAdornment={
-          onCameraScan && <CameraScanButton onScan={onCameraScan} />
+          camera && onCameraScan ? (
+            <CameraScanButton onScan={onCameraScan} />
+          ) : undefined
         }
       />
       <ChipGroup label={t('categories')}>

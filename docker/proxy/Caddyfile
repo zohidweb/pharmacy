@@ -163,6 +163,9 @@
 			Permissions-Policy "{args[0]}"
 		}
 		header /_next/static/* Cache-Control "public, max-age=31536000, immutable"
+		# the camera reader of web: its name carries the zxing-wasm version (ADR-0025)
+		@zxingReader path_regexp ^/vendor/zxing_reader-[^/]+\.wasm$
+		header @zxingReader Cache-Control "public, max-age=31536000, immutable"
 		header ?Cache-Control "no-cache"
 		# trailingSlash is false in the export: /stock/ → /stock instead of a 404. Only plain route segments: the decoded
 		# path may hold a backslash or a tab, and /%5Cevil.com/ would redirect to /\evil.com — another site for a browser.

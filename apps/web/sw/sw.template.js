@@ -3,7 +3,9 @@
  * - precache: the manifest of out/ injected at build time (HTML, RSC payloads, /_next/static/*,
  *   fonts) so the POS reloads during an outage;
  * - /api/* is never touched — buffering of operations is the job of the page (IndexedDB outbox);
- * - pages: network first, cache as the fallback; /_next/static/*: cache first (immutable);
+ * - pages: network first, cache as the fallback; /_next/static/* and the camera reader
+ *   /vendor/zxing_reader-<version>.wasm: cache first (immutable; ADR-0025) — a till open across a deploy keeps reading
+ *   with the reader of its own build;
  * - a new version waits and is activated by the page only while the receipt is empty
  *   (message SKIP_WAITING) — never in the middle of a sale;
  * - kill switch: publish sw/kill-switch.js as /sw.js (see apps/web/README.md).
@@ -51,7 +53,10 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
-  if (url.pathname.startsWith('/_next/static/')) {
+  if (
+    url.pathname.startsWith('/_next/static/') ||
+    /^\/vendor\/zxing_reader-[^/]+\.wasm$/.test(url.pathname)
+  ) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>

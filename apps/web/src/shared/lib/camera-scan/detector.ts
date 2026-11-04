@@ -39,20 +39,33 @@ async function nativeDetector(): Promise<Detector | null> {
 }
 
 async function ponyfillDetector(): Promise<Detector> {
-  const { BarcodeDetector, prepareZXingModule, ZXING_WASM_VERSION } =
-    await import('barcode-detector/ponyfill');
+  const {
+    BarcodeDetector,
+    prepareZXingModule,
+    purgeZXingModule,
+    ZXING_WASM_VERSION,
+  } = await import('barcode-detector/ponyfill');
   // the wasm is fetched now, not at the first frame: a missing file is the error of opening the window
-  await prepareZXingModule({
-    overrides: {
-      locateFile: (path: string, prefix: string) =>
-        path.endsWith('.wasm')
-          ? `/vendor/zxing_reader-${ZXING_WASM_VERSION}.wasm`
-          : prefix + path,
-    },
-    fireImmediately: true,
-  });
+  try {
+    await prepareZXingModule({
+      overrides: {
+        locateFile: (path: string, prefix: string) =>
+          path.endsWith('.wasm')
+            ? `/vendor/zxing_reader-${ZXING_WASM_VERSION}.wasm`
+            : prefix + path,
+      },
+      fireImmediately: true,
+    });
+  } catch (error) {
+    // the package keeps the module promise, a rejected one too: «Повторить» must fetch again (final review M9)
+    purgeZXingModule();
+    throw error;
+  }
   return BarcodeDetector;
 }
+
+/** A pack may carry an EAN-13 and a GS1-128 of its batch: the product code is the one the catalog knows. */
+const PRODUCT_FORMATS: readonly BarcodeFormat[] = ['ean_13', 'ean_8', 'upc_a'];
 
 let loading: Promise<CodeDetector> | null = null;
 
@@ -65,7 +78,11 @@ export function loadCodeDetector(): Promise<CodeDetector> {
       const detector = new Reader({ formats: [...CAMERA_FORMATS] });
       return {
         async detect(video) {
-          const [found] = await detector.detect(video);
+          const results = await detector.detect(video);
+          const found =
+            results.find((result) =>
+              PRODUCT_FORMATS.includes(result.format as BarcodeFormat),
+            ) ?? results[0];
           const code = found?.rawValue.trim();
           if (!code) return null;
           // zxing-cpp reads a UPC-A as 13 digits with a leading 0, a USB scanner and the native reader send its 12

@@ -30,7 +30,8 @@ function statusOf(error: unknown): CameraScanStatus {
   if (name === 'NotFoundError' || name === 'OverconstrainedError') {
     return 'no_camera';
   }
-  if (name === 'NotReadableError') return 'busy';
+  // AbortError: «Timeout starting video source» of Chrome on Windows — the camera did not start, not the reader
+  if (name === 'NotReadableError' || name === 'AbortError') return 'busy';
   return 'failed';
 }
 
@@ -61,13 +62,19 @@ export function useCameraScan({
     let frameTimer: ReturnType<typeof setTimeout> | undefined;
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
+    // only what this attempt owns: a late stop of a cancelled attempt must not detach the live one (final review M2)
     const stop = () => {
       stopped = true;
       clearTimeout(frameTimer);
       clearTimeout(idleTimer);
-      stream?.getTracks().forEach((track) => track.stop());
-      trackRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
+      const tracks = stream?.getTracks() ?? [];
+      tracks.forEach((track) => track.stop());
+      if (trackRef.current && tracks.includes(trackRef.current)) {
+        trackRef.current = null;
+      }
+      if (stream && videoRef.current?.srcObject === stream) {
+        videoRef.current.srcObject = null;
+      }
     };
     const fail = (error: unknown) => {
       if (stopped) return;
@@ -81,7 +88,12 @@ export function useCameraScan({
       try {
         // the permission first: a refusal is told before the reader is loaded
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
+          // 640×480 by default is little for a small EAN-13; the camera gives the nearest it has
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: false,
         });
         const video = videoRef.current;
@@ -97,6 +109,7 @@ export function useCameraScan({
         }, IDLE_MS);
         video.srcObject = stream;
         await video.play();
+        if (stopped) return;
         const [track] = stream.getVideoTracks();
         trackRef.current = track ?? null;
         const capabilities = track?.getCapabilities?.() as
@@ -118,7 +131,12 @@ export function useCameraScan({
           if (code) {
             stop();
             navigator.vibrate?.(80);
-            handler.current(code);
+            // a failure of the field's handler is reported, never taken for a camera error (final review M1)
+            try {
+              handler.current(code);
+            } catch (error) {
+              reportError(error);
+            }
             return;
           }
           frameTimer = setTimeout(() => {

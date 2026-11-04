@@ -19,6 +19,7 @@ import { DocumentStatusPill } from '@/entities/stock-document';
 import { UnpostDialog, type StockAccess } from '@/features/stock-document';
 import { apiFieldErrors, apiRequest, useApiErrorMessage } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
 import { CameraScanButton } from '@/shared/ui';
 import { FoundLineDialog } from './FoundLineDialog';
 
@@ -434,6 +435,7 @@ export function StockCountEditor({
   };
   const scanEnabled = editable && found === null;
   useBarcodeScanner(handleScan, { enabled: scanEnabled });
+  const camera = useCameraAvailable();
 
   const diffs = doc.lines.map(lineDiff);
   const surplus = diffs.filter((d) => d !== null && d > 0).length;
@@ -539,7 +541,9 @@ export function StockCountEditor({
                   setFocused(null);
                 }}
                 endAdornment={
-                  scanEnabled && <CameraScanButton onScan={handleScan} />
+                  scanEnabled && camera ? (
+                    <CameraScanButton onScan={handleScan} />
+                  ) : undefined
                 }
               />
             </div>

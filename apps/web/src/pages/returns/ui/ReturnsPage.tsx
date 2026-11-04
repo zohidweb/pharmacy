@@ -43,6 +43,7 @@ import {
   useApiErrorMessage,
 } from '@/shared/api';
 import { useBarcodeScanner } from '@/shared/lib/scanner';
+import { useCameraAvailable } from '@/shared/lib/camera-scan';
 import { CameraScanButton } from '@/shared/ui';
 import { PageHeader } from '@/widgets/app-shell';
 import {
@@ -433,6 +434,7 @@ function ReturnsPageView() {
     findByCode(code);
   };
   useBarcodeScanner(handleScan, { minLength: 3, enabled: online });
+  const camera = useCameraAvailable();
 
   const picked = Object.values(quantities).some((quantity) => quantity > 0);
   const refund = receipt && picked ? refundOf(receipt, quantities) : null;
@@ -491,7 +493,9 @@ function ReturnsPageView() {
               disabled={!online}
               onChange={(event) => setNumber(event.target.value)}
               endAdornment={
-                <CameraScanButton onScan={handleScan} disabled={!online} />
+                camera ? (
+                  <CameraScanButton onScan={handleScan} disabled={!online} />
+                ) : undefined
               }
             />
             <Button

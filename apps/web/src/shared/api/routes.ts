@@ -84,6 +84,7 @@ import type {
   UpdateCatalogStatusRequest,
   UpdateCategoryStatusRequest,
   UpdatePricesRequest,
+  UpdateWholesalePricesRequest,
   AcceptTransferRequest,
   DocumentListQuery,
   GoodsReceipt,
@@ -501,6 +502,12 @@ export const apiRoutes = {
     UpdatePricesRequest,
     { productId: string }
   >('PUT', (p) => `/prices/${encodeURIComponent(p.productId)}`),
+  // spec 2026-11-03-pos-store-ideas, D20
+  'prices.updateWholesale': route<
+    StorePrice[],
+    UpdateWholesalePricesRequest,
+    { productId: string }
+  >('PUT', (p) => `/prices/${encodeURIComponent(p.productId)}/wholesale`),
   'priceConflicts.list': route<PriceConflict[]>(
     'GET',
     () => '/price-conflicts',

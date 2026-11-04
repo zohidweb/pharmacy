@@ -1,6 +1,6 @@
 'use client';
 
-import { priceWarnings } from '@pharmacy/shared-domain';
+import { priceWarnings, wholesalePriceWarnings } from '@pharmacy/shared-domain';
 import type {
   DiscountRuleDefinition,
   DiscountRuleInput,
@@ -17,6 +17,7 @@ import {
   StatusPill,
   Switch,
   TextField,
+  useToast,
 } from '@pharmacy/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -226,6 +227,206 @@ export function PriceDialog({
             onChange={(event) => setConfirmed(event.target.checked)}
           />
         )}
+        <p className="text-xs text-fg-subtle">{t('auditHint')}</p>
+      </div>
+    </Dialog>
+  );
+}
+
+/**
+ * Wholesale prices of a pack by store (spec 2026-11-03-pos-store-ideas, D20–D21): an empty field closes the wholesale
+ * of the product at the store; a store without a retail price has no wholesale one (plan
+ * 2026-11-03-pos-store-ideas-pr3, R2). The warnings and the confirmation above the regulated maximum are those of the
+ * retail dialog, with «выше розничной».
+ */
+export function WholesalePriceDialog({
+  row,
+  onClose,
+}: {
+  row: PriceRow;
+  onClose: () => void;
+}) {
+  const { data: session } = useSession();
+  const t = useTranslations('pricing.wholesale');
+  const tEdit = useTranslations('pricing.edit');
+  const tPricing = useTranslations('pricing');
+  const tDocs = useTranslations('stockDocs');
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [prices, setPrices] = useState<Record<string, number | null>>(() =>
+    Object.fromEntries(
+      row.prices.map((p) => [p.storeId, p.wholesalePriceMinor]),
+    ),
+  );
+  const [same, setSame] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  // only a store with a retail price takes a wholesale one
+  const open = row.prices.filter((p) => p.priceMinor !== null);
+  const first = open[0]?.storeId ?? '';
+  const value = (storeId: string) => prices[same ? first : storeId] ?? null;
+  const warnBelowCost = session?.tenant.warnBelowCost ?? true;
+  const warningsOf = (storeId: string, retailMinor: number | null) =>
+    wholesalePriceWarnings({
+      wholesaleMinor: value(storeId),
+      retailMinor,
+      costMinor: warnBelowCost ? row.costMinor : undefined,
+      maxPriceMinor: row.maxPriceMinor,
+    });
+  const changed = open.filter(
+    (p) => value(p.storeId) !== p.wholesalePriceMinor,
+  );
+  const aboveMax = changed.some((p) =>
+    warningsOf(p.storeId, p.priceMinor).includes('above_max'),
+  );
+  const save = useMutation({
+    mutationFn: () =>
+      apiRequest('prices.updateWholesale', {
+        params: { productId: row.productId },
+        body: {
+          prices: changed.map((p) => ({
+            storeId: p.storeId,
+            priceMinor: value(p.storeId),
+          })),
+          confirmAboveMax: confirmed,
+        },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['prices'] });
+      void queryClient.invalidateQueries({ queryKey: ['catalog'] });
+      toast.show(t('saved'));
+      onClose();
+    },
+  });
+  const error = useApiErrorMessage(save.error);
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={t('title')}
+      description={row.productName}
+      closeLabel={tDocs('close')}
+      size="lg"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {tDocs('cancel')}
+          </Button>
+          <Button
+            loading={save.isPending}
+            disabled={
+              changed.length === 0 ||
+              (aboveMax && !confirmed) ||
+              changed.some((p) => value(p.storeId) === 0)
+            }
+            onClick={() => save.mutate()}
+          >
+            {t('save')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {error && (
+          <Alert tone="danger" live="assertive">
+            {error}
+          </Alert>
+        )}
+        {open.length > 1 && (
+          <Switch
+            label={t('same')}
+            description={t('sameHint')}
+            checked={same}
+            onCheckedChange={setSame}
+          />
+        )}
+        <table className="w-full border-collapse text-sm">
+          <caption className="ph-visually-hidden">{t('title')}</caption>
+          <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
+            <tr>
+              <th scope="col" className="px-2 py-2 text-start font-medium">
+                {tEdit('store')}
+              </th>
+              <th scope="col" className="px-2 py-2 text-end font-medium">
+                {tPricing('kinds.retail')}
+              </th>
+              <th scope="col" className="px-2 py-2 text-end font-medium">
+                {t('current')}
+              </th>
+              <th scope="col" className="px-2 py-2 text-start font-medium">
+                {t('new')}
+              </th>
+              <th scope="col" className="px-2 py-2 text-start font-medium">
+                {tEdit('warnings')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {row.prices.map((price) => (
+              <tr key={price.storeId} className="border-b border-border">
+                <td className="px-2 py-2">{price.storeName}</td>
+                <td className="px-2 py-2 text-end tabular-nums">
+                  {price.priceMinor === null
+                    ? tPricing('notSold')
+                    : formatMoney(price.priceMinor, { withSign: false })}
+                </td>
+                <td className="px-2 py-2 text-end tabular-nums">
+                  {price.wholesalePriceMinor === null
+                    ? '—'
+                    : formatMoney(price.wholesalePriceMinor, {
+                        withSign: false,
+                      })}
+                </td>
+                <td className="w-cell-md px-2 py-2">
+                  {price.priceMinor === null ? (
+                    <span className="text-xs text-fg-subtle">
+                      {t('noRetail')}
+                    </span>
+                  ) : !same || price.storeId === first ? (
+                    <MoneyInput
+                      label={t('newOf', { store: price.storeName })}
+                      valueMinor={value(price.storeId)}
+                      invalidText={tDocs('amountFormat')}
+                      empty={null}
+                      onChange={(priceMinor) =>
+                        setPrices((current) => ({
+                          ...current,
+                          [same ? first : price.storeId]: priceMinor,
+                        }))
+                      }
+                    />
+                  ) : (
+                    <span className="tabular-nums">
+                      {value(price.storeId) === null
+                        ? '—'
+                        : formatMoney(value(price.storeId) ?? 0, {
+                            withSign: false,
+                          })}
+                    </span>
+                  )}
+                </td>
+                <td className="px-2 py-2">
+                  <div className="flex flex-wrap gap-1">
+                    {warningsOf(price.storeId, price.priceMinor).map((w) => (
+                      <StatusPill key={w} tone="warning">
+                        {tPricing(`warnings.${w}`)}
+                      </StatusPill>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {aboveMax && (
+          <Checkbox
+            label={tEdit('confirmAboveMax')}
+            description={tEdit('softWarning')}
+            checked={confirmed}
+            onChange={(event) => setConfirmed(event.target.checked)}
+          />
+        )}
+        <p className="text-xs text-fg-subtle">{t('emptyHint')}</p>
         <p className="text-xs text-fg-subtle">{t('auditHint')}</p>
       </div>
     </Dialog>

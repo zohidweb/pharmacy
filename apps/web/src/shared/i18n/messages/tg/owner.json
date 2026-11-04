@@ -364,7 +364,8 @@
         "employees_assign-role": "Таъини нақшҳо",
         "employees_manage-peers": "Тағйир додани кормандони ҳамсатҳ",
         "sync_run": "Оғози ҳамоҳангсозӣ",
-        "shifts_force-close": "Бастани баст аз компютери дигар"
+        "shifts_force-close": "Бастани баст аз компютери дигар",
+        "pos_sell-wholesale": "Фурӯши яклухт"
       }
     },
     "terminals": {

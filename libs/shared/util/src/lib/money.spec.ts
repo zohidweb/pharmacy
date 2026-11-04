@@ -37,6 +37,39 @@ describe('formatMoney', () => {
   });
 });
 
+describe('formatMoney with trimZeroDirams', () => {
+  it('drops the dirams part when it is zero', () => {
+    expect(plain(formatMoney(40000, { trimZeroDirams: true }))).toBe(
+      `400 ${CURRENCY_SIGN}`,
+    );
+  });
+
+  it('keeps non-zero dirams', () => {
+    expect(plain(formatMoney(41250, { trimZeroDirams: true }))).toBe(
+      `412,50 ${CURRENCY_SIGN}`,
+    );
+  });
+
+  it('groups thousands with the same separator as formatMoney', () => {
+    expect(formatMoney(120000, { trimZeroDirams: true })).toBe(
+      formatMoney(120000).replace(',00', ''),
+    );
+  });
+
+  it('formats zero as a bare sign amount and keeps negatives', () => {
+    expect(plain(formatMoney(0, { trimZeroDirams: true }))).toBe(
+      `0 ${CURRENCY_SIGN}`,
+    );
+    expect(plain(formatMoney(-40000, { trimZeroDirams: true }))).toBe(
+      `-400 ${CURRENCY_SIGN}`,
+    );
+  });
+
+  it('keeps the dirams part by default', () => {
+    expect(plain(formatMoney(40000))).toBe(`400,00 ${CURRENCY_SIGN}`);
+  });
+});
+
 describe('parseMoneyToMinor', () => {
   it.each([
     ['120', 12000],

@@ -20,6 +20,11 @@ export interface FormatMoneyOptions {
   withSign?: boolean;
   /** Plain spaces instead of U+00A0/U+202F — for receipt printers lacking those glyphs. */
   plainSpaces?: boolean;
+  /**
+   * Drop the `,00` part when the dirams are zero (default false). Used by the public site's
+   * price calculator (spec 2026-11-04-public-site-home-polish, H6): `400 с`, but `412,50 с`.
+   */
+  trimZeroDirams?: boolean;
 }
 
 /** `formatMoney(195730)` → `1 957,30 с` (ru-RU grouping for both RU and TJ). */
@@ -30,12 +35,20 @@ export function formatMoney(
   if (!Number.isSafeInteger(amountMinor)) {
     throw new RangeError('Money must be a safe integer amount in dirams');
   }
-  const { withSign = true, plainSpaces = false } = options;
+  const {
+    withSign = true,
+    plainSpaces = false,
+    trimZeroDirams = false,
+  } = options;
   const sign = amountMinor < 0 ? '-' : '';
   const abs = Math.abs(amountMinor);
   const dirams = abs % 100;
   const somoni = (abs - dirams) / 100; // exact integer division, no float rounding
-  const number = `${sign}${groupFormat.format(somoni)},${String(dirams).padStart(2, '0')}`;
+  const wholePart = `${sign}${groupFormat.format(somoni)}`;
+  const number =
+    trimZeroDirams && dirams === 0
+      ? wholePart
+      : `${wholePart},${String(dirams).padStart(2, '0')}`;
   const text = withSign ? `${number}${NBSP}${CURRENCY_SIGN}` : number;
   return plainSpaces ? text.replace(WIDE_SPACES, ' ') : text;
 }

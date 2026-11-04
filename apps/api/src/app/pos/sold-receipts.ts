@@ -32,6 +32,8 @@ export interface SoldReceipt {
   cashierName: string;
   subtotalDirams: number;
   discountDirams: number;
+  /** The organisation of a wholesale receipt (spec 2026-11-03-pos-store-ideas, D28); null — a retail receipt. */
+  buyerName: string | null;
   /** Paid by kind; cash — net of the change (the payment row holds the cash handed over). */
   paidByKind: Map<ReceiptPaymentMethod, number>;
   lines: SoldLine[];
@@ -83,10 +85,12 @@ export class SoldReceipts {
       subtotal: string;
       discount: string;
       change: string;
+      buyerName: string | null;
     }>`
       select r.id, r.store_id, r.number, r.local_number, r.sold_at, r.business_date::text as business_date,
              e.full_name as cashier_name, r.subtotal_dirams::text as subtotal,
-             r.discount_dirams::text as discount, r.change_dirams::text as change
+             r.discount_dirams::text as discount, r.change_dirams::text as change,
+             r.buyer_name
       from pharmacy.receipts r
       join pharmacy.employees e on e.tenant_id = r.tenant_id and e.id = r.cashier_id
       where r.tenant_id = ${tenantId} and r.store_id = ${storeId} and ${match}
@@ -134,6 +138,7 @@ export class SoldReceipts {
       cashierName: receipt.cashierName,
       subtotalDirams: Number(receipt.subtotal),
       discountDirams: Number(receipt.discount),
+      buyerName: receipt.buyerName,
       paidByKind: new Map(
         payments.rows.map((p) => [
           p.kind,

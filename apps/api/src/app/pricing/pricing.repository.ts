@@ -135,16 +135,23 @@ export class PricingRepository {
     storeId: string,
     productIds: readonly string[] | null,
   ): Promise<
-    Array<{ productId: string; packDirams: bigint; pieceDirams: bigint | null }>
+    Array<{
+      productId: string;
+      packDirams: bigint;
+      pieceDirams: bigint | null;
+      wholesaleDirams: bigint | null;
+    }>
   > {
     if (productIds !== null && productIds.length === 0) return [];
     const result = await sql<{
       productId: string;
       packDirams: bigint;
       pieceDirams: bigint | null;
+      wholesaleDirams: bigint | null;
     }>`
       select sp.product_id, sp.retail_price_per_pack_dirams as pack_dirams,
-             sp.retail_price_per_piece_dirams as piece_dirams
+             sp.retail_price_per_piece_dirams as piece_dirams,
+             sp.wholesale_price_per_pack_dirams as wholesale_dirams
       from pharmacy.store_products sp
       where sp.tenant_id = ${tenantId} and sp.store_id = ${storeId}
         and sp.retail_price_per_pack_dirams is not null
@@ -218,7 +225,7 @@ export class PricingRepository {
     trx: TenantTransaction,
     tenantId: string,
     storeIds: readonly string[],
-  ): Promise<PriceCell[]> {
+  ): Promise<Omit<PriceCell, 'wholesaleDirams'>[]> {
     if (storeIds.length === 0) return [];
     return trx
       .selectFrom('storeProducts')

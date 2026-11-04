@@ -32,6 +32,7 @@ import {
   activeDiscountThresholds,
   piecePrice,
   storePrice,
+  wholesalePrice,
 } from './pricing';
 import { writeOffReturned } from './handlers-stock';
 import { authorize } from './session';
@@ -233,6 +234,7 @@ export function productAt(item: PosProduct, storeId: string): PosProduct {
       priceMinor === item.priceMinor
         ? item.piecePriceMinor
         : piecePrice(item, priceMinor),
+    wholesalePriceMinor: wholesalePrice(storeId, item.id),
     batches: item.batches.map((b) => ({
       ...b,
       quantityPieces: stock[b.id] ?? 0,
@@ -273,6 +275,9 @@ function networkSettingsOf(storeName: string, storeAddress: string) {
   const store = Object.entries(mockDb().owner.storeDetails).find(
     ([id]) => stores.find((s) => s.id === id)?.name === storeName,
   )?.[1];
+  const legalEntity = store
+    ? mockDb().owner.legalEntities.find((e) => e.id === store.legalEntityId)
+    : undefined;
   return {
     ...base,
     networkName: network.networkName,
@@ -289,9 +294,10 @@ function networkSettingsOf(storeName: string, storeAddress: string) {
       // the payment QR of the owner's store card (spec 2026-11-03-pos-store-ideas, D39)
       storeCode: store.code,
       paymentQr: store.paymentQr,
-      taxId:
-        mockDb().owner.legalEntities.find((e) => e.id === store.legalEntityId)
-          ?.taxId ?? base.taxId,
+      taxId: legalEntity?.taxId ?? base.taxId,
+      // the seller of a wholesale invoice (spec 2026-11-03-pos-store-ideas, D27)
+      legalEntityName: legalEntity?.name ?? base.legalEntityName,
+      legalAddress: legalEntity?.legalAddress ?? base.legalAddress,
     }),
   };
 }
@@ -725,6 +731,7 @@ export const posHandlers: Pick<MockHandlers, PosRoute> = {
       daysLeft: window - age,
       subtotalMinor: receipt.subtotalMinor,
       discountMinor: receipt.discountMinor,
+      wholesaleBuyer: null,
       payments: refundable(receipt),
       lines: receipt.lines
         .filter((l) => !query.productId || l.productId === query.productId)

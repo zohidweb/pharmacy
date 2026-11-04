@@ -16,6 +16,9 @@ export interface SalesOfStore {
   storeId: string;
   receipts: number;
   salesMinor: number;
+  /** `salesMinor` of the retail and of the wholesale receipts (spec 2026-11-03-pos-store-ideas, D29). */
+  retailMinor: number;
+  wholesaleMinor: number;
   /** The cost of the goods sold — the snapshot of the receipt lines. */
   costMinor: number;
 }
@@ -110,9 +113,11 @@ export class SalesFigures {
       storeId: string;
       receipts: number;
       salesMinor: string;
+      wholesaleMinor: string;
       costMinor: string;
     }>`
       select r.store_id, count(*)::integer as receipts, sum(r.total_dirams) as sales_minor,
+             coalesce(sum(r.total_dirams) filter (where r.sale_kind = 'wholesale'), 0) as wholesale_minor,
              sum((select coalesce(sum(l.cost_dirams), 0) from pharmacy.receipt_lines l
                   where l.tenant_id = r.tenant_id and l.receipt_id = r.id)) as cost_minor
       from pharmacy.receipts r
@@ -124,6 +129,8 @@ export class SalesFigures {
       storeId: row.storeId,
       receipts: row.receipts,
       salesMinor: Number(row.salesMinor),
+      retailMinor: Number(row.salesMinor) - Number(row.wholesaleMinor),
+      wholesaleMinor: Number(row.wholesaleMinor),
       costMinor: Number(row.costMinor),
     }));
   }

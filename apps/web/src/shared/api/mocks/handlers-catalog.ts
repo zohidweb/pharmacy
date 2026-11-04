@@ -332,6 +332,7 @@ function createProduct(body: CatalogProductInput, correlationId: string) {
     // the retail price comes from the first goods receipt by the markup
     priceMinor: 0,
     piecePriceMinor: null,
+    wholesalePriceMinor: null,
     batches: [],
   };
   applyProduct(product, body, codes);

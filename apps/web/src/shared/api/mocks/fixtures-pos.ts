@@ -41,6 +41,8 @@ export const storeSettings = (
   bufferLimits: posBufferDefaults,
   storeCode: '',
   paymentQr: null,
+  legalEntityName: 'ООО «Шифо»',
+  legalAddress: storeAddress,
 });
 
 const batch = (
@@ -74,6 +76,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'none',
       priceMinor: 450,
       piecePriceMinor: 45,
+      wholesalePriceMinor: null,
       batches: [
         batch('b-p-2288', 'P-2288', 45, 70, 300),
         batch('b-p-2311', 'P-2311', 180, 480, 310),
@@ -94,6 +97,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'rx',
       priceMinor: 2_800,
       piecePriceMinor: 175,
+      wholesalePriceMinor: null,
       batches: [batch('b-a-1187', 'A-1187', 300, 192, 1_900)],
     },
     {
@@ -110,6 +114,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'none',
       priceMinor: 1_200,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [],
     },
     {
@@ -126,6 +131,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'none',
       priceMinor: 850,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [batch('b-i-3301', 'I-3301', 200, 440, 520)],
     },
     {
@@ -142,6 +148,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'none',
       priceMinor: 1_900,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [batch('b-n-4471', 'N-4471', 12, 180, 1_250)],
     },
     {
@@ -158,6 +165,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'none',
       priceMinor: 3_400,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [batch('b-ib-120', 'IB-120', 400, 5, 2_300)],
     },
     {
@@ -174,6 +182,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'none',
       priceMinor: 6_500,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [batch('b-v-9021', 'V-9021', 500, 1_860, 4_100)],
     },
     {
@@ -190,6 +199,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'controlled',
       priceMinor: 4_200,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [batch('b-t-0712', 'T-0712', 250, 120, 2_900)],
     },
     {
@@ -206,6 +216,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'none',
       priceMinor: 620,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [batch('b-f-0902', 'F-0902', 40, 90, 380)],
     },
     {
@@ -222,6 +233,7 @@ export function initialProducts(): PosProduct[] {
       prescription: 'none',
       priceMinor: 3_600,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [batch('b-nd-55', 'ND-55', 220, 14, 2_450)],
     },
   ];

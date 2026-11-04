@@ -15,7 +15,7 @@ const FROM_OPACITY = 0.4;
 
 export interface ScrollSlideProps {
   children: ReactNode;
-  /** The column the element slides in from, and the way it leans (toward the centre of the grid). */
+  /** The side the element slides in from, and the way it leans (toward the centre of the row; spec H9.1: the first half of a row left, the second right). */
   side: 'left' | 'right';
   className?: string;
 }

@@ -1,8 +1,9 @@
 /*
  * Tariffs and services (spec 6.3, W6; redesign 4.6; amendment 2026-11-02-public-site-light-panels 4.5): the price of a
  * store huge on a green panel, «НДС N % сверху» and the price with VAT under it, the billing rule beside it as a tile,
- * the one-time services as tiles (not a table) and the call to request on a mint panel. No calculator (W6). Figures
- * come from the billing settings, so they match invoices. No `motion` on this page: the heading rises in by CSS, the
+ * the one-time services as tiles (not a table) and the call to request on a mint panel. No calculator (W6). The
+ * headline price drops zero dirams («400 с», spec 2026-11-04-public-site-home-polish, H4). Figures come from the
+ * billing settings, so they match invoices. No `motion` on this page: the heading rises in by CSS, the
  * request link gives on press (pressClassName).
  */
 import { vatOf } from '@pharmacy/shared-domain';

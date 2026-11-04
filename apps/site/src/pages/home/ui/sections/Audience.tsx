@@ -1,7 +1,7 @@
 /*
  * «Для кого» (spec 2026-11-04-public-site-home-polish, H2): the heading on the left, the four pains on the right as a
  * plain 2 x 2 grid from 1024 px (one column on a phone). The pinned stack of the light-panels amendment 4.4 is gone: the
- * cards no longer stick, so the whole block is about one screen tall. The cards are a surface, a mint block, a surface
+ * cards no longer stick: at 1440 px the four cards are about 700 px tall in all. The cards are a surface, a mint block, a surface
  * and a dark block, each with its large number on top and the title and text at the bottom; the cards of a row are
  * equally tall. They appear one after another (RevealGroup).
  */

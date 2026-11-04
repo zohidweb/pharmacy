@@ -47,6 +47,7 @@ function products(): PosProduct[] {
       prescription: 'none',
       priceMinor: 450,
       piecePriceMinor: 45,
+      wholesalePriceMinor: null,
       batches: [
         {
           id: 'b-p-2311',
@@ -70,6 +71,7 @@ function products(): PosProduct[] {
       prescription: 'none',
       priceMinor: 6_500,
       piecePriceMinor: null,
+      wholesalePriceMinor: null,
       batches: [
         {
           id: 'b-v-9021',
@@ -194,6 +196,10 @@ export class FakeApi {
       receiptFooter: 'Спасибо за покупку!',
       returnWindowDays: 14,
       bufferLimits: { ...posBufferDefaults },
+      storeCode: '03',
+      paymentQr: null,
+      legalEntityName: 'ООО «Шифо»',
+      legalAddress: store.address,
     },
   };
   private readonly shift = openShift();

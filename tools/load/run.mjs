@@ -12,7 +12,7 @@ import { cpus, platform, release, totalmem } from 'node:os';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DOCKER_NETWORK, NODE_IMAGE, startApi } from './api.mjs';
-import { at, meta } from './db.mjs';
+import { at, meta, topUpHotBatch } from './db.mjs';
 import { RESULTS_DIR, ROOT } from './env.mjs';
 import { setupFleet } from './fleet.mjs';
 import { sellable } from './receipts.mjs';
@@ -55,8 +55,12 @@ function streamReport(stats) {
     name: stats.name,
     kind: stats.kind,
     requests: answered,
-    perSecond: Number((answered / stats.seconds).toFixed(1)),
+    // the rate of the 2xx answers: a 401 or a 429 answered fast is no throughput (final review I2)
+    perSecond: Number((sorted.length / stats.seconds).toFixed(1)),
     target: stats.target,
+    notOk: Object.entries(stats.codes)
+      .filter(([code]) => Number(code) < 200 || Number(code) >= 300)
+      .reduce((sum, [, n]) => sum + n, 0),
     p50: p(50),
     p90: p(90),
     p975: p(97.5),
@@ -278,6 +282,12 @@ async function main() {
   log(`API ${api.url} (pid ${api.pid}), results in ${dir}`);
   const summary = { startedAt: startedAt.toISOString(), params: { ...options, scale: state.scale }, scenarios: [] };
   try {
+    if (options.scenarios.includes('hot')) {
+      // 20 receipts a second of up to 2 packs, with a margin, and never below the 10 000 packs of the generator
+      const hotSeconds = Math.round((options.minutes ?? MINUTES.hot) * 60);
+      const added = await topUpHotBatch(Math.max(10_000, Math.ceil(hotSeconds * 20 * 2 * 1.1)));
+      if (added > 0) log(`hot batch topped up by ${added} packs`);
+    }
     const t0 = Date.now();
     const fleet = await setupFleet(api, { cashiers: options.cashiers, managers: 5, log });
     const fullMs = [...fleet.fullSnapshotMs].sort((a, b) => a - b);
@@ -342,6 +352,21 @@ async function main() {
         scenario.checks.push({ name: 'ни одного ответа 5xx', ok: serverErrors === 0, detail: `${serverErrors}` });
         const failedConnections = scenario.streams.reduce((sum, s) => sum + s.errors, 0);
         scenario.checks.push({ name: 'ни одной ошибки соединения или таймаута', ok: failedConnections === 0, detail: `${failedConnections}` });
+        // a 401, 403, 409 or 429 means the fleet or the run broke, not a slow API: the scenario fails (final review M4)
+        const notOk = scenario.streams.filter((s) => s.notOk > 0);
+        scenario.checks.push({
+          name: 'только ответы 2xx',
+          ok: notOk.length === 0,
+          detail: notOk.length === 0 ? 'да' : notOk.map((s) => `${s.name}: ${codes(s.codes)}`).join('; '),
+        });
+        const slow = scenario.streams.filter((s) => s.target !== null && s.perSecond < s.target * 0.95);
+        if (scenario.streams.some((s) => s.target !== null)) {
+          scenario.checks.push({
+            name: 'темп потоков выдержан (≥ 95 % цели)',
+            ok: slow.length === 0,
+            detail: slow.length === 0 ? 'да' : slow.map((s) => `${s.name}: ${s.perSecond} из ${s.target}`).join('; '),
+          });
+        }
         if (name !== 'stress') {
           const limited = scenario.streams.reduce((sum, s) => sum + s.rateLimited, 0);
           scenario.checks.push({ name: 'ни одного ответа 429 (лимит не мешает замеру)', ok: limited === 0, detail: `${limited}` });

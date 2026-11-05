@@ -1,5 +1,5 @@
-// The scenarios of the load run (ADR-0009, axis Ж; plan R11–R14) and the streams they are made of. A stream is one
-// autocannon instance: its requests take the employee round-robin (autocannon resets the context of a connection
+// The scenarios of the load run (ADR-0009, axis Ж; plan R11–R14) and the streams they are made of. A stream is a set of
+// autocannon instances: its requests take the employee round-robin (autocannon resets the context of a connection
 // before every request when there is one request definition, so a connection has no identity of its own), its
 // latencies are those of the 2xx answers, every status is counted, 429 apart (Review Focus 2, 3).
 import autocannon from 'autocannon';
@@ -15,58 +15,67 @@ export const BUDGETS = {
 };
 
 /**
- * Runs one stream for `seconds`: `rate` requests a second over the whole stream (autocannon opens as many
- * connections, one request a second each) or `connections` × `perConnection` without a global pace (the stress).
- * `next(context, rng)` returns `{ path, method?, body?, headers? }`; `onResponse(context, status, body)` reads the
- * answer of that request.
+ * Runs one stream for `seconds`: `rate` requests a second, evenly spread over the second, or `connections` ×
+ * `perConnection` without a global pace (the stress). `next(context, rng)` returns `{ path, method?, body?, headers? }`;
+ * `onResponse(context, status, body)` reads the answer of that request.
  */
 export async function runStream(api, spec) {
   const rng = seededRandom(spec.seed ?? 1);
   const stats = { name: spec.name, kind: spec.kind, target: spec.rate ?? null, sent: 0, codes: {}, latencies: [], errors: 0 };
-  const instance = autocannon({
-    url: api.url,
-    ...(spec.rate ? { overallRate: spec.rate, connections: spec.rate } : {}),
-    ...(spec.connections ? { connections: spec.connections, connectionRate: spec.perConnection } : {}),
-    duration: spec.seconds,
-    timeout: 30,
-    requests: [
-      {
-        setupRequest(req, context) {
-          const built = spec.next(context, rng);
-          stats.sent += 1;
-          return {
-            ...req,
-            method: built.method ?? 'GET',
-            path: `/api/v1${built.path}`,
-            headers: {
-              Origin: api.origin,
-              Cookie: context.who.cookies,
-              ...(built.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-              ...built.headers,
-            },
-            body: built.body === undefined ? undefined : JSON.stringify(built.body),
-          };
+  const request = {
+    setupRequest(req, context) {
+      const built = spec.next(context, rng);
+      stats.sent += 1;
+      return {
+        ...req,
+        method: built.method ?? 'GET',
+        path: `/api/v1${built.path}`,
+        headers: {
+          Origin: api.origin,
+          Cookie: context.who.cookies,
+          ...(built.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...built.headers,
         },
-        ...(spec.onResponse
-          ? {
-              onResponse(status, body, context) {
-                spec.onResponse(context, status, body);
-              },
-            }
-          : {}),
-      },
-    ],
-  });
-  instance.on('response', (_client, status, _bytes, ms) => {
-    stats.codes[status] = (stats.codes[status] ?? 0) + 1;
-    if (status >= 200 && status < 300) stats.latencies.push(ms);
-  });
-  instance.on('reqError', () => {
-    stats.errors += 1;
-  });
-  const result = await instance;
+        body: built.body === undefined ? undefined : JSON.stringify(built.body),
+      };
+    },
+    ...(spec.onResponse
+      ? {
+          onResponse(status, body, context) {
+            spec.onResponse(context, status, body);
+          },
+        }
+      : {}),
+  };
+  const start = (connections) => {
+    // autocannon writes into the request definition it builds from: each instance gets its own
+    const instance = autocannon({ url: api.url, duration: spec.seconds, timeout: 30, requests: [{ ...request }], ...connections });
+    instance.on('response', (_client, status, _bytes, ms) => {
+      stats.codes[status] = (stats.codes[status] ?? 0) + 1;
+      if (status >= 200 && status < 300) stats.latencies.push(ms);
+    });
+    instance.on('reqError', () => {
+      stats.errors += 1;
+    });
+    return instance;
+  };
+  let results;
+  if (spec.rate) {
+    // every connection of an instance starts its one-second pace at the same moment: one instance with `overallRate`
+    // writes all the requests of a second in the same millisecond (final review I1). One connection an instance, the
+    // starts spread over the second from a random phase of the stream
+    const phase = rng();
+    results = await Promise.all(
+      Array.from({ length: spec.rate }, async (_, i) => {
+        await new Promise((resolve) => setTimeout(resolve, ((i + phase) / spec.rate) * 1000));
+        return start({ connections: 1, connectionRate: 1 });
+      }),
+    );
+  } else {
+    results = [await start({ connections: spec.connections, connectionRate: spec.perConnection })];
+  }
   stats.seconds = spec.seconds;
-  stats.timeouts = result.timeouts;
+  stats.timeouts = results.reduce((sum, result) => sum + result.timeouts, 0);
   return stats;
 }
 
@@ -170,8 +179,7 @@ export function hot(api, fleet, { sellable, hotProductId, seconds }) {
       runStream(api, {
         name: 'POST /receipts (горячая партия)',
         kind: 'receipt',
-        connections: fleet.hot.length,
-        perConnection: 4,
+        rate: 4 * fleet.hot.length,
         seconds,
         ...receipts,
       }),

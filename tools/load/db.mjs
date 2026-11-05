@@ -196,6 +196,41 @@ async function generate(args) {
   process.stdout.write(await size());
 }
 
+/**
+ * Brings the hot batch of L01 back to at least `packs` packs before a run (final review I3): every hot scenario sells
+ * thousands of them, and a run on the same database must not start from an emptied batch. The delivery line of the
+ * batch grows by what is added and the batch gets a delivery movement of it — the invariant «stock = delivered − sold»
+ * of run.mjs holds. Returns the packs added.
+ */
+export async function topUpHotBatch(packs) {
+  const state = await meta();
+  const added = await psql(
+    {
+      sql: `
+select g.id as line_id, g.document_id as doc_id, b.store_id, p.pieces_per_pack as ppp,
+       (select coalesce(sum(m.qty_delta_pieces), 0) from pharmacy.stock_movements m
+        where m.tenant_id = :'t' and m.batch_id = :'b') as stock
+from pharmacy.goods_receipt_lines g
+join pharmacy.batches b on b.tenant_id = g.tenant_id and b.id = g.batch_id
+join pharmacy.products p on p.tenant_id = g.tenant_id and p.id = g.product_id
+where g.tenant_id = :'t' and g.batch_id = :'b' \\gset
+select greatest(0, :packs * :ppp - :stock) as add, :packs * :ppp > :stock as needed \\gset
+\\if :needed
+update pharmacy.goods_receipt_lines set qty_pieces = qty_pieces + :add where tenant_id = :'t' and id = :'line_id';
+insert into pharmacy.stock_movements
+  (tenant_id, id, recorded_at, store_id, batch_id, qty_delta_pieces, kind, source_type, source_id, source_line_id,
+   business_date, origin)
+values (:'t', gen_random_uuid(), now(), :'store_id', :'b', :add, 'goods_receipt', 'document', :'doc_id', :'line_id',
+        (now() at time zone 'Asia/Dushanbe')::date, 'local');
+\\endif
+select :add / :ppp;`,
+    },
+    { t: state.tenant_id, b: state.hot_batch_id, packs },
+    { args: ['-1', '-At'] },
+  );
+  return Number(added.trim());
+}
+
 /** The bulk tables whose declared references verify checks one by one (plan R4). */
 const CHECKED_TABLES = [
   'receipts',

@@ -31,25 +31,26 @@ function fefoBatch(product, pieces) {
 /**
  * The body and the idempotency key of one sale of `cashier` (storeId, terminalId, employeeId, shiftId). 1–3 lines,
  * the products skewed to the head of the list (a few sell often, as in the history); `productId` sells that product
- * alone — the hot batch (R12).
+ * alone — the hot batch (R12). The sold pieces leave the batches of the snapshot at once, as the POS does
+ * (applySaleToSnapshot): a sold-out batch is not sold again, a sold-out product gives way to another (final review M3).
  */
 export function buildReceipt(cashier, snapshot, products, rng, { productId } = {}) {
-  const picked = new Map();
-  if (productId) {
-    picked.set(productId, products.find((p) => p.id === productId));
-  } else {
-    const count = rng() < 0.45 ? 1 : rng() < 0.64 ? 2 : 3;
-    while (picked.size < count) {
-      const product = products[Math.floor(products.length * rng() ** 3)];
-      picked.set(product.id, product);
-    }
-  }
+  const hot = productId ? products.find((p) => p.id === productId) : null;
+  if (productId && !hot) throw new Error(`product ${productId} is not sellable in the snapshot of the store`);
+  const count = productId ? 1 : rng() < 0.45 ? 1 : rng() < 0.64 ? 2 : 3;
   const lines = [];
-  for (const product of picked.values()) {
-    if (!product) throw new Error(`product ${productId} is not sellable in the snapshot of the store`);
+  const picked = new Set();
+  for (let attempt = 0; lines.length < count && attempt < 50; attempt += 1) {
+    const product = hot ?? products[Math.floor(products.length * rng() ** 3)];
+    if (picked.has(product.id)) continue;
     const quantity = rng() < 0.8 ? 1 : 2;
     const batch = fefoBatch(product, quantity * product.piecesPerPack);
-    if (!batch) continue;
+    if (!batch) {
+      if (hot) break;
+      continue;
+    }
+    picked.add(product.id);
+    batch.quantityPieces -= quantity * product.piecesPerPack;
     lines.push({
       productId: product.id,
       batchId: batch.id,
@@ -62,7 +63,7 @@ export function buildReceipt(cashier, snapshot, products, rng, { productId } = {
       controlled: null,
     });
   }
-  if (lines.length === 0) throw new Error('no line with stock: the snapshot is sold out');
+  if (lines.length === 0) throw new Error(hot ? 'the hot batch is sold out in the snapshot' : 'no line with stock: the snapshot is sold out');
   const total = lines.reduce((sum, line) => sum + line.amountMinor, 0);
   const cash = rng() < 0.6;
   const tendered = cash ? Math.ceil(total / 1000) * 1000 : 0;

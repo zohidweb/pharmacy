@@ -180,6 +180,8 @@ npx nx e2e web-e2e                   # e2e web: собирает web, брауз
 npx nx run api:migrate               # миграции dev-БД ролью pharmacy_owner (нужен npm run dev:deps)
 npx nx run api:integration           # интеграционные тесты на БД pharmacy_test (нужен npm run dev:deps)
 npx nx run api:db-types              # перегенерация типов Kysely из мигрированной БД; db-types-verify — проверка актуальности
+node tools/load/db.mjs create && node tools/load/db.mjs generate --scale 1   # база нагрузочного прогона pharmacy_load (ADR-0009, Ж)
+node tools/load/run.mjs --scenario all  # нагрузочный прогон кассы; затем db.mjs drop (docs/guides/load-test.md)
 
 npm run dev:deps                     # PostgreSQL + Redis в Docker (dev), затем npm run dev
 npm run dev                          # api + web + admin с hot reload

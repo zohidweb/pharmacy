@@ -65,3 +65,7 @@ test-output
 
 # the camera reader, copied from zxing-wasm by tools/scripts/zxing-wasm.mjs (ADR-0025)
 apps/web/public/vendor/*.wasm
+
+# the load run (docs/guides/load-test.md): the owner's password and device cookies of pharmacy_load, the reports
+tools/load/.state/
+tools/load/results/

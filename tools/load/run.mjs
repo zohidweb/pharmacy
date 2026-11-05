@@ -2,7 +2,7 @@
 // The POS load run (ADR-0009, axis Ж; docs/guides/load-test.md):
 //
 //   node tools/load/run.mjs --scenario profile|hot|stress|replay|all [--minutes N] [--cashiers N] [--pause S] [--api docker|host]
-//                          [--driver docker|host]
+//                          [--driver docker|host] [--factor F]
 //
 // Starts the API of the run, builds the fleet, runs the scenarios and writes tools/load/results/<time>/summary.md and
 // summary.json: per stream the requests, the rate, p50…p99 of the 2xx answers against the budgets of ADR-0009, the
@@ -37,6 +37,7 @@ function args() {
     scenarios: scenario === 'all' ? ['profile', 'hot', 'stress', 'replay'] : [scenario],
     minutes: minutes === null ? null : Number(minutes),
     cashiers: Number(value('cashiers', 250)),
+    factor: Number(value('factor', 1)),
     pause: Number(value('pause', 60)),
     api: value('api', 'docker'),
     driver: value('driver', 'docker'),
@@ -183,7 +184,8 @@ function markdown(summary) {
     '',
     `${summary.startedAt} … ${summary.finishedAt}. Масштаб данных ${summary.params.scale}` +
       `${Number(summary.params.scale) < 1 ? ' (объём ниже ADR)' : ''}, база ${summary.database.size}, ` +
-      `кассиров ${summary.params.cashiers}, заведующих ${summary.params.managers}.`,
+      `кассиров ${summary.params.cashiers}, заведующих ${summary.params.managers}` +
+      `${summary.params.factor === 1 ? "" : `, темп профиля ×${summary.params.factor}`}.`,
     '',
     `Железо: ${summary.hardware.cpu}, ОЗУ ${summary.hardware.memoryGb} ГБ, ${summary.hardware.os}, ` +
       `Node ${summary.hardware.node}, PostgreSQL ${summary.hardware.postgres}.`,
@@ -233,10 +235,11 @@ async function inProcess(api, fleet, name, context) {
  * A scenario in a container on the network of the API (driver.mjs, the default): the fleet with its cookies goes on
  * stdin, the statistics come back on stdout.
  */
-async function inDocker(api, fleet, { scenario, seconds, terms, hotProductId }) {
+async function inDocker(api, fleet, { scenario, seconds, terms, hotProductId, factor }) {
   const input = {
     scenario,
     seconds,
+    factor,
     terms,
     hotProductId,
     api: { url: api.internalUrl, origin: api.origin },
@@ -319,8 +322,8 @@ async function main() {
       } else {
         const run =
           options.driver === 'docker'
-            ? await inDocker(api, fleet, { scenario: name, seconds, terms, hotProductId: state.hot_product_id })
-            : await inProcess(api, fleet, name, { ...context, seconds });
+            ? await inDocker(api, fleet, { scenario: name, seconds, terms, hotProductId: state.hot_product_id, factor: options.factor })
+            : await inProcess(api, fleet, name, { ...context, seconds, factor: options.factor });
         scenario.streams = run.streams.map(streamReport);
         const receiptStats = scenario.streams.find((s) => s.kind === 'receipt');
         const after = await snapshotDb(state.tenant_id, state.hot_batch_id);

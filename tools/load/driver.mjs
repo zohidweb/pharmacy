@@ -17,6 +17,7 @@ const run = { profile, hot, stress }[input.scenario](input.api, fleet, {
   terms: input.terms,
   hotProductId: input.hotProductId,
   seconds: input.seconds,
+  factor: input.factor ?? 1,
 });
 const streams = await run.streams;
 process.stdout.write(

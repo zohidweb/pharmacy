@@ -141,18 +141,22 @@ function searchStream(fleet, terms, kind) {
   };
 }
 
-/** R11: 15 minutes of the pilot ×5 — 28 requests a second in six streams. */
-export function profile(api, fleet, { sellable, terms, seconds }) {
+/**
+ * R11: 15 minutes of the pilot ×5 — 28 requests a second in six streams; `factor` multiplies every rate (×2 — the
+ * headroom ADR-0009 asks for, measured as a profile and not only as the stress).
+ */
+export function profile(api, fleet, { sellable, terms, seconds, factor = 1 }) {
   const receipts = receiptStream(fleet, sellable, { seed: 11 });
+  const at = (rate) => Math.max(1, Math.round(rate * factor));
   return {
     receipts,
     streams: Promise.all([
-      runStream(api, { name: 'POST /receipts', kind: 'receipt', rate: 5, seconds, ...receipts }),
-      runStream(api, { name: 'GET catalog-snapshot (delta)', kind: 'flag', rate: 9, seconds, seed: 12, ...snapshotStream(fleet, fleet.cashiers) }),
-      runStream(api, { name: 'GET /shifts/current', kind: 'flag', rate: 5, seconds, seed: 13, ...shiftStream(fleet.cashiers) }),
-      runStream(api, { name: 'GET /catalog/products?q=<штрихкод>', kind: 'barcode', rate: 3, seconds, seed: 14, ...searchStream(fleet, terms, 'barcode') }),
-      runStream(api, { name: 'GET /catalog/products?q=<текст>', kind: 'text', rate: 3, seconds, seed: 15, ...searchStream(fleet, terms, 'text') }),
-      runStream(api, { name: 'GET stock-products?query=<текст>', kind: 'text', rate: 3, seconds, seed: 16, ...searchStream(fleet, terms, 'stock') }),
+      runStream(api, { name: 'POST /receipts', kind: 'receipt', rate: at(5), seconds, ...receipts }),
+      runStream(api, { name: 'GET catalog-snapshot (delta)', kind: 'flag', rate: at(9), seconds, seed: 12, ...snapshotStream(fleet, fleet.cashiers) }),
+      runStream(api, { name: 'GET /shifts/current', kind: 'flag', rate: at(5), seconds, seed: 13, ...shiftStream(fleet.cashiers) }),
+      runStream(api, { name: 'GET /catalog/products?q=<штрихкод>', kind: 'barcode', rate: at(3), seconds, seed: 14, ...searchStream(fleet, terms, 'barcode') }),
+      runStream(api, { name: 'GET /catalog/products?q=<текст>', kind: 'text', rate: at(3), seconds, seed: 15, ...searchStream(fleet, terms, 'text') }),
+      runStream(api, { name: 'GET stock-products?query=<текст>', kind: 'text', rate: at(3), seconds, seed: 16, ...searchStream(fleet, terms, 'stock') }),
     ]),
   };
 }

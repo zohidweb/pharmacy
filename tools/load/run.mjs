@@ -11,7 +11,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { cpus, platform, release, totalmem } from 'node:os';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DOCKER_NETWORK, NODE_IMAGE, startApi } from './api.mjs';
+import { DOCKER_NETWORK, DRIVER_CONTAINER, NODE_IMAGE, removeContainers, startApi } from './api.mjs';
 import { at, meta, topUpHotBatch } from './db.mjs';
 import { RESULTS_DIR, ROOT } from './env.mjs';
 import { setupFleet } from './fleet.mjs';
@@ -256,9 +256,15 @@ async function inDocker(api, fleet, { scenario, seconds, terms, hotProductId, fa
   };
   const child = spawn(
     'docker',
-    ['run', '--rm', '-i', '--network', DOCKER_NETWORK, '-v', `${ROOT}:/app:ro`, '-w', '/app', NODE_IMAGE, 'node', 'tools/load/driver.mjs'],
+    [
+      'run', '--rm', '-i', '--init', '--name', DRIVER_CONTAINER, '--network', DOCKER_NETWORK,
+      '-v', `${ROOT}:/app:ro`, '-w', '/app', NODE_IMAGE, 'node', 'tools/load/driver.mjs',
+    ],
     { stdio: ['pipe', 'pipe', 'pipe'] },
   );
+  // the summary of the driver carries the Cyrillic names of the streams (final review M2)
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
   let out = '';
   let err = '';
   child.stdout.on('data', (chunk) => (out += chunk));
@@ -272,6 +278,12 @@ async function inDocker(api, fleet, { scenario, seconds, terms, hotProductId, fa
 
 async function main() {
   const options = args();
+  // Ctrl+C: the API and the driver run in containers that would outlive this process (final review M1)
+  process.once('SIGINT', () => {
+    console.error('interrupted: removing the containers of the run');
+    removeContainers();
+    process.exit(130);
+  });
   const state = await meta();
   if (state?.finished_at === undefined) throw new Error('pharmacy_load is not generated: node tools/load/db.mjs generate');
   const startedAt = new Date();

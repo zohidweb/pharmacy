@@ -77,6 +77,17 @@ function superuser() {
   return user;
 }
 
+/** The output options of psql a caller may add: a database or a connection never comes through them (final review M6). */
+const PSQL_FLAGS = new Set(['-A', '-t', '-At', '-1', '-q']);
+const PSQL_OPTIONS_WITH_VALUE = new Set(['-F', '-P']);
+
+function checkPsqlArgs(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    if (PSQL_OPTIONS_WITH_VALUE.has(args[i])) i += 1;
+    else if (!PSQL_FLAGS.has(args[i])) throw new Error(`psql option ${args[i]} is not allowed in the load run`);
+  }
+}
+
 /**
  * Runs SQL as the superuser of the dev container through `docker exec … psql`, the text on stdin: `{ sql }` or
  * `{ file }`. `vars` become `-v name=value`; `database` is pharmacy_load unless the lifecycle needs `postgres`.
@@ -86,12 +97,20 @@ export function psql(input, vars = {}, { database = LOAD_DB, echo = false, args 
   if (database !== LOAD_DB && database !== 'postgres') {
     return Promise.reject(new Error(`psql runs only in ${LOAD_DB} (or postgres for create/drop)`));
   }
+  try {
+    checkPsqlArgs(args);
+  } catch (error) {
+    return Promise.reject(error);
+  }
   const text = 'file' in input ? readFileSync(input.file, 'utf8') : input.sql;
   const argv = ['exec', '-i', PG_CONTAINER, 'psql', '-X', '-q', '-U', superuser(), '-d', database];
   argv.push('-v', 'ON_ERROR_STOP=1', ...args);
   for (const [name, value] of Object.entries(vars)) argv.push('-v', `${name}=${value}`);
   return new Promise((resolve, reject) => {
     const child = spawn('docker', argv, { stdio: ['pipe', 'pipe', 'pipe'] });
+    // a Cyrillic character split between two chunks must not become U+FFFD (final review M2)
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
     let out = '';
     let err = '';
     child.stdout.on('data', (chunk) => {

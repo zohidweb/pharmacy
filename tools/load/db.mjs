@@ -104,14 +104,43 @@ async function domainDefaults() {
   return { roles: JSON.stringify(roles), catalog: JSON.stringify(catalog) };
 }
 
-/** The one-time code of the owner (base32, 26 characters, as the API issues it): kept in .state, never printed. */
-function ownerCode() {
-  if (existsSync(OWNER_STATE)) return JSON.parse(readFileSync(OWNER_STATE, 'utf8'));
+/** A new one-time code of the owner (base32, 26 characters, as the API issues it): kept in .state, never printed. */
+function newOwnerCode() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   const state = { login: 'load.owner', code: Array.from({ length: 26 }, () => alphabet[randomInt(32)]).join('') };
   mkdirSync(STATE_DIR, { recursive: true });
   writeFileSync(OWNER_STATE, JSON.stringify(state, null, 2));
   return state;
+}
+
+const ownerCode = () => (existsSync(OWNER_STATE) ? JSON.parse(readFileSync(OWNER_STATE, 'utf8')) : newOwnerCode());
+const codeHash = (code) => createHash('sha256').update(code, 'utf8').digest('hex');
+
+/**
+ * A new one-time code for the owner of an activated network (final review M7): the password of .state was lost while
+ * the database stays, and the activation code of the generator is spent. Written straight into pharmacy_load, as the
+ * operator's «new code» would; the next activation sets a new password.
+ */
+export async function reissueOwnerCode() {
+  const state = await meta();
+  const owner = newOwnerCode();
+  await at(
+    `update pharmacy.employee_credentials
+     set one_time_code_hash = :'hash', one_time_code_expires_at = now() + interval '1 day'
+     where tenant_id = :'t' and employee_id = :'owner'`,
+    { hash: codeHash(owner.code), t: state.tenant_id, owner: state.owner_id },
+  );
+  return owner;
+}
+
+/** Whether the owner of the network already has a password (the code of the generator is spent). */
+export async function ownerActivated() {
+  const state = await meta();
+  const activated = await at(
+    `select password_hash is not null from pharmacy.employee_credentials where tenant_id = :'t' and employee_id = :'owner'`,
+    { t: state.tenant_id, owner: state.owner_id },
+  );
+  return activated === 't';
 }
 
 /** The parameters the generator recorded (load_gen.meta), or null before the setup. */
@@ -155,7 +184,7 @@ async function generate(args) {
       tenant_id: randomUUID(),
       owner_id: randomUUID(),
       owner_role_id: randomUUID(),
-      owner_code_hash: createHash('sha256').update(owner.code, 'utf8').digest('hex'),
+      owner_code_hash: codeHash(owner.code),
       roles,
       catalog,
     });
@@ -169,18 +198,30 @@ async function generate(args) {
   }
 
   const loaded = new Set((await at('select month_start::text from load_gen.month')).split('\n').filter(Boolean));
+  const months = [];
   for (let month = `${state.history_from.slice(0, 7)}-01`; month <= state.today; ) {
-    if (!loaded.has(month)) {
-      // a month is one transaction: a full disk rolls it back, the next run goes on from it (plan, Review Focus 4)
-      if (freeGb() < 3) throw new Error(`less than 3 GB free on ${DOCKER_DISK}: stopped before ${month}`);
-      const t0 = Date.now();
-      const out = await generator('month', { scale, month, today: state.today, history_from: state.history_from });
-      const size = await at('select pg_size_pretty(pg_database_size(current_database()))');
-      console.log(`${out.trim().split('\n').pop()} — ${seconds(t0)}, database ${size}`);
-    }
+    months.push(month);
     const next = new Date(`${month}T00:00:00Z`);
     next.setUTCMonth(next.getUTCMonth() + 1);
     month = next.toISOString().slice(0, 10);
+  }
+  const left = months.filter((month) => !loaded.has(month));
+  // a resumed generation checks the rest of it, not only the next month: a disk full of WAL stops the whole dev
+  // cluster, not one transaction (final review M5). A month at scale 1 takes about 1.4 GB, its WAL up to 1 GB more
+  const monthGb = 3 + 2 * scale;
+  const restGb = left.length * 1.5 * scale + 3;
+  if (left.length > 0 && freeGb() < restGb) {
+    throw new Error(
+      `${freeGb().toFixed(1)} GB free on ${DOCKER_DISK}, the ${left.length} months left need ${restGb.toFixed(0)} GB`,
+    );
+  }
+  for (const month of left) {
+    // a month is one transaction: a full disk rolls it back, the next run goes on from it (plan, Review Focus 4)
+    if (freeGb() < monthGb) throw new Error(`less than ${monthGb} GB free on ${DOCKER_DISK}: stopped before ${month}`);
+    const t0 = Date.now();
+    const out = await generator('month', { scale, month, today: state.today, history_from: state.history_from });
+    const size = await at('select pg_size_pretty(pg_database_size(current_database()))');
+    console.log(`${out.trim().split('\n').pop()} — ${seconds(t0)}, database ${size}`);
   }
 
   if (state.finished_at === undefined) {

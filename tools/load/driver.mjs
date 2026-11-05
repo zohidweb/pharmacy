@@ -7,6 +7,8 @@
 import { hot, profile, stress } from './scenarios.mjs';
 import { sellable } from './receipts.mjs';
 
+// whole characters only: a Cyrillic name split between two chunks must not become U+FFFD (final review M2)
+process.stdin.setEncoding('utf8');
 let text = '';
 for await (const chunk of process.stdin) text += chunk;
 const input = JSON.parse(text);

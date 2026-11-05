@@ -1,7 +1,7 @@
 // The API of the load run (plan R8, R9): the built apps/api/dist/main.js on its own port, production defaults, the
 // database pharmacy_load and the logical Redis database 13, flushed before the start. Plus the HTTP helper of the run:
 // the Origin of the web client (CSRF), JSON, a correlation id, the cookies of one employee or terminal.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createWriteStream, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -99,6 +99,13 @@ async function healthy(url) {
 export const NODE_IMAGE = process.env.LOAD_NODE_IMAGE ?? 'node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1';
 export const DOCKER_NETWORK = process.env.LOAD_DOCKER_NETWORK ?? 'pharmacy-dev_default';
 const CONTAINER = 'pharmacy-load-api';
+/** The container of driver.mjs: named, so an interrupted run can remove it (final review M1). */
+export const DRIVER_CONTAINER = 'pharmacy-load-driver';
+
+/** Removes the containers of the run (Ctrl+C, a failed start); a missing one is no error. */
+export function removeContainers() {
+  spawnSync('docker', ['rm', '-f', CONTAINER, DRIVER_CONTAINER], { stdio: 'ignore' });
+}
 
 /**
  * The command of the API. `docker` (the default): the built bundle in a container of the production Node image on the
@@ -129,7 +136,7 @@ function apiCommand(mode, env, port) {
   return {
     command: 'docker',
     args: [
-      'run', '--rm', '--name', CONTAINER, '--network', DOCKER_NETWORK, '-p', `127.0.0.1:${port}:3000`,
+      'run', '--rm', '--init', '--name', CONTAINER, '--network', DOCKER_NETWORK, '-p', `127.0.0.1:${port}:3000`,
       '-v', `${ROOT}:/app:ro`, '-w', '/app', ...names.flatMap((name) => ['-e', name]),
       NODE_IMAGE, 'node', 'apps/api/dist/main.js',
     ],
@@ -145,6 +152,8 @@ export async function startApi({ port = 3010, logFile, mode = 'docker' } = {}) {
   if (!existsSync(MAIN)) throw new Error('apps/api/dist/main.js is missing: npx nx build api');
   const env = loadEnv({ apiPort: port });
   const url = `http://127.0.0.1:${port}`;
+  // a container left by an interrupted run answers on the port: it goes first (final review M1)
+  if (mode === 'docker') removeContainers();
   if (await healthy(url)) throw new Error(`port ${port} already answers: stop that API first`);
 
   const redis = createClient({ url: env.REDIS_URL });
@@ -153,7 +162,6 @@ export async function startApi({ port = 3010, logFile, mode = 'docker' } = {}) {
   await redis.quit();
 
   const docker = (...args) => new Promise((resolve) => spawn('docker', args, { stdio: 'ignore' }).on('exit', resolve));
-  if (mode === 'docker') await docker('rm', '-f', CONTAINER);
   const run = apiCommand(mode, env, port);
   const child = spawn(run.command, run.args, { cwd: ROOT, env: run.env, stdio: ['ignore', 'pipe', 'pipe'] });
   const log = logFile ? createWriteStream(logFile, { flags: 'a' }) : null;

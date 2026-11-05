@@ -7,7 +7,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CookieJar, call, expect, uuidv7 } from './api.mjs';
-import { OWNER_STATE, at } from './db.mjs';
+import { OWNER_STATE, at, ownerActivated, reissueOwnerCode } from './db.mjs';
 import { STATE_DIR } from './env.mjs';
 
 const FLEET_STATE = join(STATE_DIR, 'fleet.json');
@@ -52,8 +52,10 @@ async function paced(items, perSecond, fn, parallel = 1) {
 
 /** The owner's session; a new one when the step-up of the old one ran out. */
 async function ownerSession(api, state) {
-  const owner = JSON.parse(readFileSync(OWNER_STATE, 'utf8'));
+  let owner = JSON.parse(readFileSync(OWNER_STATE, 'utf8'));
   if (!state.ownerPassword) {
+    // .state/fleet.json was lost and the code of generate is spent: a new code first (final review M7)
+    if (await ownerActivated()) owner = await reissueOwnerCode();
     const newPassword = password();
     // the one-time code of generate (R17): activated once per database
     await expect(api, 'POST', '/activations', { body: { login: owner.login, code: owner.code, newPassword } }, 204);
@@ -168,6 +170,32 @@ export async function setupFleet(api, { cashiers: count = 250, managers: manager
         `select id from pharmacy.terminals where store_id = :'store' and name = :'name' and revoked_at is null`,
         { store: cashier.storeId, name },
       );
+      // a terminal with an open shift is not revoked (409 shift_open): the owner closes it from another computer first
+      const shiftId = await at(
+        `select id from pharmacy.shifts where terminal_id = :'terminal' and status = 'open'`,
+        { terminal: id },
+      );
+      if (shiftId !== '') {
+        const closing = uuidv7();
+        await asOwner(
+          api,
+          state,
+          owner,
+          'POST',
+          `/shifts/${shiftId}/forced-closure`,
+          {
+            headers: { 'Idempotency-Key': closing },
+            body: {
+              id: closing,
+              actualCashMinor: 0,
+              terminalTotals: { card: 0, qr: 0, nfc: 0 },
+              reason: 'Нагрузочный прогон: терминал привязан заново',
+            },
+          },
+          200,
+          201,
+        );
+      }
       await asOwner(api, state, owner, 'DELETE', `/terminals/${id}`, {}, 204, 200);
       jar = new CookieJar({ sid: owner.jar.get('sid') });
       bound = await call(api, 'POST', '/terminals', { jar, body: { storeId: cashier.storeId, name } });

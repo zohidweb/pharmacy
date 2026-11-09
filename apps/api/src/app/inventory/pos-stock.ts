@@ -27,10 +27,13 @@ export interface SaleMovement {
 }
 
 /**
- * Up to this many products a delta sums the stock batch by batch; a longer list reads the store
- * in one pass, cheaper from about 300 products (load run 2026-11-09, docs/guides/load-test.md).
+ * Up to this many batches a delta sums the stock batch by batch; more batches read the store in one
+ * pass. A batch costs a probe of every monthly partition (≈ 50–80 µs) whatever its stock, and the
+ * batches of a product only add up, so the cap counts batches, not products: the 200 best sellers
+ * with ≈ 600 batches took 64 ms against 87 for the store pass (load run 2026-11-09,
+ * docs/guides/load-test.md).
  */
-const PER_BATCH_STOCK_MAX_PRODUCTS = 200;
+const PER_BATCH_STOCK_MAX_BATCHES = 600;
 
 // The public interface of the stock for the POS (ADR-0002; spec 2026-10-13-pos-shift-sale, 4.3 and
 // 4.5): the batches and their stock for the snapshot, the lock of the sold batches and the `sale`
@@ -51,29 +54,38 @@ export class PosStock {
     productIds: readonly string[] | null,
   ): Promise<PosBatchRow[]> {
     if (productIds !== null && productIds.length === 0) return [];
-    if (
-      productIds !== null &&
-      productIds.length <= PER_BATCH_STOCK_MAX_PRODUCTS
-    ) {
+    if (productIds !== null) {
       // a delta: the stock of the batches of its products, batch by batch on the batch index, not
-      // the whole history of the store (load run 2026-11-05, finding 1, docs/guides/load-test.md)
-      const result = await sql<PosBatchRow>`
-        select b.id, b.product_id, b.lot_number, b.expiry_date::text as expiry_date,
-               s.qty as stock_pieces, b.purchase_price_per_pack_dirams, b.cost_per_piece_dirams
-        from pharmacy.batches b
-        join lateral (
-          select sum(m.qty_delta_pieces)::integer as qty
-          from pharmacy.stock_movements m
-          where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
-        ) s on true
-        where b.tenant_id = ${tenantId} and b.store_id = ${storeId}
-          and b.product_id = any(${sql.val([...productIds])}::uuid[])
-          and s.qty > 0
-        order by b.product_id, b.expiry_date, b.id`.execute(trx);
-      return result.rows;
+      // the whole history of the store (load run 2026-11-05, finding 1, docs/guides/load-test.md);
+      // the count stops past the cap
+      const counted = await sql<{ batches: number }>`
+        select count(*)::integer as batches from (
+          select 1 from pharmacy.batches b
+          where b.tenant_id = ${tenantId} and b.store_id = ${storeId}
+            and b.product_id = any(${sql.val([...productIds])}::uuid[])
+          limit ${PER_BATCH_STOCK_MAX_BATCHES + 1}
+        ) c`.execute(trx);
+      const batches = counted.rows[0]?.batches ?? 0;
+      if (batches === 0) return [];
+      if (batches <= PER_BATCH_STOCK_MAX_BATCHES) {
+        const result = await sql<PosBatchRow>`
+          select b.id, b.product_id, b.lot_number, b.expiry_date::text as expiry_date,
+                 s.qty as stock_pieces, b.purchase_price_per_pack_dirams, b.cost_per_piece_dirams
+          from pharmacy.batches b
+          join lateral (
+            select sum(m.qty_delta_pieces)::integer as qty
+            from pharmacy.stock_movements m
+            where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
+          ) s on true
+          where b.tenant_id = ${tenantId} and b.store_id = ${storeId}
+            and b.product_id = any(${sql.val([...productIds])}::uuid[])
+            and s.qty > 0
+          order by b.product_id, b.expiry_date, b.id`.execute(trx);
+        return result.rows;
+      }
     }
-    // the whole snapshot or a long delta (a catalog load): one pass over the movements of the store
-    // (index-only on the batch index), then the batches
+    // the whole snapshot or a delta of many batches (a catalog load, a long history): one pass over
+    // the movements of the store (index-only on the batch index), then the batches
     const result = await sql<PosBatchRow>`
       select b.id, b.product_id, b.lot_number, b.expiry_date::text as expiry_date,
              s.qty as stock_pieces, b.purchase_price_per_pack_dirams, b.cost_per_piece_dirams

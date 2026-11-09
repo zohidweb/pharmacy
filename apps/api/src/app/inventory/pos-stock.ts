@@ -26,6 +26,12 @@ export interface SaleMovement {
   businessDate: string;
 }
 
+/**
+ * Up to this many products a delta sums the stock batch by batch; a longer list reads the store
+ * in one pass, cheaper from about 300 products (load run 2026-11-09, docs/guides/load-test.md).
+ */
+const PER_BATCH_STOCK_MAX_PRODUCTS = 200;
+
 // The public interface of the stock for the POS (ADR-0002; spec 2026-10-13-pos-shift-sale, 4.3 and
 // 4.5): the batches and their stock for the snapshot, the lock of the sold batches and the `sale`
 // movements of a receipt. Stock is the sum of the movements (data model 03). Runs in the caller's
@@ -45,7 +51,29 @@ export class PosStock {
     productIds: readonly string[] | null,
   ): Promise<PosBatchRow[]> {
     if (productIds !== null && productIds.length === 0) return [];
-    // one pass over the movements of the store (index-only on the batch index), then the batches
+    if (
+      productIds !== null &&
+      productIds.length <= PER_BATCH_STOCK_MAX_PRODUCTS
+    ) {
+      // a delta: the stock of the batches of its products, batch by batch on the batch index, not
+      // the whole history of the store (load run 2026-11-05, finding 1, docs/guides/load-test.md)
+      const result = await sql<PosBatchRow>`
+        select b.id, b.product_id, b.lot_number, b.expiry_date::text as expiry_date,
+               s.qty as stock_pieces, b.purchase_price_per_pack_dirams, b.cost_per_piece_dirams
+        from pharmacy.batches b
+        join lateral (
+          select sum(m.qty_delta_pieces)::integer as qty
+          from pharmacy.stock_movements m
+          where m.tenant_id = b.tenant_id and m.store_id = b.store_id and m.batch_id = b.id
+        ) s on true
+        where b.tenant_id = ${tenantId} and b.store_id = ${storeId}
+          and b.product_id = any(${sql.val([...productIds])}::uuid[])
+          and s.qty > 0
+        order by b.product_id, b.expiry_date, b.id`.execute(trx);
+      return result.rows;
+    }
+    // the whole snapshot or a long delta (a catalog load): one pass over the movements of the store
+    // (index-only on the batch index), then the batches
     const result = await sql<PosBatchRow>`
       select b.id, b.product_id, b.lot_number, b.expiry_date::text as expiry_date,
              s.qty as stock_pieces, b.purchase_price_per_pack_dirams, b.cost_per_piece_dirams
@@ -57,7 +85,7 @@ export class PosStock {
         having sum(m.qty_delta_pieces) > 0
       ) s
       join pharmacy.batches b on b.tenant_id = ${tenantId} and b.id = s.batch_id
-      ${productIds === null ? sql`` : sql`where b.product_id in (${sql.join([...productIds])})`}
+      ${productIds === null ? sql`` : sql`where b.product_id = any(${sql.val([...productIds])}::uuid[])`}
       order by b.product_id, b.expiry_date, b.id`.execute(trx);
     return result.rows;
   }

@@ -9,8 +9,9 @@
  *   unmounted while open (`{shown && <Dialog open />}`), which fires no `close`;
  * - a dialog inside another (a confirmation) keeps its Esc and `close` to itself: React passes
  *   them up to the parent dialog, which would close too;
- * - below the tablet breakpoint (a phone) it fills the screen whatever its size: the header and the
- *   footer stay, the body scrolls (ADR-0007, amendment 2026-11-10).
+ * - below the tablet breakpoint (a phone) it fills the screen whatever its size, unless
+ *   `fullScreenOnPhone={false}`: the header and the footer stay, the body scrolls (ADR-0007,
+ *   amendment 2026-11-10).
  */
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { cx } from '../cx';
@@ -53,7 +54,23 @@ export interface DialogProps {
   children?: ReactNode;
   /** Action buttons, end-aligned (dismiss first, confirm last). */
   footer?: ReactNode;
+  /**
+   * Below the tablet breakpoint the dialog fills the screen (default). `false` keeps it centred like on a
+   * desktop — for a picture that should not sit at the top of a white screen (the zoom of the public site).
+   */
+  fullScreenOnPhone?: boolean;
 }
+
+// phone layout (ADR-0007, amendment 2026-11-10): the whole screen, only the body scrolls. No `display` on the
+// <dialog> itself: an author display would show a closed dialog.
+const phoneDialogClass =
+  'max-tablet:m-0 max-tablet:h-dvh max-tablet:max-h-none max-tablet:w-full max-tablet:max-w-none max-tablet:overflow-hidden max-tablet:rounded-none';
+const phoneInnerClass = 'max-tablet:h-full max-tablet:min-h-0';
+// the body scrolls between the header and the footer; its children keep their height (a table region would shrink
+// into a scroll of its own); -m-2 p-2 leaves room for the focus rings (3 px outline + 2 px offset)
+const phoneBodyClass =
+  'max-tablet:-m-2 max-tablet:min-h-0 max-tablet:flex-1 max-tablet:overflow-y-auto max-tablet:p-2 max-tablet:*:shrink-0';
+const phoneFooterClass = 'max-tablet:mt-auto';
 
 export function Dialog({
   open,
@@ -66,6 +83,7 @@ export function Dialog({
   size = 'sm',
   children,
   footer,
+  fullScreenOnPhone = true,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -119,14 +137,16 @@ export function Dialog({
         'rounded-(--ph-dialog-radius) border-0 bg-surface p-0 text-fg shadow-(--ph-dialog-shadow)',
         'backdrop:bg-overlay',
         sizeClass[size],
-        // phone (ADR-0007, amendment 2026-11-10): the whole screen; only the body scrolls. No `display` on the
-        // <dialog> itself: an author display would show a closed dialog.
-        'max-tablet:m-0 max-tablet:h-dvh max-tablet:max-h-none max-tablet:w-full max-tablet:max-w-none',
-        'max-tablet:overflow-hidden max-tablet:rounded-none',
+        fullScreenOnPhone && phoneDialogClass,
       )}
     >
       {open && (
-        <div className="flex flex-col gap-5 p-(--ph-dialog-padding) max-tablet:h-full max-tablet:min-h-0">
+        <div
+          className={cx(
+            'flex flex-col gap-5 p-(--ph-dialog-padding)',
+            fullScreenOnPhone && phoneInnerClass,
+          )}
+        >
           <header className="flex shrink-0 items-start gap-3">
             {icon && tone !== 'default' && (
               <span
@@ -158,14 +178,22 @@ export function Dialog({
             />
           </header>
           {children && (
-            // phone: the body scrolls between the header and the footer; its children keep their height (a table
-            // region would shrink into a scroll of its own); -m-1 p-1 keeps focus rings unclipped
-            <div className="flex flex-col gap-4 max-tablet:-m-1 max-tablet:min-h-0 max-tablet:flex-1 max-tablet:overflow-y-auto max-tablet:p-1 max-tablet:*:shrink-0">
+            <div
+              className={cx(
+                'flex flex-col gap-4',
+                fullScreenOnPhone && phoneBodyClass,
+              )}
+            >
               {children}
             </div>
           )}
           {footer && (
-            <footer className="flex shrink-0 flex-wrap justify-end gap-2 max-tablet:mt-auto">
+            <footer
+              className={cx(
+                'flex shrink-0 flex-wrap justify-end gap-2',
+                fullScreenOnPhone && phoneFooterClass,
+              )}
+            >
               {footer}
             </footer>
           )}

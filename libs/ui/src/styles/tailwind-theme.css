@@ -126,6 +126,8 @@
   --text-sm--line-height: var(--ph-line-height-sm);
   --text-md: var(--ph-font-size-md);
   --text-md--line-height: var(--ph-line-height-md);
+  --text-input-phone: var(--ph-input-font-size-phone);
+  --text-input-phone--line-height: var(--ph-line-height-md);
   --text-lg: var(--ph-font-size-lg);
   --text-lg--line-height: var(--ph-line-height-lg);
   --text-xl: var(--ph-font-size-xl);

@@ -20,6 +20,9 @@
    */
   --ph-input-height: var(--ph-size-touch-min);
   --ph-input-padding-x: var(--ph-space-3);
+  /* Text of a field on a phone (ADR-0007, amendment 2026-11-10): Safari iOS zooms the page into a field with text
+     under 16 CSS px, and at the 90 % font scale 1rem is 14.4 px */
+  --ph-input-font-size-phone: max(var(--ph-font-size-md), 16px);
   --ph-input-radius: var(--ph-radius-sm);
   --ph-input-bg: var(--ph-color-surface);
   --ph-input-bg-disabled: var(--ph-color-surface-sunken);

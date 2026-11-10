@@ -85,7 +85,8 @@ const rowVariantClass = {
 
 // Sticky first column — below the tablet breakpoint only: from 768 px the layout stays as it was. A sticky cell
 // paints over the scrolled cells, so it needs the background of its row; its edge is a shadow, because with
-// border-collapse a border of a sticky cell stays with the table grid.
+// border-collapse a border of a sticky cell stays with the table grid. Its z-index lifts it above positioned
+// content of the later cells; the scroll region is isolated, so it never reaches the top bar.
 const stickyCellBgClass = {
   default: 'max-tablet:bg-surface',
   group: 'max-tablet:bg-surface-sunken',
@@ -93,7 +94,7 @@ const stickyCellBgClass = {
 } as const;
 
 const stickyClass =
-  'max-tablet:sticky max-tablet:start-0 max-tablet:z-(--ph-z-base) max-tablet:shadow-(--ph-table-sticky-edge)';
+  'max-tablet:sticky max-tablet:start-0 max-tablet:z-(--ph-z-sticky) max-tablet:shadow-(--ph-table-sticky-edge)';
 
 export function DataTable<Row, K extends string = string>({
   caption,
@@ -276,7 +277,8 @@ export function DataTable<Row, K extends string = string>({
             {caption}
           </p>
         )}
-        <ul aria-label={caption} className="m-0 list-none p-0">
+        {/* role: VoiceOver drops the list semantics of a list without markers */}
+        <ul role="list" aria-label={caption} className="m-0 list-none p-0">
           {rows.length === 0 && empty ? (
             <li>{empty}</li>
           ) : (

@@ -40,29 +40,33 @@ export function MobileMenu() {
         indicator={attention}
         aria-expanded={open}
         aria-controls={drawerId}
-        onClick={() => setOpen(true)}
+        onClick={(event) => {
+          // Safari does not focus a button on a tap: without this the drawer returns the focus to <body>
+          event.currentTarget.focus();
+          setOpen(true);
+        }}
         className="tablet:hidden"
       />
+      {/* the panel is «Меню»: the landmark inside keeps its own name; the font size control is outside it */}
       <Drawer
         id={drawerId}
         open={open}
         onClose={() => setOpen(false)}
-        label={t('navLabel')}
+        label={t('menu')}
         closeLabel={t('closeMenu')}
       >
-        <nav
-          aria-label={t('navLabel')}
-          className="flex flex-col gap-4 px-3 pb-4"
-        >
-          <SidebarNav
-            counters={counters}
-            storeId={storeId}
-            onNavigate={() => setOpen(false)}
-          />
+        <div className="flex flex-col gap-4 px-3 pb-4">
+          <nav aria-label={t('navLabel')} className="flex flex-col gap-4">
+            <SidebarNav
+              counters={counters}
+              storeId={storeId}
+              onNavigate={() => setOpen(false)}
+            />
+          </nav>
           <div className="border-t border-border pt-4">
             <FontScaleControl />
           </div>
-        </nav>
+        </div>
       </Drawer>
     </>
   );

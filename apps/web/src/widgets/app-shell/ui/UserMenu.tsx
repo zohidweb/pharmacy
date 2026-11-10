@@ -22,6 +22,7 @@ export function UserMenu({ session }: { session: EmployeeSession }) {
   return (
     <Popover
       label={t('shell.userMenu')}
+      mobileSheet
       trigger={(props) => (
         <button
           type="button"
@@ -30,7 +31,7 @@ export function UserMenu({ session }: { session: EmployeeSession }) {
           {...props}
         >
           <Avatar name={fullName} size="sm" />
-          <span className="flex min-w-0 flex-col">
+          <span className="flex min-w-0 flex-col max-tablet:hidden">
             <span className="truncate text-sm font-medium text-fg">
               {fullName}
             </span>

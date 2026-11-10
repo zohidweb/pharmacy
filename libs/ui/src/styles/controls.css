@@ -17,6 +17,7 @@
     position-try-fallbacks: none;
     inset-block: calc(var(--ph-size-topbar) + var(--ph-space-1)) auto;
     inset-inline: var(--ph-space-2);
+    inline-size: auto; /* the browser gives [popover] fit-content */
     margin: 0;
     max-block-size: calc(100dvh - var(--ph-size-topbar) - var(--ph-space-4));
     overflow-y: auto;

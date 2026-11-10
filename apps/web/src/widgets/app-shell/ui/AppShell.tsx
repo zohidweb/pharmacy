@@ -13,6 +13,7 @@ import { landingRoute } from '../config/navigation';
 import { ConnectionStatus } from './ConnectionStatus';
 import { AnnouncementsBanner } from './AnnouncementsBanner';
 import { NotificationsBell } from './NotificationsBell';
+import { MobileMenu } from './MobileMenu';
 import { Sidebar } from './Sidebar';
 import { StoreSwitcher } from './StoreSwitcher';
 import { UserMenu } from './UserMenu';
@@ -84,27 +85,32 @@ export function AppShell({ children }: { children: ReactNode }) {
           <FontScaleControl />
         </header>
       ) : (
-        <header className="sticky top-0 z-(--ph-z-sticky) flex h-topbar items-center gap-4 border-b border-border bg-surface px-4">
+        // phone (ADR-0007, amendment 2026-11-10): menu button first, the product mark without its name, the font size
+        // control moves into the menu
+        <header className="sticky top-0 z-(--ph-z-sticky) flex h-topbar items-center gap-4 border-b border-border bg-surface px-4 max-tablet:gap-2 max-tablet:px-3">
+          <MobileMenu />
           <Link
             href={landingRoute(data)}
             aria-label={t('home')}
-            className="flex min-h-touch items-center gap-2 rounded-md px-2"
+            className="flex min-h-touch items-center gap-2 rounded-md px-2 max-tablet:shrink-0 max-tablet:px-0"
           >
             <span className="grid size-avatar-sm place-items-center rounded-md bg-primary text-on-primary">
               <Icon name="pill" size="md" />
             </span>
             <span
               aria-hidden="true"
-              className="text-lg font-bold tracking-tight text-fg"
+              className="text-lg font-bold tracking-tight text-fg max-tablet:hidden"
             >
               {t('productName')}
             </span>
           </Link>
           <StoreSwitcher session={data} />
-          <div className="flex min-w-0 flex-1 justify-end">
+          <div className="flex min-w-0 flex-1 justify-end max-tablet:min-w-icon-sm">
             <ConnectionStatus store={currentStoreOf(data)} />
           </div>
-          <FontScaleControl />
+          <div className="max-tablet:hidden">
+            <FontScaleControl />
+          </div>
           <NotificationsBell />
           <UserMenu session={data} />
         </header>

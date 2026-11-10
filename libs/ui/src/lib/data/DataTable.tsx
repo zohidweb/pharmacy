@@ -11,7 +11,8 @@
  *   says where a value goes. The table and the list are both rendered and switched by CSS: a static
  *   export knows no screen width, and a choice in JS would flash on load. The hidden copy is
  *   `display: none` — out of the accessibility tree and the Tab order. Cards have no sort buttons;
- *   the sort chosen before stays.
+ *   the sort chosen before stays. A column whose cell renders nothing (null, undefined, false, an empty string)
+ *   is left out of its card.
  * - `stickyFirstColumn` keeps the first column at the start while the table scrolls (reports); from 768 px
  *   the table stays as it was.
  */
@@ -92,6 +93,9 @@ const stickyCellBgClass = {
   group: 'max-tablet:bg-surface-sunken',
   muted: 'max-tablet:bg-surface',
 } as const;
+
+const isEmptyValue = (value: ReactNode) =>
+  value === null || value === undefined || value === false || value === '';
 
 const stickyClass =
   'max-tablet:sticky max-tablet:start-0 max-tablet:z-(--ph-z-sticky) max-tablet:shadow-(--ph-table-sticky-edge)';
@@ -282,61 +286,73 @@ export function DataTable<Row, K extends string = string>({
           {rows.length === 0 && empty ? (
             <li>{empty}</li>
           ) : (
-            rows.map((row) => (
-              <li
-                key={rowKey(row)}
-                className={cx(
-                  'flex flex-col gap-2 border-t border-border px-4 py-3 text-sm text-fg',
-                  rowVariantClass[rowVariant?.(row) ?? 'default'],
-                )}
-              >
-                {titleColumns.map((column) => (
-                  <div key={column.key} className="font-medium wrap-anywhere">
-                    {column.cell(row)}
-                  </div>
-                ))}
-                {plainColumns.map((column) => (
-                  <div
-                    key={column.key}
-                    className={cx(
-                      'min-w-0 wrap-anywhere',
-                      column.numeric && 'tabular-nums',
-                    )}
-                  >
-                    {column.cell(row)}
-                  </div>
-                ))}
-                {pairColumns.length > 0 && (
-                  <dl className="m-0 flex flex-col gap-1">
-                    {pairColumns.map((column) => (
-                      <div
-                        key={column.key}
-                        className="flex items-baseline justify-between gap-3"
-                      >
-                        <dt className="shrink-0 text-xs text-fg-muted">
-                          {labelOf(column)}
-                        </dt>
-                        <dd
-                          className={cx(
-                            'm-0 min-w-0 text-end wrap-anywhere',
-                            column.numeric && 'tabular-nums',
-                          )}
+            rows.map((row) => {
+              // a column whose cell renders nothing is left out of the card: no label over an empty value
+              const filled = (list: ReadonlyArray<DataTableColumn<Row, K>>) =>
+                list.flatMap((column) => {
+                  const value = column.cell(row);
+                  return isEmptyValue(value) ? [] : [{ column, value }];
+                });
+              const titles = filled(titleColumns);
+              const plains = filled(plainColumns);
+              const pairs = filled(pairColumns);
+              const actions = filled(actionColumns);
+              return (
+                <li
+                  key={rowKey(row)}
+                  className={cx(
+                    'flex flex-col gap-2 border-t border-border px-4 py-3 text-sm text-fg',
+                    rowVariantClass[rowVariant?.(row) ?? 'default'],
+                  )}
+                >
+                  {titles.map(({ column, value }) => (
+                    <div key={column.key} className="font-medium wrap-anywhere">
+                      {value}
+                    </div>
+                  ))}
+                  {plains.map(({ column, value }) => (
+                    <div
+                      key={column.key}
+                      className={cx(
+                        'min-w-0 wrap-anywhere',
+                        column.numeric && 'tabular-nums',
+                      )}
+                    >
+                      {value}
+                    </div>
+                  ))}
+                  {pairs.length > 0 && (
+                    <dl className="m-0 flex flex-col gap-1">
+                      {pairs.map(({ column, value }) => (
+                        <div
+                          key={column.key}
+                          className="flex items-baseline justify-between gap-3"
                         >
-                          {column.cell(row)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                {actionColumns.length > 0 && (
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {actionColumns.map((column) => (
-                      <div key={column.key}>{column.cell(row)}</div>
-                    ))}
-                  </div>
-                )}
-              </li>
-            ))
+                          <dt className="shrink-0 text-xs text-fg-muted">
+                            {labelOf(column)}
+                          </dt>
+                          <dd
+                            className={cx(
+                              'm-0 min-w-0 text-end wrap-anywhere',
+                              column.numeric && 'tabular-nums',
+                            )}
+                          >
+                            {value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  {actions.length > 0 && (
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {actions.map(({ column, value }) => (
+                        <div key={column.key}>{value}</div>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })
           )}
         </ul>
       </div>

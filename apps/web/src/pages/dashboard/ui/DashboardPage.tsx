@@ -69,7 +69,8 @@ function Kpis({ data }: { data: TenantDashboard }) {
   const { kpi, period } = data;
   const change = kpi.revenueChangePercent;
   return (
-    <div className="grid grid-cols-4 gap-4">
+    // phone: one tile a row — a sum like 18 420,50 does not fit half the screen (plan owner-mobile-pr2, R1)
+    <div className="grid grid-cols-4 gap-4 max-tablet:grid-cols-1">
       <KpiTile
         label={t(`revenue.${period}`)}
         value={formatMoney(kpi.revenueMinor)}
@@ -119,6 +120,7 @@ function StoresTable({ rows }: { rows: DashboardStoreRow[] }) {
     {
       key: 'name',
       header: t('store'),
+      mobile: 'title',
       cell: (row) => <span className="font-medium">{row.name}</span>,
     },
     {
@@ -156,6 +158,7 @@ function StoresTable({ rows }: { rows: DashboardStoreRow[] }) {
     <Card padding="none">
       <CardHeader title={t('title')} description={t('hint')} inset />
       <DataTable
+        mobileLayout="cards"
         caption={t('title')}
         columns={columns}
         rows={rows}
@@ -289,7 +292,7 @@ function DashboardPageView() {
           date: formatDateOnly(toAppDate()),
         })}
         actions={
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3 max-tablet:flex-col max-tablet:items-stretch">
             {custom && (
               <>
                 <TextField
@@ -332,7 +335,7 @@ function DashboardPageView() {
             {(data) => (
               <>
                 <Kpis data={data} />
-                <div className="grid grid-cols-2 items-start gap-4">
+                <div className="grid grid-cols-2 items-start gap-4 max-tablet:grid-cols-1">
                   <StoresTable rows={data.stores} />
                   <Card as="section" aria-labelledby="revenue-title">
                     <CardHeader title={chartTitle} titleId="revenue-title" />
@@ -348,7 +351,7 @@ function DashboardPageView() {
                     />
                   </Card>
                 </div>
-                <div className="grid grid-cols-2 items-start gap-4">
+                <div className="grid grid-cols-2 items-start gap-4 max-tablet:grid-cols-1">
                   <Reminders data={data} />
                   {/* the journal only for those who may read it (final review I1) */}
                   {can(session, 'audit:view') && <Activity data={data} />}

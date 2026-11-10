@@ -150,7 +150,8 @@ describe('DashboardPage', () => {
     const table = screen.getByRole('table', { name: 'Продажи по точкам' });
     expect(within(table).getAllByRole('row')).toHaveLength(5);
     expect(within(table).getByText('Аптека №4 · Вахдат')).toBeTruthy();
-    expect(screen.getByText(/синхр\./)).toBeTruthy();
+    // the phone cards repeat the table (jsdom applies no CSS): look inside the table
+    expect(within(table).getByText(/синхр\./)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Период'), {
       target: { value: 'week' },

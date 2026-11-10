@@ -241,7 +241,7 @@ function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
         <QueryState query={overview}>
           {(data) => (
             <>
-              <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-2">
+              <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
                 <KpiTile
                   label={t('kpi.newRequests')}
                   value={data.kpi.newRequests}

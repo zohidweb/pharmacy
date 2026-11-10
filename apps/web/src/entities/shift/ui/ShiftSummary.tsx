@@ -127,10 +127,16 @@ export function ShiftDrawer({ shift }: { shift: Shift }) {
 export function ShiftEventLog({
   events,
   title,
+  mobileLayout = 'table',
 }: {
   events: ShiftEvent[];
   /** The log of the shift by default. */
   title?: string;
+  /**
+   * `cards` below the tablet breakpoint — the owner's shift card on a phone. The till keeps a table: its log holds
+   * every receipt of the shift, and cards would render it a second time on the POS.
+   */
+  mobileLayout?: 'table' | 'cards';
 }) {
   const t = useTranslations('shift');
   const caption = title ?? t('log');
@@ -138,7 +144,7 @@ export function ShiftEventLog({
     <Card padding="none">
       <CardHeader title={caption} inset />
       <DataTable
-        mobileLayout="cards"
+        mobileLayout={mobileLayout}
         caption={caption}
         minWidth="none"
         rowKey={(row) => row.id}

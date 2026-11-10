@@ -292,7 +292,7 @@ function DashboardPageView() {
           date: formatDateOnly(toAppDate()),
         })}
         actions={
-          <div className="flex flex-wrap items-end gap-3 max-tablet:flex-col max-tablet:items-stretch">
+          <div className="flex flex-wrap items-end gap-3 max-tablet:w-full max-tablet:flex-col max-tablet:items-stretch">
             {custom && (
               <>
                 <TextField

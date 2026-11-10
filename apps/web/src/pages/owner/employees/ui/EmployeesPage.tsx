@@ -144,6 +144,8 @@ function EmployeesTab() {
       <CardHeader
         title={t('staff')}
         inset
+        // phone: the filters take the full width under the title
+        className="max-tablet:flex-col max-tablet:items-stretch"
         actions={
           <div className="flex flex-wrap gap-2 max-tablet:w-full max-tablet:flex-col max-tablet:items-stretch">
             <Select

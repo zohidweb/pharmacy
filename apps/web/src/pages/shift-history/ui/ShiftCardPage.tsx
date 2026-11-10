@@ -174,10 +174,15 @@ function ShiftCardView() {
                     <ShiftEventLog
                       events={afterClosing.events}
                       title={t('afterClosingLog')}
+                      mobileLayout="cards"
                     />
                   </>
                 )}
-                <ShiftEventLog events={shift.events} title={t('log')} />
+                <ShiftEventLog
+                  events={shift.events}
+                  title={t('log')}
+                  mobileLayout="cards"
+                />
                 {zReport && (
                   <Card>
                     <CardHeader

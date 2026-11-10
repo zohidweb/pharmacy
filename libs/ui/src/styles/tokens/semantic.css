@@ -11,7 +11,7 @@
   --ph-color-bg: var(--ph-neutral-50);
   --ph-color-surface: var(--ph-neutral-0);
   --ph-color-surface-sunken: var(--ph-slate-50);
-  --ph-color-surface-highlight: var(--ph-blue-25);
+  --ph-color-surface-highlight: var(--ph-mint-25);
 
   /* fg 19.9:1 on surface · muted 7.2:1 (6.7:1 on sunken) · subtle 5.3:1 (4.7:1 on bg).
      Disabled text is exempt from 1.4.3. */
@@ -28,17 +28,18 @@
      label above and the focus ring mark the field. */
   --ph-color-border-input: var(--ph-slate-150);
 
-  /* Primary 7.0:1 on surface and with on-primary; primary text on subtle 6.0:1.
+  /* The green of the public site. Primary 6.2:1 on surface and with on-primary (hover 9.0, active 11.8); primary text
+     on subtle 5.7:1, on subtle-hover 4.6:1, on highlight 5.8:1. Focus ring 6.2:1 on surface, 5.6:1 on bg.
      Accent — chart bars only (non-text, always paired with labels). */
-  --ph-color-primary: var(--ph-blue-500);
-  --ph-color-primary-hover: var(--ph-blue-600);
-  --ph-color-primary-active: var(--ph-blue-700);
+  --ph-color-primary: var(--ph-emerald-700);
+  --ph-color-primary-hover: var(--ph-emerald-800);
+  --ph-color-primary-active: var(--ph-emerald-900);
   --ph-color-on-primary: var(--ph-neutral-0);
-  --ph-color-primary-subtle: var(--ph-blue-50);
-  --ph-color-primary-subtle-hover: var(--ph-blue-100);
-  --ph-color-accent: var(--ph-sky-500);
+  --ph-color-primary-subtle: var(--ph-mint-50);
+  --ph-color-primary-subtle-hover: var(--ph-mint-150);
+  --ph-color-accent: var(--ph-mint-400);
 
-  --ph-color-focus-ring: var(--ph-blue-400);
+  --ph-color-focus-ring: var(--ph-emerald-700);
   --ph-color-overlay: var(--ph-scrim-40);
   --ph-color-disabled: var(--ph-slate-50);
   --ph-color-on-disabled: var(--ph-slate-200);

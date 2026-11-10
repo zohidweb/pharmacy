@@ -21,15 +21,22 @@
   --ph-slate-500: oklch(53.1% 0.041 258.8);
   --ph-slate-900: oklch(20.8% 0.04 265.8);
 
-  /* Brand blue */
-  --ph-blue-25: oklch(98.4% 0.007 260.7);
+  /*
+   * Brand green: the palette of the public site (apps/site site-theme.css, spec 2026-11-02-public-site-redesign 4.1),
+   * the same sRGB hex in OKLCH (each value converts back to its hex exactly)
+   */
+  --ph-emerald-900: oklch(33.21% 0.0549 180.1); /* #0a3f37 */
+  --ph-emerald-800: oklch(39.7% 0.064 182.9); /* #11524a */
+  --ph-emerald-700: oklch(48.09% 0.0908 170.1); /* #0f6e56 */
+  --ph-mint-25: oklch(97.8% 0.01 164.9); /* #f2faf6 */
+  --ph-mint-50: oklch(96.7% 0.013 167.2); /* #ecf7f2 */
+  --ph-mint-150: oklch(89.8% 0.025 167); /* #cfe3da */
+  --ph-mint-400: oklch(76.5% 0.115 168.3); /* #5dcaa5 */
+
+  /* Info blue: a status hue only, apart from the green of success and of the brand */
   --ph-blue-50: oklch(94.4% 0.018 258.4);
   --ph-blue-100: oklch(89% 0.037 258.4);
-  --ph-blue-400: oklch(56.5% 0.162 258.6);
   --ph-blue-500: oklch(47.3% 0.198 260.5);
-  --ph-blue-600: oklch(40.4% 0.166 260.2);
-  --ph-blue-700: oklch(33.2% 0.132 259.6);
-  --ph-sky-500: oklch(71.9% 0.106 249.9);
 
   /* Status hues */
   --ph-green-100: oklch(96.2% 0.043 156.7);

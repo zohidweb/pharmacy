@@ -21,6 +21,7 @@ import {
   IconButton,
   Select,
   Spinner,
+  TableScroll,
   TextField,
   type IconName,
 } from '@pharmacy/ui';
@@ -300,7 +301,7 @@ export function TransferDialog({
             {error}
           </Alert>
         )}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
           <Select
             label={t('from')}
             value={fromStoreId}
@@ -389,142 +390,155 @@ export function TransferDialog({
         ) : current.length === 0 ? (
           <EmptyState icon="arrow-left-right" title={t('empty')} />
         ) : (
-          <table className="w-full border-collapse text-sm">
-            <caption className="ph-visually-hidden">{t('caption')}</caption>
-            <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
-              <tr>
-                <th scope="col" className="px-2 py-2 text-start font-medium">
-                  {t('product')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-start font-medium">
-                  {t('batch')}
-                </th>
-                {request && (
-                  <th scope="col" className="px-2 py-2 text-end font-medium">
-                    {t('requested')}
+          // -mx-1 px-1: room for the focus ring of the last column's button at the region's edge
+          <TableScroll label={t('caption')} className="-mx-1 px-1">
+            <table className="w-full border-collapse text-sm">
+              <caption className="ph-visually-hidden">{t('caption')}</caption>
+              <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
+                <tr>
+                  <th scope="col" className="px-2 py-2 text-start font-medium">
+                    {t('product')}
                   </th>
-                )}
-                <th scope="col" className="px-2 py-2 text-end font-medium">
-                  {t('senderStock')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-start font-medium">
-                  {t('quantity')}
-                </th>
-                <th scope="col">
-                  <span className="ph-visually-hidden">{tDocs('actions')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {current.map((line) => {
-                const product = productOf(line.productId);
-                const batch = product?.batches.find(
-                  (b) => b.id === line.batchId,
-                );
-                const problem = problemOf(line);
-                const asked = request?.lines.find(
-                  (l) => l.productId === line.productId,
-                );
-                const set = (change: Partial<PickLine>) =>
-                  setLines(
-                    current.map((l) =>
-                      l.key === line.key ? { ...l, ...change } : l,
-                    ),
+                  <th scope="col" className="px-2 py-2 text-start font-medium">
+                    {t('batch')}
+                  </th>
+                  {request && (
+                    <th scope="col" className="px-2 py-2 text-end font-medium">
+                      {t('requested')}
+                    </th>
+                  )}
+                  <th scope="col" className="px-2 py-2 text-end font-medium">
+                    {t('senderStock')}
+                  </th>
+                  <th scope="col" className="px-2 py-2 text-start font-medium">
+                    {t('quantity')}
+                  </th>
+                  <th scope="col">
+                    <span className="ph-visually-hidden">
+                      {tDocs('actions')}
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {current.map((line) => {
+                  const product = productOf(line.productId);
+                  const batch = product?.batches.find(
+                    (b) => b.id === line.batchId,
                   );
-                return (
-                  <tr
-                    key={line.key}
-                    className="border-b border-border align-top"
-                  >
-                    <td className="px-2 py-2">
-                      <span className="font-medium">{line.productName}</span>
-                      {asked &&
-                        sentPieces(line.productId) <
-                          asked.quantity * (product?.piecesPerPack ?? 1) && (
-                          <span className="block text-xs text-warning">
-                            {t('lessThanRequested')}
-                          </span>
-                        )}
-                    </td>
-                    <td className="w-cell-lg px-2 py-2">
-                      <Select
-                        label={t('batchOf', { name: line.productName })}
-                        hideLabel
-                        value={line.batchId}
-                        onChange={(event) =>
-                          set({ batchId: event.target.value })
-                        }
-                        options={(product?.batches ?? [])
-                          .filter(
-                            (b) =>
-                              (b.quantityPieces > 0 &&
-                                b.expiresOn >= toAppDate()) ||
-                              b.id === line.batchId,
-                          )
-                          .map((b) => ({
-                            value: b.id,
-                            label: `${b.number} · ${formatDateOnly(b.expiresOn)}`,
-                          }))}
-                      />
-                    </td>
-                    {request && (
-                      <td className="px-2 py-2 text-end tabular-nums">
-                        {asked?.quantity ?? '—'}
+                  const problem = problemOf(line);
+                  const asked = request?.lines.find(
+                    (l) => l.productId === line.productId,
+                  );
+                  const set = (change: Partial<PickLine>) =>
+                    setLines(
+                      current.map((l) =>
+                        l.key === line.key ? { ...l, ...change } : l,
+                      ),
+                    );
+                  return (
+                    <tr
+                      key={line.key}
+                      className="border-b border-border align-top"
+                    >
+                      <td className="px-2 py-2">
+                        <span className="font-medium">{line.productName}</span>
+                        {asked &&
+                          sentPieces(line.productId) <
+                            asked.quantity * (product?.piecesPerPack ?? 1) && (
+                            <span className="block text-xs text-warning">
+                              {t('lessThanRequested')}
+                            </span>
+                          )}
                       </td>
-                    )}
-                    <td className="px-2 py-2 text-end tabular-nums">
-                      {batch && product
-                        ? tLines('stockValue', {
-                            packs: Math.floor(
-                              batch.quantityPieces / product.piecesPerPack,
-                            ),
-                            pieces:
-                              batch.quantityPieces % product.piecesPerPack,
-                          })
-                        : '—'}
-                    </td>
-                    <td className="px-2 py-2">
-                      <span className="flex gap-2">
-                        <span className="w-cell-sm">
-                          <QuantityInput
-                            label={t('quantityOf', { name: line.productName })}
-                            value={line.quantity}
-                            invalid={touched && problem ? problem : undefined}
-                            onChange={(value) => set({ quantity: value ?? 0 })}
-                          />
+                      <td className="w-cell-lg px-2 py-2">
+                        <Select
+                          label={t('batchOf', { name: line.productName })}
+                          hideLabel
+                          value={line.batchId}
+                          onChange={(event) =>
+                            set({ batchId: event.target.value })
+                          }
+                          options={(product?.batches ?? [])
+                            .filter(
+                              (b) =>
+                                (b.quantityPieces > 0 &&
+                                  b.expiresOn >= toAppDate()) ||
+                                b.id === line.batchId,
+                            )
+                            .map((b) => ({
+                              value: b.id,
+                              label: `${b.number} · ${formatDateOnly(b.expiresOn)}`,
+                            }))}
+                        />
+                      </td>
+                      {request && (
+                        <td className="px-2 py-2 text-end tabular-nums">
+                          {asked?.quantity ?? '—'}
+                        </td>
+                      )}
+                      <td className="px-2 py-2 text-end tabular-nums">
+                        {batch && product
+                          ? tLines('stockValue', {
+                              packs: Math.floor(
+                                batch.quantityPieces / product.piecesPerPack,
+                              ),
+                              pieces:
+                                batch.quantityPieces % product.piecesPerPack,
+                            })
+                          : '—'}
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="flex gap-2">
+                          <span className="w-cell-sm">
+                            <QuantityInput
+                              label={t('quantityOf', {
+                                name: line.productName,
+                              })}
+                              value={line.quantity}
+                              invalid={touched && problem ? problem : undefined}
+                              onChange={(value) =>
+                                set({ quantity: value ?? 0 })
+                              }
+                            />
+                          </span>
+                          {product?.divisible && (
+                            <Select
+                              label={tLines('unitOf', {
+                                name: line.productName,
+                              })}
+                              hideLabel
+                              value={line.unit}
+                              onChange={(event) =>
+                                set({ unit: event.target.value as SaleUnit })
+                              }
+                              options={(['pack', 'piece'] as const).map(
+                                (unit) => ({
+                                  value: unit,
+                                  label: tLines(`units.${unit}`),
+                                }),
+                              )}
+                            />
+                          )}
                         </span>
-                        {product?.divisible && (
-                          <Select
-                            label={tLines('unitOf', { name: line.productName })}
-                            hideLabel
-                            value={line.unit}
-                            onChange={(event) =>
-                              set({ unit: event.target.value as SaleUnit })
-                            }
-                            options={(['pack', 'piece'] as const).map(
-                              (unit) => ({
-                                value: unit,
-                                label: tLines(`units.${unit}`),
-                              }),
-                            )}
-                          />
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-1 py-2">
-                      <IconButton
-                        icon="trash-2"
-                        label={tDocs('removeLine', { name: line.productName })}
-                        onClick={() =>
-                          setLines(current.filter((l) => l.key !== line.key))
-                        }
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="px-1 py-2">
+                        <IconButton
+                          icon="trash-2"
+                          label={tDocs('removeLine', {
+                            name: line.productName,
+                          })}
+                          onClick={() =>
+                            setLines(current.filter((l) => l.key !== line.key))
+                          }
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableScroll>
         )}
         <p className="text-xs text-fg-subtle">{t('fefoHint')}</p>
         {confirmingCancel && doc && (
@@ -782,7 +796,7 @@ export function TransferDetailDialog({
           )}
           <ol
             aria-label={t('steps')}
-            className="m-0 grid list-none grid-cols-3 gap-4 p-0"
+            className="m-0 grid list-none grid-cols-3 gap-4 p-0 max-tablet:grid-cols-1"
           >
             <Step
               icon="check"
@@ -815,87 +829,93 @@ export function TransferDetailDialog({
               done={doc.status === 'accepted'}
             />
           </ol>
-          <table className="w-full border-collapse text-sm">
-            <caption className="ph-visually-hidden">{t('caption')}</caption>
-            <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
-              <tr>
-                {(
-                  ['product', 'batch', 'sent', 'received', 'diff'] as const
-                ).map((key) => (
-                  <th
-                    key={key}
-                    scope="col"
-                    className="px-2 py-2 text-start font-medium"
-                  >
-                    {t(`columns.${key}`)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {doc.lines.map((line) => {
-                const value = receiving ? valueOf(line) : line.receivedQuantity;
-                const diff = value === null ? null : value - line.sentQuantity;
-                return (
-                  <tr
-                    key={line.batchId}
-                    className="border-b border-border align-top"
-                  >
-                    <td className="px-2 py-2 font-medium">
-                      {line.productName}
-                    </td>
-                    <td className="px-2 py-2">
-                      {line.batchNumber}
-                      <span className="block text-xs text-fg-subtle">
-                        {formatDateOnly(line.expiresOn)}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2 tabular-nums">
-                      {`${line.sentQuantity} ${tUnits(line.unit)}`}
-                    </td>
-                    <td className="w-cell-sm px-2 py-2">
-                      {receiving ? (
-                        <QuantityInput
-                          label={t('receivedOf', { name: line.productName })}
-                          value={valueOf(line)}
-                          invalid={
-                            valueOf(line) === null
-                              ? touched
-                                ? t('quantityRequired')
-                                : undefined
-                              : (valueOf(line) ?? 0) > line.sentQuantity
-                                ? t('overSent')
-                                : undefined
-                          }
-                          onChange={(next) =>
-                            setReceived((current) => ({
-                              ...current,
-                              [line.batchId]: next,
-                            }))
-                          }
-                        />
-                      ) : (
-                        <span className="tabular-nums">
-                          {value === null
-                            ? '—'
-                            : `${value} ${tUnits(line.unit)}`}
+          {/* -mx-1 px-1: room for the focus ring of the last column's button at the region's edge */}
+          <TableScroll label={t('caption')} className="-mx-1 px-1">
+            <table className="w-full border-collapse text-sm">
+              <caption className="ph-visually-hidden">{t('caption')}</caption>
+              <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
+                <tr>
+                  {(
+                    ['product', 'batch', 'sent', 'received', 'diff'] as const
+                  ).map((key) => (
+                    <th
+                      key={key}
+                      scope="col"
+                      className="px-2 py-2 text-start font-medium"
+                    >
+                      {t(`columns.${key}`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {doc.lines.map((line) => {
+                  const value = receiving
+                    ? valueOf(line)
+                    : line.receivedQuantity;
+                  const diff =
+                    value === null ? null : value - line.sentQuantity;
+                  return (
+                    <tr
+                      key={line.batchId}
+                      className="border-b border-border align-top"
+                    >
+                      <td className="px-2 py-2 font-medium">
+                        {line.productName}
+                      </td>
+                      <td className="px-2 py-2">
+                        {line.batchNumber}
+                        <span className="block text-xs text-fg-subtle">
+                          {formatDateOnly(line.expiresOn)}
                         </span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 tabular-nums">
-                      {diff === null ? (
-                        '—'
-                      ) : diff === 0 ? (
-                        '0'
-                      ) : (
-                        <b className="text-danger">{diff}</b>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="px-2 py-2 tabular-nums">
+                        {`${line.sentQuantity} ${tUnits(line.unit)}`}
+                      </td>
+                      <td className="w-cell-sm px-2 py-2">
+                        {receiving ? (
+                          <QuantityInput
+                            label={t('receivedOf', { name: line.productName })}
+                            value={valueOf(line)}
+                            invalid={
+                              valueOf(line) === null
+                                ? touched
+                                  ? t('quantityRequired')
+                                  : undefined
+                                : (valueOf(line) ?? 0) > line.sentQuantity
+                                  ? t('overSent')
+                                  : undefined
+                            }
+                            onChange={(next) =>
+                              setReceived((current) => ({
+                                ...current,
+                                [line.batchId]: next,
+                              }))
+                            }
+                          />
+                        ) : (
+                          <span className="tabular-nums">
+                            {value === null
+                              ? '—'
+                              : `${value} ${tUnits(line.unit)}`}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 tabular-nums">
+                        {diff === null ? (
+                          '—'
+                        ) : diff === 0 ? (
+                          '0'
+                        ) : (
+                          <b className="text-danger">{diff}</b>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableScroll>
           {receiving && (
             <TextField
               label={t('comment')}

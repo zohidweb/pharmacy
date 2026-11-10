@@ -14,6 +14,7 @@ import {
   EmptyState,
   IconButton,
   Select,
+  TableScroll,
   TextField,
 } from '@pharmacy/ui';
 import { useMutation } from '@tanstack/react-query';
@@ -204,7 +205,7 @@ export function RequestDialog({
             {error}
           </Alert>
         )}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
           <Select
             label={t('to')}
             value={toStoreId}
@@ -270,84 +271,91 @@ export function RequestDialog({
         {lines.length === 0 ? (
           <EmptyState icon="clipboard-list" title={t('empty')} />
         ) : (
-          <table className="w-full border-collapse text-sm">
-            <caption className="ph-visually-hidden">{t('caption')}</caption>
-            <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
-              <tr>
-                <th scope="col" className="px-2 py-2 text-start font-medium">
-                  {t('product')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-end font-medium">
-                  {t('ours')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-end font-medium">
-                  {t('sender')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-start font-medium">
-                  {t('quantity')}
-                </th>
-                {editable && (
-                  <th scope="col">
-                    <span className="ph-visually-hidden">
-                      {tDocs('actions')}
-                    </span>
+          // -mx-1 px-1: room for the focus ring of the last column's button at the region's edge
+          <TableScroll label={t('caption')} className="-mx-1 px-1">
+            <table className="w-full border-collapse text-sm">
+              <caption className="ph-visually-hidden">{t('caption')}</caption>
+              <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
+                <tr>
+                  <th scope="col" className="px-2 py-2 text-start font-medium">
+                    {t('product')}
                   </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => (
-                <tr key={line.productId} className="border-b border-border">
-                  <td className="px-2 py-2 font-medium">{line.productName}</td>
-                  <td className="px-2 py-2 text-end tabular-nums">
-                    {packsOf(ours.byId.get(line.productId)) ?? '—'}
-                  </td>
-                  <td className="px-2 py-2 text-end tabular-nums">
-                    {packsOf(sender.byId.get(line.productId)) ?? '—'}
-                  </td>
-                  <td className="w-cell-sm px-2 py-2">
-                    {editable ? (
-                      <QuantityInput
-                        label={t('quantityOf', { name: line.productName })}
-                        value={line.quantity}
-                        invalid={
-                          touched && line.quantity < 1
-                            ? t('quantityRequired')
-                            : undefined
-                        }
-                        onChange={(value) =>
-                          setLines((current) =>
-                            current.map((l) =>
-                              l.productId === line.productId
-                                ? { ...l, quantity: value ?? 0 }
-                                : l,
-                            ),
-                          )
-                        }
-                      />
-                    ) : (
-                      <span className="tabular-nums">{line.quantity}</span>
-                    )}
-                  </td>
+                  <th scope="col" className="px-2 py-2 text-end font-medium">
+                    {t('ours')}
+                  </th>
+                  <th scope="col" className="px-2 py-2 text-end font-medium">
+                    {t('sender')}
+                  </th>
+                  <th scope="col" className="px-2 py-2 text-start font-medium">
+                    {t('quantity')}
+                  </th>
                   {editable && (
-                    <td className="px-1 py-2">
-                      <IconButton
-                        icon="trash-2"
-                        label={tDocs('removeLine', { name: line.productName })}
-                        onClick={() =>
-                          setLines((current) =>
-                            current.filter(
-                              (l) => l.productId !== line.productId,
-                            ),
-                          )
-                        }
-                      />
-                    </td>
+                    <th scope="col">
+                      <span className="ph-visually-hidden">
+                        {tDocs('actions')}
+                      </span>
+                    </th>
                   )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lines.map((line) => (
+                  <tr key={line.productId} className="border-b border-border">
+                    <td className="px-2 py-2 font-medium">
+                      {line.productName}
+                    </td>
+                    <td className="px-2 py-2 text-end tabular-nums">
+                      {packsOf(ours.byId.get(line.productId)) ?? '—'}
+                    </td>
+                    <td className="px-2 py-2 text-end tabular-nums">
+                      {packsOf(sender.byId.get(line.productId)) ?? '—'}
+                    </td>
+                    <td className="w-cell-sm px-2 py-2">
+                      {editable ? (
+                        <QuantityInput
+                          label={t('quantityOf', { name: line.productName })}
+                          value={line.quantity}
+                          invalid={
+                            touched && line.quantity < 1
+                              ? t('quantityRequired')
+                              : undefined
+                          }
+                          onChange={(value) =>
+                            setLines((current) =>
+                              current.map((l) =>
+                                l.productId === line.productId
+                                  ? { ...l, quantity: value ?? 0 }
+                                  : l,
+                              ),
+                            )
+                          }
+                        />
+                      ) : (
+                        <span className="tabular-nums">{line.quantity}</span>
+                      )}
+                    </td>
+                    {editable && (
+                      <td className="px-1 py-2">
+                        <IconButton
+                          icon="trash-2"
+                          label={tDocs('removeLine', {
+                            name: line.productName,
+                          })}
+                          onClick={() =>
+                            setLines((current) =>
+                              current.filter(
+                                (l) => l.productId !== line.productId,
+                              ),
+                            )
+                          }
+                        />
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
         )}
         <TextField
           label={t('comment')}

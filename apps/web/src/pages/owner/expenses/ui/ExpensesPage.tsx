@@ -81,6 +81,7 @@ function ExpensesPageView() {
     {
       key: 'store',
       header: t('store'),
+      mobile: 'title',
       cell: (row) => ('kind' in row ? storeOf(row) : t('total')),
     },
     {
@@ -105,6 +106,7 @@ function ExpensesPageView() {
           {
             key: 'actions',
             header: t('actions'),
+            mobile: 'actions' as const,
             cell: (row: Row) =>
               'kind' in row ? (
                 <div className="flex gap-1">
@@ -134,7 +136,12 @@ function ExpensesPageView() {
       : []),
   ];
   const cashColumns: DataTableColumn<CashExpensesOfStore>[] = [
-    { key: 'store', header: t('store'), cell: (row) => row.storeName },
+    {
+      key: 'store',
+      header: t('store'),
+      mobile: 'title',
+      cell: (row) => row.storeName,
+    },
     {
       key: 'operations',
       header: t('cashOperations'),
@@ -164,7 +171,7 @@ function ExpensesPageView() {
         }
       />
       <div className="flex flex-col gap-4 px-page pt-4 pb-6">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3 max-tablet:flex-col max-tablet:items-stretch">
           <div className="flex items-center gap-2">
             <IconButton
               icon="chevron-left"
@@ -172,7 +179,10 @@ function ExpensesPageView() {
               label={t('prevMonth')}
               onClick={() => setMonth(shiftMonth(month, -1))}
             />
-            <h2 className="min-w-40 text-center text-lg font-bold" aria-live="polite">
+            <h2
+              className="min-w-40 text-center text-lg font-bold max-tablet:flex-1"
+              aria-live="polite"
+            >
               {monthTitle}
             </h2>
             <IconButton
@@ -203,6 +213,7 @@ function ExpensesPageView() {
             <>
               <Card padding="none">
                 <DataTable
+                  mobileLayout="cards"
                   caption={`${t('title')} · ${monthTitle}`}
                   rowKey={(row) => row.id}
                   rows={
@@ -223,6 +234,7 @@ function ExpensesPageView() {
                   <p className="text-sm text-fg-muted">{t('cashHint')}</p>
                 </div>
                 <DataTable
+                  mobileLayout="cards"
                   caption={t('cashTitle')}
                   rowKey={(row) => row.storeId}
                   rows={data.cashExpenses}

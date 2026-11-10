@@ -67,6 +67,7 @@ function ShiftHistoryView() {
     {
       key: 'number',
       header: t('columns.number'),
+      mobile: 'title',
       nowrap: true,
       cell: (row) => (
         <Link
@@ -100,6 +101,8 @@ function ShiftHistoryView() {
     {
       key: 'closed',
       header: t('columns.closed'),
+      // a card of an open shift would read «Закрыта: Открыта»
+      mobileLabel: t('columns.closedMobile'),
       cell: (row) =>
         row.status === 'open' ? (
           <StatusPill tone="info" icon={null}>
@@ -143,21 +146,25 @@ function ShiftHistoryView() {
     {
       key: 'marks',
       header: t('columns.marks'),
-      cell: (row) => (
-        <div className="flex flex-col gap-1 text-xs">
-          {row.reasonMissing && <span>{t('reasonMissing')}</span>}
-          {row.discrepancyReceipts > 0 && (
-            <span>
-              {t('discrepancyReceipts', { count: row.discrepancyReceipts })}
-            </span>
-          )}
-          {row.afterClosingReceipts > 0 && (
-            <span className="font-medium text-attention">
-              {t('afterClosing', { count: row.afterClosingReceipts })}
-            </span>
-          )}
-        </div>
-      ),
+      // nothing when there is no mark: a phone card leaves the column out (DataTable cards)
+      cell: (row) =>
+        !row.reasonMissing &&
+        row.discrepancyReceipts === 0 &&
+        row.afterClosingReceipts === 0 ? null : (
+          <div className="flex flex-col gap-1 text-xs">
+            {row.reasonMissing && <span>{t('reasonMissing')}</span>}
+            {row.discrepancyReceipts > 0 && (
+              <span>
+                {t('discrepancyReceipts', { count: row.discrepancyReceipts })}
+              </span>
+            )}
+            {row.afterClosingReceipts > 0 && (
+              <span className="font-medium text-attention">
+                {t('afterClosing', { count: row.afterClosingReceipts })}
+              </span>
+            )}
+          </div>
+        ),
     },
   ];
 
@@ -166,7 +173,7 @@ function ShiftHistoryView() {
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <div className="flex flex-col gap-4 px-page pt-4">
         <Card padding="none">
-          <div className="flex flex-wrap items-end gap-3 p-(--ph-card-padding)">
+          <div className="flex flex-wrap items-end gap-3 p-(--ph-card-padding) max-tablet:flex-col max-tablet:items-stretch">
             <TextField
               label={t('from')}
               type="date"
@@ -212,6 +219,7 @@ function ShiftHistoryView() {
             {(data) => (
               <>
                 <DataTable
+                  mobileLayout="cards"
                   caption={t('title')}
                   rowKey={(row) => row.id}
                   rows={data.items}

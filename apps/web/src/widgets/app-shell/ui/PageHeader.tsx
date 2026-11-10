@@ -20,9 +20,9 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <>
-      <header className="flex flex-wrap items-end gap-4 px-page pt-6">
+      <header className="flex flex-wrap items-end gap-4 px-page pt-6 max-tablet:flex-col max-tablet:items-stretch">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h1 className="truncate text-2xl font-bold tracking-tight text-fg">
+          <h1 className="truncate text-2xl font-bold tracking-tight text-fg max-tablet:whitespace-normal">
             {title}
           </h1>
           {subtitle && <p className="text-sm text-fg-subtle">{subtitle}</p>}

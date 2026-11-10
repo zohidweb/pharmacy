@@ -266,6 +266,7 @@ function StockPageView({
   const columns: DataTableColumn<StockRow, string>[] = [
     {
       key: 'select',
+      mobile: 'hidden',
       header: (
         <Checkbox
           label={<span className="ph-visually-hidden">{t('selectAll')}</span>}
@@ -299,6 +300,7 @@ function StockPageView({
     {
       key: 'product',
       header: t('product'),
+      mobile: 'title',
       sortable: true,
       cell: (row) => (
         <span className="flex flex-col gap-0.5">
@@ -389,6 +391,7 @@ function StockPageView({
     {
       key: 'product',
       header: t('product'),
+      mobile: 'title',
       cell: (line) => (
         <span className="flex flex-col gap-0.5">
           <span className="font-medium">{line.productName}</span>
@@ -455,7 +458,7 @@ function StockPageView({
         {xlsx.message && <Alert tone="warning">{xlsx.message}</Alert>}
         <StockNotices access={access} />
         <Card padding="none">
-          <div className="flex flex-wrap items-end gap-3 border-b border-border p-4">
+          <div className="flex flex-wrap items-end gap-3 border-b border-border p-4 max-tablet:flex-col max-tablet:items-stretch">
             {stores.length > 1 && (
               <SegmentedControl
                 label={t('view')}
@@ -482,7 +485,7 @@ function StockPageView({
                 options={stores.map((s) => ({ value: s.id, label: s.name }))}
               />
             )}
-            <div className="min-w-(--ph-size-dialog-sm) flex-1">
+            <div className="min-w-(--ph-size-dialog-sm) flex-1 max-tablet:min-w-0">
               <TextField
                 label={t('search')}
                 hideLabel
@@ -575,6 +578,7 @@ function StockPageView({
               {(lines) => (
                 <>
                   <DataTable
+                    mobileLayout="cards"
                     caption={t('reorder.table')}
                     rowKey={(line) => `${line.storeId}/${line.productId}`}
                     rows={
@@ -603,6 +607,7 @@ function StockPageView({
               {(data) => (
                 <>
                   <DataTable
+                    mobileLayout="cards"
                     caption={t('table')}
                     rowKey={(row) => row.id}
                     rows={data.items}

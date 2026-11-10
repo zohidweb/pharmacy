@@ -58,7 +58,7 @@ function NotificationsBellView() {
       )}
     >
       <div className="flex flex-col">
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 max-tablet:flex-wrap">
           <p className="text-sm font-bold">{t('notifications')}</p>
           {unread > 0 && canWrite(session) && (
             <Button

@@ -494,6 +494,7 @@
       "store": "Нуқта ва хазина",
       "opened": "Кушода шуд",
       "closed": "Пӯшида шуд",
+      "closedMobile": "Пӯшидан",
       "receipts": "Чекҳо",
       "revenue": "Даромад",
       "discrepancy": "Фарқи нақд",

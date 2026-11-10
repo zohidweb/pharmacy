@@ -150,7 +150,8 @@ describe('DashboardPage', () => {
     const table = screen.getByRole('table', { name: 'Продажи по точкам' });
     expect(within(table).getAllByRole('row')).toHaveLength(5);
     expect(within(table).getByText('Аптека №4 · Вахдат')).toBeTruthy();
-    expect(screen.getByText(/синхр\./)).toBeTruthy();
+    // the phone cards repeat the table (jsdom applies no CSS): look inside the table
+    expect(within(table).getByText(/синхр\./)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Период'), {
       target: { value: 'week' },
@@ -238,10 +239,13 @@ describe('ProfilePage', () => {
   it('unbinds a terminal after confirmation', async () => {
     await signInAs('firuz');
     renderWithProviders(<ProfilePage />);
+    // the phone cards repeat the table (jsdom applies no CSS): the first match is the table's
     fireEvent.click(
-      await screen.findByRole('button', {
-        name: 'Отвязать терминал ПК владельца · Windows 11',
-      }),
+      (
+        await screen.findAllByRole('button', {
+          name: 'Отвязать терминал ПК владельца · Windows 11',
+        })
+      )[0],
     );
     const dialog = screen.getByRole('dialog', { name: 'Отвязать терминал?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Отвязать' }));

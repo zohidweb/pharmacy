@@ -185,6 +185,7 @@ export function EmployeeDialog({
     {
       key: 'action',
       header: t('action'),
+      mobile: 'title',
       cell: (row) => tGroups(row.action),
     },
     { key: 'object', header: t('object'), cell: (row) => row.object },
@@ -247,7 +248,7 @@ export function EmployeeDialog({
         {card?.status === 'blocked' && (
           <Alert tone="warning">{t('blockedHint')}</Alert>
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 max-tablet:grid-cols-1">
           <TextField
             label={t('fullName')}
             required
@@ -355,7 +356,7 @@ export function EmployeeDialog({
                 />
               )}
               {form.storeIds !== null && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 max-tablet:grid-cols-1">
                   {scopeStores.map((store) => (
                     <Checkbox
                       key={store.id}
@@ -451,6 +452,7 @@ export function EmployeeDialog({
         )}
         {employee && (
           <DataTable
+            mobileLayout="cards"
             caption={t('activity')}
             rowKey={(row) => `${row.at}-${row.object}`}
             rows={employee.activity}

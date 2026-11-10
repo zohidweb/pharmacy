@@ -83,6 +83,7 @@ function EmployeesTab() {
     {
       key: 'name',
       header: t('columns.name'),
+      mobile: 'title',
       cell: (row) =>
         canEdit ? (
           <button
@@ -143,8 +144,10 @@ function EmployeesTab() {
       <CardHeader
         title={t('staff')}
         inset
+        // phone: the filters take the full width under the title
+        className="max-tablet:flex-col max-tablet:items-stretch"
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 max-tablet:w-full max-tablet:flex-col max-tablet:items-stretch">
             <Select
               label={t('columns.stores')}
               hideLabel
@@ -212,6 +215,7 @@ function EmployeesTab() {
         {(data) => (
           <>
             <DataTable
+              mobileLayout="cards"
               caption={t('staff')}
               rowKey={(row) => row.id}
               rows={data.items}
@@ -268,6 +272,7 @@ function RolesTab() {
     {
       key: 'name',
       header: t('columns.role'),
+      mobile: 'title',
       cell: (row) => (
         <button
           type="button"
@@ -343,6 +348,7 @@ function RolesTab() {
             }
           />
           <DataTable
+            mobileLayout="cards"
             caption={t('roles')}
             rowKey={(row) => row.id}
             rows={data}
@@ -388,6 +394,7 @@ function TerminalsTab() {
     {
       key: 'device',
       header: t('device'),
+      mobile: 'title',
       cell: (row) => (
         <div className="flex flex-col">
           <b>{row.name}</b>
@@ -409,6 +416,7 @@ function TerminalsTab() {
     {
       key: 'actions',
       header: <span className="ph-visually-hidden">{t('actions')}</span>,
+      mobile: 'actions',
       cell: (row) =>
         canUnbind ? (
           <Button
@@ -448,6 +456,7 @@ function TerminalsTab() {
             </div>
           )}
           <DataTable
+            mobileLayout="cards"
             caption={t('title')}
             rowKey={(row) => row.id}
             rows={data}

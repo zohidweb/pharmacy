@@ -54,7 +54,8 @@ export function StatusPill({
       )}
     >
       {iconName && <Icon name={iconName} size="xs" />}
-      <span className="truncate">{children}</span>
+      {/* phone (ADR-0007, amendment 2026-11-10): a long state wraps instead of losing its end */}
+      <span className="truncate max-tablet:whitespace-normal">{children}</span>
     </span>
   );
 }

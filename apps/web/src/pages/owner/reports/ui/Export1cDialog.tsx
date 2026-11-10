@@ -175,7 +175,7 @@ export function Export1cDialog({
             })}
           </Alert>
         )}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
           <Select
             label={t('dataSet')}
             value={dataSet}

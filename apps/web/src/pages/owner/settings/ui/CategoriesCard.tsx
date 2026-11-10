@@ -8,6 +8,7 @@ import {
   CardHeader,
   Dialog,
   StatusPill,
+  TableScroll,
   TextField,
   useToast,
 } from '@pharmacy/ui';
@@ -75,81 +76,88 @@ export function CategoriesCard() {
       )}
       <QueryState query={categories}>
         {(rows) => (
-          <table className="w-full border-collapse text-sm">
-            <caption className="ph-visually-hidden">{t('title')}</caption>
-            <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
-              <tr>
-                <th scope="col" className="px-2 py-2 text-start font-medium">
-                  {t('name')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-end font-medium">
-                  {t('markup')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-end font-medium">
-                  {t('products')}
-                </th>
-                <th scope="col" className="px-2 py-2 text-end font-medium">
-                  <span className="ph-visually-hidden">{t('actions')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((category) => (
-                <tr key={category.id} className="border-b border-border">
-                  <th scope="row" className="px-2 py-2 text-start font-medium">
-                    <span className="flex flex-wrap items-center gap-2">
-                      {category.nameRu || category.nameTj}
-                      {category.status === 'archived' && (
-                        <StatusPill tone="neutral">{t('archived')}</StatusPill>
-                      )}
-                    </span>
-                    {category.nameRu && category.nameTj && (
-                      <span
-                        lang="tg"
-                        className="block text-xs font-normal text-fg-subtle"
-                      >
-                        {category.nameTj}
-                      </span>
-                    )}
+          <TableScroll label={t('title')}>
+            <table className="w-full border-collapse text-sm">
+              <caption className="ph-visually-hidden">{t('title')}</caption>
+              <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
+                <tr>
+                  <th scope="col" className="px-2 py-2 text-start font-medium">
+                    {t('name')}
                   </th>
-                  <td className="px-2 py-2 text-end tabular-nums">
-                    {category.markupPercent === null
-                      ? '—'
-                      : `${category.markupPercent} %`}
-                  </td>
-                  <td className="px-2 py-2 text-end tabular-nums">
-                    {category.products}
-                  </td>
-                  <td className="px-2 py-2">
-                    {editable && (
-                      <span className="flex justify-end gap-2">
-                        <Button
-                          variant="tertiary"
-                          onClick={() => setEditing(category)}
-                        >
-                          {t('rename')}
-                        </Button>
-                        <Button
-                          variant="tertiary"
-                          loading={
-                            setStatus.isPending &&
-                            setStatus.variables?.id === category.id
-                          }
-                          onClick={() => setStatus.mutate(category)}
-                        >
-                          {t(
-                            category.status === 'active'
-                              ? 'archive'
-                              : 'restore',
-                          )}
-                        </Button>
-                      </span>
-                    )}
-                  </td>
+                  <th scope="col" className="px-2 py-2 text-end font-medium">
+                    {t('markup')}
+                  </th>
+                  <th scope="col" className="px-2 py-2 text-end font-medium">
+                    {t('products')}
+                  </th>
+                  <th scope="col" className="px-2 py-2 text-end font-medium">
+                    <span className="ph-visually-hidden">{t('actions')}</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((category) => (
+                  <tr key={category.id} className="border-b border-border">
+                    <th
+                      scope="row"
+                      className="px-2 py-2 text-start font-medium"
+                    >
+                      <span className="flex flex-wrap items-center gap-2">
+                        {category.nameRu || category.nameTj}
+                        {category.status === 'archived' && (
+                          <StatusPill tone="neutral">
+                            {t('archived')}
+                          </StatusPill>
+                        )}
+                      </span>
+                      {category.nameRu && category.nameTj && (
+                        <span
+                          lang="tg"
+                          className="block text-xs font-normal text-fg-subtle"
+                        >
+                          {category.nameTj}
+                        </span>
+                      )}
+                    </th>
+                    <td className="px-2 py-2 text-end tabular-nums">
+                      {category.markupPercent === null
+                        ? '—'
+                        : `${category.markupPercent} %`}
+                    </td>
+                    <td className="px-2 py-2 text-end tabular-nums">
+                      {category.products}
+                    </td>
+                    <td className="px-2 py-2">
+                      {editable && (
+                        <span className="flex justify-end gap-2">
+                          <Button
+                            variant="tertiary"
+                            onClick={() => setEditing(category)}
+                          >
+                            {t('rename')}
+                          </Button>
+                          <Button
+                            variant="tertiary"
+                            loading={
+                              setStatus.isPending &&
+                              setStatus.variables?.id === category.id
+                            }
+                            onClick={() => setStatus.mutate(category)}
+                          >
+                            {t(
+                              category.status === 'active'
+                                ? 'archive'
+                                : 'restore',
+                            )}
+                          </Button>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
         )}
       </QueryState>
       {editing !== null && (

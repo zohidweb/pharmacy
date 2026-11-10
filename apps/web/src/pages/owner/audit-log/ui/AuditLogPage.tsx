@@ -187,6 +187,7 @@ function AuditLogPageView() {
     {
       key: 'action',
       header: t('action'),
+      mobile: 'title',
       cell: (row) => text(row).title,
     },
     { key: 'object', header: t('object'), cell: (row) => row.object ?? '—' },
@@ -229,7 +230,7 @@ function AuditLogPageView() {
       <div className="flex flex-col gap-4 px-page pt-4">
         {xlsx.message && <Alert tone="warning">{xlsx.message}</Alert>}
         <Card padding="none">
-          <div className="flex flex-wrap items-end gap-3 p-(--ph-card-padding)">
+          <div className="flex flex-wrap items-end gap-3 p-(--ph-card-padding) max-tablet:flex-col max-tablet:items-stretch">
             <TextField
               label={t('from')}
               type="date"
@@ -298,6 +299,7 @@ function AuditLogPageView() {
             {(data) => (
               <>
                 <DataTable
+                  mobileLayout="cards"
                   caption={t('title')}
                   rowKey={(row) => row.id}
                   rows={data.items}

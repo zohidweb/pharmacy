@@ -193,7 +193,7 @@ function ForceCloseDialog({
           })}
         </Alert>
         <Alert tone="info">{t('unbind')}</Alert>
-        <div className="grid grid-cols-2 items-end gap-4">
+        <div className="grid grid-cols-2 items-end gap-4 max-tablet:grid-cols-1">
           <p className="flex flex-col text-sm">
             <span className="text-fg-subtle">{t('expected')}</span>
             <b className="text-lg tabular-nums">
@@ -211,7 +211,7 @@ function ForceCloseDialog({
             }
           />
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
           {BANK.map((m) => (
             <TextField
               key={m}

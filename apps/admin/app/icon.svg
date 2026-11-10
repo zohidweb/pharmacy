@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    The brand mark of the client app (apps/web app/icon.svg) on the darker --ph-emerald-900 (#0a3f37), so the tab of
+    the operator console stands apart from the tabs of the client app. A favicon cannot read the page's tokens, so the
+    colours are fixed here; the glyph is the kit's "pill" icon in --ph-neutral-0. public/favicon.ico is the same mark
+    at 16, 32 and 48 px.
+  -->
+  <rect width="32" height="32" rx="14" fill="#0a3f37" />
+  <g
+    transform="translate(5.2 5.2) scale(0.9)"
+    fill="none"
+    stroke="#fff"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
+    <path d="m8.5 8.5 7 7" />
+  </g>
+</svg>

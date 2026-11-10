@@ -61,6 +61,9 @@
   --ph-table-row-height: var(--ph-size-row-dense);
   --ph-table-cell-padding-x: var(--ph-space-5);
   --ph-table-header-bg: var(--ph-color-surface-sunken);
+  /* Edge of a sticky first column (DataTable stickyFirstColumn): an inset line at the inline end (LTR only, RU/TJ) */
+  --ph-table-sticky-edge: inset calc(-1 * var(--ph-border-width-1)) 0 0
+    var(--ph-color-border);
 
   --ph-nav-item-bg-active: var(--ph-color-primary-subtle);
   --ph-nav-item-fg-active: var(--ph-color-primary);

@@ -160,7 +160,9 @@ export {
 export {
   DataTable,
   type DataTableColumn,
+  type DataTableMobileRole,
   type DataTableProps,
   type SortDirection,
   type SortState,
 } from './lib/data/DataTable';
+export { TableScroll, type TableScrollProps } from './lib/data/TableScroll';

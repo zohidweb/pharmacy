@@ -7,29 +7,30 @@
 [data-theme='light'] {
   color-scheme: light;
 
-  /* Canvas, cards/panels/sidebar/header, input fill and table head, unread row */
-  --ph-color-bg: var(--ph-neutral-50);
-  --ph-color-surface: var(--ph-neutral-0);
-  --ph-color-surface-sunken: var(--ph-slate-50);
+  /* The light page of the public site: mint canvas, near-white cards and panels, mint input fill and table head,
+     unread row */
+  --ph-color-bg: var(--ph-mint-25);
+  --ph-color-surface: var(--ph-mint-0);
+  --ph-color-surface-sunken: var(--ph-mint-50);
   --ph-color-surface-highlight: var(--ph-mint-25);
 
-  /* fg 19.9:1 on surface · muted 7.2:1 (6.7:1 on sunken) · subtle 5.3:1 (4.7:1 on bg).
+  /* fg 16.7:1 on surface (16.0 on bg, 15.5 on sunken) · muted and subtle 7.2:1 (6.9 on bg, 6.7 on sunken).
      Disabled text is exempt from 1.4.3. */
-  --ph-color-fg: var(--ph-neutral-900);
-  --ph-color-fg-muted: var(--ph-neutral-400);
-  --ph-color-fg-subtle: var(--ph-slate-500);
+  --ph-color-fg: var(--ph-emerald-975);
+  --ph-color-fg-muted: var(--ph-emerald-ink-600);
+  --ph-color-fg-subtle: var(--ph-emerald-ink-600);
   --ph-color-fg-disabled: var(--ph-slate-200);
 
-  /* Hairlines, switch track / empty-state glyphs, control boundary 3.5:1 (1.4.11) */
-  --ph-color-border: var(--ph-slate-100);
-  --ph-color-border-strong: var(--ph-slate-200);
-  --ph-color-border-control: var(--ph-slate-400);
-  /* Borders of fields and dropdowns (QA 2026-10-28, #cbd5e1): 1.5:1, below 1.4.11 by the product's choice — the
-     label above and the focus ring mark the field. */
-  --ph-color-border-input: var(--ph-slate-150);
+  /* Hairlines and the secondary button outline (the site's one line colour), control boundary 7.2:1 (1.4.11) */
+  --ph-color-border: var(--ph-mint-150);
+  --ph-color-border-strong: var(--ph-mint-150);
+  --ph-color-border-control: var(--ph-emerald-ink-600);
+  /* Borders of fields and dropdowns (QA 2026-10-28: light, like #cbd5e1): 1.3:1, below 1.4.11 by the product's
+     choice — the label above and the focus ring mark the field. */
+  --ph-color-border-input: var(--ph-mint-150);
 
-  /* The green of the public site. Primary 6.2:1 on surface and with on-primary (hover 9.0, active 11.8); primary text
-     on subtle 5.7:1, on subtle-hover 4.6:1, on highlight 5.8:1. Focus ring 6.2:1 on surface, 5.6:1 on bg.
+  /* The green of the public site. Primary 6.2:1 with on-primary (hover 9.0, active 11.8), 6.1:1 on surface; primary
+     text on subtle 5.7:1, on subtle-hover 4.6:1, on bg and highlight 5.8:1. Focus ring 6.1:1 on surface, 5.8:1 on bg.
      Accent — chart bars only (non-text, always paired with labels). */
   --ph-color-primary: var(--ph-emerald-700);
   --ph-color-primary-hover: var(--ph-emerald-800);

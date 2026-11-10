@@ -25,10 +25,13 @@
    * Brand green: the palette of the public site (apps/site site-theme.css, spec 2026-11-02-public-site-redesign 4.1),
    * the same sRGB hex in OKLCH (each value converts back to its hex exactly)
    */
+  --ph-emerald-975: oklch(22.4% 0.037 176.7); /* #04211b — text */
   --ph-emerald-900: oklch(33.21% 0.0549 180.1); /* #0a3f37 */
   --ph-emerald-800: oklch(39.7% 0.064 182.9); /* #11524a */
   --ph-emerald-700: oklch(48.09% 0.0908 170.1); /* #0f6e56 */
-  --ph-mint-25: oklch(97.8% 0.01 164.9); /* #f2faf6 */
+  --ph-emerald-ink-600: oklch(44.9% 0.037 178.3); /* #3e5c55 — secondary text, control borders */
+  --ph-mint-0: oklch(99.4% 0.004 157.2); /* #fbfefc — surfaces, not a pure white */
+  --ph-mint-25: oklch(97.8% 0.01 164.9); /* #f2faf6 — the page */
   --ph-mint-50: oklch(96.7% 0.013 167.2); /* #ecf7f2 */
   --ph-mint-150: oklch(89.8% 0.025 167); /* #cfe3da */
   --ph-mint-400: oklch(76.5% 0.115 168.3); /* #5dcaa5 */

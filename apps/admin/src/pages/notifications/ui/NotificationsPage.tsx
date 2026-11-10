@@ -375,7 +375,13 @@ export function NotificationsPage() {
                           <Icon name={eventIcon[item.kind]} size="md" />
                         </span>
                         <div className="flex min-w-0 flex-1 flex-col">
-                          <span className="text-sm font-medium">
+                          {/* unread: bold besides the tint of the row, never colour alone */}
+                          <span
+                            className={cx(
+                              'text-sm',
+                              item.read ? 'font-medium' : 'font-bold',
+                            )}
+                          >
                             {title}
                             {!item.read && (
                               <span className="ph-visually-hidden">

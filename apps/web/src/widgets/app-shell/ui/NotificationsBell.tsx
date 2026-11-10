@@ -89,7 +89,12 @@ function NotificationsBellView() {
                     <Icon name={reminderIcon[item.kind]} size="sm" />
                   </span>
                   <span className="flex min-w-0 flex-col">
-                    <span className="font-medium text-fg">
+                    {/* unread: bold besides the tint of the row, never colour alone */}
+                    <span
+                      className={
+                        item.read ? 'font-medium text-fg' : 'font-bold text-fg'
+                      }
+                    >
                       {!item.read && (
                         <span className="ph-visually-hidden">
                           {t('unread')}:{' '}

@@ -19,7 +19,7 @@ const base =
 const variants: Record<ButtonVariant, string> = {
   primary:
     'bg-primary text-on-primary hover:bg-primary-hover active:bg-primary-active',
-  // white with a border, as the second button of the client mockups
+  // the surface with a border, as the second button of the client mockups
   secondary:
     'border-border-strong bg-surface text-fg hover:bg-surface-sunken active:bg-surface-sunken',
   tertiary:

@@ -22,10 +22,13 @@ export interface RevealGroupProps {
   as?: RevealGroupElement;
   /**
    * Share of the group that must be in view before it plays (0.15 by default). A group much taller than the screen
-   * (a column of tiles on a phone) takes `0`: it plays as soon as its top edge enters, so no blank space waits on screen.
+   * (the tiles of «Возможности») takes `0`: it plays as soon as its top edge enters, so no blank space waits on screen.
    */
   amount?: number;
   className?: string;
+  /** A list that scrolls sideways (a row of cards on a phone) takes keyboard focus and the name of its section. */
+  tabIndex?: number;
+  'aria-labelledby'?: string;
 }
 
 export interface RevealItemProps {
@@ -43,6 +46,8 @@ export function RevealGroup({
   as = 'div',
   amount,
   className,
+  tabIndex,
+  'aria-labelledby': labelledBy,
 }: RevealGroupProps) {
   const reduce = useReducedMotion() ?? false;
   const Element = groups[as];
@@ -55,6 +60,8 @@ export function RevealGroup({
   return (
     <Element
       className={className}
+      tabIndex={tabIndex}
+      aria-labelledby={labelledBy}
       variants={variants}
       initial="hidden"
       whileInView="visible"

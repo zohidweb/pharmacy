@@ -30,11 +30,14 @@ interface Contact {
 
 /** A link of a column list: secondary text that lights up on hover. */
 const listLinkClass =
-  'inline-flex min-h-touch items-center text-fg-muted transition-colors hover:text-fg md:min-h-0 md:py-1';
+  'inline-flex min-h-touch min-w-touch items-center text-fg-muted transition-colors hover:text-fg md:min-h-0 md:min-w-0 md:py-1';
 
-/** A contact value: the main text colour, the accent on hover. */
+/**
+ * A contact value: the main text colour, the accent on hover; at least 44 px tall on a phone (spec
+ * 2026-11-10-public-site-mobile, M4).
+ */
 const contactLinkClass =
-  'text-fg underline-offset-4 transition-colors hover:text-accent-site hover:underline';
+  'inline-flex min-h-touch items-center text-fg underline-offset-4 transition-colors hover:text-accent-site hover:underline md:min-h-0';
 
 const headingClass = 'text-sm font-semibold text-fg';
 
@@ -138,7 +141,7 @@ export function SiteFooter({ locale, info }: SiteFooterProps) {
         <div className="flex flex-col gap-3">
           <Link
             href={home}
-            className="self-start text-lg font-bold tracking-tight text-fg"
+            className="inline-flex min-h-touch items-center self-start text-lg font-bold tracking-tight text-fg"
           >
             {name}
           </Link>

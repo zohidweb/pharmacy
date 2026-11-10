@@ -87,7 +87,11 @@ export function SiteHeader({ locale, info }: SiteHeaderProps) {
               className="h-icon-xl w-auto"
             />
           ) : (
-            <span className="truncate">{name}</span>
+            // a long name (the TJ fallback) wraps to a second line on a phone instead of an ellipsis
+            // (spec 2026-11-10-public-site-mobile, M3); 72 px hold two lines
+            <span className="line-clamp-2 leading-tight md:line-clamp-1">
+              {name}
+            </span>
           )}
         </Link>
 

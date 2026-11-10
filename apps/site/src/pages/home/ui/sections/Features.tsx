@@ -2,12 +2,13 @@
  * Возможности (amendment 2026-11-02-public-site-light-panels 4.4, п. 5): exactly six tiles of different sizes, no empty
  * cell. From 1024 px a grid of six columns: the till is the large tile on the left (four columns, three rows), batches
  * and expiry dates, purchasing and prices stack in the two columns on its right, transfers and reports share the last
- * row. On a phone one column in the same order. The tiles are light surfaces with a line, except prices (a mint block)
- * and reports (a dark block, no line). A product screen sits in the lower right corner of its tile and the tile's edge
- * crops it; four tiles carry one: the till, batches, transfers and, since spec 2026-11-04-public-site-home-polish,
- * H9.2, the sales report (the dark tile was almost empty with only an icon; it now holds a screen like its neighbour,
- * in the same window, with the same zoom and scroll motion). Only what works in the cloud pilot: no 1C export, no
- * offline stores (spec 2, anti-goals).
+ * row. Below 1024 px a row the finger swipes, in the same order (spec 2026-11-10-public-site-mobile, M1). The tiles
+ * are light surfaces with a line, except prices (a mint block) and reports (a dark block, no line). A product screen
+ * sits in the lower right corner of its tile and the tile's edge crops it; four tiles carry one: the till, batches,
+ * transfers and, since spec 2026-11-04-public-site-home-polish, H9.2, the sales report (the dark tile was almost empty
+ * with only an icon; it now holds a screen like its neighbour, in the same window, with the same zoom and scroll
+ * motion). Below 1024 px a tile shows a fragment of its screen cut for a phone, whole (M2). Only what works in the cloud
+ * pilot: no 1C export, no offline stores (spec 2, anti-goals).
  *
  * The tiles appear one after another (RevealGroup). Under the pointer the product screen of a tile rises by 4 px: a CSS
  * transform, only where the device can hover and without reduce (`motion-safe:group-hover:`).
@@ -26,26 +27,50 @@ import { contentClassName, panelBodyClassName } from '@/shared/ui';
 import { Parallax, RevealGroup, RevealItem } from '@/shared/ui/motion';
 import { ShotZoom } from './ShotZoom';
 
-/** Real pixel sizes of the WebP files (CLS). Screens of apps/web on its mocks: synthetic data only. */
+/**
+ * Real pixel sizes of the WebP files (CLS). Screens of apps/web on its mocks: synthetic data only. `phone` is a fragment
+ * of the same screen at its own resolution, cut for a phone (spec 2026-11-10-public-site-mobile, M2).
+ */
 const SHOTS = {
-  pos: { src: '/images/pos.webp', width: 1600, height: 1100 },
-  stock: { src: '/images/stock-batches.webp', width: 1600, height: 1000 },
-  transfers: { src: '/images/transfers.webp', width: 1600, height: 1000 },
-  reports: { src: '/images/sales-report.webp', width: 1600, height: 1000 },
+  pos: {
+    src: '/images/pos.webp',
+    width: 1600,
+    height: 1100,
+    phone: { src: '/images/pos-phone.webp', width: 392, height: 420 },
+  },
+  stock: {
+    src: '/images/stock-batches.webp',
+    width: 1600,
+    height: 1000,
+    phone: { src: '/images/stock-batches-phone.webp', width: 420, height: 527 },
+  },
+  transfers: {
+    src: '/images/transfers.webp',
+    width: 1600,
+    height: 1000,
+    phone: { src: '/images/transfers-phone.webp', width: 440, height: 360 },
+  },
+  reports: {
+    src: '/images/sales-report.webp',
+    width: 1600,
+    height: 1000,
+    phone: { src: '/images/sales-report-phone.webp', width: 420, height: 330 },
+  },
 } as const;
 
 type ShotKey = keyof typeof SHOTS;
 
 /**
- * How a screen sits in its tile: the least window (its aspect; the window grows with a tile the grid makes taller) and
- * the screen's height against the window. The screen is always taller than the window, so its lower edge and its right
- * edge run past the tile and the tile crops them; a narrow tile shows the screen larger, so its corner (the page title,
- * the first rows) stays readable.
+ * How a screen sits in its tile from 1024 px: the least window (its aspect; the window grows with a tile the grid makes
+ * taller) and the screen's height against the window. The screen is always taller than the window, so its lower edge
+ * and its right edge run past the tile and the tile crops them; a narrow tile shows the screen larger, so its corner
+ * (the page title, the first rows) stays readable. Below 1024 px the tile shows the phone fragment whole, in the width
+ * of the tile's text (M2).
  */
 const FRAMES = {
-  wide: { view: 'aspect-4/3', screen: 'h-5/4' },
-  half: { view: 'aspect-2/1', screen: 'h-3/2' },
-  narrow: { view: 'aspect-16/9', screen: 'h-8/5' },
+  wide: { view: 'md:aspect-4/3', screen: 'md:h-5/4' },
+  half: { view: 'md:aspect-2/1', screen: 'md:h-3/2' },
+  narrow: { view: 'md:aspect-16/9', screen: 'md:h-8/5' },
 } as const;
 
 type Tile =
@@ -104,35 +129,41 @@ function TileShot({
   title: string;
   labels: { open: string; close: string };
 }) {
-  const { src, width, height } = SHOTS[shot];
+  const { src, width, height, phone } = SHOTS[shot];
   const { view, screen } = FRAMES[frame];
   return (
-    // The window fills the rest of the tile. The screen starts 24 px (32 px from 1024 px) from the left edge and runs
-    // past the right and the lower edges: the tile crops it there (the shots are viewport crops, as on the first
-    // screen). The 8 px above the screen leave room for the 4 px hover rise; the scroll motion (H8.4) moves the screen
-    // 24 px either way, into the text block's bottom padding above and past the tile's edge below.
-    <div className={cx('relative grow', view)}>
-      <div className="absolute inset-y-0 left-6 pt-2 transition-transform duration-(--ph-duration-slow) ease-out motion-safe:group-hover:-translate-y-1 md:left-8">
+    // From 1024 px the window fills the rest of the tile. The screen starts 32 px from the left edge and runs past the
+    // right and the lower edges: the tile crops it there (the shots are viewport crops, as on the first screen). The
+    // 8 px above the screen leave room for the 4 px hover rise; the scroll motion (H8.4) moves the screen 24 px either
+    // way, into the text block's bottom padding above and past the tile's edge below. Below 1024 px the phone fragment
+    // stands whole at the bottom of the tile (the row makes the tiles as tall as the tallest), inside the tile's 24 px
+    // padding, and does not move (M2).
+    <div
+      className={cx('relative mt-auto px-6 pb-6 md:mt-0 md:grow md:p-0', view)}
+    >
+      <div className="pt-2 transition-transform duration-(--ph-duration-slow) ease-out motion-safe:group-hover:-translate-y-1 md:absolute md:inset-y-0 md:left-8">
         {/* the screen moves with the scroll from 24 px lower to 24 px higher (H8.4); the hover rise stays above */}
-        <Parallax speed={-0.24} className="h-full">
+        <Parallax speed={-0.24} className="md:h-full">
           <ShotZoom
             src={src}
             width={width}
             height={height}
+            phone={phone}
             alt={alt}
             title={title}
             labels={labels}
             className={cx(
-              'block w-auto max-w-none rounded-site-card border border-site-shot shadow-shot',
+              'block h-auto w-full rounded-site-card border border-site-shot shadow-shot md:w-auto md:max-w-none',
               screen,
             )}
           />
         </Parallax>
       </div>
-      {/* the badge sits in the corner of the window (not of the cropped screen) and lets clicks through to the screen */}
+      {/* the badge sits in the corner of the window (not of the cropped screen) and lets clicks through to the screen;
+          on a phone it sits inside the fragment's lower corner, off the column headings */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute right-4 top-4 grid size-10 place-items-center rounded-full bg-fg text-bg"
+        className="pointer-events-none absolute right-8 bottom-8 grid size-10 place-items-center rounded-full bg-fg text-bg md:right-4 md:top-4 md:bottom-auto"
       >
         <Icon name="maximize" size="sm" />
       </span>
@@ -163,8 +194,15 @@ export function Features({ locale }: { locale: UiLocale }) {
             {t('home.features.subtitle')}
           </p>
         </header>
-        {/* a column of tiles on a phone is far taller than the screen: it plays as soon as it enters */}
-        <RevealGroup as="ul" amount={0} className="grid gap-4 md:grid-cols-6">
+        {/* the grid is far taller than a short screen: it plays as soon as it enters. Below 1024 px the tiles are a
+            row the finger swipes (M1), focusable so the arrows swipe it too */}
+        <RevealGroup
+          as="ul"
+          amount={0}
+          tabIndex={0}
+          aria-labelledby="features-title"
+          className="site-ribbon gap-4 md:grid md:grid-cols-6"
+        >
           {TILES.map((tile) => {
             const surface = SURFACES[tile.key];
             return (

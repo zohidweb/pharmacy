@@ -638,6 +638,39 @@
   background: var(--ph-color-primary);
 }
 
+/*
+ * A row of cards that the finger swipes (spec 2026-11-10-public-site-mobile, M1): below 1024 px the list of «Для кого»
+ * and «Возможности» is one row, each card 5/6 of the content wide so the next one shows its edge, snapping to a card's
+ * start. The row runs to the screen edges (the content's 16 px inset moves inside it) and hides its scrollbar. From
+ * 1024 px the class does nothing and the list keeps its grid (`md:grid`).
+ */
+@media (width < 64rem) {
+  .site-ribbon {
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    margin-inline: calc(var(--ph-space-4) * -1);
+    padding-inline: var(--ph-space-4);
+    scroll-padding-inline: var(--ph-space-4);
+  }
+
+  .site-ribbon::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* the row takes keyboard focus (arrows swipe it); the ring goes inside, the section clips sideways */
+  .site-ribbon:focus-visible {
+    outline-offset: calc(var(--ph-focus-ring-width) * -1);
+  }
+
+  .site-ribbon > * {
+    flex: 0 0 calc(100% * 5 / 6);
+    scroll-snap-align: start;
+  }
+}
+
 /* Windows High Contrast: the custom track and thumb would not be drawn, so the native slider takes over */
 @media (forced-colors: active) {
   .site-range {

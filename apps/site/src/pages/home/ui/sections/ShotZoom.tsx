@@ -11,14 +11,24 @@
  * The tile crops the screen, so the button keeps the screen's own box and `className` goes on the <img>; the focus ring
  * is drawn by the tile (`has-focus-visible`, Features), since the button's own outline would be cropped. The round badge
  * of the corner is drawn by the tile (a decorative sibling that lets clicks through); the texts arrive finished.
+ *
+ * Below 1024 px the tile shows `phone`, a fragment of the same screen at its own resolution (spec
+ * 2026-11-10-public-site-mobile, M2): a <picture> whose source for 1024 px and wider is the whole screen; the dialog
+ * always shows the whole screen.
  */
 import { useState } from 'react';
 import { Dialog } from '@pharmacy/ui';
 
-export interface ShotZoomProps {
+/** A WebP file with its real pixel size (CLS). */
+export interface ShotFile {
   src: string;
   width: number;
   height: number;
+}
+
+export interface ShotZoomProps extends ShotFile {
+  /** The fragment the tile shows below 1024 px. */
+  phone: ShotFile;
   alt: string;
   /** The tile's title: the dialog's heading. */
   title: string;
@@ -32,6 +42,7 @@ export function ShotZoom({
   src,
   width,
   height,
+  phone,
   alt,
   title,
   labels,
@@ -48,18 +59,28 @@ export function ShotZoom({
           event.currentTarget.focus();
           setOpen(true);
         }}
-        className="block h-full cursor-zoom-in rounded-site-card focus-visible:outline-hidden"
+        // a button shrinks to its content even as a block: on a phone it takes the tile's width (the fragment fills it),
+        // from 1024 px the width of the screen it holds
+        className="block h-full w-full cursor-zoom-in rounded-site-card focus-visible:outline-hidden md:w-auto"
       >
-        {/* a plain <img>: no next/image on the site (ADR-0023) */}
-        <img
-          src={src}
-          width={width}
-          height={height}
-          alt={alt}
-          loading="lazy"
-          decoding="async"
-          className={className}
-        />
+        {/* a plain <picture>: no next/image on the site (ADR-0023); each source carries its own size */}
+        <picture>
+          <source
+            media="(min-width: 64rem)"
+            srcSet={src}
+            width={width}
+            height={height}
+          />
+          <img
+            src={phone.src}
+            width={phone.width}
+            height={phone.height}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            className={className}
+          />
+        </picture>
       </button>
       <Dialog
         open={open}

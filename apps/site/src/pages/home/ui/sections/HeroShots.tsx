@@ -3,8 +3,8 @@
  * screens of spec 4.4, 4.5, п. 2 and amendment 4.4, п. 2): one till screen, large enough to read the search, the first
  * rows of the catalogue and the receipt. From 1024 px it is wider than its column (w-site-hero-shot, 150 % of it: about
  * 990 px at 1440), starts at the column's left edge and runs past the panel's right edge, which clips it (the panel has
- * `overflow-x-clip`); it still hangs 64 px below the panel. On a phone it is the whole picture in the width of the
- * content. It comes in with the CSS entrance (R1) and, from 1024 px, rises and grows with the scroll while the panel
+ * `overflow-x-clip`); it still hangs 64 px below the panel. On a phone it is the receipt of the same screen, whole, in
+ * the width of the content (spec 2026-11-10-public-site-mobile, M2). It comes in with the CSS entrance (R1) and, from 1024 px, rises and grows with the scroll while the panel
  * leaves upwards (spec 2026-11-04-public-site-home-polish, H8.1; ScrollZoom: `scale` 0.92 and 48 px lower → 1 in place,
  * `transform` only, visible from the first paint); with reduce and on a phone it stands. The layers do not fight:
  * ScrollZoom (scroll) → entrance. On the dark panel the screen has no border, only the shadow (L3). A server component:
@@ -12,8 +12,17 @@
  */
 import { ScrollZoom } from '@/shared/ui/motion';
 
-/** Real pixel size of the WebP file (CLS). A screen of apps/web on its mocks: synthetic data only. */
+/**
+ * Real pixel sizes of the WebP files (CLS). A screen of apps/web on its mocks: synthetic data only. Below 1024 px the
+ * first screen shows the receipt of that screen at its own resolution, cut for a phone (two items with batch and expiry,
+ * the total, the ways to pay; spec 2026-11-10-public-site-mobile, M2): the whole till is unreadable at 330 px.
+ */
 const SHOT = { src: '/images/pos.webp', width: 1600, height: 1100 } as const;
+const PHONE = {
+  src: '/images/pos-receipt-phone.webp',
+  width: 540,
+  height: 628,
+} as const;
 
 export interface HeroShotsProps {
   /** The text alternative of the screen, in the page language. */
@@ -29,16 +38,24 @@ export function HeroShots({ alt }: HeroShotsProps) {
     <div className="relative mx-auto w-full max-w-(--ph-size-dialog-lg) md:mx-0 md:-mb-16 md:w-site-hero-shot md:max-w-none md:self-end md:justify-self-start">
       <ScrollZoom>
         <div className="site-enter site-enter-delay-2 rounded-site-card shadow-shot">
-          {/* a plain <img>: no next/image on the site (ADR-0023) */}
-          <img
-            src={SHOT.src}
-            width={SHOT.width}
-            height={SHOT.height}
-            alt={alt}
-            fetchPriority="high"
-            decoding="async"
-            className="block h-auto w-full rounded-site-card"
-          />
+          {/* a plain <picture>: no next/image on the site (ADR-0023); each source carries its own size */}
+          <picture>
+            <source
+              media="(min-width: 64rem)"
+              srcSet={SHOT.src}
+              width={SHOT.width}
+              height={SHOT.height}
+            />
+            <img
+              src={PHONE.src}
+              width={PHONE.width}
+              height={PHONE.height}
+              alt={alt}
+              fetchPriority="high"
+              decoding="async"
+              className="block h-auto w-full rounded-site-card"
+            />
+          </picture>
         </div>
       </ScrollZoom>
     </div>

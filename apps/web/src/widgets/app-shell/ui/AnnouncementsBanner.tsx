@@ -95,7 +95,7 @@ export function AnnouncementsBanner() {
   };
 
   return (
-    <div ref={ref} className="flex flex-col gap-2 px-6 pt-4">
+    <div ref={ref} className="flex flex-col gap-2 px-page pt-4">
       {shown.map((item) => (
         <Alert key={item.id} tone="info">
           <div className="flex flex-wrap items-center gap-x-4">

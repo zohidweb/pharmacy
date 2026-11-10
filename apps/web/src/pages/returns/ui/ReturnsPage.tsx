@@ -470,7 +470,7 @@ function ReturnsPageView() {
           windowDays === null ? undefined : t('subtitle', { days: windowDays })
         }
       />
-      <div className="flex flex-col gap-4 px-6 pt-4">
+      <div className="flex flex-col gap-4 px-page pt-4">
         {!online && <Alert tone="warning">{t('offline')}</Alert>}
         <Card
           as="section"

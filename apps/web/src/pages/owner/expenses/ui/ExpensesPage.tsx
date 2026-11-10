@@ -163,7 +163,7 @@ function ExpensesPageView() {
           )
         }
       />
-      <div className="flex flex-col gap-4 px-6 pt-4 pb-6">
+      <div className="flex flex-col gap-4 px-page pt-4 pb-6">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex items-center gap-2">
             <IconButton

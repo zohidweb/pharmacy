@@ -51,7 +51,7 @@ function ProductView() {
         title={card.data?.nameRu ?? t('title')}
         subtitle={card.data?.categoryName}
       />
-      <div className="flex flex-col gap-4 px-6 pt-4">
+      <div className="flex flex-col gap-4 px-page pt-4">
         <Link
           href={routes.catalog()}
           className="inline-flex min-h-touch items-center gap-1 self-start text-sm text-primary hover:text-primary-hover"

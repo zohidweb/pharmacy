@@ -20,7 +20,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <>
-      <header className="flex flex-wrap items-end gap-4 px-6 pt-6">
+      <header className="flex flex-wrap items-end gap-4 px-page pt-6">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h1 className="truncate text-2xl font-bold tracking-tight text-fg">
             {title}
@@ -32,7 +32,7 @@ export function PageHeader({
         )}
       </header>
       {demoRoutes && (
-        <DemoDataNotice routes={demoRoutes} className="mx-6 mt-4" />
+        <DemoDataNotice routes={demoRoutes} className="mx-page mt-4" />
       )}
     </>
   );

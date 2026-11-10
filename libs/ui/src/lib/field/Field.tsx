@@ -85,11 +85,12 @@ export function Field({
 
 /**
  * Shared look of text-like controls (input, textarea, select) in apps/web and apps/admin: a white field; focus — the
- * primary border and a soft ring in place of the offset outline (tokens --ph-input-*).
+ * primary border and a soft ring in place of the offset outline (tokens --ph-input-*). Below the tablet breakpoint the
+ * text is 16 px: Safari iOS zooms the page into a field with smaller text (ADR-0007, amendment 2026-11-10).
  */
 export const controlClassName =
   'w-full min-w-0 rounded-(--ph-input-radius) border border-(--ph-input-border) ' +
-  'bg-(--ph-input-bg) px-(--ph-input-padding-x) text-sm text-fg transition ' +
+  'bg-(--ph-input-bg) px-(--ph-input-padding-x) text-sm text-fg transition max-tablet:text-md ' +
   'placeholder:text-fg-subtle hover:border-fg-subtle focus-visible:border-(--ph-input-border-focus) ' +
   'focus-visible:shadow-(--ph-input-ring-focus) focus-visible:outline-hidden ' +
   'aria-invalid:border-(--ph-input-border-invalid) ' +

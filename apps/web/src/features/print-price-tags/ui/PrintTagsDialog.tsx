@@ -97,7 +97,7 @@ export function PrintTagsDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 tablet:grid-cols-3">
           {store && (
             <Select
               label={t('store')}

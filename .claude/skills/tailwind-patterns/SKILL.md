@@ -90,6 +90,7 @@ className="bg-primary p-4 min-h-touch-pos"   →   background-color: var(--ph-co
 ```css
 @theme {
   --*: initial;            /* drop the default theme: no bg-blue-500, no p-13, no text-7xl */
+  --breakpoint-tablet: 48rem; /* below it the phone layout: max-tablet: (ADR-0007, amendment 2026-11-10) */
   --breakpoint-lg: 80rem;  /* literals only here: media/container queries cannot use var() */
   --container-md: 28rem;
   /* … */
@@ -282,6 +283,12 @@ var(--ph-pos-side-width)`) — компонентные токены libs/ui; ш
 
 Viewport-префиксы (`lg:`, `xl:`) — только для раскладки страницы; компоненты libs/ui — через
 `@container` (размеры — `--container-*` из §3).
+
+**Телефон** (ADR-0007, поправка 2026-11-10): ниже точки `tablet` (48rem = 768 px) — раскладка телефона для экранов
+кабинета владельца. Правила телефона пишутся вариантами `max-tablet:` поверх классов ПК; базовые классы не меняются, и
+от 768 px раскладка прежняя. Исключение из правила `@container`: `Dialog`, `Drawer`, `Popover` (`mobileSheet`) и карточки
+`DataTable` переключаются по той же точке экрана. В CSS кита — `@variant max-tablet { … }`, второго литерала точки нет.
+Точек `sm`/`md` в теме кита нет; `md` публичного сайта — его собственная, 1024 px.
 
 ## 10. Тема, OKLCH, motion, печать
 

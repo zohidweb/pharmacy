@@ -68,7 +68,7 @@ function ShiftCardView() {
           </Link>
         }
       />
-      <div className="flex flex-col gap-4 px-6 pt-4">
+      <div className="flex flex-col gap-4 px-page pt-4">
         <QueryState query={card}>
           {(details) => {
             const { shift, zReport, afterClosing } = details;
@@ -106,7 +106,7 @@ function ShiftCardView() {
                       />
                     }
                   />
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm tablet:grid-cols-4">
                     <dt className="text-fg-subtle">{t('status')}</dt>
                     <dd>
                       {shift.status === 'open' ? (
@@ -156,7 +156,7 @@ function ShiftCardView() {
                     </Alert>
                   )}
                 </Card>
-                <div className="grid items-start gap-4 md:grid-cols-2">
+                <div className="grid items-start gap-4 tablet:grid-cols-2">
                   <ShiftTotals shift={shift} />
                   <ShiftDrawer shift={shift} />
                 </div>

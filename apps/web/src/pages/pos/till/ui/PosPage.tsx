@@ -571,7 +571,7 @@ function PosPageView() {
     return (
       <>
         {header}
-        <div className="px-6 pt-4">
+        <div className="px-page pt-4">
           <EmptyState
             icon="lock"
             title={t('noTerminal')}
@@ -598,7 +598,7 @@ function PosPageView() {
     // the POS fits the screen: catalog and receipt lines scroll inside, «Оплатить» stays visible
     <div className="flex h-(--ph-pos-height) min-h-0 flex-col">
       {header}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 pt-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-page pt-4">
         {!openShift && (
           <ClosedElsewhereNotice storeId={storeId} shift={shift.data} />
         )}

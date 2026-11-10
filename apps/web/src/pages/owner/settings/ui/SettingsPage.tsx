@@ -13,6 +13,7 @@ import {
   Card,
   CardHeader,
   Switch,
+  TableScroll,
   TextareaField,
   TextField,
   useToast,
@@ -165,7 +166,7 @@ function NetworkCard({
             {error}
           </Alert>
         )}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
           <TextField
             label={t('network.networkName')}
             readOnly
@@ -207,7 +208,7 @@ function NetworkCard({
           title={t('offline.title')}
           description={t('offline.hint')}
         />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
           {number('posBufferMaxHours')}
           {number('posBufferMaxOperations')}
           {number('prescriptionRetentionDays')}
@@ -230,7 +231,7 @@ function NetworkCard({
           title={t('receipt.title')}
           description={t('receipt.hint')}
         />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 max-tablet:grid-cols-1">
           {FOOTER_LANGUAGES.map((language) => (
             <TextareaField
               key={language}
@@ -270,7 +271,7 @@ function NetworkCard({
           title={t('notifications.title')}
           description={t('notifications.hint')}
         />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 max-tablet:grid-cols-1">
           {NOTIFICATIONS.map((kind) => (
             <Switch
               key={kind}
@@ -344,7 +345,7 @@ function ReturnsCard({
           {error}
         </Alert>
       )}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
         <TextField
           label={t('returns.windowDays')}
           inputMode="numeric"
@@ -362,7 +363,7 @@ function ReturnsCard({
           }
         />
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-1">
         {KINDS.map((kind) => (
           <Switch
             key={kind}
@@ -440,64 +441,69 @@ function MarkupsCard({
           {error}
         </Alert>
       )}
-      <table className="w-full border-collapse text-sm">
-        <caption className="ph-visually-hidden">{t('title')}</caption>
-        <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
-          <tr>
-            <th scope="col" className="px-2 py-2 text-start font-medium">
-              {t('category')}
-            </th>
-            <th scope="col" className="px-2 py-2 text-start font-medium">
-              {t('markup')}
-            </th>
-            <th scope="col" className="px-2 py-2 text-end font-medium">
-              {t('products')}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {markups.map((m) => (
-            <tr key={m.categoryId} className="border-b border-border">
-              <th scope="row" className="px-2 py-2 text-start font-medium">
-                {m.categoryName}
+      <TableScroll label={t('title')}>
+        <table className="w-full border-collapse text-sm">
+          <caption className="ph-visually-hidden">{t('title')}</caption>
+          <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
+            <tr>
+              <th scope="col" className="px-2 py-2 text-start font-medium">
+                {t('category')}
               </th>
-              <td className="w-cell-md px-2 py-2">
-                <TextField
-                  label={t('markupOf', { category: m.categoryName })}
-                  hideLabel
-                  inputMode="numeric"
-                  disabled={!editable}
-                  value={String(values[m.categoryId] ?? '')}
-                  error={
-                    (values[m.categoryId] ?? 0) > 1000
-                      ? tSettings('outOfRange')
-                      : undefined
-                  }
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [m.categoryId]:
-                        event.target.value.replace(/\D/g, '') === ''
-                          ? null
-                          : Number(event.target.value.replace(/\D/g, '')),
-                    }))
-                  }
-                  onBlur={() =>
-                    // A saved markup cannot be removed here (the API keeps it): an emptied field
-                    // shows it again instead of looking cleared.
-                    setValues((current) =>
-                      current[m.categoryId] === null && m.markupPercent !== null
-                        ? { ...current, [m.categoryId]: m.markupPercent }
-                        : current,
-                    )
-                  }
-                />
-              </td>
-              <td className="px-2 py-2 text-end tabular-nums">{m.products}</td>
+              <th scope="col" className="px-2 py-2 text-start font-medium">
+                {t('markup')}
+              </th>
+              <th scope="col" className="px-2 py-2 text-end font-medium">
+                {t('products')}
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {markups.map((m) => (
+              <tr key={m.categoryId} className="border-b border-border">
+                <th scope="row" className="px-2 py-2 text-start font-medium">
+                  {m.categoryName}
+                </th>
+                <td className="w-cell-md px-2 py-2">
+                  <TextField
+                    label={t('markupOf', { category: m.categoryName })}
+                    hideLabel
+                    inputMode="numeric"
+                    disabled={!editable}
+                    value={String(values[m.categoryId] ?? '')}
+                    error={
+                      (values[m.categoryId] ?? 0) > 1000
+                        ? tSettings('outOfRange')
+                        : undefined
+                    }
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [m.categoryId]:
+                          event.target.value.replace(/\D/g, '') === ''
+                            ? null
+                            : Number(event.target.value.replace(/\D/g, '')),
+                      }))
+                    }
+                    onBlur={() =>
+                      // A saved markup cannot be removed here (the API keeps it): an emptied field
+                      // shows it again instead of looking cleared.
+                      setValues((current) =>
+                        current[m.categoryId] === null &&
+                        m.markupPercent !== null
+                          ? { ...current, [m.categoryId]: m.markupPercent }
+                          : current,
+                      )
+                    }
+                  />
+                </td>
+                <td className="px-2 py-2 text-end tabular-nums">
+                  {m.products}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
       {editable && (
         <Button
           className="self-end"
@@ -524,7 +530,7 @@ function ReferencesCard() {
       <CardHeader title={t('title')} description={t('hint')} />
       <QueryState query={refs}>
         {(data) => (
-          <dl className="grid grid-cols-2 gap-4 text-sm">
+          <dl className="grid grid-cols-2 gap-4 text-sm max-tablet:grid-cols-1">
             {(
               [
                 ['categories', data.categories.map((c) => c.name)],
@@ -575,7 +581,7 @@ function SettingsPageView() {
           {(data) => <ReturnsCard policy={data} editable={editable} />}
         </QueryState>
         <CategoriesCard />
-        <div className="grid grid-cols-2 items-start gap-4">
+        <div className="grid grid-cols-2 items-start gap-4 max-tablet:grid-cols-1">
           <QueryState query={markups}>
             {(data) => (
               <MarkupsCard

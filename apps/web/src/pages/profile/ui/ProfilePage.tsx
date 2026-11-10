@@ -78,14 +78,14 @@ function MainInfo({ me }: { me: EmployeeMe }) {
       className="flex flex-col gap-4"
     >
       <CardHeader title={t('title')} titleId="main-title" />
-      <dl className="m-0 grid grid-cols-4 gap-4">
+      <dl className="m-0 grid grid-cols-4 gap-4 max-tablet:grid-cols-1">
         {rows.map(([label, value]) => (
           <div key={label} className="flex flex-col gap-1">
             <dt className="text-xs text-fg-subtle">{label}</dt>
             <dd className="m-0 text-sm font-medium">{value}</dd>
           </div>
         ))}
-        <div className="col-span-4 flex flex-col gap-2">
+        <div className="col-span-4 flex flex-col gap-2 max-tablet:col-span-1">
           <dt className="text-xs text-fg-subtle">{t('stores')}</dt>
           <dd className="m-0">
             {me.scope === 'network' ? (
@@ -359,6 +359,7 @@ function TerminalsCard({ canUnbind }: { canUnbind: boolean }) {
     {
       key: 'device',
       header: t('device'),
+      mobile: 'title',
       cell: (row) => (
         <span className="flex flex-col items-start gap-1">
           <span className="font-medium">{row.name}</span>
@@ -387,6 +388,7 @@ function TerminalsCard({ canUnbind }: { canUnbind: boolean }) {
             key: 'actions',
             header: <span className="ph-visually-hidden">{t('actions')}</span>,
             align: 'end' as const,
+            mobile: 'actions' as const,
             cell: (row: MyTerminal) => (
               <Button
                 variant="tertiary"
@@ -411,6 +413,7 @@ function TerminalsCard({ canUnbind }: { canUnbind: boolean }) {
       <QueryState query={terminals}>
         {(rows) => (
           <DataTable
+            mobileLayout="cards"
             caption={t('title')}
             columns={columns}
             rows={rows}
@@ -487,7 +490,7 @@ function ProfilePageView() {
                 <SignOutButton variant="secondary" />
               </Card>
               <MainInfo me={data} />
-              <div className="grid grid-cols-2 items-start gap-4">
+              <div className="grid grid-cols-2 items-start gap-4 max-tablet:grid-cols-1">
                 <PasswordCard locked={locked} />
                 <PinCard me={data} locked={locked} />
               </div>

@@ -138,6 +138,7 @@ export function ShiftEventLog({
     <Card padding="none">
       <CardHeader title={caption} inset />
       <DataTable
+        mobileLayout="cards"
         caption={caption}
         minWidth="none"
         rowKey={(row) => row.id}
@@ -153,6 +154,7 @@ export function ShiftEventLog({
           {
             key: 'kind',
             header: t('operation'),
+            mobile: 'title',
             cell: (e) => (
               <span className="flex flex-wrap items-center gap-2">
                 {t(`events.${e.kind}`, {

@@ -106,7 +106,7 @@ function ShiftCardView() {
                       />
                     }
                   />
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm tablet:grid-cols-4">
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm max-tablet:grid-cols-1 tablet:grid-cols-4">
                     <dt className="text-fg-subtle">{t('status')}</dt>
                     <dd>
                       {shift.status === 'open' ? (

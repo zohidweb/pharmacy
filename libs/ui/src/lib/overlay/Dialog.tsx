@@ -8,7 +8,9 @@
  * - focus returns to the element that was focused before opening — also when the dialog is
  *   unmounted while open (`{shown && <Dialog open />}`), which fires no `close`;
  * - a dialog inside another (a confirmation) keeps its Esc and `close` to itself: React passes
- *   them up to the parent dialog, which would close too.
+ *   them up to the parent dialog, which would close too;
+ * - below the tablet breakpoint (a phone) it fills the screen whatever its size: the header and the
+ *   footer stay, the body scrolls (ADR-0007, amendment 2026-11-10).
  */
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { cx } from '../cx';
@@ -117,11 +119,15 @@ export function Dialog({
         'rounded-(--ph-dialog-radius) border-0 bg-surface p-0 text-fg shadow-(--ph-dialog-shadow)',
         'backdrop:bg-overlay',
         sizeClass[size],
+        // phone (ADR-0007, amendment 2026-11-10): the whole screen; only the body scrolls. No `display` on the
+        // <dialog> itself: an author display would show a closed dialog.
+        'max-tablet:m-0 max-tablet:h-dvh max-tablet:max-h-none max-tablet:w-full max-tablet:max-w-none',
+        'max-tablet:overflow-hidden max-tablet:rounded-none',
       )}
     >
       {open && (
-        <div className="flex flex-col gap-5 p-6">
-          <header className="flex items-start gap-3">
+        <div className="flex flex-col gap-5 p-(--ph-dialog-padding) max-tablet:h-full max-tablet:min-h-0">
+          <header className="flex shrink-0 items-start gap-3">
             {icon && tone !== 'default' && (
               <span
                 className={cx(
@@ -151,9 +157,15 @@ export function Dialog({
               className="-me-2 -mt-2"
             />
           </header>
-          {children && <div className="flex flex-col gap-4">{children}</div>}
+          {children && (
+            // phone: the body scrolls between the header and the footer; its children keep their height (a table
+            // region would shrink into a scroll of its own); -m-1 p-1 keeps focus rings unclipped
+            <div className="flex flex-col gap-4 max-tablet:-m-1 max-tablet:min-h-0 max-tablet:flex-1 max-tablet:overflow-y-auto max-tablet:p-1 max-tablet:*:shrink-0">
+              {children}
+            </div>
+          )}
           {footer && (
-            <footer className="flex flex-wrap justify-end gap-2">
+            <footer className="flex shrink-0 flex-wrap justify-end gap-2 max-tablet:mt-auto">
               {footer}
             </footer>
           )}

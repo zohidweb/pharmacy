@@ -103,6 +103,7 @@ export {
   type DialogSize,
   type DialogTone,
 } from './lib/overlay/Dialog';
+export { Drawer, type DrawerProps } from './lib/overlay/Drawer';
 export {
   Popover,
   type PopoverProps,

@@ -451,7 +451,7 @@ function StockPageView({
           </>
         }
       />
-      <div className="flex flex-col gap-4 px-6 pt-4">
+      <div className="flex flex-col gap-4 px-page pt-4">
         {xlsx.message && <Alert tone="warning">{xlsx.message}</Alert>}
         <StockNotices access={access} />
         <Card padding="none">

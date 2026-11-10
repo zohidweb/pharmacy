@@ -8,6 +8,23 @@
 }
 
 /*
+ * Popover `mobileSheet` below the tablet breakpoint (ADR-0007, amendment 2026-11-10): a sheet under the top bar of
+ * the shell, full width minus the gutters; no anchor positioning (Safari iOS may lack it).
+ */
+.ph-popover-sheet {
+  @variant max-tablet {
+    position-area: none;
+    position-try-fallbacks: none;
+    inset-block: calc(var(--ph-size-topbar) + var(--ph-space-1)) auto;
+    inset-inline: var(--ph-space-2);
+    inline-size: auto; /* the browser gives [popover] fit-content */
+    margin: 0;
+    max-block-size: calc(100dvh - var(--ph-size-topbar) - var(--ph-space-4));
+    overflow-y: auto;
+  }
+}
+
+/*
  * Native control parts that utilities cannot reach (pseudo-elements of the platform).
  * Customizable <select> (Chrome/Edge 135+, ADR-0007); other engines keep the native picker.
  */

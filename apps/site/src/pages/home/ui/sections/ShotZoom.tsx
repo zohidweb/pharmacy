@@ -88,6 +88,8 @@ export function ShotZoom({
         title={title}
         closeLabel={labels.close}
         size="xl"
+        // a picture: centred on a phone too, not at the top of a white screen
+        fullScreenOnPhone={false}
       >
         <img
           src={src}

@@ -86,7 +86,7 @@ function PricingPageView({ initial }: { initial: ProblemsFilter }) {
   return (
     <>
       <PageHeader title={t('title')} />
-      <div className="flex flex-col gap-4 px-6 pt-4">
+      <div className="flex flex-col gap-4 px-page pt-4">
         <Tabs
           label={t('title')}
           value={tab}

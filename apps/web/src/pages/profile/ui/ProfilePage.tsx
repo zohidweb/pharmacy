@@ -468,7 +468,7 @@ function ProfilePageView() {
   return (
     <>
       <PageHeader title={t('title')} />
-      <div className="flex flex-col gap-4 px-6 pt-4">
+      <div className="flex flex-col gap-4 px-page pt-4">
         <QueryState query={me}>
           {(data) => (
             <>

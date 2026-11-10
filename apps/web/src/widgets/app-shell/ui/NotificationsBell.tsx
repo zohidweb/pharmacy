@@ -42,6 +42,7 @@ function NotificationsBellView() {
     <Popover
       label={t('notifications')}
       width="md"
+      mobileSheet
       trigger={(props) => (
         <IconButton
           icon="bell"

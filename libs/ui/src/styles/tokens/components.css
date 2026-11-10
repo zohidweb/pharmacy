@@ -20,6 +20,9 @@
    */
   --ph-input-height: var(--ph-size-touch-min);
   --ph-input-padding-x: var(--ph-space-3);
+  /* Text of a field on a phone (ADR-0007, amendment 2026-11-10): Safari iOS zooms the page into a field with text
+     under 16 CSS px, and at the 90 % font scale 1rem is 14.4 px */
+  --ph-input-font-size-phone: max(var(--ph-font-size-md), 16px);
   --ph-input-radius: var(--ph-radius-sm);
   --ph-input-bg: var(--ph-color-surface);
   --ph-input-bg-disabled: var(--ph-color-surface-sunken);
@@ -51,10 +54,19 @@
   --ph-dialog-shadow: var(--ph-shadow-lg);
   --ph-dialog-max-block: calc(100dvh - var(--ph-space-8));
   --ph-dialog-max-inline: calc(100vw - var(--ph-space-8));
+  --ph-dialog-padding: var(--ph-space-6);
+  /* Menu drawer of the phone layout (ADR-0007, amendment 2026-11-10): sidebar width, at most 85 % of the screen */
+  --ph-drawer-max-inline: 85vw;
+
+  /* Inline padding of a screen inside the shell (utilities px-page, mx-page) */
+  --ph-page-padding-inline: var(--ph-space-6);
 
   --ph-table-row-height: var(--ph-size-row-dense);
   --ph-table-cell-padding-x: var(--ph-space-5);
   --ph-table-header-bg: var(--ph-color-surface-sunken);
+  /* Edge of a sticky first column (DataTable stickyFirstColumn): an inset line at the inline end (LTR only, RU/TJ) */
+  --ph-table-sticky-edge: inset calc(-1 * var(--ph-border-width-1)) 0 0
+    var(--ph-color-border);
 
   --ph-nav-item-bg-active: var(--ph-color-primary-subtle);
   --ph-nav-item-fg-active: var(--ph-color-primary);
@@ -103,4 +115,16 @@
   --ph-input-height: var(--ph-size-control-compact);
   --ph-chip-height: var(--ph-size-control-compact);
   --ph-table-row-height: var(--ph-size-row-compact);
+}
+
+/*
+ * Phone layout, below the tablet breakpoint (ADR-0007, amendment 2026-11-10): 16 px paddings of a screen, a card and a
+ * dialog. @variant keeps the one breakpoint literal in tailwind-theme.css.
+ */
+:root {
+  @variant max-tablet {
+    --ph-page-padding-inline: var(--ph-space-4);
+    --ph-card-padding: var(--ph-space-4);
+    --ph-dialog-padding: var(--ph-space-4);
+  }
 }

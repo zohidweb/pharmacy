@@ -41,7 +41,10 @@ export function Pagination({
   return (
     <nav
       aria-label={labels.nav}
-      className={cx('flex items-center justify-end gap-3', className)}
+      className={cx(
+        'flex items-center justify-end gap-3 max-tablet:flex-wrap',
+        className,
+      )}
     >
       <span className="text-xs text-fg-subtle tabular-nums" aria-live="polite">
         {labels.range({ from, to, total })}

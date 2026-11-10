@@ -34,7 +34,7 @@ export function StateScreen({ kind, note, actions }: StateScreenProps) {
   return (
     <section
       aria-labelledby="state-title"
-      className="mx-auto flex max-w-(--ph-size-dialog-md) flex-col items-center gap-4 px-6 py-16 text-center"
+      className="mx-auto flex max-w-(--ph-size-dialog-md) flex-col items-center gap-4 px-page py-16 text-center"
     >
       {kind === 'notFound' ? (
         <p aria-hidden="true" className="text-4xl font-bold text-border-strong">

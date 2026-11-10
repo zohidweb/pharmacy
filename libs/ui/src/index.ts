@@ -103,6 +103,7 @@ export {
   type DialogSize,
   type DialogTone,
 } from './lib/overlay/Dialog';
+export { Drawer, type DrawerProps } from './lib/overlay/Drawer';
 export {
   Popover,
   type PopoverProps,
@@ -159,7 +160,9 @@ export {
 export {
   DataTable,
   type DataTableColumn,
+  type DataTableMobileRole,
   type DataTableProps,
   type SortDirection,
   type SortState,
 } from './lib/data/DataTable';
+export { TableScroll, type TableScrollProps } from './lib/data/TableScroll';

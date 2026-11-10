@@ -61,26 +61,27 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
   }
 
   return (
+    // phone (ADR-0007, amendment 2026-11-10): the icon stays, the texts are for screen readers only
     <p role="status" className="flex min-w-0 flex-col items-end text-xs">
       {/* max-w-full: a long status is cut with an ellipsis instead of running over the store switcher */}
       <span className={`flex max-w-full min-w-0 items-center gap-2 ${tone}`}>
         <Icon name={icon} size="sm" />
-        <span className="truncate">{text}</span>
+        <span className="truncate max-tablet:sr-only">{text}</span>
       </span>
       {counts.quarantine > 0 && (
-        <span className="flex items-center gap-1 font-medium text-danger">
+        <span className="flex items-center gap-1 font-medium text-danger max-tablet:sr-only">
           <Icon name="triangle-alert" size="xs" />
           {t('quarantine', { count: counts.quarantine })}
         </span>
       )}
       {buffer?.general === 'blocked' ? (
-        <span className="flex items-center gap-1 font-medium text-danger">
+        <span className="flex items-center gap-1 font-medium text-danger max-tablet:sr-only">
           <Icon name="triangle-alert" size="xs" />
           {t('bufferBlocked')}
         </span>
       ) : (
         buffer?.general === 'warn' && (
-          <span className="flex items-center gap-1 text-warning">
+          <span className="flex items-center gap-1 text-warning max-tablet:sr-only">
             <Icon name="triangle-alert" size="xs" />
             {t('bufferWarn', {
               count: buffer.pending,
@@ -91,13 +92,13 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
         )
       )}
       {buffer?.controlled === 'blocked' ? (
-        <span className="flex items-center gap-1 font-medium text-danger">
+        <span className="flex items-center gap-1 font-medium text-danger max-tablet:sr-only">
           <Icon name="triangle-alert" size="xs" />
           {t('controlledBlocked')}
         </span>
       ) : (
         buffer?.controlled === 'warn' && (
-          <span className="flex items-center gap-1 text-warning">
+          <span className="flex items-center gap-1 text-warning max-tablet:sr-only">
             <Icon name="triangle-alert" size="xs" />
             {t('controlledWarn', {
               count: buffer.controlledPending,
@@ -106,7 +107,9 @@ export function ConnectionStatus({ store }: { store: SessionStore | null }) {
           </span>
         )
       )}
-      {counts.paused && <span className="text-warning">{t('paused')}</span>}
+      {counts.paused && (
+        <span className="text-warning max-tablet:sr-only">{t('paused')}</span>
+      )}
     </p>
   );
 }

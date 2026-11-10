@@ -13,6 +13,7 @@ Tailwind выбран ADR-0007. Рабочий файл — `libs/ui/src/styles/
   --*: initial; /* drop Tailwind's default theme: no bg-blue-500, no p-13, no text-7xl */
 
   /* Media/container queries cannot use var() → literals mirroring ui-design-tokens.md §7 */
+  --breakpoint-tablet: 48rem; /* 768 — below it the phone layout (ADR-0007, amendment 2026-11-10) */
   --breakpoint-lg: 80rem;  /* 1280 — target POS screen */
   --breakpoint-xl: 100rem; /* 1600 */
   --breakpoint-2xl: 120rem;/* 1920 */

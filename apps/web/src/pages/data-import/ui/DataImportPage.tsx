@@ -23,7 +23,7 @@ function DataImportView() {
     return (
       <>
         <PageHeader title={t('pageTitle')} />
-        <div className="px-6 pt-4">
+        <div className="px-page pt-4">
           <Alert tone="warning">{t('notFound')}</Alert>
         </div>
       </>
@@ -38,7 +38,7 @@ function DataImportView() {
   return (
     <>
       <PageHeader title={t(`kinds.${kind}.title`)} />
-      <div className="flex flex-col gap-4 px-6 pt-4 pb-6">
+      <div className="flex flex-col gap-4 px-page pt-4 pb-6">
         {allowed ? (
           <DataImportWizard
             key={kind}

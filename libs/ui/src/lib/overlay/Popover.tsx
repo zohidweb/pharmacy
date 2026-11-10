@@ -32,6 +32,11 @@ export interface PopoverProps {
   children: ReactNode | ((close: () => void) => ReactNode);
   /** Panel width token (spacing namespace), default dialog-sm. */
   width?: 'sm' | 'md';
+  /**
+   * Below the tablet breakpoint (a phone) the panel is a sheet under the top bar of the shell, full width
+   * minus the gutters, not tied to the trigger (ADR-0007, amendment 2026-11-10): for the top bar panels.
+   */
+  mobileSheet?: boolean;
 }
 
 const widthClass = {
@@ -39,11 +44,18 @@ const widthClass = {
   md: 'w-(--ph-size-dialog-md)',
 } as const;
 
+// the kit CSS (layer base) cannot beat utilities: a sheet takes its width from the insets of .ph-popover-sheet
+const sheetWidthClass = {
+  sm: 'tablet:w-(--ph-size-dialog-sm)',
+  md: 'tablet:w-(--ph-size-dialog-md)',
+} as const;
+
 export function Popover({
   trigger,
   label,
   children,
   width = 'sm',
+  mobileSheet = false,
 }: PopoverProps) {
   const reactId = useId();
   const panelId = `popover-${reactId.replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -81,9 +93,13 @@ export function Popover({
         // ignore-design: anchor linkage, not a visual value
         style={{ positionAnchor: anchorName } as CSSProperties}
         className={cx(
-          'ph-popover max-w-(--ph-dialog-max-inline) rounded-lg border border-border bg-surface p-0',
-          'text-fg shadow-lg',
-          widthClass[width],
+          'ph-popover rounded-lg border border-border bg-surface p-0 text-fg shadow-lg',
+          mobileSheet
+            ? cx(
+                'ph-popover-sheet tablet:max-w-(--ph-dialog-max-inline)',
+                sheetWidthClass[width],
+              )
+            : cx('max-w-(--ph-dialog-max-inline)', widthClass[width]),
         )}
       >
         {typeof children === 'function' ? children(close) : children}

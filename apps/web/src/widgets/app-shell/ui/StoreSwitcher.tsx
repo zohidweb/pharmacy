@@ -9,7 +9,7 @@ import { useApiErrorMessage } from '@/shared/api';
 
 const triggerClass =
   'inline-flex min-h-touch max-w-(--ph-size-dialog-sm) items-center gap-2 rounded-md border ' +
-  'border-border bg-surface px-3 text-sm font-medium text-fg';
+  'border-border bg-surface px-3 text-sm font-medium text-fg max-tablet:min-w-0 max-tablet:shrink';
 
 /**
  * Working store of the session. A PIN session is tied to the terminal store and an employee with
@@ -27,7 +27,7 @@ export function StoreSwitcher({ session }: { session: EmployeeSession }) {
   if (fixed) {
     return (
       <span className={cx(triggerClass, 'border-transparent')}>
-        <Icon name="store" size="md" />
+        <Icon name="store" size="md" className="max-tablet:hidden" />
         <span className="ph-visually-hidden">{t('label')}: </span>
         <span className="truncate">{name}</span>
         {session.auth === 'pin' && (
@@ -43,6 +43,7 @@ export function StoreSwitcher({ session }: { session: EmployeeSession }) {
     <Popover
       label={t('label')}
       width="md"
+      mobileSheet
       trigger={(props) => (
         <button
           type="button"
@@ -50,7 +51,7 @@ export function StoreSwitcher({ session }: { session: EmployeeSession }) {
           aria-label={t('current', { name })}
           {...props}
         >
-          <Icon name="store" size="md" />
+          <Icon name="store" size="md" className="max-tablet:hidden" />
           <span className="truncate">{name}</span>
           <Icon name="chevron-down" size="sm" />
         </button>

@@ -439,7 +439,7 @@ function ShiftPageView() {
     return (
       <>
         <PageHeader title={t('titleNone')} />
-        <div className="px-6 pt-4">
+        <div className="px-page pt-4">
           <EmptyState
             icon="lock"
             title={t('noTerminal')}
@@ -516,7 +516,7 @@ function ShiftPageView() {
                 )
               }
             />
-            <div className="flex flex-col gap-4 px-6 pt-4">
+            <div className="flex flex-col gap-4 px-page pt-4">
               {counts.pending > 0 && (
                 <Alert tone="info" live="polite">
                   {t('pendingHint', { count: counts.pending })}

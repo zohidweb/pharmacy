@@ -84,7 +84,7 @@ pharmacy/
 │   ├── shared/dto/     # @pharmacy/shared-dto — DTO и контракты REST API (единственный источник типов API)
 │   ├── shared/domain/  # @pharmacy/shared-domain — Tenant, Store, Batch, Receipt, StockMovement…
 │   ├── shared/util/    # @pharmacy/shared-util — деньги (integer дирамы), даты, i18n RU/TJ
-│   └── ui/             # @pharmacy/ui — общий UI-кит web, admin и site (сенсорные экраны от 10″)
+│   └── ui/             # @pharmacy/ui — общий UI-кит web, admin и site (сенсорные экраны от 10″ и телефон владельца от 360 px)
 ├── docker/           # compose.yml (+ compose.backup.yml и compose.secrets.yml для test/prod) + образы postgres/, redis/, proxy/ (Caddy + статика, ADR-0012); apps/api/Dockerfile, apps/site/Dockerfile
 ├── docs/architecture/, templates/   # архитектура, ADR; шаблоны ai-project-start
 └── nx.json / package.json / tsconfig.base.json / eslint.config.mjs

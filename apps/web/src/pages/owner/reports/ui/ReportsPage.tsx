@@ -221,7 +221,7 @@ function ReportsPageView() {
           ))}
         </ChipGroup>
         <Card padding="none">
-          <div className="flex flex-wrap items-end gap-3 p-(--ph-card-padding)">
+          <div className="flex flex-wrap items-end gap-3 p-(--ph-card-padding) max-tablet:flex-col max-tablet:items-stretch">
             <h2 className="me-auto text-lg font-bold">
               {t(`kindNames.${kind}`)}
             </h2>
@@ -280,6 +280,7 @@ function ReportsPageView() {
                 return (
                   <>
                     <DataTable
+                      stickyFirstColumn
                       caption={t(`kindNames.${kind}`)}
                       rowKey={(row) => row.__key}
                       rows={rows}

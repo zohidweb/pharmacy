@@ -494,6 +494,7 @@
       "store": "Точка и касса",
       "opened": "Открыта",
       "closed": "Закрыта",
+      "closedMobile": "Закрытие",
       "receipts": "Чеков",
       "revenue": "Выручка",
       "discrepancy": "Расхождение наличных",

@@ -390,7 +390,8 @@ export function TransferDialog({
         ) : current.length === 0 ? (
           <EmptyState icon="arrow-left-right" title={t('empty')} />
         ) : (
-          <TableScroll label={t('caption')}>
+          // -mx-1 px-1: room for the focus ring of the last column's button at the region's edge
+          <TableScroll label={t('caption')} className="-mx-1 px-1">
             <table className="w-full border-collapse text-sm">
               <caption className="ph-visually-hidden">{t('caption')}</caption>
               <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">
@@ -828,7 +829,8 @@ export function TransferDetailDialog({
               done={doc.status === 'accepted'}
             />
           </ol>
-          <TableScroll label={t('caption')}>
+          {/* -mx-1 px-1: room for the focus ring of the last column's button at the region's edge */}
+          <TableScroll label={t('caption')} className="-mx-1 px-1">
             <table className="w-full border-collapse text-sm">
               <caption className="ph-visually-hidden">{t('caption')}</caption>
               <thead className="bg-(--ph-table-header-bg) text-xs text-fg-muted">

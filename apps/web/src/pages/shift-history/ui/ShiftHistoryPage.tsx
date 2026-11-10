@@ -101,6 +101,8 @@ function ShiftHistoryView() {
     {
       key: 'closed',
       header: t('columns.closed'),
+      // a card of an open shift would read «Закрыта: Открыта»
+      mobileLabel: t('columns.closedMobile'),
       cell: (row) =>
         row.status === 'open' ? (
           <StatusPill tone="info" icon={null}>

@@ -11,8 +11,8 @@
  *   says where a value goes. The table and the list are both rendered and switched by CSS: a static
  *   export knows no screen width, and a choice in JS would flash on load. The hidden copy is
  *   `display: none` — out of the accessibility tree and the Tab order. Cards have no sort buttons;
- *   the sort chosen before stays. A column whose cell renders nothing (null, undefined, false, an empty string)
- *   is left out of its card.
+ *   the sort chosen before stays. A column whose cell returns nothing (null, undefined, false, an empty string)
+ *   is left out of its card; a component that renders nothing is not detected — return null from the cell instead.
  * - `stickyFirstColumn` keeps the first column at the start while the table scrolls (reports); from 768 px
  *   the table stays as it was.
  */

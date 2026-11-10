@@ -221,10 +221,7 @@ function ExpensesPageView() {
                       ? []
                       : [
                           ...data.items,
-                          {
-                            id: 'total' as const,
-                            amountMinor: data.totalMinor,
-                          },
+                          { id: 'total' as const, amountMinor: data.totalMinor },
                         ]
                   }
                   columns={columns}

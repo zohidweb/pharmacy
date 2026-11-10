@@ -238,7 +238,10 @@ describe('TransfersPage', () => {
   it('accepts a transfer with a shortage written off at the sender', async () => {
     await signInAs('manizha', 'store-3');
     renderWithProviders(<TransfersPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'ПМ-000015' }));
+    // the phone cards repeat the table (jsdom applies no CSS): the first match is the table's
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: 'ПМ-000015' }))[0],
+    );
     const card = await dialog('Перемещение ПМ-000015');
     fireEvent.change(
       await within(card).findByLabelText('Принято: Нурофен 200 мг, таб. №10'),
@@ -268,7 +271,11 @@ describe('TransfersPage', () => {
     await signInAs('manizha', 'store-1');
     renderWithProviders(<TransfersPage />);
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Собрать заявку ЗП-000007' }),
+      (
+        await screen.findAllByRole('button', {
+          name: 'Собрать заявку ЗП-000007',
+        })
+      )[0],
     );
     const picking = await dialog('Сборка по заявке ЗП-000007');
     // a requested product may take several lines: its FEFO batches
@@ -280,8 +287,8 @@ describe('TransfersPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     // a new transfer is in transit; the request closes — done or partial (one request, one transfer)
     expect(
-      await screen.findByRole('button', { name: 'ПМ-000016' }),
-    ).toBeTruthy();
+      (await screen.findAllByRole('button', { name: 'ПМ-000016' })).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getAllByText(/^(Выполнена|Частично)$/).length,
     ).toBeGreaterThan(0);

@@ -174,7 +174,7 @@ export function RoleDialog({
         </div>
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 text-sm font-bold">{t('specials')}</legend>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 max-tablet:grid-cols-1">
             {specialPermissions.map((permission) => (
               <Checkbox
                 key={permission}

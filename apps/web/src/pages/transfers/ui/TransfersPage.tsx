@@ -78,6 +78,7 @@ function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
     {
       key: 'number',
       header: '№',
+      mobile: 'title',
       cell: (r) => (
         <button
           type="button"
@@ -122,6 +123,7 @@ function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
       key: 'actions',
       header: <span className="ph-visually-hidden">{tDocs('actions')}</span>,
       align: 'end',
+      mobile: 'actions',
       cell: (r) =>
         canPick(r) || canReject(r) ? (
           <span className="flex justify-end gap-2">
@@ -160,6 +162,7 @@ function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
     {
       key: 'number',
       header: '№',
+      mobile: 'title',
       cell: (r) => (
         <button
           type="button"
@@ -238,7 +241,7 @@ function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
         <QueryState query={overview}>
           {(data) => (
             <>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-4 max-tablet:grid-cols-2">
                 <KpiTile
                   label={t('kpi.newRequests')}
                   value={data.kpi.newRequests}
@@ -258,6 +261,7 @@ function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
               <Card padding="none">
                 <CardHeader title={t('requests')} inset />
                 <DataTable
+                  mobileLayout="cards"
                   caption={t('requests')}
                   rowKey={(r) => r.id}
                   rows={data.requests}
@@ -290,6 +294,7 @@ function TransfersPageView({ initialIncoming }: { initialIncoming: boolean }) {
                   </ChipGroup>
                 </div>
                 <DataTable
+                  mobileLayout="cards"
                   caption={t('transfers')}
                   rowKey={(r) => r.id}
                   rows={

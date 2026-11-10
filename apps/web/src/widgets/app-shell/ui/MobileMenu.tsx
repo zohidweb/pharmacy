@@ -29,8 +29,10 @@ export function MobileMenu() {
     setOpen(false);
   }, [pathname]);
 
+  // only the button is hidden from the tablet breakpoint up: an open drawer under a display:none ancestor would stay
+  // modal but invisible after a phone turns to landscape (wider than 768 px), and nothing could be tapped
   return (
-    <div className="tablet:hidden">
+    <>
       <IconButton
         icon="menu"
         label={attention ? t('menuAttention') : t('menu')}
@@ -39,6 +41,7 @@ export function MobileMenu() {
         aria-expanded={open}
         aria-controls={drawerId}
         onClick={() => setOpen(true)}
+        className="tablet:hidden"
       />
       <Drawer
         id={drawerId}
@@ -61,6 +64,6 @@ export function MobileMenu() {
           </div>
         </nav>
       </Drawer>
-    </div>
+    </>
   );
 }

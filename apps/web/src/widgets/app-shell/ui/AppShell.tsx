@@ -85,21 +85,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           <FontScaleControl />
         </header>
       ) : (
-        // phone (ADR-0007, amendment 2026-11-10): menu button first, the product mark without its name, the font size
-        // control moves into the menu
+        // phone (ADR-0007, amendment 2026-11-10): menu button first; the product mark and the font size control are
+        // hidden (home is the first menu item, the font size control is in the menu) so the store name fits
         <header className="sticky top-0 z-(--ph-z-sticky) flex h-topbar items-center gap-4 border-b border-border bg-surface px-4 max-tablet:gap-2 max-tablet:px-3">
           <MobileMenu />
           <Link
             href={landingRoute(data)}
             aria-label={t('home')}
-            className="flex min-h-touch items-center gap-2 rounded-md px-2 max-tablet:shrink-0 max-tablet:px-0"
+            className="flex min-h-touch items-center gap-2 rounded-md px-2 max-tablet:hidden"
           >
             <span className="grid size-avatar-sm place-items-center rounded-md bg-primary text-on-primary">
               <Icon name="pill" size="md" />
             </span>
             <span
               aria-hidden="true"
-              className="text-lg font-bold tracking-tight text-fg max-tablet:hidden"
+              className="text-lg font-bold tracking-tight text-fg"
             >
               {t('productName')}
             </span>

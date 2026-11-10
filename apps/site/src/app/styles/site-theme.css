@@ -1,13 +1,14 @@
 /*
  * The theme of the public site (spec 2026-11-02-public-site-redesign 4.2, 4.7 and its amendment
  * 2026-11-02-public-site-light-panels 4.1 to 4.3; ADR-0023, ADR-0024): a light page with colour panels, no light/dark
- * switch. The only place the site's colour values live. On <html data-theme="site"> it overrides the kit's semantic
+ * switch. Its colours are the kit's brand primitives (libs/ui primitives.css: emerald and mint, the hex of spec 4.1),
+ * shared with web and admin; this file maps them. On <html data-theme="site"> it overrides the kit's semantic
  * layer (and four component tokens of shape and the field focus ring), so libs/ui components (buttons, fields, cards,
  * alerts) take the site palette without changes to the kit. A panel is any container with data-surface="dark", "green"
  * or "mint": it sets the same semantic tokens to its own values, its fill and its text colour, so the kit inside it takes
  * the panel's colours too.
  *
- * WCAG 2.1 contrast, measured on the sRGB hex below (text ≥ 4.5:1; large text, controls and focus ≥ 3:1):
+ * WCAG 2.1 contrast, measured on the sRGB hex of the palette (text ≥ 4.5:1; large text, controls and focus ≥ 3:1):
  *   light root (bg mint-25, surface mint-0)
  *     fg (975)              on bg 16.0 · surface 16.7 · sunken mint-50 15.5
  *     fg-muted (ink-600)    on bg 6.9  · surface 7.2  · sunken 6.7 (fg-subtle is the same colour)
@@ -35,21 +36,8 @@
  *   decorative only, never text: the future step numbers (mint-300 at 55 %, 3.4:1 on the panel, text-site-step-future).
  */
 
-/* Primitives of the site: spec 4.1 (hex as approved). Read only by this file: the semantic layer and @theme below. */
+/* Primitives of the site beyond the kit's palette. Read only by this file: the semantic layer and @theme below. */
 :root {
-  --ph-emerald-975: #04211b;
-  --ph-emerald-950: #06302a;
-  --ph-emerald-900: #0a3f37;
-  --ph-emerald-800: #11524a;
-  --ph-emerald-700: #0f6e56;
-  --ph-emerald-ink-600: #3e5c55; /* secondary text and field borders of the light page */
-  --ph-mint-0: #fbfefc; /* the surface of the light page, not a pure white */
-  --ph-mint-25: #f2faf6; /* the light page */
-  --ph-mint-50: #ecf7f2;
-  --ph-mint-150: #cfe3da; /* lines of the light page */
-  --ph-mint-200: #7fd9ba; /* the accent on hover */
-  --ph-mint-300: #9cc7b8;
-  --ph-mint-400: #5dcaa5;
   /* Shadows are tinted with the page, no black shadows (4.3) */
   --ph-site-shadow-color: rgb(1 20 16 / 0.5); /* on a dark panel */
   --ph-site-shadow-color-light: rgb(4 33 27 / 0.18); /* on the light page */
@@ -142,7 +130,7 @@
  * The light page (amendment 4.1). Only the roles of its table are set; every other semantic token keeps the kit's light
  * value (the form's error among them). Roles the table names cover the kit's twin tokens too: fg-subtle is secondary
  * text, border-strong (the secondary button's outline) a line, border-control a field border, primary-active the
- * pressed main button (the kit's blue otherwise).
+ * pressed main button (the kit's darker emerald-900 otherwise).
  */
 :root[data-theme='site'] {
   color-scheme: light;

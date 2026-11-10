@@ -15,8 +15,8 @@
 
   /*
    * Text-like controls look the same in apps/web and apps/admin (QA 2026-10-28: the input of the client mockups): a
-   * white field with a small radius; focus — the primary border and a soft ring instead of the offset outline. The
-   * border is the light --ph-color-border-input (#cbd5e1).
+   * near-white field with a small radius; focus — the primary border and a soft ring instead of the offset outline. The
+   * border is the light --ph-color-border-input.
    */
   --ph-input-height: var(--ph-size-touch-min);
   --ph-input-padding-x: var(--ph-space-3);

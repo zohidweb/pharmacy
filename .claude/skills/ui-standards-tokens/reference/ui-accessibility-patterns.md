@@ -158,7 +158,7 @@ export function BatchStatusBadge({ status, label }: { status: BatchStatus; label
 
 - Фокус глобально: `:focus-visible { outline: var(--ph-focus-ring-width) solid var(--ph-color-focus-ring); }`.
   В компонентах не переопределять, кроме смещения (`outline-offset`) для особых форм.
-- Кольцо фокуса ≥ 3:1 к фону (синий `--ph-color-focus-ring` на белом и на `surface-sunken`).
+- Кольцо фокуса ≥ 3:1 к фону (`--ph-color-focus-ring` на `surface`, `bg` и `surface-sunken`).
 - Элемент в фокусе не должен уходить под липкую шапку/панель действий:
   `scroll-padding-block: <высота панели через токен>` на скролл-контейнере.
 - `forced-colors: active` (режим высокой контрастности Windows): не полагаться на фон как

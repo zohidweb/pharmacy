@@ -7,38 +7,43 @@
 [data-theme='light'] {
   color-scheme: light;
 
-  /* Canvas, cards/panels/sidebar/header, input fill and table head, unread row */
-  --ph-color-bg: var(--ph-neutral-50);
-  --ph-color-surface: var(--ph-neutral-0);
-  --ph-color-surface-sunken: var(--ph-slate-50);
-  --ph-color-surface-highlight: var(--ph-blue-25);
+  /* The light page of the public site: mint canvas; near-white cards, panels and fields; disabled fields, table head
+     and hovers; unread rows and the selection bar (1.08:1 to the surface, so they carry a mark of their own) */
+  --ph-color-bg: var(--ph-mint-25);
+  --ph-color-surface: var(--ph-mint-0);
+  --ph-color-surface-sunken: var(--ph-mint-50);
+  --ph-color-surface-highlight: var(--ph-mint-50);
 
-  /* fg 19.9:1 on surface · muted 7.2:1 (6.7:1 on sunken) · subtle 5.3:1 (4.7:1 on bg).
+  /* fg 16.7:1 on surface (16.0 on bg, 15.5 on sunken) · muted and subtle 7.2:1 (6.9 on bg, 6.7 on sunken).
      Disabled text is exempt from 1.4.3. */
-  --ph-color-fg: var(--ph-neutral-900);
-  --ph-color-fg-muted: var(--ph-neutral-400);
-  --ph-color-fg-subtle: var(--ph-slate-500);
+  --ph-color-fg: var(--ph-emerald-975);
+  --ph-color-fg-muted: var(--ph-emerald-ink-600);
+  --ph-color-fg-subtle: var(--ph-emerald-ink-600);
   --ph-color-fg-disabled: var(--ph-slate-200);
 
-  /* Hairlines, switch track / empty-state glyphs, control boundary 3.5:1 (1.4.11) */
-  --ph-color-border: var(--ph-slate-100);
-  --ph-color-border-strong: var(--ph-slate-200);
-  --ph-color-border-control: var(--ph-slate-400);
-  /* Borders of fields and dropdowns (QA 2026-10-28, #cbd5e1): 1.5:1, below 1.4.11 by the product's choice — the
-     label above and the focus ring mark the field. */
-  --ph-color-border-input: var(--ph-slate-150);
+  /* Hairlines and the secondary button outline (the site's one line colour). Control boundary (checkbox, radio, the
+     switch when off) 3.5:1 on surface, 3.4 on bg, 3.3 on sunken (1.4.11); 1.7:1 to the primary of a switch when on. */
+  --ph-color-border: var(--ph-mint-150);
+  --ph-color-border-strong: var(--ph-mint-150);
+  --ph-color-border-control: var(--ph-emerald-ink-400);
+  /* Borders of fields and dropdowns (QA 2026-10-28: light, #cbd5e1 at 1.5:1 then): 1.8:1 on surface, 1.7 on sunken,
+     below 1.4.11 by the product's choice — the label above and the focus ring mark the field. */
+  --ph-color-border-input: var(--ph-mint-300);
 
-  /* Primary 7.0:1 on surface and with on-primary; primary text on subtle 6.0:1.
-     Accent — chart bars only (non-text, always paired with labels). */
-  --ph-color-primary: var(--ph-blue-500);
-  --ph-color-primary-hover: var(--ph-blue-600);
-  --ph-color-primary-active: var(--ph-blue-700);
+  /* The green of the public site. Primary 6.2:1 with on-primary (hover 9.0, active 11.8), 6.1:1 on surface; primary
+     text on subtle 5.1:1, on subtle-hover 4.6:1, on bg 5.8:1, on sunken and highlight 5.7:1. Subtle is 1.1:1 apart
+     from sunken (an active menu item from a hovered one). Focus ring 6.1:1 on surface, 5.8:1 on bg.
+     Accent — chart bars only (non-text, always paired with labels): the site's accent of the light page, 6.1:1 on
+     surface (1.4.11). */
+  --ph-color-primary: var(--ph-emerald-700);
+  --ph-color-primary-hover: var(--ph-emerald-800);
+  --ph-color-primary-active: var(--ph-emerald-900);
   --ph-color-on-primary: var(--ph-neutral-0);
-  --ph-color-primary-subtle: var(--ph-blue-50);
-  --ph-color-primary-subtle-hover: var(--ph-blue-100);
-  --ph-color-accent: var(--ph-sky-500);
+  --ph-color-primary-subtle: var(--ph-mint-100);
+  --ph-color-primary-subtle-hover: var(--ph-mint-150);
+  --ph-color-accent: var(--ph-emerald-700);
 
-  --ph-color-focus-ring: var(--ph-blue-400);
+  --ph-color-focus-ring: var(--ph-emerald-700);
   --ph-color-overlay: var(--ph-scrim-40);
   --ph-color-disabled: var(--ph-slate-50);
   --ph-color-on-disabled: var(--ph-slate-200);
@@ -50,7 +55,8 @@
 
   /* Statuses: solid (text/icon/button), subtle (tint background), border.
      Solid on subtle ≥ 4.5:1: success 4.6, warning 4.5, danger 5.3 (5.9 on danger-surface),
-     attention 6.9. White on success/danger buttons ≥ 4.8. Never color alone (Iron Law 3). */
+     attention 6.9. As text on the mint canvas: success and warning 4.6 on sunken (4.7 on bg), danger 5.9 (6.1),
+     attention 6.7, info 6.4. White on success/danger buttons ≥ 4.8. Never color alone (Iron Law 3). */
   --ph-color-success: var(--ph-green-700);
   --ph-color-success-subtle: var(--ph-green-100);
   --ph-color-success-border: var(--ph-green-600);

@@ -84,7 +84,7 @@ export function Field({
 }
 
 /**
- * Shared look of text-like controls (input, textarea, select) in apps/web and apps/admin: a white field; focus — the
+ * Shared look of text-like controls (input, textarea, select) in apps/web and apps/admin: a surface field; focus — the
  * primary border and a soft ring in place of the offset outline (tokens --ph-input-*). Below the tablet breakpoint the
  * text is at least 16 px at any font scale: Safari iOS zooms the page into a field with smaller text (ADR-0007,
  * amendment 2026-11-10).

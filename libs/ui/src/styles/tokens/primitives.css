@@ -1,35 +1,49 @@
 /*
- * Primitive tokens: raw values only. Used exclusively by semantic.css and components.css —
- * never by components or screens (ui-standards-tokens, Iron Law 1).
- * Colors are OKLCH conversions of the admin UI mockups palette (sRGB), contrast-checked in pairs
- * in semantic.css.
+ * Primitive tokens: raw values only. Used exclusively by semantic.css and components.css (and by the theme of the
+ * public site, apps/site site-theme.css, which maps them onto its panels) — never by components or screens
+ * (ui-standards-tokens, Iron Law 1). Colors are OKLCH conversions of sRGB palettes, contrast-checked in pairs in
+ * semantic.css: the brand green of the public site, the rest from the admin UI mockups.
  */
 :root {
-  /* Neutral (warm-neutral "nblack" ramp of the mockups) */
+  /* Neutral (warm-neutral "nblack" ramp of the mockups): white on fills, the inverse surface */
   --ph-neutral-0: oklch(100% 0 0);
-  --ph-neutral-50: oklch(96.1% 0.001 0);
-  --ph-neutral-100: oklch(87.3% 0 0);
-  --ph-neutral-400: oklch(45.6% 0.002 247.9);
   --ph-neutral-900: oklch(14% 0 0);
 
-  /* Cool gray ("cblack"): hairlines, fills, subtle text */
+  /* Cool gray ("cblack"): disabled fills and text */
   --ph-slate-50: oklch(97.2% 0.003 228.8);
-  --ph-slate-100: oklch(91.2% 0.006 255.5);
-  --ph-slate-150: oklch(86.9% 0.022 252.9); /* #cbd5e1 — field borders */
   --ph-slate-200: oklch(82.1% 0.014 258.4);
-  --ph-slate-400: oklch(63% 0.032 259.6);
-  --ph-slate-500: oklch(53.1% 0.041 258.8);
-  --ph-slate-900: oklch(20.8% 0.04 265.8);
 
-  /* Brand blue */
-  --ph-blue-25: oklch(98.4% 0.007 260.7);
+  /*
+   * Brand green: the one palette of the apps and the public site (spec 2026-11-02-public-site-redesign 4.1, the hex as
+   * approved), each sRGB hex in OKLCH that converts back to it exactly. 975 is text, ink-600 secondary text, 700 the
+   * primary and the chart accent; mint-0 the surfaces (not a pure white), mint-25 the page, mint-150 the lines,
+   * mint-300 the field borders. 950, mint-200 and mint-400 are read by the site's panels only.
+   */
+  --ph-emerald-975: oklch(22.4% 0.037 176.7); /* #04211b */
+  --ph-emerald-950: oklch(27.95% 0.0459 181.1); /* #06302a */
+  --ph-emerald-900: oklch(33.21% 0.0549 180.1); /* #0a3f37 */
+  --ph-emerald-800: oklch(39.7% 0.064 182.9); /* #11524a */
+  --ph-emerald-700: oklch(48.09% 0.0908 170.1); /* #0f6e56 */
+  --ph-emerald-ink-600: oklch(44.9% 0.037 178.3); /* #3e5c55 */
+  --ph-mint-0: oklch(99.4% 0.004 157.2); /* #fbfefc */
+  --ph-mint-25: oklch(97.8% 0.01 164.9); /* #f2faf6 */
+  --ph-mint-50: oklch(96.7% 0.013 167.2); /* #ecf7f2 */
+  --ph-mint-150: oklch(89.8% 0.025 167); /* #cfe3da */
+  --ph-mint-200: oklch(82.01% 0.0981 169.7); /* #7fd9ba */
+  --ph-mint-300: oklch(79.45% 0.0503 171.7); /* #9cc7b8 */
+  --ph-mint-400: oklch(76.5% 0.115 168.3); /* #5dcaa5 */
+  /*
+   * Two steps of the apps between the site's ones: mint-100, a greener tint than the sunken mint-50 (the active menu
+   * item, selections); ink-400, a mid tone for control boundaries (checkbox, radio, the switch when off) that stays
+   * apart from the primary of the switch when on.
+   */
+  --ph-mint-100: oklch(93% 0.04 166); /* #d0f1e2 */
+  --ph-emerald-ink-400: oklch(62% 0.035 177); /* #708d86 */
+
+  /* Info blue: a status hue only, apart from the green of success and of the brand */
   --ph-blue-50: oklch(94.4% 0.018 258.4);
   --ph-blue-100: oklch(89% 0.037 258.4);
-  --ph-blue-400: oklch(56.5% 0.162 258.6);
   --ph-blue-500: oklch(47.3% 0.198 260.5);
-  --ph-blue-600: oklch(40.4% 0.166 260.2);
-  --ph-blue-700: oklch(33.2% 0.132 259.6);
-  --ph-sky-500: oklch(71.9% 0.106 249.9);
 
   /* Status hues */
   --ph-green-100: oklch(96.2% 0.043 156.7);

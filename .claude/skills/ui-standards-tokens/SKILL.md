@@ -40,7 +40,10 @@ last-reviewed: "2026-10-02"
 - Структура кода и нейминг — по скилу `react-dev` (TypeScript, PascalCase-компоненты, английские
   идентификаторы; доменные термины — из `docs/architecture/glossary.md`).
 - Аудит соответствия выполняет агент проекта `ui-standards-expert` с этим скилом.
-- **Открыто / согласовать** (не выдавать за решённое): финальная палитра, лицензия шрифта TT Norms
+- **Палитра решена** (2026-11-10): web, admin и публичный сайт — одна зелёная палитра сайта (emerald и
+  mint) с мятной страницей; значения — `libs/ui/src/styles/tokens/primitives.css`, роли и контраст пар —
+  `semantic.css`. Информационный статус остаётся синим, отдельно от зелёного «успеха».
+- **Открыто / согласовать** (не выдавать за решённое): лицензия шрифта TT Norms
   Pro (`libs/ui/src/styles/fonts.css` — подтвердить до релиза), обозначение валюты («смн»?) и формат
   для TJ, набор горячих клавиш кассы, тёмная тема и компактная плотность `apps/admin`.
   Статусы партий — только из `glossary.md` (срок годности партии); новые статусы (например,
@@ -139,7 +142,7 @@ components.css   --ph-button-bg-primary, --ph-batch-expired-bg …       кон�
 
 ```bash
 SCOPE="apps libs/ui/src/lib"
-EXCL=(--glob '!**/*.spec.*' --glob '!**/*.test.*' --glob '!apps/*-e2e/**' --glob '!libs/ui/src/styles/tokens/**')
+EXCL=(--glob '!**/*.spec.*' --glob '!**/*.test.*' --glob '!apps/*-e2e/**' --glob '!libs/ui/src/styles/tokens/**' --glob '!apps/site/src/app/styles/site-theme.css')
 
 # 1. Цветовые литералы (hex ловит и якоря вида "#add" — разбирать вручную)
 rg -n "${EXCL[@]}" -e '#[0-9a-fA-F]{3,8}\b' -e '\b(rgba?|hsla?|oklch|oklab|lab|lch|color-mix)\(' $SCOPE
@@ -147,8 +150,8 @@ rg -n "${EXCL[@]}" -e '#[0-9a-fA-F]{3,8}\b' -e '\b(rgba?|hsla?|oklch|oklab|lab|l
 rg -n "${EXCL[@]}" --glob '*.css' -e '\b\d+(\.\d+)?(px|rem|em|pt|mm)\b' $SCOPE
 # 3. Inline-стили и литеральный z-index
 rg -n "${EXCL[@]}" -e 'style=\{\{' -e 'z-index:\s*\d' $SCOPE
-# 4. Примитивы вне файлов токенов
-rg -n "${EXCL[@]}" -e 'var\(--ph-(neutral|green|red|amber|blue)-\d+' $SCOPE
+# 4. Примитивы вне файлов токенов (тема сайта site-theme.css раскладывает их по панелям — исключена)
+rg -n "${EXCL[@]}" -e 'var\(--ph-(neutral|slate|green|emerald|mint|red|amber|orange|blue)-(ink-)?\d+' $SCOPE
 # 5. Сброс фокуса
 rg -n "${EXCL[@]}" -e 'outline:\s*(none|0)' $SCOPE
 # 6. Деньги во float

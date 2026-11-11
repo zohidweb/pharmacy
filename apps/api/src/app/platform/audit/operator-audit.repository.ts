@@ -16,7 +16,7 @@ const KIND_PREFIXES: Record<Exclude<OperatorActionType, 'access'>, readonly stri
   payment: ['payment.', 'invoice.'],
   key: ['license.'],
   service: ['service.'],
-  settings: ['settings.', 'announcement.'],
+  settings: ['settings.', 'announcement.', 'drug-reference.'],
 };
 
 /** Details operators see: codes only — never IP addresses, routes or free text. */

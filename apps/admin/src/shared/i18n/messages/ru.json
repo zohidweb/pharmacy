@@ -1522,6 +1522,7 @@
     "jobs": {
       "operator-auth": "Вход в админку (система)",
       "create-operator": "Скрипт создания оператора",
+      "seed-drug-reference": "Скрипт загрузки справочника препаратов",
       "operator-activation": "Первый вход оператора (система)",
       "other": "Служебная задача «{job}»"
     },
@@ -1568,6 +1569,7 @@
       "settings_updated": "Изменены настройки платформы",
       "announcement_published": "Опубликовано объявление",
       "announcement_cancelled": "Снято объявление",
+      "drug-reference_seeded": "Загружен справочник препаратов",
       "unknown": "Событие {action}",
       "invoice_generated": "Сформирован счёт",
       "invoice_recalculated": "Пересчитан счёт",

@@ -1522,6 +1522,7 @@
     "jobs": {
       "operator-auth": "Вуруд ба админка (система)",
       "create-operator": "Скрипти сохтани оператор",
+      "seed-drug-reference": "Скрипти боркунии маълумотномаи доруҳо",
       "operator-activation": "Вуруди аввали оператор (система)",
       "other": "Вазифаи хизматӣ «{job}»"
     },
@@ -1568,6 +1569,7 @@
       "settings_updated": "Танзимоти платформа тағйир дода шуд",
       "announcement_published": "Эълон нашр шуд",
       "announcement_cancelled": "Эълон бекор карда шуд",
+      "drug-reference_seeded": "Маълумотномаи доруҳо бор карда шуд",
       "unknown": "Ҳодисаи {action}",
       "invoice_generated": "Ҳисобнома сохта шуд",
       "invoice_recalculated": "Ҳисобнома аз нав ҳисоб шуд",

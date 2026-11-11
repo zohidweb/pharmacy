@@ -64,6 +64,8 @@ import type {
   DeficitLine,
   DiscountRuleDefinition,
   DiscountRuleInput,
+  DrugReferenceListResponse,
+  DrugReferenceQuery,
   PriceConflict,
   PriceHistoryPage,
   PriceHistoryQuery,
@@ -477,6 +479,13 @@ export const apiRoutes = {
     'GET',
     () => '/catalog/references',
   ),
+  // the platform drug reference for a new product card (plan 2026-11-11-drug-reference-seed, R9)
+  'catalog.drugReferences': route<
+    DrugReferenceListResponse,
+    undefined,
+    undefined,
+    DrugReferenceQuery
+  >('GET', () => '/catalog/drug-references'),
   'catalog.duplicates': route<CatalogDuplicate[]>(
     'GET',
     () => '/catalog/duplicates',

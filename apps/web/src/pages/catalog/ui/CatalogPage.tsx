@@ -501,6 +501,7 @@ function NewProductDialog({
           touched={touched}
           disabled={false}
           fieldErrors={fieldErrors}
+          lookup={{ initialQuery: '' }}
         />
         <Alert tone="info">{t('priceFromReceipt')}</Alert>
       </div>

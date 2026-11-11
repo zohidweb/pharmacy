@@ -19,8 +19,11 @@ import {
 } from '@pharmacy/ui';
 import { useId, useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { isApiRouteAvailable } from '@/shared/api';
 import { useCameraAvailable } from '@/shared/lib/camera-scan';
 import { CameraScanButton } from '@/shared/ui';
+import { fillFromReference } from '../model/fill-from-reference';
+import { DrugReferenceLookup } from './DrugReferenceLookup';
 
 export interface ProductDraft extends CatalogProductInput {
   /** Text of the regulated maximum while it is typed. */
@@ -132,6 +135,7 @@ export function ProductForm({
   touched,
   disabled,
   fieldErrors = [],
+  lookup,
 }: {
   draft: ProductDraft;
   onChange: (change: (draft: ProductDraft) => ProductDraft) => void;
@@ -140,6 +144,11 @@ export function ProductForm({
   disabled: boolean;
   /** `errors[]` of the last rejected save, laid onto the fields. */
   fieldErrors?: ReadonlyArray<{ field: string; code: string }>;
+  /**
+   * A new product only: the platform drug reference above the fields (plan 2026-11-11-drug-reference-seed, R10),
+   * searched at once for what the product started from.
+   */
+  lookup?: { initialQuery: string };
 }) {
   const t = useTranslations('products.form');
   const id = useId();
@@ -180,6 +189,15 @@ export function ProductForm({
 
   return (
     <div className="flex flex-col gap-5">
+      {lookup && isApiRouteAvailable('catalog.drugReferences') && (
+        <DrugReferenceLookup
+          initialQuery={lookup.initialQuery}
+          disabled={disabled}
+          onFill={(entry) =>
+            onChange((current) => fillFromReference(current, entry, refs))
+          }
+        />
+      )}
       <div className="grid grid-cols-2 gap-4">
         <TextField
           label={t('nameRu')}

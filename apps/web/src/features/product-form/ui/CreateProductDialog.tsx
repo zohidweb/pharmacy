@@ -177,6 +177,9 @@ function CreateProductForm({
         touched={touched}
         disabled={create.isPending || created !== null}
         fieldErrors={fieldErrors}
+        lookup={{
+          initialQuery: 'barcode' in seed ? seed.barcode : seed.name,
+        }}
       />
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>

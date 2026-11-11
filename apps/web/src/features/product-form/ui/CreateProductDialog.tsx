@@ -144,10 +144,12 @@ function CreateProductForm({
   );
   const problems = draftProblems(draft);
   const valid = !problems.name && !problems.piecesPerPack && !problems.maxPrice;
-  // the search showed «нет в каталоге», yet the barcode is taken: the product holding it is archived (D11)
-  const barcodeArchived = fieldErrors.some(
-    (problem) => problem.code === 'barcode_taken',
-  );
+  // the search showed «нет в каталоге», yet the barcode is taken: the product holding it is archived (D11). Only while
+  // the card holds just that code: a barcode added by hand or from the reference may belong to an active product.
+  const barcodeArchived =
+    'barcode' in seed &&
+    draft.barcodes.every((barcode) => barcode.code === seed.barcode) &&
+    fieldErrors.some((problem) => problem.code === 'barcode_taken');
 
   if (lost) {
     return (

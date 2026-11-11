@@ -31,7 +31,8 @@ export function DrugReferenceLookup({
   const camera = useCameraAvailable();
   const [text, setText] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
-  const [filled, setFilled] = useState<string | null>(null);
+  // grows with each «Заполнить»: the alert remounts and is announced again; a new query hides it
+  const [filled, setFilled] = useState(0);
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(text), TYPING_PAUSE_MS);
     return () => window.clearTimeout(timer);
@@ -44,6 +45,7 @@ export function DrugReferenceLookup({
   const searchNow = (value: string) => {
     setText(value);
     setQuery(value);
+    setFilled(0);
   };
 
   return (
@@ -65,7 +67,10 @@ export function DrugReferenceLookup({
         autoComplete="off"
         disabled={disabled}
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value);
+          setFilled(0);
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.preventDefault();
@@ -89,7 +94,16 @@ export function DrugReferenceLookup({
         {active && search.isSuccess && items.length === 0 && (
           <p className="text-sm text-fg-subtle">{t('reference.notFound')}</p>
         )}
-        {filled && <Alert tone="success">{t('reference.filled')}</Alert>}
+        {active && search.isSuccess && items.length > 0 && (
+          <p className="sr-only">
+            {t('reference.found', { count: search.data.total })}
+          </p>
+        )}
+        {filled > 0 && (
+          <Alert key={filled} tone="success">
+            {t('reference.filled')}
+          </Alert>
+        )}
       </div>
       {active && items.length > 0 && (
         <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-surface">
@@ -130,7 +144,7 @@ export function DrugReferenceLookup({
                   })}
                   onClick={() => {
                     onFill(entry);
-                    setFilled(entry.id);
+                    setFilled((count) => count + 1);
                   }}
                 >
                   {t('reference.fill')}

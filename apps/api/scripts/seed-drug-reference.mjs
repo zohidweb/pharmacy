@@ -8,10 +8,11 @@
 // alpha-2) and prescription (none / rx / controlled) are optional; other columns are ignored.
 //
 // Rules: a barcode must be a GTIN (8, 12, 13 or 14 digits with a valid check digit) and not an internal store code;
-// a barcode with different names in the file is a conflict and is not loaded; rows with the same name make one
-// entry with several barcodes; a barcode already in the reference is skipped (entries are never overwritten); a new
-// barcode of a name already in the reference joins that entry. One transaction under an advisory lock; --dry-run
-// rolls it back.
+// it is stored in its shortest form (a GTIN-14 with the indicator 0 as its GTIN-13); a barcode with different names
+// in the file is a conflict and is not loaded; rows with the same name make one entry with several barcodes (at most
+// 20, as a product card; the dispensing is the strictest of the rows); a barcode already in the reference is skipped
+// (entries are never overwritten); a new barcode of a name already in the reference joins that entry. One
+// transaction under an advisory lock; --dry-run rolls it back.
 //
 // Reads PLATFORM_DATABASE_URL (the pharmacy_platform role). Prints counters and line numbers only — never values of
 // the file or the connection string. Errors go to stderr with exit code 1.
@@ -40,6 +41,9 @@ const KNOWN_COLUMNS = [
   'prescription',
 ];
 const PRESCRIPTIONS = new Set(['none', 'rx', 'controlled']);
+const RANK = { none: 0, rx: 1, controlled: 2 };
+/** As ArrayMaxSize of the product card in the API: «Заполнить» copies an entry into one card. */
+const MAX_BARCODES = 20;
 
 class UserError extends Error {}
 
@@ -190,14 +194,26 @@ function gtinValid(code) {
 }
 
 /**
+ * The shortest form of a GTIN: a GTIN-14 with the indicator 0 is its GTIN-13, a GTIN-13 of five zeros and eight digits
+ * is a GTIN-8. Leading zeros do not change the check digit; a scanner reads the shortest form.
+ */
+function shortestGtin(code) {
+  let short = code;
+  if (short.length === 14 && short.startsWith('0')) short = short.slice(1);
+  if (short.length === 13 && short.startsWith('00000')) short = short.slice(5);
+  return short;
+}
+
+/**
  * Restricted circulation numbers of GS1: codes a shop gives its own goods. Another network would read the same code
- * as a different product, so the shared reference does not take them.
+ * as a different product, so the shared reference does not take them. GTIN-8: prefixes 0 and 2; GTIN-12, -13 and -14
+ * by the GS1 prefix of their 13-digit form: 020–029, 040–049, 200–299.
  */
 function internalCode(code) {
-  if (code.length === 13) return /^(2|02|04)/.test(code);
-  if (code.length === 12) return /^[24]/.test(code);
   if (code.length === 8) return /^[02]/.test(code);
-  return false;
+  const thirteen =
+    code.length === 12 ? `0${code}` : code.length === 14 ? code.slice(1) : code;
+  return /^(2|02|04)/.test(thirteen);
 }
 
 const PROBLEMS = {
@@ -212,11 +228,12 @@ const PROBLEMS = {
 
 /** A data row → a reference row, or the code of its problem. */
 function readRow(get) {
-  const code = clean(get('barcode')).replace(/\s/g, '');
-  if (code === '') return { problem: 'no_barcode' };
-  if (!/^\d+$/.test(code) || ![8, 12, 13, 14].includes(code.length)) {
+  const written = clean(get('barcode')).replace(/\s/g, '');
+  if (written === '') return { problem: 'no_barcode' };
+  if (!/^\d+$/.test(written) || ![8, 12, 13, 14].includes(written.length)) {
     return { problem: 'barcode_format' };
   }
+  const code = shortestGtin(written);
   if (!gtinValid(code)) return { problem: 'barcode_check' };
   if (internalCode(code)) return { problem: 'barcode_internal' };
 
@@ -304,22 +321,28 @@ function readFile(text) {
     } else repeated += seen.lines.length - 1;
   }
 
-  // Rows of one name make one entry; an attribute comes from the first row that has it.
+  // Rows of one name make one entry; an attribute comes from the first row that has it, the dispensing — the strictest
+  // of the rows whatever their order. An entry fills one product card, so it keeps at most MAX_BARCODES codes.
   const entries = new Map();
+  const overLimit = [];
   for (const row of rows) {
     if (byCode.get(row.code).conflict) continue;
     let entry = entries.get(row.key);
     if (!entry) {
-      entry = { key: row.key, nameRu: row.nameRu, codes: new Set() };
+      entry = { key: row.key, nameRu: row.nameRu, codes: new Map(), prescription: 'none' };
       entries.set(row.key, entry);
     }
-    entry.codes.add(row.code);
+    if (!entry.codes.has(row.code)) {
+      if (entry.codes.size >= MAX_BARCODES) {
+        overLimit.push(row.line);
+        continue;
+      }
+      entry.codes.set(row.code, row.line);
+    }
     for (const attribute of ['nameTj', 'inn', 'form', 'dosage', 'manufacturer', 'country']) {
       if (entry[attribute] == null && row[attribute] !== null) entry[attribute] = row[attribute];
     }
-    if (entry.prescription === undefined || entry.prescription === 'none') {
-      entry.prescription = row.prescription;
-    }
+    if (RANK[row.prescription] > RANK[entry.prescription]) entry.prescription = row.prescription;
   }
 
   return {
@@ -329,6 +352,7 @@ function readFile(text) {
     conflictCodes,
     conflictLines: conflictLines.sort((a, b) => a - b),
     repeated,
+    overLimit,
     entries: [...entries.values()],
   };
 }
@@ -345,7 +369,7 @@ async function write(client, parsed, digest) {
   await client.query("select set_config('app.actor', $1, true)", [ACTOR]);
   await client.query('select pg_advisory_xact_lock(hashtext($1))', [JOB]);
 
-  const codes = parsed.entries.flatMap((entry) => [...entry.codes]);
+  const codes = parsed.entries.flatMap((entry) => [...entry.codes.keys()]);
   const existingCodes = new Set(
     (
       await client.query(
@@ -354,27 +378,37 @@ async function write(client, parsed, digest) {
       )
     ).rows.map((row) => row.barcode),
   );
-  // Active entries by name; with several of one name the oldest (UUIDv7 ids grow with time).
+  // Active entries by name with their barcode count; with several of one name the oldest (UUIDv7 ids grow with time).
   const existingNames = new Map();
   for (const row of (
     await client.query(
-      `select id, name ->> 'ru' as name from pharmacy.drug_reference
-       where status = 'active' order by id`,
+      `select r.id, r.name ->> 'ru' as name,
+              (select count(*) from pharmacy.drug_reference_barcodes b where b.drug_reference_id = r.id)::int as codes
+       from pharmacy.drug_reference r
+       where r.status = 'active' order by r.id`,
     )
   ).rows) {
     const key = nameKey(clean(row.name));
-    if (!existingNames.has(key)) existingNames.set(key, row.id);
+    if (!existingNames.has(key)) existingNames.set(key, { id: row.id, codes: row.codes });
   }
 
   const created = [];
   const extended = [];
   const barcodes = [];
+  const overLimit = [];
   let barcodesExisting = 0;
   for (const entry of parsed.entries) {
-    const fresh = [...entry.codes].filter((code) => !existingCodes.has(code));
+    let fresh = [...entry.codes.keys()].filter((code) => !existingCodes.has(code));
     barcodesExisting += entry.codes.size - fresh.length;
+    const existing = existingNames.get(entry.key);
+    // an entry already in the reference keeps within MAX_BARCODES with the new codes too
+    if (existing) {
+      const room = Math.max(0, MAX_BARCODES - existing.codes);
+      for (const code of fresh.slice(room)) overLimit.push(entry.codes.get(code));
+      fresh = fresh.slice(0, room);
+    }
     if (fresh.length === 0) continue;
-    let id = existingNames.get(entry.key);
+    let id = existing?.id;
     if (id) extended.push(id);
     else {
       id = uuidv7();
@@ -421,6 +455,8 @@ async function write(client, parsed, digest) {
     entriesExtended: extendedIds.length,
     barcodesAdded: barcodes.length,
     barcodesExisting,
+    // codes past MAX_BARCODES: of one name in the file, or past what the entry already holds
+    overLimitLines: [...parsed.overLimit, ...overLimit].sort((a, b) => a - b),
   };
   await client.query(
     `insert into pharmacy.platform_audit_log (id, actor_kind, job, action, details, correlation_id)
@@ -429,7 +465,11 @@ async function write(client, parsed, digest) {
       uuidv7(),
       JOB,
       JSON.stringify({
-        ...totals,
+        entriesCreated: totals.entriesCreated,
+        entriesExtended: totals.entriesExtended,
+        barcodesAdded: totals.barcodesAdded,
+        barcodesExisting: totals.barcodesExisting,
+        barcodesOverLimit: totals.overLimitLines.length,
         rows: parsed.dataRows,
         rejected: [...parsed.problems.values()].reduce((sum, lines) => sum + lines.length, 0),
         conflictBarcodes: parsed.conflictCodes,
@@ -461,6 +501,12 @@ function report(parsed, totals, dryRun) {
     );
   }
   if (parsed.repeated > 0) out.push(`Repeated rows (same barcode and name): ${parsed.repeated}`);
+  if (totals.overLimitLines.length > 0) {
+    out.push(
+      `Barcodes over ${MAX_BARCODES} per name (not loaded): ${totals.overLimitLines.length} — ` +
+        `lines ${lineList(totals.overLimitLines)}`,
+    );
+  }
   if (parsed.countryIgnored.length > 0) {
     out.push(
       `Country not an ISO code (left empty): ${parsed.countryIgnored.length} — lines ${lineList(parsed.countryIgnored)}`,

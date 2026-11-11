@@ -6,6 +6,17 @@ import { nameOf } from './catalog.repository';
 
 const BARCODE = /^[0-9]{8,14}$/;
 
+/**
+ * As the seed script stores codes: a GTIN-14 with the indicator 0 is its GTIN-13, a GTIN-13 of five zeros and eight
+ * digits is a GTIN-8 — a scanner reading the padded form still finds the entry.
+ */
+function shortestGtin(code: string): string {
+  let short = code;
+  if (short.length === 14 && short.startsWith('0')) short = short.slice(1);
+  if (short.length === 13 && short.startsWith('00000')) short = short.slice(5);
+  return short;
+}
+
 function prescriptionOf(row: {
   isPrescription: boolean;
   isControlled: boolean;
@@ -33,7 +44,7 @@ export class DrugReferencesRepository {
     const tj = sql`replace(lower(r.name ->> 'tj'), 'ё', 'е')`;
     const match = BARCODE.test(q)
       ? sql<SqlBool>`exists (select 1 from pharmacy.drug_reference_barcodes b
-          where b.drug_reference_id = r.id and b.barcode = ${q})`
+          where b.drug_reference_id = r.id and b.barcode = ${shortestGtin(q)})`
       : sql<SqlBool>`(${ru} like ${`%${text}%`} or ${tj} like ${`%${text}%`}
           or replace(lower(r.inn ->> 'ru'), 'ё', 'е') like ${`%${text}%`})`;
     const base = trx

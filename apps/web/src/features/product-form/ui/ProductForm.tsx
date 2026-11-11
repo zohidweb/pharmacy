@@ -17,12 +17,15 @@ import {
   Switch,
   TextField,
 } from '@pharmacy/ui';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { isApiRouteAvailable } from '@/shared/api';
 import { useCameraAvailable } from '@/shared/lib/camera-scan';
 import { CameraScanButton } from '@/shared/ui';
-import { fillFromReference } from '../model/fill-from-reference';
+import {
+  fillFromReference,
+  type ReferenceFill,
+} from '../model/fill-from-reference';
 import { DrugReferenceLookup } from './DrugReferenceLookup';
 
 export interface ProductDraft extends CatalogProductInput {
@@ -153,6 +156,8 @@ export function ProductForm({
   const t = useTranslations('products.form');
   const id = useId();
   const [code, setCode] = useState('');
+  // the last «Заполнить»: the next one undoes it first, so two reference entries never mix
+  const lastFill = useRef<ReferenceFill | null>(null);
   const camera = useCameraAvailable();
   const problems = draftProblems(draft);
   const serverError = (field: string) => {
@@ -193,9 +198,16 @@ export function ProductForm({
         <DrugReferenceLookup
           initialQuery={lookup.initialQuery}
           disabled={disabled}
-          onFill={(entry) =>
-            onChange((current) => fillFromReference(current, entry, refs))
-          }
+          onFill={(entry) => {
+            const { draft: next, fill } = fillFromReference(
+              draft,
+              entry,
+              refs,
+              { previous: lastFill.current, seed: lookup.initialQuery },
+            );
+            lastFill.current = fill;
+            onChange(() => next);
+          }}
         />
       )}
       <div className="grid grid-cols-2 gap-4">

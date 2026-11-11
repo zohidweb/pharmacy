@@ -98,7 +98,7 @@ function decode(bytes) {
   } catch {
     throw new UserError('The file is not UTF-8: save it as «CSV UTF-8».');
   }
-  return text.startsWith('﻿') ? text.slice(1) : text;
+  return text.startsWith('\uFEFF') ? text.slice(1) : text;
 }
 
 // --- CSV (RFC 4180) -----------------------------------------------------------------------------
@@ -170,7 +170,7 @@ function parseCsv(text) {
 const clean = (value) =>
   (value ?? '')
     .normalize('NFC')
-    .replace(/[   ]/g, ' ')
+    .replace(/[\u00A0\u2007\u202F]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 

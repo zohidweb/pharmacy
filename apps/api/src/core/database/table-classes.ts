@@ -110,6 +110,9 @@ export const TABLE_CLASSES: Readonly<Record<string, TableClass>> =
     platform_settings: 'shared',
     services: 'shared',
     announcements: 'shared',
+    // the platform drug reference (ADR-0013): the operator writes, every network reads
+    drug_reference: 'shared',
+    drug_reference_barcodes: 'shared',
   });
 
 // Tenant tables that are append-only (insert and select only; a trigger rejects update, delete

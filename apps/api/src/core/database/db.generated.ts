@@ -279,6 +279,26 @@ export interface Documents {
   writeOffReason: string | null;
 }
 
+export interface DrugReference {
+  country: string | null;
+  createdAt: Generated<Timestamp>;
+  dosage: string | null;
+  dosageForm: string | null;
+  id: string;
+  inn: Json | null;
+  isControlled: Generated<boolean>;
+  isPrescription: Generated<boolean>;
+  manufacturer: string | null;
+  name: Json;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface DrugReferenceBarcodes {
+  barcode: string;
+  drugReferenceId: string;
+}
+
 export interface EmployeeCredentials {
   createdAt: Generated<Timestamp>;
   employeeId: string;
@@ -1342,6 +1362,8 @@ export interface DB {
   discountRuleTiers: DiscountRuleTiers;
   documentCounters: DocumentCounters;
   documents: Documents;
+  drugReference: DrugReference;
+  drugReferenceBarcodes: DrugReferenceBarcodes;
   employeeCredentials: EmployeeCredentials;
   employees: Employees;
   employeeStores: EmployeeStores;

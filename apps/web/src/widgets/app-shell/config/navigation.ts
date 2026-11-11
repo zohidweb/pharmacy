@@ -26,6 +26,11 @@ export interface NavItem {
   icon: IconName;
   /** Permission that opens the screen (ADR-0018); the item is hidden without it. */
   permission: Permission;
+  /**
+   * The item is also hidden unless the session holds one of these: a screen the role may read but has
+   * nothing to do on (the menu only — the server still answers the screen to `permission`).
+   */
+  anyOf?: readonly Permission[];
   /** False for screens of the next stages: shown, but not a link yet. */
   ready: boolean;
   /** The route the screen loads; the item is hidden in a build where it does not answer. */
@@ -45,6 +50,16 @@ export interface NavSection {
   key: NavSectionKey;
   items: NavItem[];
 }
+
+/**
+ * Goods receipts, opening balances and supplier returns: for those who post stock documents
+ * (manager, owner) or reconcile them (accountant), not for a cashier who may only read them
+ * (QA 2026-11-11).
+ */
+const STOCK_DOCUMENTS: readonly Permission[] = [
+  'inventory:post',
+  'inventory:export',
+];
 
 /** Sidebar of the client product (UI mockups, groups in this order). */
 export const navigation: NavSection[] = [
@@ -101,12 +116,14 @@ export const navigation: NavSection[] = [
         route: 'goodsReceipts',
         icon: 'inbox',
         permission: 'inventory:view',
+        anyOf: STOCK_DOCUMENTS,
         ready: true,
       },
       {
         route: 'openingBalances',
         icon: 'clipboard-list',
         permission: 'inventory:view',
+        anyOf: STOCK_DOCUMENTS,
         ready: true,
       },
       {
@@ -130,6 +147,7 @@ export const navigation: NavSection[] = [
         route: 'supplierReturns',
         icon: 'undo-2',
         permission: 'inventory:view',
+        anyOf: STOCK_DOCUMENTS,
         ready: true,
       },
       {
@@ -258,6 +276,8 @@ export function visibleNavigation(
       items: section.items.filter(
         (item) =>
           can(session, item.permission) &&
+          (!item.anyOf ||
+            item.anyOf.some((permission) => can(session, permission))) &&
           (!item.api || isApiRouteAvailable(item.api)),
       ),
     }))

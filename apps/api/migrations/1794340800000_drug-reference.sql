@@ -20,10 +20,11 @@ create table pharmacy.drug_reference (
   updated_at timestamptz not null default now(),
   check (not is_controlled or is_prescription)
 );
+-- search by a part of the name: case-insensitive, `ё` as `е` (the query is normalized the same way)
 create index drug_reference_name_ru_trgm on pharmacy.drug_reference
-  using gin (lower(name ->> 'ru') pharmacy.gin_trgm_ops);
+  using gin (replace(lower(name ->> 'ru'), 'ё', 'е') pharmacy.gin_trgm_ops);
 create index drug_reference_name_tj_trgm on pharmacy.drug_reference
-  using gin (lower(name ->> 'tj') pharmacy.gin_trgm_ops);
+  using gin (replace(lower(name ->> 'tj'), 'ё', 'е') pharmacy.gin_trgm_ops);
 
 -- A barcode (GTIN) belongs to one entry of the reference.
 create table pharmacy.drug_reference_barcodes (

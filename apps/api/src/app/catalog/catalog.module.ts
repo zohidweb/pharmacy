@@ -11,13 +11,17 @@ import {
   MarkupsController,
 } from './categories.controller';
 import { CategoriesService } from './categories.service';
+import { DrugReferencesController } from './drug-references.controller';
+import { DrugReferencesRepository } from './drug-references.repository';
+import { DrugReferencesService } from './drug-references.service';
 import { ProductsController } from './products.controller';
 import { ProductsReader } from './products-reader';
 import { ProductsService } from './products.service';
 
 // Catalog of the network (spec 2026-10-07-catalog-pricing): products, barcodes, categories, dosage
-// forms and markups. Cloud only for now: an offline store gets the catalog by the change feed
-// (ADR-0014). Other modules read products only through ProductsReader (ADR-0002).
+// forms and markups; search of the platform drug reference (ADR-0013). Cloud only for now: an
+// offline store gets the catalog by the change feed (ADR-0014). Other modules read products only
+// through ProductsReader (ADR-0002).
 @Module({
   imports: [AuditModule, SyncCoreModule],
   controllers: [
@@ -25,6 +29,7 @@ import { ProductsService } from './products.service';
     CategoriesController,
     MarkupsController,
     CatalogImportsController,
+    DrugReferencesController,
   ],
   providers: [
     CatalogRepository,
@@ -34,6 +39,8 @@ import { ProductsService } from './products.service';
     CatalogFacts,
     CatalogFeed,
     CatalogImportService,
+    DrugReferencesRepository,
+    DrugReferencesService,
   ],
   exports: [ProductsReader],
 })

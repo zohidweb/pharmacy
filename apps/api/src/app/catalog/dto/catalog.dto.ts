@@ -5,6 +5,7 @@ import type {
   CatalogProductInput,
   CatalogStatus,
   CategoryInput,
+  DrugReferenceQuery,
   PrescriptionKind,
   UpdateCatalogStatusRequest,
   UpdateMarkupsRequest,
@@ -19,6 +20,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Length,
   Matches,
   Max,
   MaxLength,
@@ -73,6 +75,28 @@ export class CatalogListQueryDto implements CatalogListQuery {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  offset?: number;
+}
+
+/** GET /api/v1/catalog/drug-references (plan 2026-11-11-drug-reference-seed, R9). */
+export class DrugReferenceQueryDto implements DrugReferenceQuery {
+  @Transform(trim)
+  @IsString()
+  @Length(2, 100)
+  q!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
   offset?: number;
 }
 

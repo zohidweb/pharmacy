@@ -17,10 +17,16 @@ import {
   Switch,
   TextField,
 } from '@pharmacy/ui';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
+import { isApiRouteAvailable } from '@/shared/api';
 import { useCameraAvailable } from '@/shared/lib/camera-scan';
 import { CameraScanButton } from '@/shared/ui';
+import {
+  fillFromReference,
+  type ReferenceFill,
+} from '../model/fill-from-reference';
+import { DrugReferenceLookup } from './DrugReferenceLookup';
 
 export interface ProductDraft extends CatalogProductInput {
   /** Text of the regulated maximum while it is typed. */
@@ -132,6 +138,7 @@ export function ProductForm({
   touched,
   disabled,
   fieldErrors = [],
+  lookup,
 }: {
   draft: ProductDraft;
   onChange: (change: (draft: ProductDraft) => ProductDraft) => void;
@@ -140,10 +147,17 @@ export function ProductForm({
   disabled: boolean;
   /** `errors[]` of the last rejected save, laid onto the fields. */
   fieldErrors?: ReadonlyArray<{ field: string; code: string }>;
+  /**
+   * A new product only: the platform drug reference above the fields (plan 2026-11-11-drug-reference-seed, R10),
+   * searched at once for what the product started from.
+   */
+  lookup?: { initialQuery: string };
 }) {
   const t = useTranslations('products.form');
   const id = useId();
   const [code, setCode] = useState('');
+  // the last «Заполнить»: the next one undoes it first, so two reference entries never mix
+  const lastFill = useRef<ReferenceFill | null>(null);
   const camera = useCameraAvailable();
   const problems = draftProblems(draft);
   const serverError = (field: string) => {
@@ -180,6 +194,22 @@ export function ProductForm({
 
   return (
     <div className="flex flex-col gap-5">
+      {lookup && isApiRouteAvailable('catalog.drugReferences') && (
+        <DrugReferenceLookup
+          initialQuery={lookup.initialQuery}
+          disabled={disabled}
+          onFill={(entry) => {
+            const { draft: next, fill } = fillFromReference(
+              draft,
+              entry,
+              refs,
+              { previous: lastFill.current, seed: lookup.initialQuery },
+            );
+            lastFill.current = fill;
+            onChange(() => next);
+          }}
+        />
+      )}
       <div className="grid grid-cols-2 gap-4">
         <TextField
           label={t('nameRu')}

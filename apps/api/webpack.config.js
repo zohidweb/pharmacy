@@ -25,6 +25,8 @@ module.exports = {
         { input: './scripts', glob: 'create-activation-code.mjs', output: 'scripts' },
         // Creates a platform operator and issues his one-time activation code (auth design, section 9).
         { input: './scripts', glob: 'create-operator.mjs', output: 'scripts' },
+        // Seeds the platform drug reference from a CSV on stdin (plan 2026-11-11-drug-reference-seed, R1).
+        { input: './scripts', glob: 'seed-drug-reference.mjs', output: 'scripts' },
         // Generates the JWT key and pepper of an offline store into its env file (auth design, section 10).
         { input: './scripts', glob: 'generate-store-secrets.mjs', output: 'scripts' },
         // Reads the secrets of test and prod from files before any code of the image (ADR-0021): NODE_OPTIONS of

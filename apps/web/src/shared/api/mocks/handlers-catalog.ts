@@ -25,6 +25,7 @@ import type {
   CategoryInput,
   DiscountRuleDefinition,
   DiscountRuleInput,
+  DrugReferenceItem,
   EmployeeSession,
   PosProduct,
   PriceHistoryEntry,
@@ -51,7 +52,7 @@ import type { MockHandlers } from './types';
 
 type CatalogRoute = Extract<
   ApiRouteKey,
-  | `catalog.${'list' | 'get' | 'create' | 'update' | 'status' | 'references' | 'duplicates'}`
+  | `catalog.${'list' | 'get' | 'create' | 'update' | 'status' | 'references' | 'drugReferences' | 'duplicates'}`
   | `catalog.${'categories' | 'createCategory' | 'updateCategory' | 'categoryStatus'}`
   | `catalogImports.${'check' | 'apply'}`
   | `prices.${string}`
@@ -66,6 +67,70 @@ const validation = (correlationId: string, field: string, code: string) =>
   new ApiError(400, 'validation_failed', correlationId, [{ field, code }]);
 const conflict = (correlationId: string, code: string, field?: string) =>
   new ApiError(409, code, correlationId, field ? [{ field, code }] : []);
+
+/** The platform drug reference of the mocks: synthetic names and barcodes, not data of a network (plan R13). */
+const DRUG_REFERENCE: DrugReferenceItem[] = [
+  {
+    id: 'drug-ref-1',
+    nameRu: 'Парацетамол 500 мг, таблетки №10',
+    nameTj: 'Парасетамол 500 мг, ҳаб №10',
+    inn: 'Парацетамол',
+    form: 'Таблетки',
+    dosage: '500 мг',
+    manufacturer: 'Тестфарм',
+    countryCode: 'TJ',
+    prescription: 'none',
+    barcodes: ['4780000001011', '4780000001028'],
+  },
+  {
+    id: 'drug-ref-2',
+    nameRu: 'Ибупрофен 200 мг, таблетки №20',
+    nameTj: '',
+    inn: 'Ибупрофен',
+    form: 'Таблетки',
+    dosage: '200 мг',
+    manufacturer: 'Тестфарм',
+    countryCode: 'RU',
+    prescription: 'none',
+    barcodes: ['4780000001035'],
+  },
+  {
+    id: 'drug-ref-3',
+    nameRu: 'Амоксициллин 500 мг, капсулы №16',
+    nameTj: '',
+    inn: 'Амоксициллин',
+    form: 'Капсулы',
+    dosage: '500 мг',
+    manufacturer: '',
+    countryCode: 'IN',
+    prescription: 'rx',
+    barcodes: ['4780000001042'],
+  },
+  {
+    id: 'drug-ref-4',
+    nameRu: 'Трамадол 50 мг, капсулы №20',
+    nameTj: '',
+    inn: 'Трамадол',
+    form: 'Капсулы',
+    dosage: '50 мг',
+    manufacturer: '',
+    countryCode: '',
+    prescription: 'controlled',
+    barcodes: ['4780000001059'],
+  },
+  {
+    id: 'drug-ref-5',
+    nameRu: 'Сироп с мёдом и ромашкой 100 мл',
+    nameTj: '',
+    inn: '',
+    form: 'Сироп для детей',
+    dosage: '',
+    manufacturer: '',
+    countryCode: 'XX',
+    prescription: 'none',
+    barcodes: ['4780000001066'],
+  },
+];
 
 export const COUNTRIES = [
   { code: 'TJ', name: 'Таджикистан' },
@@ -663,6 +728,25 @@ export const catalogHandlers: Pick<MockHandlers, CatalogRoute> = {
       inns: unique(products().map((p) => p.inn ?? '')),
       countries: COUNTRIES,
     };
+  },
+  // as GET /catalog/drug-references: a barcode exactly or a part of the name RU/TJ or the INN, ё as е
+  'catalog.drugReferences': ({ query, correlationId }) => {
+    context(correlationId, 'catalog:create');
+    const q = (query?.q ?? '').trim();
+    if (q.length < 2 || q.length > 100) {
+      throw validation(correlationId, 'q', 'is_length');
+    }
+    const fold = (value: string) =>
+      value.toLocaleLowerCase('ru').replace(/ё/g, 'е');
+    const needle = fold(q);
+    const found = /^[0-9]{8,14}$/.test(q)
+      ? DRUG_REFERENCE.filter((entry) => entry.barcodes.includes(q))
+      : DRUG_REFERENCE.filter((entry) =>
+          [entry.nameRu, entry.nameTj, entry.inn].some((text) =>
+            fold(text).includes(needle),
+          ),
+        );
+    return page(found, query);
   },
   'catalog.duplicates': ({ correlationId }) => {
     context(correlationId, 'catalog:view');

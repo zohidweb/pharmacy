@@ -116,6 +116,40 @@ export interface CatalogReferences {
   countries: Array<{ code: string; name: string }>;
 }
 
+/**
+ * An entry of the platform drug reference (ADR-0013, decision D4): a template the product card is filled from; the
+ * card keeps its own copy. Empty strings — not given in the reference.
+ */
+export interface DrugReferenceItem {
+  id: string;
+  nameRu: string;
+  nameTj: string;
+  /** МНН (glossary). */
+  inn: string;
+  /** Dosage form as the reference names it (not necessarily a form of the network). */
+  form: string;
+  dosage: string;
+  manufacturer: string;
+  /** ISO 3166-1 alpha-2, or an empty string. */
+  countryCode: string;
+  prescription: PrescriptionKind;
+  /** GTINs, at least one. */
+  barcodes: string[];
+}
+
+/**
+ * GET /api/v1/catalog/drug-references (`catalog:create`; plan 2026-11-11-drug-reference-seed, R9). `q` — 2–100
+ * characters: 8–14 digits find a barcode exactly, other text — a part of the name (RU/TJ) or of the МНН.
+ */
+export interface DrugReferenceQuery {
+  q: string;
+  /** 1–20, default 10. */
+  limit?: number;
+  offset?: number;
+}
+
+export type DrugReferenceListResponse = Page<DrugReferenceItem>;
+
 export type DuplicateMatch = 'barcode' | 'name';
 export type DuplicateStatus = 'pending' | 'merged' | 'kept';
 

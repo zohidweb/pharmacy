@@ -189,6 +189,7 @@ export const REAL_API_ROUTES: ReadonlySet<ApiRouteKey> = new Set<ApiRouteKey>([
   'catalog.update',
   'catalog.status',
   'catalog.references',
+  'catalog.drugReferences',
   'catalog.categories',
   'catalog.createCategory',
   'catalog.updateCategory',

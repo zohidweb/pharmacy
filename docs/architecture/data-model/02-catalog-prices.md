@@ -30,19 +30,30 @@ erDiagram
 
 ## `drug_reference`, `drug_reference_barcodes` — общий справочник (класс `shared`, ADR-0013)
 
-Ведёт оператор (`pharmacy_platform`), читают все тенанты. Синхронизация: облако → точка.
+Ведёт оператор (`pharmacy_platform`), читают все тенанты (`pharmacy_app` — только `SELECT`). Синхронизация: облако →
+точка (позже, вместе с офлайн-точками).
+
+> **Введено миграцией `drug-reference` (2026-11-11, план `docs/superpowers/plans/2026-11-11-drug-reference-seed.md`):**
+> обе таблицы; наполняет скрипт оператора `seed-drug-reference.mjs`, сеть ищет по справочнику в «Новом товаре»
+> (`GET /api/v1/catalog/drug-references`) и копирует запись в свою карточку (D4). `products.drug_reference_id` пока нет:
+> ссылка карточки на запись появится вместе с «в справочнике есть обновление». Решения при реализации:
+> - в справочник попадают только GTIN с верной контрольной цифрой, в кратчайшей форме (GTIN-14 с индикатором `0` — как GTIN-13); внутренние коды магазинов (префиксы `2`, `02`, `04`
+>   у 13 цифр, `2`, `4` у 12, `0`, `2` у 8) не берутся — у другой сети тот же код означает другой товар;
+> - поиск по названию — без учёта регистра и `ё`/`е` (trigram-индексы на `replace(lower(name->>'ru'|'tj'), 'ё', 'е')` и на то же выражение МНН);
+> - в записи не больше 20 штрихкодов — как у карточки товара, которую она заполняет.
 
 | Колонка | Тип | Правило |
 |---|---|---|
 | `id` | uuid PK | |
-| `name` | jsonb | D6 |
-| `inn` | jsonb | МНН по языкам |
-| `dosage_form`, `dosage`, `manufacturer`, `country` | text | |
-| `is_prescription`, `is_controlled` | boolean | Рекомендуемые значения; действующие — в карточке товара (D4) |
-| `status` | text | `active` / `archived` |
-| `updated_at` | timestamptz | По нему владелец видит «в справочнике есть обновление» |
+| `name` | jsonb | D6; `ru` обязателен |
+| `inn` | jsonb null | МНН, как у карточки — `{"ru": …}` |
+| `dosage_form`, `dosage`, `manufacturer` | text null | До 200 символов; форма — как её называет справочник, не значение `dictionary_values` сети |
+| `country` | text null | ISO 3166-1 alpha-2 |
+| `is_prescription`, `is_controlled` | boolean | Рекомендуемые значения; действующие — в карточке товара (D4); ПКУ ⇒ рецептурный |
+| `status` | text | `active` / `archived` (архивные не ищутся) |
+| `created_at`, `updated_at` | timestamptz | По `updated_at` владелец позже увидит «в справочнике есть обновление» |
 
-`drug_reference_barcodes`: `(drug_reference_id, barcode)`, `barcode` уникален.
+`drug_reference_barcodes`: `barcode` — первичный ключ (8–14 цифр), `drug_reference_id`; индекс по `drug_reference_id`.
 
 ## `products` — карточка товара (класс `tenant`, D4)
 

@@ -527,6 +527,16 @@ npm run prod:build / prod:up / prod:down
   Скрипт работает ролью `pharmacy_platform` (`PLATFORM_DATABASE_URL`, задан в сервисе `api`) и пишет
   `platform_audit_log`. Запуск — как выше, с `node scripts/create-operator.mjs …`; в dev —
   `node --env-file=.env apps/api/scripts/create-operator.mjs --login … --name "…"`.
+- Общий справочник препаратов (ADR-0013, класс `shared`; план `docs/superpowers/plans/2026-11-11-drug-reference-seed.md`)
+  наполняет оператор скриптом `scripts/seed-drug-reference.mjs` ролью `pharmacy_platform`: CSV UTF-8, столбцы `barcode`,
+  `name_ru` (обязательные), `name_tj`, `inn`, `form`, `dosage`, `manufacturer`, `country` (ISO-2), `prescription`
+  (`none`/`rx`/`controlled`). Берутся только GTIN, не внутренние коды магазинов; штрихкод с разными названиями не
+  загружается; уже загруженные штрихкоды пропускаются (записи не перезаписываются); `--dry-run` только печатает отчёт —
+  счётчики и номера строк, без значений файла. В test/prod файл идёт через stdin (контейнер только для чтения):
+  `… run --rm --no-deps -T api node scripts/seed-drug-reference.mjs --dry-run < справочник.csv`, затем без
+  `--dry-run` (из bash или на VPS: в PowerShell `<` не работает); в dev —
+  `node --env-file=.env apps/api/scripts/seed-drug-reference.mjs --file <файл.csv>`. Файл данных в git не кладётся.
+  Сеть видит справочник в «Новом товаре» (`GET /api/v1/catalog/drug-references`, право `catalog:create`).
 - Офлайн-точка (часть 4 аутентификации): `STORE_MODE=offline` и `OFFLINE_TENANT_ID=<сеть точки>`,
   Redis не нужен — сессии в таблице `sessions` PostgreSQL точки, лимиты попыток в памяти процесса,
   маршрутов оператора нет; модули `stores`, `staff`, `catalog`, `pricing`, `purchasing`, `inventory`, `pos`, `returns`,
